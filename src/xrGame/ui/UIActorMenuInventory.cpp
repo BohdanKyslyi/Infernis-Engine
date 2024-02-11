@@ -46,6 +46,7 @@ void CUIActorMenu::InitInventoryMode()
 	m_pInventoryOutfitList->Show		(true);
 	m_pInventoryHelmetList->Show		(true);
 	m_pInventoryDetectorList->Show		(true);
+	m_pInventoryKnifeList->Show			(true);
 	m_pInventoryPistolList->Show		(true);
 	m_pInventoryAutomaticList->Show		(true);
 	m_pQuickSlot->Show					(true);
@@ -241,6 +242,7 @@ void CUIActorMenu::OnInventoryAction(PIItem pItem, u16 action_type)
 		m_pInventoryOutfitList,
 		m_pInventoryHelmetList,
 		m_pInventoryDetectorList,
+		m_pInventoryKnifeList,
 		m_pInventoryBagList,
 		m_pTradeActorBagList,
 		m_pTradeActorList,
@@ -422,6 +424,7 @@ void CUIActorMenu::InitInventoryContents(CUIDragDropListEx* pBagList)
 	InitCellForSlot				(INV_SLOT_3);
 	InitCellForSlot				(OUTFIT_SLOT);
 	InitCellForSlot				(DETECTOR_SLOT);
+	InitCellForSlot				(KNIFE_SLOT);
 	InitCellForSlot				(GRENADE_SLOT);
 	InitCellForSlot				(HELMET_SLOT);
 
@@ -705,6 +708,10 @@ CUIDragDropListEx* CUIActorMenu::GetSlotList(u16 slot_idx)
 
 		case DETECTOR_SLOT:
 			return m_pInventoryDetectorList;
+			break;
+
+		case KNIFE_SLOT:
+			return m_pInventoryKnifeList;
 			break;
 
 		case GRENADE_SLOT://fake
