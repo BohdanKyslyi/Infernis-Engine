@@ -60,12 +60,12 @@ BEGIN
         BLOCK "000004b0"
         BEGIN
             VALUE "CompanyName", "GSC Game World"
-            VALUE "FileDescription", "X-Ray 1.6 Engine"
+            VALUE "FileDescription", "Infernis Engine"
             VALUE "FileVersion", "1.6.02"
             VALUE "InternalName", "xrEngine"
             VALUE "LegalCopyright", "Copyright © 2009 GSC Game World"
             VALUE "OriginalFilename", "xrEngine.exe"
-            VALUE "ProductName", "S.T.A.L.K.E.R.: Call Of Pripyat"
+            VALUE "ProductName", "Infernis Engine"
             VALUE "ProductVersion", "1.6.02"
         END
     END

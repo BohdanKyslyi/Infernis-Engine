@@ -49,7 +49,7 @@ BEGIN
             VALUE "InternalName", "CPU Pipe"
             VALUE "LegalCopyright", "Copyright (C) 2009 GSC Game World"
             VALUE "OriginalFilename", "xrCPU_Pipe.dll"
-            VALUE "ProductName", "S.T.A.L.K.E.R.: Call Of Pripyat"
+            VALUE "ProductName", "Infernis Engine"
             VALUE "ProductVersion", "1.6.0.2"
         END
     END
