@@ -106,6 +106,8 @@ void CUIActorMenu::Construct()
 	m_DetectorSlotHighlight		->Show(false);
 	m_KnifeSlotHighlight		= UIHelper::CreateStatic(uiXml, "knife_slot_highlight", this);
 	m_KnifeSlotHighlight		->Show(false);
+	m_BackpackSlotHighlight		= UIHelper::CreateStatic(uiXml, "backpack_slot_highlight", this);
+	m_BackpackSlotHighlight		->Show(false);
 	m_QuickSlotsHighlight[0]	= UIHelper::CreateStatic(uiXml, "quick_slot_highlight", this);
 	m_QuickSlotsHighlight[0]	->Show(false);
 	m_ArtefactSlotsHighlight[0]	= UIHelper::CreateStatic(uiXml, "artefact_slot_highlight", this);
@@ -137,6 +139,7 @@ void CUIActorMenu::Construct()
 	m_pInventoryHelmetList		= UIHelper::CreateDragDropListEx(uiXml, "dragdrop_helmet", this);
 	m_pInventoryDetectorList	= UIHelper::CreateDragDropListEx(uiXml, "dragdrop_detector", this);
 	m_pInventoryKnifeList		= UIHelper::CreateDragDropListEx(uiXml, "dragdrop_knife", this);
+	m_pInventoryBackpackList	= UIHelper::CreateDragDropListEx(uiXml, "dragdrop_backpack", this);
 	m_pInventoryPistolList		= UIHelper::CreateDragDropListEx(uiXml, "dragdrop_pistol", this);
 	m_pInventoryAutomaticList	= UIHelper::CreateDragDropListEx(uiXml, "dragdrop_automatic", this);
 	m_pTradeActorBagList		= UIHelper::CreateDragDropListEx(uiXml, "dragdrop_actor_trade_bag", this);
@@ -246,6 +249,7 @@ void CUIActorMenu::Construct()
 	BindDragDropListEvents				(m_pInventoryHelmetList);	
 	BindDragDropListEvents				(m_pInventoryDetectorList);	
 	BindDragDropListEvents				(m_pInventoryKnifeList);	
+	BindDragDropListEvents				(m_pInventoryBackpackList);	
 	BindDragDropListEvents				(m_pInventoryBagList);
 	BindDragDropListEvents				(m_pTradeActorBagList);
 	BindDragDropListEvents				(m_pTradeActorList);

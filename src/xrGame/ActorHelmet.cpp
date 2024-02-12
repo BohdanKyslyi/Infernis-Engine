@@ -52,6 +52,9 @@ void CHelmet::Load(LPCSTR section)
 	m_fPowerLoss					= READ_IF_EXISTS(pSettings, r_float, section, "power_loss",    1.0f );
 	clamp							( m_fPowerLoss, 0.0f, 1.0f );
 
+	m_additional_weight		= pSettings->r_float(section,"additional_inventory_weight");
+	m_additional_weight2	= pSettings->r_float(section,"additional_inventory_weight2");
+
 	m_BonesProtectionSect			= READ_IF_EXISTS(pSettings, r_string, section, "bones_koeff_protection",  "" );
 	m_fShowNearestEnemiesDistance	= READ_IF_EXISTS(pSettings, r_float, section, "nearest_enemies_show_dist",  0.0f );
 
@@ -176,6 +179,9 @@ bool CHelmet::install_upgrade_impl( LPCSTR section, bool test )
 	result |= process_if_exists( section, "satiety_restore_speed",   &CInifile::r_float, m_fSatietyRestoreSpeed,   test );
 	result |= process_if_exists( section, "power_restore_speed",     &CInifile::r_float, m_fPowerRestoreSpeed,     test );
 	result |= process_if_exists( section, "bleeding_restore_speed",  &CInifile::r_float, m_fBleedingRestoreSpeed,  test );
+
+	result |= process_if_exists( section, "additional_inventory_weight",  &CInifile::r_float,  m_additional_weight,  test );
+	result |= process_if_exists( section, "additional_inventory_weight2", &CInifile::r_float,  m_additional_weight2, test );
 
 	result |= process_if_exists( section, "power_loss", &CInifile::r_float, m_fPowerLoss, test );
 	clamp( m_fPowerLoss, 0.0f, 1.0f );

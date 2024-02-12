@@ -94,6 +94,7 @@ protected:
 	CUIDragDropListEx*			m_pInventoryHelmetList;
 	CUIDragDropListEx*			m_pInventoryDetectorList;
 	CUIDragDropListEx*			m_pInventoryKnifeList;
+	CUIDragDropListEx*			m_pInventoryBackpackList;
 	CUIDragDropListEx*			m_pInventoryBagList;
 
 	CUIDragDropListEx*			m_pTradeActorBagList;
@@ -113,6 +114,7 @@ protected:
 	CUIStatic*					m_OutfitSlotHighlight;
 	CUIStatic*					m_DetectorSlotHighlight;
 	CUIStatic*					m_KnifeSlotHighlight;
+	CUIStatic*					m_BackpackSlotHighlight;
 	CUIStatic*					m_QuickSlotsHighlight[4];
 	CUIStatic*					m_ArtefactSlotsHighlight[e_af_count];
 

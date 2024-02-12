@@ -1,0 +1,33 @@
+[backpack_base]:helmet
+slot 				= 12
+
+;------------------ Важливі параметри для базового рюкзака ---------------------------------
+
+visual				= dynamics\devices\dev_rukzak\dev_rukzak.ogf
+inv_name			= inv_backpack_base_name ; Назва рюкзака
+inv_name_short		= inv_backpack_base_name ; Скорочена назва рюкзака
+description			= inv_backpack_base_desc ; Опис рюкзака
+inv_weight			= 0.0 ; Вага рюкзака
+cost				= 0; Вартість (у гривнях)
+additional_inventory_weight 	= 0 ; Який буст переносимої ваги отримає гравець
+inv_grid_width     = 2 ; Довжина іконки
+inv_grid_height    = 3 ; Ширина іконки
+inv_grid_x         = 18 ; Положення іконки по X
+inv_grid_y         = 22 ; Положення іконки по Y
+
+;------------------------------------------------------------------------------------------
+;------------------ Перелік рюкзаків для використання -------------------------------------
+;------------------------------------------------------------------------------------------
+
+[backpack_stalker]:backpack_base
+$spawn				= "backpacks\backpack_stalker"
+visual				= dynamics\devices\dev_rukzak\dev_rukzak.ogf
+inv_name			= inv_backpack_stalker_name ; Назва рюкзака
+inv_name_short		= inv_backpack_stalker_name ; Скорочена назва рюкзака
+description			= inv_backpack_stalker_desc ; Опис рюкзака
+inv_weight			= 1.0 ; Вага рюкзака
+cost				= 1000; Вартість (у гривнях)
+additional_inventory_weight 	= 10 ; Який буст переносимої ваги отримає гравець
+
+
+;------------------------------------------------------------------------------------------
