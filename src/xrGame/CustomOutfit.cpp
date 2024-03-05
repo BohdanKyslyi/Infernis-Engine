@@ -11,6 +11,7 @@
 #include "../Include/xrRender/Kinematics.h"
 #include "player_hud.h"
 #include "ActorHelmet.h"
+#include "UserBackpack.h"
 
 
 CCustomOutfit::CCustomOutfit()
@@ -109,6 +110,7 @@ void CCustomOutfit::Load(LPCSTR section)
 
 	m_BonesProtectionSect	= READ_IF_EXISTS(pSettings, r_string, section, "bones_koeff_protection",  "" );
 	bIsHelmetAvaliable		= !!READ_IF_EXISTS(pSettings, r_bool, section, "helmet_avaliable", true);
+	bIsBackpackAvaliable	= !!READ_IF_EXISTS(pSettings, r_bool, section, "backpack_avaliable", true);
 }
 
 void CCustomOutfit::ReloadBonesProtection()
@@ -221,6 +223,15 @@ void	CCustomOutfit::OnMoveToSlot		(const SInvItemPlace& prev)
 			PIItem pHelmet = pActor->inventory().ItemFromSlot(HELMET_SLOT);
 			if(pHelmet && !bIsHelmetAvaliable)
 				pActor->inventory().Ruck(pHelmet, false);
+			if (prev.type==eItemPlaceSlot && !bIsBackpackAvaliable)
+			{
+				CTorch* pTorch = smart_cast<CTorch*>(pActor->inventory().ItemFromSlot(TORCH_SLOT));
+				if(pTorch && pTorch->GetNightVisionStatus())
+					pTorch->SwitchNightVision(true, false);
+			}
+			PIItem pBackpack = pActor->inventory().ItemFromSlot(BACKPACK_SLOT);
+			if(pBackpack && !bIsBackpackAvaliable)
+				pActor->inventory().Ruck(pBackpack, false);
 		}
 	}
 }

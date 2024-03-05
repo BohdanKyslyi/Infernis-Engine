@@ -28,6 +28,7 @@
 #include "../Antirad.h"
 #include "../CustomOutfit.h"
 #include "../ActorHelmet.h"
+#include "../UserBackpack.h"
 #include "../UICursor.h"
 #include "../MPPlayersBag.h"
 #include "../player_hud.h"
@@ -507,6 +508,12 @@ bool CUIActorMenu::ToSlot(CUICellItem* itm, bool force_place, u16 slot_id)
 		if(pOutfit && !pOutfit->bIsHelmetAvaliable)
 			return false;
 	}
+	if (slot_id==BACKPACK_SLOT)
+	{
+		CCustomOutfit* pOutfit = m_pActorInvOwner->GetOutfit();
+		if(pOutfit && !pOutfit->bIsBackpackAvaliable)
+			return false;
+	}
 
 	if(m_pActorInvOwner->inventory().CanPutInSlot(iitem, slot_id))
 	{
@@ -514,7 +521,7 @@ bool CUIActorMenu::ToSlot(CUICellItem* itm, bool force_place, u16 slot_id)
 
 		if ( slot_id == GRENADE_SLOT || !new_owner )
 		{
-			return true; //fake, sorry (((
+			return true; //fake, sorry ((( Ladno.
 		}
 
 		if(slot_id==OUTFIT_SLOT)
@@ -527,6 +534,15 @@ bool CUIActorMenu::ToSlot(CUICellItem* itm, bool force_place, u16 slot_id)
 				{
 					CUICellItem* helmet_cell		= helmet_list->GetItemIdx(0);
 					ToBag(helmet_cell, false);
+				}
+			}
+			if(pOutfit && !pOutfit->bIsBackpackAvaliable)
+			{
+				CUIDragDropListEx* backpack_list		= GetSlotList(BACKPACK_SLOT);
+				if(backpack_list->ItemsCount()==1)
+				{
+					CUICellItem* backpack_cell		= backpack_list->GetItemIdx(0);
+					ToBag(backpack_cell, false);
 				}
 			}
 		}
@@ -861,6 +877,7 @@ void CUIActorMenu::PropertiesBoxForSlots( PIItem item, bool& b_show )
 {
 	CCustomOutfit* pOutfit	= smart_cast<CCustomOutfit*>( item );
 	CHelmet* pHelmet		= smart_cast<CHelmet*>		( item );
+	CBackpack* pBackpack	= smart_cast<CBackpack*>	( item );
 	CInventory&  inv		= m_pActorInvOwner->inventory();
 
 	// Флаг-признак для невлючения пункта контекстного меню: Dreess Outfit, если костюм уже надет
@@ -909,6 +926,11 @@ void CUIActorMenu::PropertiesBoxForSlots( PIItem item, bool& b_show )
 	if ( pHelmet && !bAlreadyDressed && (!outfit_in_slot || outfit_in_slot->bIsHelmetAvaliable))
 	{
 		m_UIPropertiesBox->AddItem( "st_dress_helmet",  NULL, INVENTORY_TO_SLOT_ACTION );
+		b_show			= true;
+	}
+	if ( pBackpack && !bAlreadyDressed && (!outfit_in_slot || outfit_in_slot->bIsBackpackAvaliable))
+	{
+		m_UIPropertiesBox->AddItem( "st_dress_backpack",  NULL, INVENTORY_TO_SLOT_ACTION );
 		b_show			= true;
 	}
 }

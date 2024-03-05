@@ -607,6 +607,7 @@ bool CActor::is_jump()
 //максимальный переносимы вес
 #include "CustomOutfit.h"
 #include "ActorHelmet.h"
+#include "UserBackpack.h"
 float CActor::MaxCarryWeight () const
 {
 	float res = inventory().GetMaxWeight();
@@ -630,7 +631,7 @@ float CActor::get_additional_weight() const
 		res				+= outfit->m_additional_weight;
 	}
 
-	CHelmet* backpack	= smart_cast<CHelmet*>(inventory().ItemFromSlot(BACKPACK_SLOT));
+	CBackpack* backpack	= smart_cast<CBackpack*>(inventory().ItemFromSlot(BACKPACK_SLOT));
 	if ( backpack )
 	{
 		res				+= backpack->m_additional_weight;

@@ -1127,6 +1127,13 @@ bool CInventory::CanPutInSlot(PIItem pIItem, u16 slot_id) const
 			return false;
 	}
 
+	if(slot_id==BACKPACK_SLOT)
+	{
+		CCustomOutfit* pOutfit = m_pOwner->GetOutfit();
+		if(pOutfit && !pOutfit->bIsBackpackAvaliable)
+			return false;
+	}
+
 	if(slot_id!=NO_ACTIVE_SLOT && 
 		NULL==ItemFromSlot(slot_id) )
 		return true;

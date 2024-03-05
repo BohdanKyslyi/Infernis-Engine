@@ -18,6 +18,7 @@
 #include "actorEffector.h"
 #include "CustomOutfit.h"
 #include "ActorHelmet.h"
+#include "UserBackpack.h"
 
 static const float		TORCH_INERTION_CLAMP		= PI_DIV_6;
 static const float		TORCH_INERTION_SPEED_MAX	= 7.5f;
@@ -121,9 +122,15 @@ void CTorch::SwitchNightVision(bool vision_on, bool use_sounds)
 	}
 
 	CHelmet* pHelmet	= smart_cast<CHelmet*>(pA->inventory().ItemFromSlot(HELMET_SLOT));
+	CBackpack* pBackpack	= smart_cast<CBackpack*>(pA->inventory().ItemFromSlot(BACKPACK_SLOT));
 	CCustomOutfit* pOutfit	= smart_cast<CCustomOutfit*>(pA->inventory().ItemFromSlot(OUTFIT_SLOT));
 
 	if(pHelmet && pHelmet->m_NightVisionSect.size() && !b_allow)
+	{
+		m_night_vision->OnDisabled(pA, use_sounds);
+		return;
+	}
+	if(pBackpack && pBackpack->m_NightVisionSect.size() && !b_allow)
 	{
 		m_night_vision->OnDisabled(pA, use_sounds);
 		return;
@@ -141,7 +148,12 @@ void CTorch::SwitchNightVision(bool vision_on, bool use_sounds)
 
 		if(!bIsActiveNow)
 		{
-			if(pHelmet && pHelmet->m_NightVisionSect.size())
+			if(pBackpack && pBackpack->m_NightVisionSect.size())
+			{
+				m_night_vision->Start(pBackpack->m_NightVisionSect, pA, use_sounds);
+				return;
+			}
+			else if(pHelmet && pHelmet->m_NightVisionSect.size())
 			{
 				m_night_vision->Start(pHelmet->m_NightVisionSect, pA, use_sounds);
 				return;

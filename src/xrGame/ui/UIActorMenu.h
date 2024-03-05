@@ -111,10 +111,10 @@ protected:
 	CUIStatic*					m_InvSlot2Highlight;
 	CUIStatic*					m_InvSlot3Highlight;
 	CUIStatic*					m_HelmetSlotHighlight;
+	CUIStatic*					m_BackpackSlotHighlight;
 	CUIStatic*					m_OutfitSlotHighlight;
 	CUIStatic*					m_DetectorSlotHighlight;
 	CUIStatic*					m_KnifeSlotHighlight;
-	CUIStatic*					m_BackpackSlotHighlight;
 	CUIStatic*					m_QuickSlotsHighlight[4];
 	CUIStatic*					m_ArtefactSlotsHighlight[e_af_count];
 
@@ -140,6 +140,7 @@ protected:
 	CUIProgressBar*				m_WeaponSlot1_progress;
 	CUIProgressBar*				m_WeaponSlot2_progress;
 	CUIProgressBar*				m_Helmet_progress;
+	CUIProgressBar*				m_Backpack_progress;
 	CUIProgressBar*				m_Outfit_progress;
 	// bottom ---------------------------------
 	CUIStatic*					m_ActorBottomInfo;

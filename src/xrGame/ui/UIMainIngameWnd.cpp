@@ -11,6 +11,7 @@
 #include "../EntityCondition.h"
 #include "../CustomOutfit.h"
 #include "../ActorHelmet.h"
+#include "../UserBackpack.h"
 #include "../PDA.h"
 #include "../xrServerEntities/character_info.h"
 #include "../inventory.h"
@@ -146,6 +147,7 @@ void CUIMainIngameWnd::Init()
 	m_ind_starvation		= UIHelper::CreateStatic(uiXml, "indicator_starvation", this);
 	m_ind_weapon_broken		= UIHelper::CreateStatic(uiXml, "indicator_weapon_broken", this);
 	m_ind_helmet_broken		= UIHelper::CreateStatic(uiXml, "indicator_helmet_broken", this);
+	m_ind_backpack_broken	= UIHelper::CreateStatic(uiXml, "indicator_backpack_broken", this);
 	m_ind_outfit_broken		= UIHelper::CreateStatic(uiXml, "indicator_outfit_broken", this);
 	m_ind_overweight		= UIHelper::CreateStatic(uiXml, "indicator_overweight", this);
 
@@ -771,6 +773,23 @@ void CUIMainIngameWnd::UpdateMainIndicators()
 				m_ind_helmet_broken->InitTexture("ui_inGame2_circle_Helmetbroken_yellow");
 			else
 				m_ind_helmet_broken->InitTexture("ui_inGame2_circle_Helmetbroken_red");
+		}
+	}
+// Backpack broken icon
+	CBackpack* backpack = smart_cast<CBackpack*>(pActor->inventory().ItemFromSlot(BACKPACK_SLOT));
+	m_ind_backpack_broken->Show(false);
+	if(backpack)
+	{
+		float condition = backpack->GetCondition();
+		if(condition<0.75f)
+		{
+			m_ind_backpack_broken->Show(true);
+			if(condition>0.5f)
+				m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_green");
+			else if(condition>0.25f)
+				m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_yellow");
+			else
+				m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_red");
 		}
 	}
 // Weapon broken icon

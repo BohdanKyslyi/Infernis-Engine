@@ -27,6 +27,7 @@
 #include "gametask.h"
 #include "gametaskmanager.h"
 #include "ActorHelmet.h"
+#include "UserBackpack.h"
 #include "Inventory.h"
 //#include "CustomMonster.h"
 
@@ -782,9 +783,17 @@ bool CRelationMapLocation::Update()
 				const CGameObject* pObj = smart_cast<const CGameObject*>(_object_);
 				CActor* pAct = smart_cast<CActor*>(Level().Objects.net_Find(m_pInvOwnerActorID));
 				CHelmet* helm = smart_cast<CHelmet*>(pAct->inventory().ItemFromSlot(HELMET_SLOT));
+				CBackpack* bkp = smart_cast<CBackpack*>(pAct->inventory().ItemFromSlot(BACKPACK_SLOT));
 				if(helm && helm->m_fShowNearestEnemiesDistance)
 				{
 					if(pAct->Position().distance_to(pObj->Position()) < helm->m_fShowNearestEnemiesDistance)
+						vis_res = true;
+					else
+						vis_res = Actor()->memory().visual().visible_now(pObj);
+				}
+				else if(bkp && bkp->m_fShowNearestEnemiesDistance)
+				{
+					if(pAct->Position().distance_to(pObj->Position()) < bkp->m_fShowNearestEnemiesDistance)
 						vis_res = true;
 					else
 						vis_res = Actor()->memory().visual().visible_now(pObj);

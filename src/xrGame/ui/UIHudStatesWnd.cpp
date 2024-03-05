@@ -6,6 +6,7 @@
 #include "../EntityCondition.h"
 #include "../CustomOutfit.h"
 #include "../ActorHelmet.h"
+#include "../UserBackpack.h"
 #include "../inventory.h"
 #include "../RadioactiveZone.h"
 
@@ -567,8 +568,10 @@ void CUIHudStatesWnd::UpdateIndicatorType( CActor* actor, ALife::EInfluenceType 
 	
 	CCustomOutfit* outfit = actor->GetOutfit();
 	CHelmet* helmet = smart_cast<CHelmet*>(actor->inventory().ItemFromSlot(HELMET_SLOT));
+	CBackpack* backpack = smart_cast<CBackpack*>(actor->inventory().ItemFromSlot(BACKPACK_SLOT));
 	float protect = (outfit) ? outfit->GetDefHitTypeProtection( hit_type ) : 0.0f;
 	protect += (helmet) ? helmet->GetDefHitTypeProtection(hit_type) : 0.0f;
+	protect += (backpack) ? backpack->GetDefHitTypeProtection(hit_type) : 0.0f;
 	protect += actor->GetProtection_ArtefactsOnBelt( hit_type );
 
 	CEntityCondition::BOOSTER_MAP cur_booster_influences = actor->conditions().GetCurBoosterInfluences();
@@ -712,8 +715,10 @@ void CUIHudStatesWnd::FakeUpdateIndicatorType(u8 t, float power)
 	
 	CCustomOutfit* outfit = actor->GetOutfit();
 	CHelmet* helmet = smart_cast<CHelmet*>(actor->inventory().ItemFromSlot(HELMET_SLOT));
+	CBackpack* backpack = smart_cast<CBackpack*>(actor->inventory().ItemFromSlot(BACKPACK_SLOT));
 	float protect = (outfit) ? outfit->GetDefHitTypeProtection( hit_type ) : 0.0f;
 	protect += (helmet) ? helmet->GetDefHitTypeProtection(hit_type) : 0.0f;
+	protect += (backpack) ? backpack->GetDefHitTypeProtection(hit_type) : 0.0f;
 	protect += actor->GetProtection_ArtefactsOnBelt( hit_type );
 
 	CEntityCondition::BOOSTER_MAP cur_booster_influences = actor->conditions().GetCurBoosterInfluences();

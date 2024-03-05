@@ -22,6 +22,7 @@
 #include "../Weapon.h"
 #include "../CustomOutfit.h"
 #include "../ActorHelmet.h"
+#include "../UserBackpack.h"
 #include "../eatable_item.h"
 #include "UICellItem.h"
 
@@ -378,6 +379,7 @@ void CUIItemInfo::TryAddOutfitInfo( CInventoryItem& pInvItem, CInventoryItem* pC
 {
 	CCustomOutfit* outfit = smart_cast<CCustomOutfit*>(&pInvItem);
 	CHelmet* helmet = smart_cast<CHelmet*>(&pInvItem);
+	CBackpack* backpack = smart_cast<CBackpack*>(&pInvItem);
 	if ( outfit && UIOutfitInfo )
 	{
 		CCustomOutfit* comp_outfit = smart_cast<CCustomOutfit*>(pCompareItem);
@@ -388,6 +390,12 @@ void CUIItemInfo::TryAddOutfitInfo( CInventoryItem& pInvItem, CInventoryItem* pC
 	{
 		CHelmet* comp_helmet = smart_cast<CHelmet*>(pCompareItem);
 		UIOutfitInfo->UpdateInfo( helmet, comp_helmet );
+		UIDesc->AddWindow( UIOutfitInfo, false );
+	}
+	if ( backpack && UIOutfitInfo )
+	{
+		CBackpack* comp_backpack = smart_cast<CBackpack*>(pCompareItem);
+		UIOutfitInfo->UpdateInfo( backpack, comp_backpack );
 		UIDesc->AddWindow( UIOutfitInfo, false );
 	}
 

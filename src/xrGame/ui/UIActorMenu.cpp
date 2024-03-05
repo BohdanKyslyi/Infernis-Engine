@@ -19,6 +19,7 @@
 #include "../GrenadeLauncher.h"
 #include "../trade_parameters.h"
 #include "../ActorHelmet.h"
+#include "../UserBackpack.h"
 #include "../CustomOutfit.h"
 #include "../CustomDetector.h"
 #include "../eatable_item.h"
@@ -512,6 +513,7 @@ void CUIActorMenu::highlight_item_slot(CUICellItem* cell_item)
 
 	CWeapon* weapon = smart_cast<CWeapon*>(item);
 	CHelmet* helmet = smart_cast<CHelmet*>(item);
+	CBackpack* backpack = smart_cast<CBackpack*>(item);
 	CCustomOutfit* outfit = smart_cast<CCustomOutfit*>(item);
 	CCustomDetector* detector = smart_cast<CCustomDetector*>(item);
 	CEatableItem* eatable = smart_cast<CEatableItem*>(item);
@@ -526,6 +528,11 @@ void CUIActorMenu::highlight_item_slot(CUICellItem* cell_item)
 	if(helmet)
 	{
 		m_HelmetSlotHighlight->Show(true);
+		return;
+	}
+	if(backpack)
+	{
+		m_BackpackSlotHighlight->Show(true);
 		return;
 	}
 	if(outfit)
@@ -911,4 +918,10 @@ void CUIActorMenu::UpdateConditionProgressBars()
 		m_Helmet_progress->SetProgressPos(iCeil(itm->GetCondition()*15.0f)/15.0f);
 	else
 		m_Helmet_progress->SetProgressPos(0);
+
+	itm = m_pActorInvOwner->inventory().ItemFromSlot(BACKPACK_SLOT);
+	if(itm)
+		m_Backpack_progress->SetProgressPos(iCeil(itm->GetCondition()*15.0f)/15.0f);
+	else
+		m_Backpack_progress->SetProgressPos(0);
 }
