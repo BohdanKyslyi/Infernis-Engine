@@ -165,6 +165,8 @@ void CUIActorMenu::Construct()
 	}
 	m_HelmetOver = UIHelper::CreateStatic(uiXml, "helmet_over", this);
 	m_HelmetOver->Show			(false);
+	m_BackpackOver = UIHelper::CreateStatic(uiXml, "backpack_over", this);
+	m_BackpackOver->Show			(false);
 
 	m_ActorMoney	= UIHelper::CreateTextWnd(uiXml, "actor_money_static", this);
 	m_PartnerMoney	= UIHelper::CreateTextWnd(uiXml, "partner_money_static", this);

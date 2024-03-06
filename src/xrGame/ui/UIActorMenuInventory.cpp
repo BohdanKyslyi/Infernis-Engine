@@ -1304,6 +1304,11 @@ void CUIActorMenu::UpdateOutfit()
 	else
 		m_HelmetOver->Show(false);
 
+	if(outfit && !outfit->bIsBackpackAvaliable)
+		m_BackpackOver->Show(true);
+	else
+		m_BackpackOver->Show(false);
+
 	if ( !outfit )
 	{
 		MoveArtefactsToBag();

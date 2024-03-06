@@ -107,6 +107,7 @@ protected:
 	enum						{e_af_count = 5};
 	CUIStatic*					m_belt_list_over[e_af_count];
 	CUIStatic*					m_HelmetOver;
+	CUIStatic*					m_BackpackOver;
 
 	CUIStatic*					m_InvSlot2Highlight;
 	CUIStatic*					m_InvSlot3Highlight;
