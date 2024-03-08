@@ -891,7 +891,7 @@ void CUIActorMenu::PropertiesBoxForSlots( PIItem item, bool& b_show )
 	bool bAlreadyDressed	= false;
 	u16 cur_slot			= item->BaseSlot();
 
-	if (	!pOutfit && !pHelmet &&
+	if (	!pOutfit && !pHelmet && !pBackpack &&
 			cur_slot != NO_ACTIVE_SLOT &&
 			!inv.SlotIsPersistent(cur_slot) &&
 			inv.CanPutInSlot(item, cur_slot) )
@@ -913,7 +913,12 @@ void CUIActorMenu::PropertiesBoxForSlots( PIItem item, bool& b_show )
 		if( !pOutfit )
 		{
 			if( !pHelmet )
-				m_UIPropertiesBox->AddItem( "st_move_to_bag",  NULL, INVENTORY_TO_BAG_ACTION );
+			{
+				if( !pBackpack )
+					m_UIPropertiesBox->AddItem( "st_move_to_bag",  NULL, INVENTORY_TO_BAG_ACTION );
+				else
+					m_UIPropertiesBox->AddItem( "st_undress_backpack",  NULL, INVENTORY_TO_BAG_ACTION );
+			}
 			else
 				m_UIPropertiesBox->AddItem( "st_undress_helmet",  NULL, INVENTORY_TO_BAG_ACTION );
 		}
