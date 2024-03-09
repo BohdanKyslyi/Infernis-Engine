@@ -13,6 +13,8 @@
 
 #include "../Weapon.h"
 #include "../WeaponMagazinedWGrenade.h"
+#include "../WeaponKnife.h"
+#include "../WeaponBinoculars.h"
 #include "../WeaponAmmo.h"
 #include "../Silencer.h"
 #include "../Scope.h"
@@ -513,6 +515,8 @@ void CUIActorMenu::highlight_item_slot(CUICellItem* cell_item)
 	if(CUIDragDropListEx::m_drag_item)
 		return;
 
+	CWeaponKnife* knife = smart_cast<CWeaponKnife*>(item);
+	CWeaponBinoculars* binocular = smart_cast<CWeaponBinoculars*>(item);
 	CWeapon* weapon = smart_cast<CWeapon*>(item);
 	CHelmet* helmet = smart_cast<CHelmet*>(item);
 	CBackpack* backpack = smart_cast<CBackpack*>(item);
@@ -521,6 +525,16 @@ void CUIActorMenu::highlight_item_slot(CUICellItem* cell_item)
 	CEatableItem* eatable = smart_cast<CEatableItem*>(item);
 	CArtefact* artefact = smart_cast<CArtefact*>(item);
 
+	if(knife)
+	{
+		m_KnifeSlotHighlight->Show(true);
+		return;
+	}
+	if(binocular)
+	{
+		m_BinocularSlotHighlight->Show(true);
+		return;
+	}
 	if(weapon)
 	{
 		m_InvSlot2Highlight->Show(true);
