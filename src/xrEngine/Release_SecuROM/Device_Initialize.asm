@@ -171,7 +171,7 @@ $LN11@Initialize@6:
 
 ; 68   : 
 ; 69   :         // Create the render window
-; 70   : 		m_hWnd = CreateWindow( wndclass, "S.T.A.L.K.E.R.: Call of Pripyat", m_dwWindowStyle,
+; 70   : 		m_hWnd = CreateWindow( wndclass, "Infernis Engine", m_dwWindowStyle,
 ; 71   :                                /*rc.left, rc.top, */CW_USEDEFAULT, CW_USEDEFAULT,
 ; 72   :                                (rc.right-rc.left), (rc.bottom-rc.top), 0L,
 ; 73   :                                0, hInstance, 0L );

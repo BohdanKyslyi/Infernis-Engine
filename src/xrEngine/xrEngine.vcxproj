@@ -738,7 +738,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="splash_xrcs_en.bmp" />
+    <Image Include="splash_ie.bmp" />
     <Image Include="stalker_cs.ico" />
+    <Image Include="stalker_ie.ico" />
   </ItemGroup>
   <ItemGroup>
     <None Include="My Amplifier Results\r000hs\r000hs.ampl" />

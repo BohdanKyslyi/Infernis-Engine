@@ -975,7 +975,13 @@
     <Image Include="splash_xrcs_en.bmp">
       <Filter>General\Resources</Filter>
     </Image>
+    <Image Include="splash_ie.bmp">
+      <Filter>General\Resources</Filter>
+    </Image>
     <Image Include="stalker_cs.ico">
+      <Filter>General\Resources</Filter>
+    </Image>
+    <Image Include="stalker_ie.ico">
       <Filter>General\Resources</Filter>
     </Image>
   </ItemGroup>
