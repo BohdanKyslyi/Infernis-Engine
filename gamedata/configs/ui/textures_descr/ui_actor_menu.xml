@@ -32,6 +32,7 @@
 	    <texture id="ui_inGame2_repair_panel" x="0" y="0" width="341" height="768" />
 	    <texture id="ui_inGame2_artefact_blocker" x="477" y="850" width="59" height="59" />
 	    <texture id="ui_inGame2_helmet_blocker" x="564" y="778" width="109" height="114" />
+	    <texture id="ui_inGame2_backpack_blocker" x="222" y="867" width="96" height="130" />
 		<texture id="ui_inGame2_GameSpy_logo" x="1" y="993" width="130" height="30" />
 	</file>
 	<file name="ui\ui_actor_widescreen_sidepanels">
@@ -52,8 +53,9 @@
 		<texture id="ui_inGame2_helmet_highlighter" x="306" y="549" width="96" height="98" />
 		<texture id="ui_inGame2_armor_highlighter" x="307" y="653" width="96" height="161" />
 		<texture id="ui_inGame2_detector_highlighter" x="307" y="820" width="96" height="48" />
-		<texture id="ui_inGame2_knife_highlighter" x="356" y="20" width="88" height="56" />
-		<texture id="ui_inGame2_backpack_highlighter" x="579" y="14" width="91" height="130" />
+		<texture id="ui_inGame2_knife_highlighter" x="307" y="820" width="88" height="56" />
+		<texture id="ui_inGame2_binocular_highlighter" x="307" y="820" width="88" height="56" />
+		<texture id="ui_inGame2_backpack_highlighter" x="307" y="653" width="96" height="161" />
 		<texture id="ui_inGame2_quick_item_highlighter" x="410" y="549" width="66" height="59" />
 		<texture id="ui_inGame2_artefakt_highlighter" x="410" y="614" width="52" height="52" />
 
