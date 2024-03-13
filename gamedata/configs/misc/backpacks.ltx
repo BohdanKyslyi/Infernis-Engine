@@ -1,5 +1,14 @@
-[backpack]:helm_battle
-;helmet
+[backpack]
+GroupControlSection	= spawn_group
+discovery_dependency =
+;$spawn 			= "outfit\backpack"
+$prefetch 		= 32
+cform           	= skeleton
+visual          	= dynamics\devices\dev_rukzak\dev_rukzak.ogf
+default_to_ruck		= false
+sprint_allowed		= true
+control_inertion_factor	= 1.0
+
 class			= E_BCKP
 slot 				= 12
 
@@ -12,10 +21,16 @@ description			= inv_backpack_base_desc ; Опис рюкзака
 inv_weight			= 0.0 ; Вага рюкзака
 cost				= 0; Вартість (у гривнях)
 additional_inventory_weight 	= 0 ; Який буст переносимої ваги отримає гравець
+
 inv_grid_width     = 2 ; Довжина іконки
 inv_grid_height    = 3 ; Ширина іконки
 inv_grid_x         = 18 ; Положення іконки по X
 inv_grid_y         = 22 ; Положення іконки по Y
+
+upgr_icon_x			= 800 ; Довжина іконки в меню ремонтника
+upgr_icon_y			= 600 ; Ширина іконки в меню ремонтника
+upgr_icon_width		= 100 ; Положення іконки по X в меню ремонтника
+upgr_icon_height   	= 150 ; Положення іконки по Y в меню ремонтника
 
 ;------------------------------------------------------------------------------------------
 ;------------------ Перелік рюкзаків для використання -------------------------------------
