@@ -8,6 +8,7 @@ visual          	= dynamics\devices\dev_rukzak\dev_rukzak.ogf
 default_to_ruck		= false
 sprint_allowed		= true
 control_inertion_factor	= 1.0
+additional_inventory_weight2 	= 0
 
 class			= E_BCKP
 slot 				= 12
@@ -31,6 +32,30 @@ upgr_icon_x			= 800 ; Довжина іконки в меню ремонтника
 upgr_icon_y			= 600 ; Ширина іконки в меню ремонтника
 upgr_icon_width		= 100 ; Положення іконки по X в меню ремонтника
 upgr_icon_height   	= 150 ; Положення іконки по Y в меню ремонтника
+
+burn_protection 			= 0.0
+shock_protection 			= 0.0
+chemical_burn_protection 	= 0.0
+radiation_protection 		= 0.0
+telepatic_protection 		= 0.0
+strike_protection 			= 0.0
+explosion_protection 		= 0.0
+wound_protection			= 0.0
+hit_fraction_actor			= 1.0
+
+immunities_sect 			= actor_backpack_immunity
+bones_koeff_protection		= actor_backpack
+
+[actor_backpack_immunity]
+burn_immunity				= 0.05
+strike_immunity				= 0.0
+shock_immunity				= 0.0
+wound_immunity				= 0.05
+radiation_immunity			= 0.0
+telepatic_immunity			= 0.0
+chemical_burn_immunity		= 0.05
+explosion_immunity			= 0.05
+fire_wound_immunity			= 0.02
 
 ;------------------------------------------------------------------------------------------
 ;------------------ Перелік рюкзаків для використання -------------------------------------

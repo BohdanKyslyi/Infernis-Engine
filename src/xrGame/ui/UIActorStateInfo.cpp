@@ -205,10 +205,10 @@ void ui_actor_state_wnd::UpdateActorInfo( CInventoryOwner* owner )
 		woun_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeWound);
 		shoc_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeShock);
 
-		//IKinematics* ikv = smart_cast<IKinematics*>(actor->Visual());
-		//VERIFY(ikv);
-		//u16 spine_bone = ikv->LL_BoneID("bip01_spine1");
-		//fwou_value += backpack->GetBoneArmor(spine_bone)*backpack->GetCondition();
+		IKinematics* ikv = smart_cast<IKinematics*>(actor->Visual());
+		VERIFY(ikv);
+		u16 spine_bone = ikv->LL_BoneID("bip01_spine1");
+		fwou_value += backpack->GetBoneArmor(spine_bone)*backpack->GetCondition();
 	}
 	
 //fire burn protection progress bar
