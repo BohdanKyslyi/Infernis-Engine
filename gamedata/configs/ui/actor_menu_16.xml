@@ -67,13 +67,13 @@
 	<outfit_slot_highlight x="472" y="142" width="76" height="161" stretch="1">
 		<texture>ui_inGame2_armor_highlighter</texture>
 	</outfit_slot_highlight>
-	<knife_slot_highlight x="380" y="25" width="76" height="65" stretch="1">
+	<knife_slot_highlight x="380" y="15" width="76" height="80" stretch="1">
 		<texture>ui_inGame2_knife_highlighter</texture>
 	</knife_slot_highlight>
-	<binocular_slot_highlight x="380" y="95" width="76" height="65" stretch="1">
+	<binocular_slot_highlight x="380" y="85" width="76" height="80" stretch="1">
 		<texture>ui_inGame2_binocular_highlighter</texture>
 	</binocular_slot_highlight>
-	<backpack_slot_highlight x="560" y="14" width="91" height="130" stretch="1">
+	<backpack_slot_highlight x="559" y="14" width="84" height="130" stretch="1">
 		<texture>ui_inGame2_backpack_highlighter</texture>
 	</backpack_slot_highlight>
 	<detector_slot_highlight x="472" y="330" width="76" height="48" stretch="1">
