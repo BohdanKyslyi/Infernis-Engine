@@ -232,7 +232,7 @@
 		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
 		vc_horiz_align="c"/>
 
-	<dragdrop_backpack x="555" y="20" width="91" height="130"
+	<dragdrop_backpack x="555" y="15" width="91" height="130"
 		cell_width="33" cell_height="41" rows_num="3" cols_num="2"
 		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
 		vc_horiz_align="c"/>
