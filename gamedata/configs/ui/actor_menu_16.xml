@@ -221,7 +221,7 @@
 		cell_width="33" cell_height="41" rows_num="1" cols_num="2"
 		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
 		vc_horiz_align="c"/>
-
+		
 	<dragdrop_knife x="380" y="5" width="88" height="88"
 		cell_width="33" cell_height="33" rows_num="1" cols_num="2"
 		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
@@ -238,12 +238,12 @@
 		vc_horiz_align="c"/>
 
 	<dragdrop_pistol x="390" y="158" width="65" height="213"
-		cell_width="33" cell_height="33" rows_num="6" cols_num="2"
+		cell_width="33" cell_height="33" rows_num="7" cols_num="2"
 		custom_placement="0" vertical_placement="1" a="0"
 		virtual_cells="1" vc_vert_align="c" vc_horiz_align="c"/>
 
-	<dragdrop_automatic x="570" y="158" width="65" height="214"
-		cell_width="33" cell_height="33" rows_num="6" cols_num="2"
+	<dragdrop_automatic x="580" y="158" width="65" height="214"
+		cell_width="33" cell_height="33" rows_num="7" cols_num="2"
 		custom_placement="0" vertical_placement="1" a="0"
 		virtual_cells="1" vc_vert_align="c" vc_horiz_align="c" />
 
