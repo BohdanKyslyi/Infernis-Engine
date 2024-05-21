@@ -118,9 +118,9 @@
       <Culture>0x0809</Culture>
     </ResourceCompile>
     <Link>
-      <OutputFile>..\..\..\..\binaries\$(ProjectName).dll</OutputFile>
+      <OutputFile>..\..\..\..\bin\$(ProjectName).dll</OutputFile>
       <AdditionalLibraryDirectories>..\..\..\..\..\libraries;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <ProgramDatabaseFile>..\..\..\..\binaries\$(ProjectName).pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>..\..\..\..\bin\$(ProjectName).pdb</ProgramDatabaseFile>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
       <DataExecutionPrevention />
       <ImportLibrary>..\..\..\..\..\libraries\$(TargetName).lib</ImportLibrary>
