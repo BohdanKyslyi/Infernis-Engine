@@ -236,6 +236,175 @@ public:
 	}
 };
 
+//debug with -dev_mode key
+#include "InfoPortion.h"
+#include "xrServer_Objects_ALife_Monsters.h"
+#include "ai_object_location.h"
+class CCC_Spawn : public IConsole_Command {
+public:
+	CCC_Spawn(LPCSTR N) : IConsole_Command(N) { };
+	virtual void Execute(LPCSTR args) {
+		if (!g_pGameLevel) return;
+
+		int count = 1;
+		char	Name[128];	Name[0] = 0;
+		sscanf(args, "%s %d", Name, &count);
+
+		if (GameID() != eGameIDSingle)
+		{
+			Msg("For this game type entity-spawning is disabled.");
+			return;
+		};
+
+		if (count > 50)
+		{
+			Msg("! [g_spawn]: Cancel the command. Maximum value of the second argument: 50. Cound is: %d", count);
+			return;
+		}
+
+		if (!pSettings->section_exist(Name))
+		{
+			Msg("! Section [%s] isn`t exist...", Name);
+		}
+
+		collide::rq_result RQ = Level().GetPickResult(Device.vCameraPosition, Device.vCameraDirection, 1000.0f, Level().CurrentControlEntity());
+		Fvector pos = Fvector(Device.vCameraPosition).add(Fvector(Device.vCameraDirection).mul(RQ.range));
+		if (auto tpGame = smart_cast<game_sv_Single*>(Level().Server->game))
+		{
+			for (int i = 0; i < count; ++i)
+			{
+				CSE_Abstract* entity = tpGame->alife().spawn_item(Name, pos, Actor()->ai_location().level_vertex_id(), Actor()->ai_location().game_vertex_id(), ALife::_OBJECT_ID(-1));
+
+				if (CSE_ALifeAnomalousZone* anom = smart_cast<CSE_ALifeAnomalousZone*>(entity))
+				{
+					CShapeData::shape_def _shape;
+					_shape.data.sphere.P.set(0.0f, 0.0f, 0.0f);
+					_shape.data.sphere.R = 3.0f;
+					_shape.type = CShapeData::cfSphere;
+					anom->assign_shapes(&_shape, 1);
+					anom->m_space_restrictor_type = RestrictionSpace::eRestrictorTypeNone;
+				}
+			}
+	}
+}
+	virtual void	Info(TInfo& I)
+	{
+		strcpy(I, "name,team,squad,group");
+	}
+};
+
+#include "game_graph.h"
+struct CCC_JumpToLevel : public IConsole_Command {
+	CCC_JumpToLevel(LPCSTR N) : IConsole_Command(N) {};
+
+	virtual void Execute(LPCSTR level)
+	{
+		if (!ai().get_alife())
+		{
+			Msg("! ALife simulator is needed to perform specified command!");
+			return;
+		}
+
+		GameGraph::LEVEL_MAP::const_iterator	I = ai().game_graph().header().levels().begin();
+		GameGraph::LEVEL_MAP::const_iterator	E = ai().game_graph().header().levels().end();
+		for (; I != E; ++I)
+			if (!xr_strcmp((*I).second.name(), level))
+			{
+				ai().alife().jump_to_level(level);
+				return;
+			}
+		Msg("! There is no level \"%s\" in the game graph!", level);
+	}
+
+	virtual void	Save(IWriter* F) {};
+	virtual void	fill_tips(vecTips& tips, u32 mode)
+	{
+		if (!ai().get_alife())
+		{
+			Msg("! ALife simulator is needed to perform specified command!");
+			return;
+		}
+
+		GameGraph::LEVEL_MAP::const_iterator	itb = ai().game_graph().header().levels().begin();
+		GameGraph::LEVEL_MAP::const_iterator	ite = ai().game_graph().header().levels().end();
+		for (; itb != ite; ++itb)
+		{
+			tips.push_back((*itb).second.name());
+		}
+	}
+
+};
+
+class CCC_Giveinfo : public IConsole_Command {
+public:
+	CCC_Giveinfo(LPCSTR N) : IConsole_Command(N) { };
+	virtual void Execute(LPCSTR info_id)
+	{
+		if (!g_pGameLevel) return;
+
+		char	Name[128];	Name[0] = 0;
+		CActor* actor = smart_cast<CActor*>(Level().CurrentEntity());
+
+		if (actor)
+			actor->OnReceiveInfo(info_id);
+		else
+			Msg("! [g_info] : Actor not found!");
+	}
+};
+
+class CCC_Disinfo : public IConsole_Command {
+public:
+	CCC_Disinfo(LPCSTR N) : IConsole_Command(N) { };
+	virtual void Execute(LPCSTR info_id)
+	{
+		if (!g_pGameLevel) return;
+
+		char	Name[128];	Name[0] = 0;
+		CActor* actor = smart_cast<CActor*>(Level().CurrentEntity());
+
+		if (actor)
+			actor->OnDisableInfo(info_id);
+		else
+			Msg("! [g_info] : Actor not found!");
+	}
+};
+
+class CCC_Spawn_to_inv : public IConsole_Command {
+public:
+	CCC_Spawn_to_inv(LPCSTR N) : IConsole_Command(N) { };
+	virtual void Execute(LPCSTR args) {
+		if (!g_pGameLevel)
+		{
+			Log("Error: No game level!");
+			return;
+		}
+
+		int count = 1;
+		char	Name[128];	Name[0] = 0;
+		sscanf(args, "%s %d", Name, &count);
+
+		if (count > 250)
+		{
+			Msg("! [g_spawn_to_inventory]: Cancel the command. Maximum value of the second argument: 250. Cound is: %d", count);
+			return;
+		}
+
+		if (!pSettings->section_exist(Name))
+		{
+			Msg("! Section [%s] isn`t exist...", Name);
+			return;
+		}
+
+		for (int i = 0; i < count; ++i)
+			Level().spawn_item(Name, Actor()->Position(), false, Actor()->ID());
+	}
+
+	virtual void	Info(TInfo& I)
+	{
+		strcpy(I, "name,team,squad,group");
+	}
+};
+// debug with -dev_mode key
 
 
 
@@ -1188,49 +1357,7 @@ public:
 #endif
 
 #ifndef MASTER_GOLD
-#	include "game_graph.h"
-struct CCC_JumpToLevel : public IConsole_Command {
-	CCC_JumpToLevel(LPCSTR N) : IConsole_Command(N)  {};
 
-	virtual void Execute(LPCSTR level)
-	{
-		if ( !ai().get_alife() )
-		{
-			Msg				("! ALife simulator is needed to perform specified command!");
-			return;
-		}
-
-		GameGraph::LEVEL_MAP::const_iterator	I = ai().game_graph().header().levels().begin();
-		GameGraph::LEVEL_MAP::const_iterator	E = ai().game_graph().header().levels().end();
-		for ( ; I != E; ++I )
-			if ( !xr_strcmp((*I).second.name(),level) )
-			{
-				ai().alife().jump_to_level(level);
-				return;
-			}
-		Msg							("! There is no level \"%s\" in the game graph!",level);
-	}
-
-	virtual void	Save	(IWriter *F)	{};
-	virtual void	fill_tips(vecTips& tips, u32 mode)
-	{
-		if ( !ai().get_alife() )
-		{
-			Msg				("! ALife simulator is needed to perform specified command!");
-			return;
-		}
-
-		GameGraph::LEVEL_MAP::const_iterator	itb = ai().game_graph().header().levels().begin();
-		GameGraph::LEVEL_MAP::const_iterator	ite = ai().game_graph().header().levels().end();
-		for ( ; itb != ite; ++itb )
-		{
-			tips.push_back( (*itb).second.name() );
-		}
-	}
-
-};
-
-//#ifndef MASTER_GOLD
 class CCC_Script : public IConsole_Command {
 public:
 	CCC_Script(LPCSTR N) : IConsole_Command(N)  { bEmptyArgsHandled = false; };
@@ -1975,13 +2102,23 @@ CMD4(CCC_Integer,			"hit_anims_tune",						&tune_hit_anims,		0, 1);
 #endif // DEBUG
 
 #ifndef MASTER_GOLD
-	CMD1(CCC_JumpToLevel,	"jump_to_level"		);
-	CMD3(CCC_Mask,			"g_god",			&psActorFlags,	AF_GODMODE	);
-	CMD3(CCC_Mask,			"g_unlimitedammo",	&psActorFlags,	AF_UNLIMITEDAMMO);
 	CMD1(CCC_Script,		"run_script");
 	CMD1(CCC_ScriptCommand,	"run_string");
 	CMD1(CCC_TimeFactor,	"time_factor");		
 #endif // MASTER_GOLD
+
+	//debug with -dev_mode key
+	if (strstr(Core.Params, "-dev_mode"))
+	{
+		CMD1(CCC_Spawn_to_inv,      "g_spawn_to_inv");
+		CMD1(CCC_Spawn,             "g_spawn");
+		CMD1(CCC_Giveinfo,          "g_info");
+		CMD1(CCC_Disinfo,           "d_info");
+		CMD1(CCC_JumpToLevel,       "jump_to_level");
+		CMD3(CCC_Mask,              "g_god",           &psActorFlags, AF_GODMODE);
+		CMD3(CCC_Mask,              "g_unlimitedammo", &psActorFlags, AF_UNLIMITEDAMMO);
+	}
+	//debug with -dev_mode key
 
 	CMD3(CCC_Mask,		"g_autopickup",			&psActorFlags,	AF_AUTOPICKUP);
 	CMD3(CCC_Mask,		"g_dynamic_music",		&psActorFlags,	AF_DYNAMIC_MUSIC);
