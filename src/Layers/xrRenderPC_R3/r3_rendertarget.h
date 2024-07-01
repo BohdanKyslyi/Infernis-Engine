@@ -186,6 +186,8 @@ private:
 	ref_shader				s_combine;
    ref_shader				s_combine_msaa[8];
 	ref_shader				s_combine_volumetric;
+	ref_geom				g_rain_drops;
+	ref_shader				s_rain_drops;
 public:
 	ref_shader				s_postprocess;
    ref_shader           s_postprocess_msaa;
@@ -240,7 +242,7 @@ public:
 	bool						u_need_CM				();
 	BOOL						u_DBT_enable			(float zMin, float zMax);
 	void						u_DBT_disable			();
-
+    void                        PhaseRainDrops          ();
 	void						phase_scene_prepare		();
 	void						phase_scene_begin		();
 	void						phase_scene_end			();
