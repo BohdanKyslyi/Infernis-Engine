@@ -224,6 +224,12 @@ float		ps_r3_dyn_wet_surf_near		= 10.f;				// 10.0f
 float		ps_r3_dyn_wet_surf_far		= 30.f;				// 30.0f
 int			ps_r3_dyn_wet_surf_sm_res	= 256;				// 256
 
+float		ps_r2_rain_drops_intensity = 0.00025f;
+float		ps_r2_rain_drops_speed = 1.25f;
+
+Flags32		ps_r2_rain_drops_flags = { R2FLAG_RAIN_DROPS
+	| R2FLAG_RAIN_DROPS_CONTROL
+	};
 
 //- Mad Max
 float		ps_r2_gloss_factor			= 4.0f;
@@ -852,6 +858,10 @@ void		xrRender_initconsole	()
 	CMD3(CCC_Mask,		"r4_wireframe",					&ps_r2_ls_flags_ext,		R2FLAGEXT_WIREFRAME);//Need restart
 	CMD3(CCC_Mask,		"r2_steep_parallax",			&ps_r2_ls_flags,			R2FLAG_STEEP_PARALLAX);
 	CMD3(CCC_Mask,		"r2_detail_bump",				&ps_r2_ls_flags,			R2FLAG_DETAIL_BUMP);
+	CMD3(CCC_Mask,		"r2_raindrops",			        &ps_r2_rain_drops_flags,	R2FLAG_RAIN_DROPS	);	
+	CMD3(CCC_Mask,		"r2_rain_drops_control",        &ps_r2_rain_drops_flags,	R2FLAG_RAIN_DROPS_CONTROL	);
+	CMD4(CCC_Float,		"r2_rain_drops_intensity",	    &ps_r2_rain_drops_intensity, 0.f,	1.f	);
+	CMD4(CCC_Float,		"r2_rain_drops_speed",	        &ps_r2_rain_drops_speed, 	 0.8f,	5.f		);
 
 	CMD3(CCC_Token,		"r2_sun_quality",				&ps_r_sun_quality,			qsun_quality_token);
 

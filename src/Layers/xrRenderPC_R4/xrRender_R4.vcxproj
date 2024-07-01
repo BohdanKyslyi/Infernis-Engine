@@ -534,6 +534,7 @@
     <ClCompile Include="..\xrRender\xrRender_console.cpp" />
     <ClCompile Include="..\xrRender\xrStripify.cpp" />
     <ClCompile Include="..\xrRender\xr_effgamma.cpp" />
+	<ClCompile Include="..\xrRender\rendertarget_raindrops.cpp" />
     <ClCompile Include="blender_bloom_build.cpp" />
     <ClCompile Include="blender_combine.cpp" />
     <ClCompile Include="blender_deffer_aref.cpp" />
