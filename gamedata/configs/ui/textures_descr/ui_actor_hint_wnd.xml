@@ -68,9 +68,9 @@
 	    <texture id="ui_inGame2_circle_Helmetbroken_orange" x="200" y="927" width="33" height="35" />
 	    <texture id="ui_inGame2_circle_Helmetbroken_red" x="200" y="969" width="33" height="35" />
 		
-	    <texture id="ui_inGame2_circle_Backpackbroken_green" x="200" y="845" width="33" height="35" />
-	    <texture id="ui_inGame2_circle_Backpackbroken_yellow" x="247" y="845" width="33" height="35" />
-	    <texture id="ui_inGame2_circle_Backpackbroken_red" x="294" y="845" width="33" height="35" />
+	    <texture id="ui_inGame2_circle_Backpackbroken_green" x="868" y="981" width="37" height="39" />
+	    <texture id="ui_inGame2_circle_Backpackbroken_yellow" x="916" y="981" width="35" height="39" />
+	    <texture id="ui_inGame2_circle_Backpackbroken_red" x="962" y="981" width="35" height="39" />
 		
 	    <texture id="ui_inGame2_circle_Armorbroken_green" x="782" y="983" width="33" height="35" />
 	    <texture id="ui_inGame2_circle_Armorbroken_yellow" x="247" y="886" width="33" height="35" />
