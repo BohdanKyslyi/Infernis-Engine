@@ -5,6 +5,7 @@
 #include "../../xrEngine/igame_level.h"
 #include "../../xrEngine/environment.h"
 #include "../../xrEngine/fmesh.h"
+#include "../../build_config_defines.h"
 
 #include "ftreevisual.h"
 
@@ -103,7 +104,19 @@ struct	FTreeVisual_setup
 
 		// Calc wind-vector3, scale
 		float	tm_rot			= PI_MUL_2*Device.fTimeGlobal/ps_r__Tree_w_rot;
+#ifdef TREE_WIND_EFFECT
+		CEnvDescriptor&	E = *g_pGamePersistent->Environment().CurrentEnv;
+		float fValue = E.m_fTreeAmplitudeIntensity;
+		wind.set(_sin(tm_rot), 0, _cos(tm_rot), 0);
+		wind.normalize();
+#if RENDER!=R_R1
+		wind.mul(fValue);
+#else
+		wind.mul(ps_r__Tree_w_amp);
+#endif
+#else
 		wind.set				(_sin(tm_rot),0,_cos(tm_rot),0);	wind.normalize	();	wind.mul(ps_r__Tree_w_amp);	// dir1*amplitude
+		#endif //-TREE_WIND_EFFECT
 		scale					= 1.f/float(FTreeVisual_quant);
 
 		// setup constants

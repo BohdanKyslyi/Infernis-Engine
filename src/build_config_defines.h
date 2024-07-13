@@ -4,6 +4,7 @@
 // --- xrCore ---
 // don't crash game when VERIFY fails
 #define NON_FATAL_VERIFY
+#define TREE_WIND_EFFECT
 
 // --- xrRender --- 
 // HQ Geometry fix by Shoker.
