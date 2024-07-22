@@ -223,12 +223,12 @@
 		vc_horiz_align="c"/>
 		
 	<dragdrop_knife x="380" y="5" width="88" height="88"
-		cell_width="33" cell_height="33" rows_num="1" cols_num="2"
+		cell_width="33" cell_height="33" rows_num="2" cols_num="2"
 		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
 		vc_horiz_align="c"/>
 
 	<dragdrop_binocular x="380" y="75" width="88" height="88"
-		cell_width="33" cell_height="33" rows_num="1" cols_num="2"
+		cell_width="33" cell_height="33" rows_num="2" cols_num="2"
 		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
 		vc_horiz_align="c"/>
 
