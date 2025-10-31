@@ -24,24 +24,60 @@
 	</left_background>
 
 	<actor_ch_info x="657" y="10" width="257" height="89">
-		<name_static x="8" y="18" width="112" height="16">
+		<name_static x="5" y="5" width="112" height="16">
 			<text align="l" font="letterica18" color="ui_2"/>
 		</name_static>
-		<community_static x="8" y="36" width="112" height="14">
-			<text align="l" font="letterica16" color="ui_3"/>
+		<rank_caption x="5" y="28" width="112" height="14">
+			<text align="l" font="letterica16" color="ui_3">ui_st_rank</text>
+		</rank_caption>
+		<rank_static x="38" y="28" width="112" height="14">
+			<text align="r" font="letterica16" color="ui_3"/>
+		</rank_static>
+		<community_caption x="5" y="17" width="112" height="14">
+			<text align="l" font="letterica16" color="ui_3">ui_st_community</text>
+		</community_caption>
+		<community_static x="38" y="17" width="112" height="14">
+			<text align="r" font="letterica16" color="ui_3"/>
 		</community_static>
+		<reputation_caption x="5" y="39" width="112" height="14">
+			<text align="l" font="letterica16" color="ui_3">ui_st_reputation</text>
+		</reputation_caption>
+		<reputation_static x="38" y="39" width="112" height="14">
+			<text align="r" font="letterica16" color="ui_3"/>
+		</reputation_static>
 		<icon x="158" y="1" width="99" height="87" stretch="1">
 			<deadbody r="255" g="160" b="160" a="205"/>
 		</icon>
 	</actor_ch_info>
 
 	<partner_ch_info x="111" y="10" width="257" height="89">
-		<name_static x="8" y="18" width="112" height="16">
+		<name_static x="5" y="-3" width="112" height="16">
 			<text align="l" font="letterica18" color="ui_2"/>
 		</name_static>
-		<community_static x="8" y="36" width="112" height="14">
-			<text align="l" font="letterica16" color="ui_3"/>
+		<rank_caption x="5" y="23" width="112" height="14">
+			<text align="l" font="letterica16" color="ui_3">ui_st_rank</text>
+		</rank_caption>
+		<rank_static x="38" y="23" width="112" height="14">
+			<text align="r" font="letterica16" color="ui_3"/>
+		</rank_static>
+		<community_caption x="5" y="12" width="112" height="14">
+			<text align="l" font="letterica16" color="ui_3">ui_st_community</text>
+		</community_caption>
+		<community_static x="38" y="12" width="112" height="14">
+			<text align="r" font="letterica16" color="ui_3"/>
 		</community_static>
+		<reputation_caption x="5" y="34" width="112" height="14">
+			<text align="l" font="letterica16" color="ui_3">ui_st_reputation</text>
+		</reputation_caption>
+		<reputation_static x="38" y="34" width="112" height="14">
+			<text align="r" font="letterica16" color="ui_3"/>
+		</reputation_static>
+		<relation_caption x="5" y="45" width="112" height="14">
+			<text align="l" font="letterica16" color="ui_3">ui_st_relation</text>
+		</relation_caption>
+		<relation_static x="38" y="45" width="112" height="14">
+			<text align="r" font="letterica16" color="ui_3"/>
+		</relation_static>
 		<icon x="158" y="1" width="99" height="87" stretch="1">
 			<deadbody r="255" g="160" b="160" a="205"/>
 		</icon>
