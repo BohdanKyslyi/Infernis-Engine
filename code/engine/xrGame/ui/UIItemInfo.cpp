@@ -25,6 +25,7 @@
 #include "../UserBackpack.h"
 #include "../eatable_item.h"
 #include "UICellItem.h"
+#include "string_table.h"
 
 extern const LPCSTR g_inventory_upgrade_xml;
 
@@ -218,8 +219,10 @@ void CUIItemInfo::InitItem(CUICellItem* pCellItem, CInventoryItem* pCompareItem,
             UIWeight->SetWndPos(pos);
         }
     }
-    if (UICost && IsGameTypeSingle() && item_price != u32(-1)) {
-        xr_sprintf(str, "%d UAH", item_price); // will be owerwritten in multiplayer
+	if (UICost && IsGameTypeSingle() && item_price != u32(-1)) {
+        LPCSTR currency_name = CStringTable().translate("st_currency_name").c_str();
+        xr_sprintf(str, "%d %s", item_price, currency_name);
+        
         UICost->SetText(str);
         pos.x = UICost->GetWndPos().x;
         if (m_complex_desc) {

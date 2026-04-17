@@ -27,6 +27,7 @@
 #include "../string_table.h"
 #include "UICharacterInfo.h"
 #include "ui_base.h"
+#include "string_table.h"
 
 #define PDA_RANKING_XML "pda_ranking.xml"
 
@@ -49,9 +50,12 @@ CUIRankingWnd::~CUIRankingWnd() {
 void CUIRankingWnd::Show(bool status) {
     if (status) {
         m_actor_ch_info->InitCharacter(Actor()->object_id());
+        CStringTable st;
+        LPCSTR currency_name = st.translate("st_currency_name").c_str();
 
         string64 buf;
-        xr_sprintf(buf, sizeof(buf), "%d %s", Actor()->get_money(), "UAH");
+        xr_sprintf(buf, sizeof(buf), "%d %s", Actor()->get_money(), currency_name);
+        
         m_money_value->SetText(buf);
         m_money_value->AdjustWidthToText();
         update_info();

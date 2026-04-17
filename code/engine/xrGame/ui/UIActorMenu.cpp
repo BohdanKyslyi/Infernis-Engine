@@ -40,6 +40,7 @@
 #include "UIPropertiesBox.h"
 #include "UIMainIngameWnd.h"
 #include "../Trade.h"
+#include "string_table.h"
 
 void CUIActorMenu::SetActor(CInventoryOwner* io) {
     R_ASSERT(!IsShown());
@@ -783,9 +784,11 @@ void CUIActorMenu::UpdateActorMP() {
     }
 
     int money = Game().local_player->money_for_round;
+    CStringTable st;
+    LPCSTR currency_name = st.translate("st_currency_name").c_str();
 
     string64 buf;
-    xr_sprintf(buf, "%d UAH", money);
+    xr_sprintf(buf, "%d %s", money, currency_name);
     m_ActorMoney->SetText(buf);
 
     m_ActorCharacterInfo->InitCharacterMP(Game().local_player->getName(), "ui_npc_u_nebo_1");

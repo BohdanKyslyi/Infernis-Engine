@@ -24,6 +24,7 @@
 #include "../../xrServerEntities/script_engine.h"
 #include "../UIGameSP.h"
 #include "UITalkWnd.h"
+#include "string_table.h"
 
 // -------------------------------------------------
 
@@ -286,8 +287,11 @@ bool CUIActorMenu::CanMoveToPartner(PIItem pItem) {
 
 void CUIActorMenu::UpdateActor() {
     if (IsGameTypeSingle()) {
+        CStringTable st;
+        LPCSTR currency_name = st.translate("st_currency_name").c_str();
+
         string64 buf;
-        xr_sprintf(buf, "%d UAH", m_pActorInvOwner->get_money());
+        xr_sprintf(buf, "%d %s", m_pActorInvOwner->get_money(), currency_name);
         m_ActorMoney->SetText(buf);
     } else {
         UpdateActorMP();
