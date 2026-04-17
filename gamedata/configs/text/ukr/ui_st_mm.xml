@@ -1,151 +1,151 @@
 <?xml version="1.0" encoding="windows-1251" ?>
 <string_table>
 	<string id="Clear">
-		<text>Ясная</text>
+		<text>Ясна</text>
 	</string>
 	<string id="Cloudy">
-		<text>Облачная</text>
+		<text>Хмарна</text>
 	</string>
 	<string id="Default">
-		<text>средние</text>
+		<text>середні</text>
 	</string>
 	<string id="Extreme">
-		<text>максимальные</text>
+		<text>максимальні</text>
 	</string>
 	<string id="High">
-		<text>высокие</text>
+		<text>високі</text>
 	</string>
 	<string id="Low">
-		<text>низкие</text>
+		<text>низькі</text>
 	</string>
 	<string id="Minimum">
-		<text>минимальные</text>
+		<text>мінімальні</text>
 	</string>
 	<string id="Night">
-		<text>Ночь</text>
+		<text>Ніч</text>
 	</string>
 	<string id="Rain">
-		<text>Дождь</text>
+		<text>Дощ</text>
 	</string>
 	<string id="game type">
-		<text>ТИП ИГРЫ</text>
+		<text>ТИП ГРИ</text>
 	</string>
 	<string id="gd_master">
-		<text>мастер</text>
+		<text>майстер</text>
 	</string>
 	<string id="gd_novice">
-		<text>новичок</text>
+		<text>новачок</text>
 	</string>
 	<string id="gd_veteran">
 		<text>ветеран</text>
 	</string>
 	<string id="icon">
-		<text>ЗНАЧКИ</text>
+		<text>ПОЗНАЧКИ</text>
 	</string>
 	<string id="map">
 		<text>КАРТА</text>
 	</string>
 	<string id="mm_mp_actret_time">
-		<text>Возвращение активацией</text>
+		<text>Повернення активацією</text>
 	</string>
 	<string id="mm_mp_allowvoting">
-		<text>Разрешить голосование</text>
+		<text>Дозволити голосування</text>
 	</string>
 	<string id="mm_mp_anomalytime">
-		<text>Время аномалии (мин.)</text>
+		<text>Час аномалії (хв.)</text>
 	</string>
 	<string id="mm_mp_artefactcapture">
-		<text>Захват артефакта</text>
+		<text>Захоплення артефакту</text>
 	</string>
 	<string id="mm_mp_artefdelay">
-		<text>Задержка артефакта</text>
+		<text>Затримка артефакту</text>
 	</string>
 	<string id="mm_mp_artefnum">
-		<text>Кол-во артефактов</text>
+		<text>К-сть артефактів</text>
 	</string>
 	<string id="mm_mp_artefstay">
-		<text>Время артефакта</text>
+		<text>Час артефакту</text>
 	</string>
 	<string id="mm_mp_artret_time">
-		<text>Возврат артефакта</text>
+		<text>Поверн. артефакту</text>
 	</string>
 	<string id="mm_mp_autoteambalance">
 		<text>Автобаланс команд</text>
 	</string>
 	<string id="mm_mp_autoteamswap">
-		<text>Автосмена команд</text>
+		<text>Автозаміна команд</text>
 	</string>
 	<string id="mm_mp_avail_maps">
-		<text>ДОСТУПНЫЕ КАРТЫ</text>
+		<text>ДОСТУПНІ МАПИ</text>
 	</string>
 	<string id="mm_mp_cancel">
-		<text>Отмена</text>
+		<text>Відмінити</text>
 	</string>
 	<string id="mm_mp_cd_key">
 		<text>CD-key</text>
 	</string>
 	<string id="mm_mp_check_cdkey">
-		<text>проверять CD-key</text>
+		<text>перевіряти CD-key</text>
 	</string>
 	<string id="mm_mp_client">
-		<text>Клиент</text>
+		<text>Клієнт</text>
 	</string>
 	<string id="mm_mp_create">
-		<text>Создать</text>
+		<text>Створити</text>
 	</string>
 	<string id="mm_mp_damageblock">
-		<text>Неуязвимость (сек.)</text>
+		<text>Невразливість (сек.)</text>
 	</string>
 	<string id="mm_mp_damageblockindicator">
-		<text>Индикатор неуязвимости</text>
+		<text>Індикатор невразливості</text>
 	</string>
 	<string id="mm_mp_deaths">
-		<text>Смерти</text>
+		<text>Смерті</text>
 	</string>
 	<string id="mm_mp_dedicated">
-		<text>Выделенный</text>
+		<text>Виділений</text>
 	</string>
 	<string id="mm_mp_demo_play_list">
-		<text>список демо-роликов</text>
+		<text>список демо-роликів</text>
 	</string>
 	<string id="mm_mp_demo_play_players_stats">
-		<text>статистика игроков</text>
+		<text>статистика гравців</text>
 	</string>
 	<string id="mm_mp_demosave">
-		<text>Записывать демо-ролики</text>
+		<text>Записувати демо-ролики</text>
 	</string>
 	<string id="mm_mp_demosave_options">
-		<text>Запись демо-роликов</text>
+		<text>Запис демо-роликів</text>
 	</string>
 	<string id="mm_mp_empty">
-		<text>Пустые</text>
+		<text>Порожні</text>
 	</string>
 	<string id="mm_mp_filters">
-		<text>Фильтры</text>
+		<text>Фільтри</text>
 	</string>
 	<string id="mm_mp_forcerespawn">
-		<text>Рождение (сек.)</text>
+		<text>Народження (с.)</text>
 	</string>
 	<string id="mm_mp_fraglimit">
-		<text>Лимит фрагов</text>
+		<text>Ліміт фрагів</text>
 	</string>
 	<string id="mm_mp_frags">
 		<text>Фраги</text>
 	</string>
 	<string id="mm_mp_freezetime">
-		<text>Время задержки</text>
+		<text>Час затримки</text>
 	</string>
 	<string id="mm_mp_friendlyfire">
-		<text>Огонь союзника (к.)</text>
+		<text>Вогонь союзника (к.)</text>
 	</string>
 	<string id="mm_mp_friendlyindicators">
-		<text>Индикаторы союзников</text>
+		<text>Індикатори союзників</text>
 	</string>
 	<string id="mm_mp_friendlynames">
-		<text>Имена друзей</text>
+		<text>Імена друзів</text>
 	</string>
 	<string id="mm_mp_full">
-		<text>Полные</text>
+		<text>Повні</text>
 	</string>
 	<string id="mm_mp_gamemode">
 		<text>Режим</text>
@@ -154,142 +154,142 @@
 		<text>IP/хост: порт</text>
 	</string>
 	<string id="mm_mp_internet">
-		<text>Интернет</text>
+		<text>Інтернет</text>
 	</string>
 	<string id="mm_mp_join">
-		<text>Соединиться</text>
+		<text>З'єднатися</text>
 	</string>
 	<string id="mm_mp_lan">
-		<text>Локальная сеть</text>
+		<text>Локальна мережа</text>
 	</string>
 	<string id="mm_mp_listenservers">
-		<text>Не выделенные</text>
+		<text>Не виділені</text>
 	</string>
 	<string id="mm_mp_load_demo">
-		<text>Воспроизвести</text>
+		<text>Програти</text>
 	</string>
 	<string id="mm_mp_mapratation">
-		<text>Список карт</text>
+		<text>Список мап</text>
 	</string>
 	<string id="mm_mp_maxplayers">
-		<text>Макс. игроков</text>
+		<text>Макс. гравців</text>
 	</string>
 	<string id="mm_mp_network_connection">
-		<text>Сетевое соединение</text>
+		<text>З'єднання по мережі</text>
 	</string>
 	<string id="mm_mp_noanomalies">
-		<text>Без аномалий</text>
+		<text>Без аномалій</text>
 	</string>
 	<string id="mm_mp_options">
-		<text>Опции</text>
+		<text>Опції</text>
 	</string>
 	<string id="mm_mp_password">
 		<text>Пароль</text>
 	</string>
 	<string id="mm_mp_player_name">
-		<text>Имя игрока:</text>
+		<text>Ім'я гравця</text>
 	</string>
 	<string id="mm_mp_players">
-		<text>Игроки</text>
+		<text>Гравці</text>
 	</string>
 	<string id="mm_mp_players_count">
-		<text>количество игроков</text>
+		<text>кількість гравців</text>
 	</string>
 	<string id="mm_mp_publicserver">
-		<text>Интернет-сервер</text>
+		<text>Інтернет-сервер</text>
 	</string>
 	<string id="mm_mp_quickrefresh">
-		<text>Обновить один</text>
+		<text>Оновити один</text>
 	</string>
 	<string id="mm_mp_rateofchange">
-		<text>Коэф. изменения</text>
+		<text>Коеф. зміни</text>
 	</string>
 	<string id="mm_mp_refresh">
-		<text>Обновить всё</text>
+		<text>Оновити все</text>
 	</string>
 	<string id="mm_mp_reinforcement">
-		<text>Подкрепление (сек.)</text>
+		<text>Підкріплення (с.)</text>
 	</string>
 	<string id="mm_mp_respawnoptions">
-		<text>Опции рождения</text>
+		<text>Опції народження</text>
 	</string>
 	<string id="mm_mp_sel_maps">
-		<text>ВЫБРАННЫЕ КАРТЫ</text>
+		<text>ВИБРАНІ МАПИ</text>
 	</string>
 	<string id="mm_mp_server">
 		<text>Сервер</text>
 	</string>
 	<string id="mm_mp_server_list">
-		<text>Список серверов</text>
+		<text>Список серверів</text>
 	</string>
 	<string id="mm_mp_server_prop">
-		<text>Свойства сервера</text>
+		<text>Властивості сервера</text>
 	</string>
 	<string id="mm_mp_serverinfo">
-		<text>Инфо сервера</text>
+		<text>Інфо сервера</text>
 	</string>
 	<string id="mm_mp_serverlist">
 		<text>Сервер</text>
 	</string>
 	<string id="mm_mp_servername">
-		<text>Имя сервера</text>
+		<text>Ім'я сервера</text>
 	</string>
 	<string id="mm_mp_serversettings">
-		<text>Настройки сервера</text>
+		<text>Налаштування сервера</text>
 	</string>
 	<string id="mm_mp_spectator">
-		<text>Наблюдатель</text>
+		<text>Спостерігач</text>
 	</string>
 	<string id="mm_mp_spectator_firsteye">
-		<text>От первого лица</text>
+		<text>Від першої особи</text>
 	</string>
 	<string id="mm_mp_spectator_freefly">
-		<text>Свободный полёт</text>
+		<text>Вільний політ</text>
 	</string>
 	<string id="mm_mp_spectator_freelook">
-		<text>Свободно-привязанный</text>
+		<text>Вільно-прив'язаний</text>
 	</string>
 	<string id="mm_mp_spectator_lookat">
-		<text>От третьего лица</text>
+		<text>Від третьої особи</text>
 	</string>
 	<string id="mm_mp_spectator_options">
-		<text>Настройки наблюдателя</text>
+		<text>Налаштування спостерігача</text>
 	</string>
 	<string id="mm_mp_spectator_teamonly">
-		<text>Только для команды</text>
+		<text>Лише для команди</text>
 	</string>
 	<string id="mm_mp_startweather">
 		<text>Погода</text>
 	</string>
 	<string id="mm_mp_team_stats">
-		<text>счёт</text>
+		<text>рахунок</text>
 	</string>
 	<string id="mm_mp_timelimit">
-		<text>Лимит времени (мин.)</text>
+		<text>Ліміт часу (хв.)</text>
 	</string>
 	<string id="mm_mp_warmuptime">
-		<text>Разогрев (сек.)</text>
+		<text>Розігрів (сек.)</text>
 	</string>
 	<string id="mm_mp_weatheroptions">
-		<text>Опции погоды</text>
+		<text>Опції погоди</text>
 	</string>
 	<string id="mm_mp_withoutfriendlyfire">
-		<text>Без огня по своим</text>
+		<text>Без вогню по своїх</text>
 	</string>
 	<string id="mm_mp_withoutpassword">
-		<text>Без пароля</text>
+		<text>Без паролю</text>
 	</string>
 	<string id="mm_mp_withoutpunkbuster">
 		<text>Без Punk Buster</text>
 	</string>
 	<string id="mm_mp_withpassword">
-		<text>С паролем</text>
+		<text>Із паролем</text>
 	</string>
 	<string id="mm_offline_mode">
-		<text>Локальная сеть</text>
+		<text>Локальна мережа</text>
 	</string>
 	<string id="mm_online_mode">
-		<text>Интернет</text>
+		<text>Інтернет</text>
 	</string>
 	<string id="mp_agroprom">
 		<text>Завод «Агропром»</text>
@@ -298,325 +298,325 @@
 		<text>АТП</text>
 	</string>
 	<string id="mp_bath">
-		<text>Бассейн</text>
+		<text>Басейн</text>
 	</string>
 	<string id="mp_change_unick_success">
-		<text>Успешное изменение уникального ника!</text>
+		<text>Успішна зміна унікального ніку!</text>
 	</string>
 	<string id="mp_darkvalley">
-		<text>Тёмная Долина</text>
+		<text>Темна Долина</text>
 	</string>
 	<string id="mp_factory">
-		<text>Завод «Янтарь»</text>
+		<text>Завод «Янтар»</text>
 	</string>
 	<string id="mp_gamespy_atlas_error">
-		<text>ошибка соединения с сервером статистики</text>
+		<text>помилка з'єднання із сервером статистики</text>
 	</string>
 	<string id="mp_gamespy_ws_login_error">
-		<text>ошибка соединения с логин-сервером</text>
+		<text>помилка з'єднання із логін-сервером</text>
 	</string>
 	<string id="mp_login_success">
-		<text>Вы успешно авторизировались</text>
+		<text>Ви успішно авторизувалися</text>
 	</string>
 	<string id="mp_lost_village">
-		<text>Заброшенная деревня</text>
+		<text>Покинуте село</text>
 	</string>
 	<string id="mp_military_1">
-		<text>Военные склады</text>
+		<text>Військові склади</text>
 	</string>
 	<string id="mp_nick_name_not_valid">
-		<text>неправильное имя</text>
+		<text>неправильне ім'я</text>
 	</string>
 	<string id="mp_pool">
-		<text>Бассейн</text>
+		<text>Басейн</text>
 	</string>
 	<string id="mp_railroad">
-		<text>Ж/д станция</text>
+		<text>Зал. станція</text>
 	</string>
 	<string id="mp_rostok">
 		<text>Завод «Росток»</text>
 	</string>
 	<string id="mp_unique_nick_not_valid">
-		<text>неправильный уникальный ник</text>
+		<text>неправильний унікальний нік</text>
 	</string>
 	<string id="mp_want_to_delete_demo">
-		<text>Вы действительно хотите удалить</text>
+		<text>Ви справді хочете видалити</text>
 	</string>
 	<string id="mp_workshop">
-		<text>Заброшенная фабрика</text>
+		<text>Покинута фабрика</text>
 	</string>
 	<string id="ping">
-		<text>ПИНГ</text>
+		<text>ПІНГ</text>
 	</string>
 	<string id="players">
-		<text>ИГРОКИ</text>
+		<text>ГРАВЦІ</text>
 	</string>
 	<string id="renderer_r1">
-		<text>Статичное освещение</text>
+		<text>Статичне освітлення</text>
 	</string>
 	<string id="renderer_r2">
-		<text>Полное динамическое освещение</text>
+		<text>Повне динамічне освітлення</text>
 	</string>
 	<string id="renderer_r2.5">
-		<text>Улучшенное полное освещение</text>
+		<text>Покращене повне освітлення</text>
 	</string>
 	<string id="renderer_r2a">
-		<text>Динам. освещение объектов</text>
+		<text>Динам. освітлення об'єктів</text>
 	</string>
 	<string id="renderer_r3">
-		<text>Ул. полное освещение (DX10)</text>
+		<text>Покр. повне освітлення (DX10)</text>
 	</string>
 	<string id="server name">
-		<text>ИМЯ СЕРВЕРА</text>
+		<text>ІМ'Я СЕРВЕРА</text>
 	</string>
 	<string id="st_artefacthunt">
-		<text>Охота за артефактом</text>
+		<text>Полювання за артефактом</text>
 	</string>
 	<string id="st_capture_the_artefact">
-		<text>Захват артефакта</text>
+		<text>Захоплення артефакту</text>
 	</string>
 	<string id="st_deathmatch">
-		<text>Все против всех</text>
+		<text>Всі проти всіх</text>
 	</string>
 	<string id="st_mp_gsfilter">
-		<text>Фильтр:</text>
+		<text>Фільтр:</text>
 	</string>
 	<string id="st_opt_high">
-		<text>высоко</text>
+		<text>високо</text>
 	</string>
 	<string id="st_opt_low">
-		<text>низко</text>
+		<text>низько</text>
 	</string>
 	<string id="st_opt_medium">
-		<text>средне</text>
+		<text>посередньо</text>
 	</string>
 	<string id="st_opt_off">
-		<text>отключено</text>
+		<text>відключено</text>
 	</string>
 	<string id="st_rank_experienced">
-		<text>опытный</text>
+		<text>досвідчений</text>
 	</string>
 	<string id="st_rank_legend">
-		<text>легендарный сталкер</text>
+		<text>легендарний сталкер</text>
 	</string>
 	<string id="st_rank_novice">
-		<text>новичок</text>
+		<text>новачок</text>
 	</string>
 	<string id="st_rank_professional">
-		<text>профессионал</text>
+		<text>професіонал</text>
 	</string>
 	<string id="st_rank_veteran">
 		<text>ветеран</text>
 	</string>
 	<string id="st_team_deathmatch">
-		<text>Команда против команды</text>
+		<text>Команда проти команди</text>
 	</string>
 	<string id="ui_mm_60_hz">
-		<text>Частота 60Гц</text>
+		<text>Частота 60 Гц</text>
 	</string>
 	<string id="ui_mm_action">
-		<text>Действие</text>
+		<text>Дія</text>
 	</string>
 	<string id="ui_mm_advanced">
-		<text>Расширенные</text>
+		<text>Розширені</text>
 	</string>
 	<string id="ui_mm_alternative">
 		<text>Альтернатива</text>
 	</string>
 	<string id="ui_mm_anisotropic">
-		<text>Фильтрация текстур</text>
+		<text>Фільтрація текстур</text>
 	</string>
 	<string id="ui_mm_apply">
-		<text>Применить</text>
+		<text>Застосувати</text>
 	</string>
 	<string id="ui_mm_back">
 		<text>Назад</text>
 	</string>
 	<string id="ui_mm_blood">
-		<text>Кровь</text>
+		<text>Кров</text>
 	</string>
 	<string id="ui_mm_brightness">
-		<text>Яркость</text>
+		<text>Яскравість</text>
 	</string>
 	<string id="ui_mm_cancel">
-		<text>Отмена</text>
+		<text>Відмінити</text>
 	</string>
 	<string id="ui_mm_check_updates">
-		<text>Обновления</text>
+		<text>Оновлення</text>
 	</string>
 	<string id="ui_mm_contrast">
 		<text>Контраст</text>
 	</string>
 	<string id="ui_mm_controls">
-		<text>Управление</text>
+		<text>Керування</text>
 	</string>
 	<string id="ui_mm_credits">
-		<text>Титры</text>
+		<text>Титри</text>
 	</string>
 	<string id="ui_mm_crosshair_distance">
-		<text>Дистанция до цели</text>
+		<text>Відстань до цілі</text>
 	</string>
 	<string id="ui_mm_default">
-		<text>По умолчанию</text>
+		<text>До замовчувань</text>
 	</string>
 	<string id="ui_mm_delete">
-		<text>Удалить</text>
+		<text>Видалити</text>
 	</string>
 	<string id="ui_mm_delete_existing_file_q">
-		<text>Вы действительно хотите удалить файл?</text>
+		<text>Ви справді хочете видалити файл?</text>
 	</string>
 	<string id="ui_mm_detail_density">
-		<text>Плотность травы</text>
+		<text>Щільність трави</text>
 	</string>
 	<string id="ui_mm_difficulty">
-		<text>Сложность</text>
+		<text>Важкість</text>
 	</string>
 	<string id="ui_mm_disconnect">
-		<text>Отсоединиться</text>
+		<text>Від'єднатися</text>
 	</string>
 	<string id="ui_mm_disconnect_message">
-		<text>Вы действительно желаете отсоединиться?</text>
+		<text>Ви справді хочете від'єднатися?</text>
 	</string>
 	<string id="ui_mm_dof">
-		<text>Глубина резкости</text>
+		<text>Глибина різкості</text>
 	</string>
 	<string id="ui_mm_dyn_crosshair">
-		<text>Динамический прицел</text>
+		<text>Динамічний приціл</text>
 	</string>
 	<string id="ui_mm_dynamic_music">
-		<text>Динамическая музыка</text>
+		<text>Динамічна музика</text>
 	</string>
 	<string id="ui_mm_eax">
 		<text>EAX</text>
 	</string>
 	<string id="ui_mm_fullscreen">
-		<text>Полный экран</text>
+		<text>Повний екран</text>
 	</string>
 	<string id="ui_mm_gameplay">
-		<text>Игра</text>
+		<text>Гра</text>
 	</string>
 	<string id="ui_mm_gamma">
-		<text>Гамма</text>
+		<text>Гама</text>
 	</string>
 	<string id="ui_mm_geometry_lod">
-		<text>Детализация объектов</text>
+		<text>Деталізація об'єктів</text>
 	</string>
 	<string id="ui_mm_invert_mouse">
-		<text>Инвертировать мышь</text>
+		<text>Інвертувати мишу</text>
 	</string>
 	<string id="ui_mm_key">
 		<text>Кнопка</text>
 	</string>
 	<string id="ui_mm_keyboard_setup">
-		<text>Настройка клавиатуры</text>
+		<text>Налаштування клавіатури</text>
 	</string>
 	<string id="ui_mm_last_save">
-		<text>Посл. сохранение</text>
+		<text>Ост. збереження</text>
 	</string>
 	<string id="ui_mm_light_distance">
-		<text>Дальность освещения</text>
+		<text>Дальність освітлення</text>
 	</string>
 	<string id="ui_mm_load">
-		<text>Загрузить</text>
+		<text>Завантажити</text>
 	</string>
 	<string id="ui_mm_load_game">
-		<text>Загрузить игру</text>
+		<text>Завантажити гру</text>
 	</string>
 	<string id="ui_mm_logout">
-		<text>Выйти из профиля</text>
+		<text>Вийти з профілю</text>
 	</string>
 	<string id="ui_mm_master">
-		<text>Мастер</text>
+		<text>Майстер</text>
 	</string>
 	<string id="ui_mm_master_volume">
-		<text>Громкость</text>
+		<text>Гучність</text>
 	</string>
 	<string id="ui_mm_mouse_sense">
-		<text>Чувствительность мыши</text>
+		<text>Чутливість миші</text>
 	</string>
 	<string id="ui_mm_msaa_alphatest">
-		<text>Сглаживать А-тестовые объекты</text>
+		<text>Згладжувати А-тестові об'єкти</text>
 	</string>
 	<string id="ui_mm_msaa_opt">
-		<text>Оптимизировать сглаживание</text>
+		<text>Оптимізувати згладжування</text>
 	</string>
 	<string id="ui_mm_multiplayer">
-		<text>СЕТЕВАЯ ИГРА</text>
+		<text>ГРА ПО МЕРЕЖІ</text>
 	</string>
 	<string id="ui_mm_multiplayer_n">
-		<text>Сетевая игра</text>
+		<text>Гра по мережі</text>
 	</string>
 	<string id="ui_mm_music_volume">
-		<text>Громкость музыки</text>
+		<text>Гучність музики</text>
 	</string>
 	<string id="ui_mm_need_restart">
-		<text>Изменения вступят в силу только после перезагрузки игры</text>
+		<text>Зміни набудуть чинності лише після перезавантаження гри</text>
 	</string>
 	<string id="ui_mm_network_game">
-		<text>Сетевая игра</text>
+		<text>Гра по мережі</text>
 	</string>
 	<string id="ui_mm_newgame">
-		<text>Новая игра</text>
+		<text>Нова гра</text>
 	</string>
 	<string id="ui_mm_novice">
-		<text>Новичок</text>
+		<text>Новачок</text>
 	</string>
 	<string id="ui_mm_npc_torch">
-		<text>Свет фонариков NPC</text>
+		<text>Світло ліхтариків NPC</text>
 	</string>
 	<string id="ui_mm_options">
-		<text>ОПЦИИ</text>
+		<text>ОПЦІЇ</text>
 	</string>
 	<string id="ui_mm_options_n">
-		<text>Опции</text>
+		<text>Опції</text>
 	</string>
 	<string id="ui_mm_particles_distance">
-		<text>Дальность частиц</text>
+		<text>Дальність часток</text>
 	</string>
 	<string id="ui_mm_quality_presets">
-		<text>Установки качества</text>
+		<text>Налаштування якості</text>
 	</string>
 	<string id="ui_mm_quit2windows">
-		<text>Выйти в Windows</text>
+		<text>Вийти до Windows</text>
 	</string>
 	<string id="ui_mm_quit_game">
-		<text>Завершить игру</text>
+		<text>Скінчити гру</text>
 	</string>
 	<string id="ui_mm_quit_game_message">
-		<text>Вы действительно желаете покинуть игру?</text>
+		<text>Ви справді бажаєте вийти із гри?</text>
 	</string>
 	<string id="ui_mm_quit_windows_message">
-		<text>Вы действительно хотите выйти в Windows?</text>
+		<text>Ви справді хочете вийти до Windows?</text>
 	</string>
 	<string id="ui_mm_r2_detail_bump">
-		<text>Детальный рельеф</text>
+		<text>Детальний рельєф</text>
 	</string>
 	<string id="ui_mm_r2_steep_parallax">
 		<text>Steep parallax</text>
 	</string>
 	<string id="ui_mm_r2_sun">
-		<text>Тень от солнца</text>
+		<text>Тінь від сонця</text>
 	</string>
 	<string id="ui_mm_r2_sun_details">
-		<text>Тень травы</text>
+		<text>Тінь трави</text>
 	</string>
 	<string id="ui_mm_r2_sun_quality">
-		<text>Качество солнца</text>
+		<text>Якість сонця</text>
 	</string>
 	<string id="ui_mm_r3_DX10_1">
-		<text>Использовать DX10.1</text>
+		<text>Використовувати DX10.1</text>
 	</string>
 	<string id="ui_mm_r3_MSAA">
-		<text>Полноэкранное сглаживание</text>
+		<text>Повноекранне згладжування</text>
 	</string>
 	<string id="ui_mm_r3_dynamic_wet_surfaces">
-		<text>Намокание плоскостей</text>
+		<text>Намокання площин</text>
 	</string>
 	<string id="ui_mm_r3_gbuffer_opt">
-		<text>Оптимизировать геометр. буфер</text>
+		<text>Оптимізувати геометр. буфер</text>
 	</string>
 	<string id="ui_mm_r3_volumetric_smoke">
-		<text>Объёмный дым</text>
+		<text>Об'ємний дим</text>
 	</string>
 	<string id="ui_mm_render_2">
 		<text>Рендер-2</text>
@@ -625,223 +625,223 @@
 		<text>Тип рендера</text>
 	</string>
 	<string id="ui_mm_resolution">
-		<text>Разрешение</text>
+		<text>Роздільна здатність</text>
 	</string>
 	<string id="ui_mm_return_game">
-		<text>Возврат к игре</text>
+		<text>Повернення до гри</text>
 	</string>
 	<string id="ui_mm_save">
-		<text>Сохранить</text>
+		<text>Зберегти</text>
 	</string>
 	<string id="ui_mm_save_game">
-		<text>Сохранить игру</text>
+		<text>Зберегти гру</text>
 	</string>
 	<string id="ui_mm_show_crosshair">
-		<text>Показывать прицел</text>
+		<text>Показувати приціл</text>
 	</string>
 	<string id="ui_mm_show_weapon">
-		<text>Показывать оружие</text>
+		<text>Показувати зброю</text>
 	</string>
 	<string id="ui_mm_simply">
-		<text>Базовые</text>
+		<text>Базові</text>
 	</string>
 	<string id="ui_mm_snd_device">
-		<text>Звуковое устройство</text>
+		<text>Звуковий пристрій</text>
 	</string>
 	<string id="ui_mm_soft_particles">
-		<text>Мягкие частицы</text>
+		<text>М'які частинки</text>
 	</string>
 	<string id="ui_mm_soft_water">
-		<text>Мягкая вода</text>
+		<text>М'яка вода</text>
 	</string>
 	<string id="ui_mm_sound">
 		<text>Звук</text>
 	</string>
 	<string id="ui_mm_sound_quality">
-		<text>Качество звука</text>
+		<text>Якість звуку</text>
 	</string>
 	<string id="ui_mm_stalker">
 		<text>Сталкер</text>
 	</string>
 	<string id="ui_mm_sun_quality">
-		<text>Качество теней</text>
+		<text>Якість тіней</text>
 	</string>
 	<string id="ui_mm_sun_shafts">
-		<text>Солнечные лучи</text>
+		<text>Сонячне проміння</text>
 	</string>
 	<string id="ui_mm_supersample">
-		<text>Сглаживание</text>
+		<text>Згладжування</text>
 	</string>
 	<string id="ui_mm_switch_torch">
-		<text>Использование фонариков AI</text>
+		<text>Використання ліхтариків AI</text>
 	</string>
 	<string id="ui_mm_texture_quality">
-		<text>Качество текстур</text>
+		<text>Якість текстур</text>
 	</string>
 	<string id="ui_mm_tips">
-		<text>Распознавание NPC</text>
+		<text>Розпізнавання NPC</text>
 	</string>
 	<string id="ui_mm_veteran">
 		<text>Ветеран</text>
 	</string>
 	<string id="ui_mm_video">
-		<text>Видео</text>
+		<text>Відео</text>
 	</string>
 	<string id="ui_mm_vis_distance">
-		<text>Дальность видимости</text>
+		<text>Дальність видимості</text>
 	</string>
 	<string id="ui_mm_volumetric_light">
-		<text>Объёмный свет</text>
+		<text>Об'ємне світло</text>
 	</string>
 	<string id="ui_mm_vsync">
-		<text>Верт. синхронизация</text>
+		<text>Верт. синхронізація</text>
 	</string>
 	<string id="ui_mp_gamespy_changing_unique_nick">
-		<text>Изменение уникального имени...</text>
+		<text>Зміна унікального імені... </text>
 	</string>
 	<string id="ui_mp_gamespy_email_already_exist">
-		<text>такой e-mail уже используется</text>
+		<text>такий E-mail уже використовується</text>
 	</string>
 	<string id="ui_mp_internet">
-		<text>По Интернету</text>
+		<text>Через Інтернет</text>
 	</string>
 	<string id="ui_mp_localnet">
-		<text>В локальной сети</text>
+		<text>У локальній мережі</text>
 	</string>
 	<string id="ui_st_backstabks_in_row">
-		<text>ножом в спину</text>
+		<text>ножем у спину</text>
 	</string>
 	<string id="ui_st_bleed_kills_in_row">
-		<text>от потери крови</text>
+		<text>від втрати крові</text>
 	</string>
 	<string id="ui_st_explosive_kills_in_row">
-		<text>взрывом</text>
+		<text>вибухом</text>
 	</string>
 	<string id="ui_st_eye_kills_in_row">
-		<text>в глаз</text>
+		<text>в око</text>
 	</string>
 	<string id="ui_st_headshots_in_row">
-		<text>в голову</text>
+		<text>у голову</text>
 	</string>
 	<string id="ui_st_invalid_saved_game">
-		<text>Версия сохраненного файла не совпадает с версией игры</text>
+		<text>Версія збереженого файлу не збігається із версією гри</text>
 	</string>
 	<string id="ui_st_kills_in_row">
-		<text>убийств подряд</text>
+		<text>вбивств поспіль</text>
 	</string>
 	<string id="ui_st_knife_kills_in_row">
-		<text>ножом</text>
+		<text>ножем</text>
 	</string>
 	<string id="ui_st_last_set">
-		<text>Посл. набор</text>
+		<text>Ост. набір</text>
 	</string>
 	<string id="ui_st_mp_local_network_login_page">
-		<text>Вход в сетевую игру</text>
+		<text>Вхід до гри у мережі</text>
 	</string>
 	<string id="ui_st_mp_nickname">
-		<text>Имя</text>
+		<text>Ім'я</text>
 	</string>
 	<string id="ui_st_mp_try_change">
-		<text>Изменить</text>
+		<text>Змінити</text>
 	</string>
 	<string id="ui_st_preset1">
-		<text>Набор 1</text>
+		<text>Набір 1</text>
 	</string>
 	<string id="ui_st_preset2">
-		<text>Набор 2</text>
+		<text>Набір 2</text>
 	</string>
 	<string id="ui_st_preset3">
-		<text>Набор 3</text>
+		<text>Набір 3</text>
 	</string>
 	<string id="ui_st_reset">
-		<text>Сбросить</text>
+		<text>Скинути</text>
 	</string>
 	<string id="ui_st_sell_all">
-		<text>Продать всё</text>
+		<text>Продати все</text>
 	</string>
 	<string id="version">
-		<text>Версия</text>
+		<text>Версія</text>
 	</string>
 	<string id="mp_pripyat">
-		<text>Припять</text>
+		<text>Прип'ять</text>
 	</string>
 	<string id="ui_mm_crouch_toggle">
-		<text>Режим сесть/встать</text>
+		<text>Режим сісти/встати</text>
 	</string>
 	<string id="ui_mm_important_save">
-		<text>Автосохранение</text>
+		<text>Автозбереження</text>
 	</string>
 	<string id="ui_mm_r1_detail_textures">
-		<text>Детальные текстуры</text>
+		<text>Детальні текстури</text>
 	</string>
 	<string id="mm_mp_demo">
 		<text>Ролики</text>
 	</string>
 	<string id="ui_st_mp_login">
-		<text>Войти</text>
+		<text>Увійти</text>
 	</string>
 	<string id="ui_st_mp_logout">
-		<text>Выйти</text>
+		<text>Вийти</text>
 	</string>
 	<string id="ui_st_mp_create">
-		<text>Создать</text>
+		<text>Створити</text>
 	</string>
 	<string id="mp_gp_unknown_email_or_bad_password">
-		<text>Неверный e-mail или пароль</text>
+		<text>Неправильний E-mail або пароль</text>
 	</string>
 	<string id="mp_gp_parameter_error">
-		<text>Неверный профиль</text>
+		<text>Неправильний профіль</text>
 	</string>
 	<string id="mp_gp_network_error">
-		<text>Ошибка соединения</text>
+		<text>Помилка з'єднання</text>
 	</string>
 	<string id="mp_gp_server_error">
-		<text>Сервер временно недоступен</text>
+		<text>Сервер тимчасово недоступний</text>
 	</string>
 	<string id="mp_gp_unknown_error_2">
-		<text>Необходимо войти в профиль</text>
+		<text>Необхідно увійти у профіль</text>
 	</string>
 	<string id="mp_gp_unknown_error_6">
-		<text>Ошибка соединения</text>
+		<text>Помилка з'єднання</text>
 	</string>
 	<string id="mp_gp_unknown_error_7">
-		<text>Ошибка соединения</text>
+		<text>Помилка з'єднання</text>
 	</string>
 	<string id="mp_gp_unknown_error_8">
-		<text>Ошибка соединения</text>
+		<text>Помилка з'єднання</text>
 	</string>
 	<string id="mp_gp_unknown_error_513">
-		<text>Неверное имя профиля</text>
+		<text>Неправильне ім'я профілю</text>
 	</string>
 	<string id="mp_gp_unknown_error_514">
-		<text>Неверный пароль</text>
+		<text>Неправильний пароль</text>
 	</string>
 	<string id="mp_gp_unknown_error_515">
-		<text>Неверный уникальный ник</text>
+		<text>Неправильний унікальний нік</text>
 	</string>
 	<string id="mp_gp_unknown_error_516">
-		<text>Уникальный ник уже используется</text>
+		<text>Унікальний нік уже використовується</text>
 	</string>
 	<string id="mp_first_need_to_login">
-		<text>Необходимо вначале войти в профиль</text>
+		<text>Необхідно спочатку увійти до профілю</text>
 	</string>
 	<string id="mp_first_need_to_logout">
-		<text>Необходимо сперва выйти из профиля</text>
+		<text>Необхідно спочатку вийти з профілю</text>
 	</string>
 	<string id="mp_gamespy_http_error">
-		<text>Ошибка соединения с сервером профилей</text>
+		<text>Помилка з'єднання із сервером профілів</text>
 	</string>
 	<string id="ui_st_you_cannot_delete_profile_after_creation">
-		<text>Вы не сможете удалить профиль после его создания</text>
+		<text>Ви не зможете видалити профіль після його створення</text>
 	</string>
 	<string id="ui_mm_ssao_quality">
-		<text>Качество SSAO</text>
+		<text>Якість SSAO</text>
 	</string>
 	<string id="ui_mm_ssao_text">
 		<text>Режим SSAO</text>
 	</string>
 	<string id="ui_mm_ssao">
-		<text>по умолчанию</text>
+		<text>за замовчуванням</text>
 	</string>
 	<string id="ui_mm_hdao">
 		<text>HDAO</text>
@@ -850,87 +850,87 @@
 		<text>HBAO</text>
 	</string>
 	<string id="ui_st_disable_hud">
-		<text>Показывать интерфейс</text>
+		<text>Показувати інтерфейс</text>
 	</string>
 	<string id="mp_gp_unique_nick_not_registred">
-		<text>Уникальный ник не зарегистрирован. Пожалуйста, зарегистрируйте его</text>
+		<text>Унікальний нік не зареєстровано. Будь ласка, зареєструйте його</text>
 	</string>
 	<string id="mp_gp_unique_nick_has_expired">
-		<text>Уникальный ник устарел. Пожалуйста, зарегистрируйте его снова</text>
+		<text>Унікальний нік застарів. Будь ласка, зареєструйте його знову</text>
 	</string>
 	<string id="gd_stalker">
 		<text>сталкер</text>
 	</string>
 	<string id="st_opt_extreme">
-		<text>макс. высоко</text>
+		<text>макс. високо</text>
 	</string>
 	<string id="renderer_r4">
-		<text>Ул. полное освещение (DX11)</text>
+		<text>Покр. повне освітлення (DX11)</text>
 	</string>
 	<string id="mp_please_login">
-		<text>Пожалуйста, авторизируйтесь для входа на внешний сервер.</text>
+		<text>Будь ласка, авторизуйтеся для входу на зовнішній сервер.</text>
 	</string>
 	<string id="mp_already_logged_in">
-		<text>Этот профиль GameSpy ID в данный момент используется. Пожалуйста, используйте другой профиль GameSpy ID.</text>
+		<text>Зазначений профіль GameSpy ID на цей момент використовується. Будь ласка, використайте інший профіль GameSpy ID.</text>
 	</string>
 	<string id="mp_gp_unknown_email">
-		<text>Неверный Email</text>
+		<text>Неправильний E-mail</text>
 	</string>
 	<string id="mp_gp_bad_password">
-		<text>Неверный пароль</text>
+		<text>Неправильний пароль</text>
 	</string>
 	<string id="mp_use_offline_mode">
-		<text>Вы не можете использовать профиль GameSpy ID для входа на локальный сервер. Пожалуйста, используйте режим игры по локальной сети.</text>
+		<text>Ви не можете використати профіль GameSpy ID для входу на локальний сервер. Будь ласка, використайте режим гри через локальну мережу.</text>
 	</string>
 	<string id="st_kicked_by_server">
-		<text>Вы были выброшены сервером.</text>
+		<text>Вас було викинуто сервером</text>
 	</string>
 	<string id="mp_you_have_been_banned_by">
-		<text>Вы были заблокированы администратором: </text>
+		<text>Вас було заблоковано адміністратором: </text>
 	</string>
 	<string id="mp_you_have_been_banned_by_server">
-		<text>Вы были заблокированы сервером</text>
+		<text>Вас було заблоковано сервером</text>
 	</string>
 	<string id="mp_server_info">
-		<text>Информация о сервере</text>
+		<text>Інформація про сервер</text>
 	</string>
 	<string id="mp_gp_email_is_too_big">
-		<text>E-mail слишком длинный. Вы можете ввести максимум 50 символов.</text>
+		<text>E-mail надто довгий. Ви можете ввести максимум 50 символів.</text>
 	</string>
 	<string id="mp_gp_bad_email">
-		<text>Некорректный e-mail</text>
+		<text>Некоректний E-mail</text>
 	</string>
 	<string id="mp_gp_password_is_too_small">
-		<text>Пароль слишком короткий</text>
+		<text>Пароль надто короткий</text>
 	</string>
 	<string id="mp_gp_password_is_too_big">
-		<text>Пароль слишком длинный</text>
+		<text>Пароль надто довгий</text>
 	</string>
 	<string id="mp_gp_no_email">
-		<text>E-mail не найден</text>
+		<text>E-mail не знайдено</text>
 	</string>
 	<string id="mp_gp_no_unique_nick">
-		<text>Уникальный ник не задан</text>
+		<text>Унікальний нік не задано</text>
 	</string>
 	<string id="mp_gp_unique_nick_is_too_big">
-		<text>Уникальный ник слишком длинный. Вы можете ввести максимум 30 символов.</text>
+		<text>Унікальний нік надто довгий. Ви можете ввести максимум 30 символів.</text>
 	</string>
 	<string id="mp_gp_unique_nick_must_contain_only">
-		<text><![CDATA[Уникальный ник может содержать только цифры, буквы латиницы и специальные символы: "#$&'()*+-./:;<=>?@[]^_`{|}~]]></text>
+		<text><![CDATA[Унікальний нік може містити лише цифри, літери латиниці та спеціальні символи: "#$&'()*+-./:;<=>?@[]^_`{|}~]]></text>
 	</string>
 	<string id="mp_gp_unique_nick_must_contain_nospaces">
-		<text>Уникальный ник не может содержать пробелы</text>
+		<text>Унікальний ник не може містити пропуски</text>
 	</string>
 	<string id="mp_gp_unique_nick_bad_first_symbol">
-		<text><![CDATA[Уникальный ник не может начинаться с цифры или символов: '@', '+', ':' или '#']]></text>
+		<text><![CDATA[Унікальний нік не може починатися з цифри або символів: '@', '+', ':' или '#']]></text>
 	</string>
 	<string id="st_opt_ultra">
-		<text>очень высоко</text>
+		<text>дуже високо</text>
 	</string>
 	<string id="ui_mm_r4_enable_tessellation">
-		<text>Тесселяция</text>
+		<text>Тесселяція</text>
 	</string>
 	<string id="ui_mm_confirm_changes">
-		<text>Применить сделанные изменения? Все изменения будут отменены через</text>
+		<text>Застосувати зроблені зміни? Усі зміни будуть скасовані через</text>
 	</string>
 </string_table>

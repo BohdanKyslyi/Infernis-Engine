@@ -25,6 +25,10 @@ CUITalkWnd::CUITalkWnd() {
 
     m_pOurInvOwner = NULL;
     m_pOthersInvOwner = NULL;
+	
+    m_UIInfoLeft = NULL;
+    m_UIInfoRight = NULL;
+    m_bShowPortraits = false;
 
     m_pOurDialogManager = NULL;
     m_pOthersDialogManager = NULL;
@@ -40,6 +44,26 @@ CUITalkWnd::~CUITalkWnd() {}
 
 void CUITalkWnd::InitTalkWnd() {
     inherited::SetWndRect(Frect().set(0, 0, UI_BASE_WIDTH, UI_BASE_HEIGHT));
+	
+    m_bShowPortraits = false;
+    if (pSettings->section_exist("ui_extensions") && pSettings->line_exist("ui_extensions", "show_dialog_portraits")) {
+        m_bShowPortraits = pSettings->r_bool("ui_extensions", "show_dialog_portraits");
+    }
+
+    if (m_bShowPortraits) {
+        CUIXml uiXml;
+        uiXml.Load(CONFIG_PATH, UI_PATH, "talk.xml");
+
+        m_UIInfoLeft = xr_new<CUICharacterInfo>();
+        m_UIInfoLeft->SetAutoDelete(true);
+        AttachChild(m_UIInfoLeft);
+        m_UIInfoLeft->InitCharacterInfo(&uiXml, "left_character_window");
+
+        m_UIInfoRight = xr_new<CUICharacterInfo>();
+        m_UIInfoRight->SetAutoDelete(true);
+        AttachChild(m_UIInfoRight);
+        m_UIInfoRight->InitCharacterInfo(&uiXml, "right_character_window");
+    }
 
     UITalkDialogWnd = xr_new<CUITalkDialogWnd>();
     UITalkDialogWnd->SetAutoDelete(true);
@@ -63,6 +87,11 @@ void CUITalkWnd::InitTalkDialog() {
     UITalkDialogWnd->UICharacterInfoLeft.InitCharacter(m_pOurInvOwner->object_id());
     UITalkDialogWnd->UICharacterInfoRight.InitCharacter(m_pOthersInvOwner->object_id());
 
+    if (m_bShowPortraits) {
+        if (m_UIInfoLeft) m_UIInfoLeft->InitCharacter(m_pOurInvOwner->object_id());
+        if (m_UIInfoRight) m_UIInfoRight->InitCharacter(m_pOthersInvOwner->object_id());
+    }
+	
     //.	UITalkDialogWnd->UIDialogFrame.UITitleText.SetText		(m_pOthersInvOwner->Name());
     //.	UITalkDialogWnd->UIOurPhrasesFrame.UITitleText.SetText	(m_pOurInvOwner->Name());
 

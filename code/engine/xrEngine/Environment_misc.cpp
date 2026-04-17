@@ -209,7 +209,7 @@ CEnvDescriptor::CEnvDescriptor(std::string identifier) : m_identifier(std::move(
     m_fWaterIntensity = 1;
 
 #ifdef TREE_WIND_EFFECT
-	m_fTreeAmplitudeIntensity = 0.01;
+	m_fTreeAmplitudeIntensity = 0.025;
 #endif
 
     lens_flare_id = "";

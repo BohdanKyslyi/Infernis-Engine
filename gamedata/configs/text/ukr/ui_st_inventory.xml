@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="windows-1251" ?>
 <string_table>
+	<string id="st_currency_name">
+		<text>UAH</text>
+	</string>
 	<string id="not_enough_money_actor">
 		<text>Вам бракує грошей</text>
 	</string>

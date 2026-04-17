@@ -320,14 +320,17 @@ void CUIActorMenu::UpdateActor() {
 
 void CUIActorMenu::UpdatePartnerBag() {
     string64 buf;
+    CStringTable st;
+    LPCSTR currency_name = st.translate("st_currency_name").c_str();
 
     CBaseMonster* monster = smart_cast<CBaseMonster*>(m_pPartnerInvOwner);
     if (monster || m_pPartnerInvOwner->use_simplified_visual()) {
         m_PartnerWeight->SetText("");
     } else if (m_pPartnerInvOwner->InfinitiveMoney()) {
-        m_PartnerMoney->SetText("--- UAH");
+        xr_sprintf(buf, "--- %s", currency_name);
+        m_PartnerMoney->SetText(buf);
     } else {
-        xr_sprintf(buf, "%d UAH", m_pPartnerInvOwner->get_money());
+        xr_sprintf(buf, "%d %s", m_pPartnerInvOwner->get_money(), currency_name);
         m_PartnerMoney->SetText(buf);
     }
 
@@ -353,10 +356,12 @@ void CUIActorMenu::UpdatePrices() {
     u32 partner_price = CalcItemsPrice(m_pTradePartnerList, m_partner_trade, false);
 
     string64 buf;
-    xr_sprintf(buf, "%d UAH", actor_price);
+    CStringTable st;
+    LPCSTR currency_name = st.translate("st_currency_name").c_str();
+    xr_sprintf(buf, "%d %s", actor_price, currency_name);
     m_ActorTradePrice->SetText(buf);
     m_ActorTradePrice->AdjustWidthToText();
-    xr_sprintf(buf, "%d UAH", partner_price);
+    xr_sprintf(buf, "%d %s", partner_price, currency_name);
     m_PartnerTradePrice->SetText(buf);
     m_PartnerTradePrice->AdjustWidthToText();
 

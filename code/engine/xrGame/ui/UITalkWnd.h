@@ -6,7 +6,7 @@
 #include "UIEditBox.h"
 //#include "UIListWnd.h"
 #include "UIFrameWindow.h"
-
+#include "UICharacterInfo.h"
 #include "../PhraseDialogDefs.h"
 
 class CActor;
@@ -69,6 +69,9 @@ public:
 
 protected:
     CUITalkDialogWnd* UITalkDialogWnd;
+    CUICharacterInfo* m_UIInfoLeft;
+    CUICharacterInfo* m_UIInfoRight;
+    bool              m_bShowPortraits;
 
     CActor* m_pActor;
     CInventoryOwner* m_pOurInvOwner;

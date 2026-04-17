@@ -377,14 +377,13 @@ void CDemoRecord::IR_OnKeyboardPress(int dik) {
     if (dik == DIK_ESCAPE)
         fLifeTime = -1;
 
-#ifndef MASTER_GOLD
     if (dik == DIK_RETURN) {
-        if (g_pGameLevel->CurrentEntity()) {
-            g_pGameLevel->CurrentEntity()->ForceTransform(m_Camera);
-            fLifeTime = -1;
-        }
+        if (g_pGameLevel->CurrentEntity())
+            if (g_pGameLevel->CurrentEntity() && strstr(Core.Params, "-dev_mode")) {
+                g_pGameLevel->CurrentEntity()->ForceTransform(m_Camera);
+                fLifeTime = -1;
+            }
     }
-#endif // #ifndef MASTER_GOLD
 
     if (dik == DIK_PAUSE)
         Device.Pause(!Device.Paused(), TRUE, TRUE, "demo_record");
