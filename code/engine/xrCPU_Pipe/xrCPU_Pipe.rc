@@ -45,12 +45,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "GSC Game World"
             VALUE "FileDescription", "X-Ray CPU-dependent helper library"
-            VALUE "FileVersion", "0.2.3"
+            VALUE "FileVersion", "0.2.3.1"
             VALUE "InternalName", "CPU Pipe"
             VALUE "LegalCopyright", "Copyright (C) 2009 GSC Game World"
             VALUE "OriginalFilename", "xrCPU_Pipe.dll"
             VALUE "ProductName", "Infernis Engine x64"
-            VALUE "ProductVersion", "0.2.3"
+            VALUE "ProductVersion", "0.2.3.1"
         END
     END
     BLOCK "VarFileInfo"

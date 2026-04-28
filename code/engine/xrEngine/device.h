@@ -17,7 +17,9 @@
 //#include "R_Backend.h"
 
 #define VIEWPORT_NEAR 0.2f
-#define IE_VIEWPORT_NEAR 0.013f
+//#define IE_VIEWPORT_NEAR 0.013f
+
+ENGINE_API extern float IE_VIEWPORT_NEAR;
 
 #define DEVICE_RESET_PRECACHE_FRAME_COUNT 10
 

@@ -26,6 +26,8 @@
 ENGINE_API CRenderDevice Device;
 ENGINE_API CLoadScreenRenderer load_screen_renderer;
 
+ENGINE_API float IE_VIEWPORT_NEAR; // 0.05f - для юзу сучасних збройових паків, 0.2f - для ванільних
+
 ENGINE_API BOOL g_bRendering = FALSE;
 
 BOOL g_bLoaded = FALSE;
@@ -50,7 +52,6 @@ if (FAILED(_hr))
             }
     }
     */
-
     switch (m_pRender->GetDeviceState()) {
     case IRenderDeviceRender::dsOK:
         break;
@@ -323,6 +324,11 @@ void CRenderDevice::Run() {
         u32 time_system = timeGetTime();
         u32 time_local = TimerAsync();
         Timer_MM_Delta = time_system - time_local;
+    }
+
+    if (pSettings->section_exist("hud_extensions") &&
+        pSettings->line_exist("hud_extensions", "viewport_near")) {
+        IE_VIEWPORT_NEAR = pSettings->r_float("hud_extensions", "viewport_near");
     }
 
     // Start all threads
