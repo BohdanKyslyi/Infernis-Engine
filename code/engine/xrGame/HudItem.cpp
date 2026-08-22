@@ -236,6 +236,11 @@ u32 CHudItem::PlayHUDMotion(const shared_str& M, BOOL bMixIn, CHudItem* W, u32 s
     return anim_time;
 }
 
+void CHudItem::PlayItemUseMotion(const shared_str& motion, BOOL bMixIn)
+{
+    PlayHUDMotion(motion, bMixIn, this, GetState());
+}
+
 u32 CHudItem::PlayHUDMotion_noCB(const shared_str& motion_name, BOOL bMixIn) {
     m_current_motion = motion_name;
 

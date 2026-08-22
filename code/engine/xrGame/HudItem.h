@@ -130,6 +130,7 @@ public:
     virtual void UpdateXForm() = 0;
 
     u32 PlayHUDMotion(const shared_str& M, BOOL bMixIn, CHudItem* W, u32 state);
+	void PlayItemUseMotion(const shared_str& motion, BOOL bMixIn = TRUE);
     u32 PlayHUDMotion_noCB(const shared_str& M, BOOL bMixIn);
     void StopCurrentAnimWithoutCallback();
 

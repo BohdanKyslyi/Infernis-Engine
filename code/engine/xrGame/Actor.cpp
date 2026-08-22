@@ -75,6 +75,8 @@
 #include "UserBackpack.h"
 #include "UI/UIDragDropReferenceList.h"
 
+#include "ItemUseController.h"
+
 const u32 patch_frames = 50;
 const float respawn_delay = 1.f;
 const float respawn_auto = 7.f;
@@ -96,6 +98,7 @@ int psActorSleepTime = 1;
 
 CActor::CActor() : CEntityAlive(), current_ik_cam_shift(0) {
     game_news_registry = xr_new<CGameNewsRegistryWrapper>();
+	m_item_use = xr_new<CItemUseController>(this);
     // Cameras
     cameras[eacFirstEye] = xr_new<CCameraFirstEye>(this);
     cameras[eacFirstEye]->Load("actor_firsteye_cam");
@@ -199,6 +202,7 @@ CActor::CActor() : CEntityAlive(), current_ik_cam_shift(0) {
 }
 
 CActor::~CActor() {
+	xr_delete(m_item_use);
     xr_delete(m_location_manager);
     xr_delete(m_memory);
     xr_delete(game_news_registry);
@@ -832,6 +836,9 @@ float CActor::currentFOV() {
 }
 
 void CActor::UpdateCL() {
+	if (m_item_use)
+		m_item_use->Update(Device.fTimeDelta);
+	
     if (g_Alive() && Level().CurrentViewEntity() == this) {
         if (CurrentGameUI() && NULL == CurrentGameUI()->TopInputReceiver()) {
             int dik = get_action_dik(kUSE, 0);
@@ -961,12 +968,15 @@ void CActor::shedule_Update(u32 DT) {
     setSVU(OnServer());
     //.	UpdateInventoryOwner			(DT);
 
-    if (IsFocused()) {
+if (IsFocused() && !(m_item_use && m_item_use->IsActive())) {
         BOOL bHudView = HUDview();
+
         if (bHudView) {
             CInventoryItem* pInvItem = inventory().ActiveItem();
+
             if (pInvItem) {
                 CHudItem* pHudItem = smart_cast<CHudItem*>(pInvItem);
+
                 if (pHudItem) {
                     if (pHudItem->IsHidden()) {
                         g_player_hud->detach_item(pHudItem);

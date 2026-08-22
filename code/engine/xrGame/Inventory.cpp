@@ -20,6 +20,7 @@
 #include "clsid_game.h"
 #include "static_cast_checked.hpp"
 #include "player_hud.h"
+#include "ItemUseController.h"
 
 using namespace InventoryUtilities;
 
@@ -945,8 +946,16 @@ bool CInventory::Eat(PIItem pIItem) {
     if (pItemToEat->object().H_Parent()->ID() != entity_alive->ID())
         return false;
 
-    if (!pItemToEat->UseBy(entity_alive))
-        return false;
+	CActor* actor = smart_cast<CActor*>(entity_alive);
+	
+	if (actor &&
+		actor->m_inventory == this &&
+		actor->ItemUseController() &&
+		actor->ItemUseController()->Start(pIItem))
+	{
+		// Effect will be applied later by ItemUseController.
+		return true;
+	}
 
 #ifdef MP_LOGGING
     Msg("--- Actor [%d] use or eat [%d][%s]", entity_alive->ID(), pItemToEat->object().ID(),

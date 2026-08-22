@@ -60,6 +60,8 @@ class CActorStatisticMgr;
 
 class CLocationManager;
 
+class CItemUseController;
+
 class CActor : public CEntityAlive,
                public IInputReceiver,
                public Feel::Touch,
@@ -67,6 +69,7 @@ class CActor : public CEntityAlive,
                public CPhraseDialogManager,
                public CStepManager,
                public Feel::Sound
+			   
 #ifdef DEBUG
     ,
                public pureRender
@@ -80,6 +83,9 @@ private:
 public:
     CActor();
     virtual ~CActor();
+
+public:
+    CItemUseController* ItemUseController() { return m_item_use; }
 
 public:
     virtual BOOL AlwaysTheCrow() { return TRUE; }
@@ -256,6 +262,7 @@ public:
     virtual bool can_attach(const CInventoryItem* inventory_item) const;
 
 protected:
+	CItemUseController* m_item_use;
     CHolderCustom* m_holder;
     u16 m_holderID;
     bool use_Holder(CHolderCustom* holder);
