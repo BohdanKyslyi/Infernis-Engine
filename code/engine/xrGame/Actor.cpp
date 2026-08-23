@@ -958,7 +958,7 @@ float NET_Jump = 0;
 void CActor::set_state_box(u32 mstate) {
     if (mstate & mcCrouch) {
         if (isActorAccelerated(mstate_real, IsZoomAimingMode()))
-            character_physics_support()->movement()->ActivateBox(1, true);
+		character_physics_support()->movement()->ActivateBox(1, true);
         else
             character_physics_support()->movement()->ActivateBox(2, true);
     } else
