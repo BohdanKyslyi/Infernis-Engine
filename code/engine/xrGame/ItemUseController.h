@@ -1,10 +1,11 @@
 #pragma once
 
+#include "HudSound.h"
+
 class CActor;
 class CInventoryItem;
 
-class CItemUseController
-{
+class CItemUseController {
 public:
     explicit CItemUseController(CActor* actor);
     ~CItemUseController();
@@ -21,6 +22,11 @@ public:
 private:
     void Reset();
 
+    void LoadAnimSound();
+    void PlayAnimSound();
+    void StopAnimSound();
+    void DestroyAnimSound();
+
 private:
     CActor* m_actor;
     CInventoryItem* m_item;
@@ -35,4 +41,7 @@ private:
 
     bool m_active;
     bool m_effect_applied;
+
+    HUD_SOUND_ITEM m_anim_sound;
+    bool m_anim_sound_loaded;
 };

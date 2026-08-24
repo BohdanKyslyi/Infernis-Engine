@@ -13,7 +13,8 @@ CItemUseController::CItemUseController(CActor* actor)
       m_action_time(0),
       m_animation_duration(0),
       m_active(false),
-      m_effect_applied(false)
+      m_effect_applied(false),
+      m_anim_sound_loaded(false)
 {
 }
 
@@ -22,7 +23,8 @@ CItemUseController::~CItemUseController()
     Cancel();
 }
 
-bool CItemUseController::Start(CInventoryItem* item) {
+bool CItemUseController::Start(CInventoryItem* item)
+{
     if (!item)
         return false;
 
@@ -84,20 +86,26 @@ bool CItemUseController::Start(CInventoryItem* item) {
         return false;
     }
 
+    LoadAnimSound();
+
     m_animation_duration = g_player_hud->play_controller_motion("anm_show", TRUE);
 
     if (m_animation_duration == 0) {
         g_player_hud->detach_controller_item();
+        DestroyAnimSound();
         Reset();
         return false;
     }
+
+    PlayAnimSound();
 
     m_start_time = Device.dwTimeGlobal;
     m_active = true;
     m_effect_applied = false;
 
-    Msg("* ItemUse started: [%s], HUD [%s], duration [%u], effect [%u]", m_item_section.c_str(),
-        m_hud_section.c_str(), m_animation_duration, m_action_time);
+    Msg("* ItemUse started: [%s], HUD [%s], duration [%u], effect [%u], sound [%s]",
+        m_item_section.c_str(), m_hud_section.c_str(), m_animation_duration, m_action_time,
+        m_anim_sound_loaded ? "yes" : "no");
 
     return true;
 }
@@ -110,40 +118,41 @@ void CItemUseController::Update(float dt)
     const u32 elapsed =
         Device.dwTimeGlobal - m_start_time;
 
-if (!m_effect_applied && elapsed >= m_action_time) {
-        if (!m_item) {
-            Msg("! ItemUse: source item is NULL");
-            Cancel();
-            return;
-        }
-
-        if (!m_actor) {
-            Msg("! ItemUse: actor is NULL");
-            Cancel();
-            return;
-        }
-
-        bool became_empty = false;
-
-        if (!m_actor->inventory().ApplyEat(m_item, became_empty)) {
-            Msg("! ItemUse: failed to apply effect for [%s]", m_item_section.c_str());
-
-            Cancel();
-            return;
-        }
-
-        m_effect_applied = true;
-
-        Msg("* ItemUse effect applied: [%s]", m_item_section.c_str());
-
-        //
-        // Предмет уже позначений SetDropManual(TRUE).
-        // Більше Controller'у pointer не потрібен.
-        //
-        if (became_empty)
-            m_item = NULL;
+    if (!m_effect_applied && elapsed >= m_action_time)
+    {
+            if (!m_item) {
+                Msg("! ItemUse: source item is NULL");
+                Cancel();
+                return;
+            }
+    
+            if (!m_actor) {
+                Msg("! ItemUse: actor is NULL");
+                Cancel();
+                return;
+            }
+    
+            bool became_empty = false;
+    
+            if (!m_actor->inventory().ApplyEat(m_item, became_empty)) {
+                Msg("! ItemUse: failed to apply effect for [%s]", m_item_section.c_str());
+    
+                Cancel();
+                return;
+            }
+    
+            m_effect_applied = true;
+    
+            Msg("* ItemUse effect applied: [%s]", m_item_section.c_str());
+    
+            //
+            // Предмет уже позначений SetDropManual(TRUE).
+            // Більше Controller'у pointer не потрібен.
+            //
+            if (became_empty)
+                m_item = NULL;
     }
-
+    
     //
     // Для першого тесту закінчуємо по реальній
     // довжині HUD animation.
@@ -160,11 +169,12 @@ void CItemUseController::Cancel()
     if (!m_active)
         return;
 
+    DestroyAnimSound();
+
     if (g_player_hud)
         g_player_hud->detach_controller_item();
 
-    Msg("* ItemUse cancelled: [%s]",
-        m_item_section.c_str());
+    Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
     Reset();
 }
@@ -174,11 +184,12 @@ void CItemUseController::Finish()
     if (!m_active)
         return;
 
+    DestroyAnimSound();
+
     if (g_player_hud)
         g_player_hud->detach_controller_item();
 
-    Msg("* ItemUse finished: [%s]",
-        m_item_section.c_str());
+    Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
     Reset();
 }
@@ -197,4 +208,45 @@ void CItemUseController::Reset()
 
     m_active = false;
     m_effect_applied = false;
+}
+
+void CItemUseController::LoadAnimSound() {
+    DestroyAnimSound();
+
+    if (!pSettings->line_exist(m_use_section, "snd_using_anim"))
+        return;
+
+    HUD_SOUND_ITEM::LoadSound(m_use_section.c_str(), "snd_using_anim", m_anim_sound, sg_SourceType);
+
+    m_anim_sound_loaded = true;
+}
+
+void CItemUseController::PlayAnimSound() {
+    if (!m_anim_sound_loaded)
+        return;
+
+    if (!m_actor)
+        return;
+
+    HUD_SOUND_ITEM::PlaySound(m_anim_sound, m_actor->Position(), m_actor,
+                              true, // HUD mode -> sm_2D
+                              false // not looped
+    );
+}
+
+void CItemUseController::StopAnimSound() {
+    if (!m_anim_sound_loaded)
+        return;
+
+    HUD_SOUND_ITEM::StopSound(m_anim_sound);
+}
+
+void CItemUseController::DestroyAnimSound() {
+    if (!m_anim_sound_loaded)
+        return;
+
+    HUD_SOUND_ITEM::StopSound(m_anim_sound);
+    HUD_SOUND_ITEM::DestroySound(m_anim_sound);
+
+    m_anim_sound_loaded = false;
 }
