@@ -41,6 +41,8 @@ extern u32 hud_adj_mode;
 static bool ItemUseBlocksAction(int cmd) {
     switch (cmd) {
     case kDETECTOR:
+    case kTORCH:
+    case kNIGHT_VISION:
 
     case kWPN_1:
     case kWPN_2:

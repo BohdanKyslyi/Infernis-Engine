@@ -9,6 +9,8 @@
 #include "CustomDetector.h"
 #include "UIGameCustom.h"
 
+#include "../xrPhysics/ElevatorState.h"
+
 CItemUseController::CItemUseController(CActor* actor)
     : m_actor(actor),
       m_item(NULL),
@@ -115,29 +117,23 @@ void CItemUseController::LockActor()
     if (!m_actor || m_actor_locked)
         return;
 
-    //
-    // Запам'ятовуємо попередній стан.
-    //
-    m_prev_inventory_disabled = m_actor->inventory_disabled();
+    m_prev_inventory_disabled =
+        m_actor->inventory_disabled();
 
-    //
-    // Якщо використання запущено прямо з inventory —
-    // закриваємо його.
-    //
     if (CurrentGameUI())
         CurrentGameUI()->HideActorMenu();
 
-    //
-    // Забороняємо повторне відкриття inventory/PDA.
-    //
     m_actor->set_inventory_disabled(true);
 
     //
-    // Штатний X-Ray механізм:
-    // блокує слоти, починає ховати active item,
-    // запам'ятовує previous slot.
+    // From this moment the actor cannot attach to ladders.
     //
-    m_actor->SetWeaponHideState(INV_STATE_BLOCK_ALL, true);
+    LockActorLadder();
+
+    m_actor->SetWeaponHideState(
+        INV_STATE_BLOCK_ALL,
+        true
+    );
 
     m_actor_locked = true;
 
@@ -149,19 +145,22 @@ void CItemUseController::UnlockActor()
     if (!m_actor_locked)
         return;
 
-    if (m_actor) {
-        //
-        // Штатний CInventory при розблокуванні
-        // сам спробує повернути previous active slot.
-        //
-        m_actor->SetWeaponHideState(INV_STATE_BLOCK_ALL, false);
+    if (m_actor)
+    {
+        m_actor->SetWeaponHideState(
+            INV_STATE_BLOCK_ALL,
+            false
+        );
 
-        //
-        // Повертаємо саме попередній стан inventory,
-        // а не тупо ставимо false.
-        //
-        m_actor->set_inventory_disabled(m_prev_inventory_disabled);
+        m_actor->set_inventory_disabled(
+            m_prev_inventory_disabled
+        );
     }
+
+    //
+    // Always release our ladder lock.
+    //
+    UnlockActorLadder();
 
     m_actor_locked = false;
     m_prev_inventory_disabled = false;

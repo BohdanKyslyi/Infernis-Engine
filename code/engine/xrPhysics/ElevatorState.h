@@ -63,4 +63,14 @@ public:
     void NetRelcase(IPhysicsShellHolder* O);
 };
 
+//
+// Global actor ladder lock.
+//
+// Counter instead of bool:
+// several independent action systems may lock ladders simultaneously.
+//
+XRPHYSICS_API void LockActorLadder();
+XRPHYSICS_API void UnlockActorLadder();
+XRPHYSICS_API bool IsActorLadderAllowed();
+
 #endif

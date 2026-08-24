@@ -18,6 +18,40 @@ static const float out_dist = 1.5f;
 static const float look_angle_cosine = 0.9238795f;  // 22.5
 static const float lookup_angle_sine = 0.34202014f; // 20
 extern class CPHWorld* ph_world;
+
+//
+// Actor ladder lock.
+//
+// Counter is used instead of bool because several independent
+// gameplay systems may request the ladder lock simultaneously.
+//
+static u32 g_actor_ladder_lock_count = 0;
+
+void LockActorLadder() {
+    ++g_actor_ladder_lock_count;
+
+#ifdef DEBUG
+    Msg("* Actor ladder locked, count [%u]", g_actor_ladder_lock_count);
+#endif
+}
+
+void UnlockActorLadder() {
+    if (g_actor_ladder_lock_count == 0) {
+#ifdef DEBUG
+        Msg("! UnlockActorLadder called with zero lock count");
+#endif
+        return;
+    }
+
+    --g_actor_ladder_lock_count;
+
+#ifdef DEBUG
+    Msg("* Actor ladder unlocked, count [%u]", g_actor_ladder_lock_count);
+#endif
+}
+
+bool IsActorLadderAllowed() { return g_actor_ladder_lock_count == 0; }
+
 CElevatorState::CElevatorState() {
     m_state = clbNoLadder;
     m_ladder = NULL;
@@ -36,8 +70,30 @@ float CElevatorState::ClimbDirection() {
 
 void CElevatorState::PhTune(float step) {
     VERIFY(m_character && m_character->b_exist && m_character->is_active());
+
     if (!m_ladder)
         return;
+
+    //
+    // Action animation currently owns actor's hands.
+    //
+    // Only the player actor is affected.
+    // NPC/monster ladder behaviour remains untouched.
+    //
+    if (!IsActorLadderAllowed() && m_character->RestrictionType() == rtActor) {
+        //
+        // If actor was already interacting with a ladder
+        // when the lock appeared, force him out of ladder state.
+        //
+        if (m_state != clbNoLadder) {
+            UpdateDepart();
+        } else {
+            m_ladder = NULL;
+        }
+
+        return;
+    }
+
     switch (m_state) {
     case clbNone:
         UpdateStNone();
@@ -68,6 +124,14 @@ void CElevatorState::PhDataUpdate(float step) {}
 void CElevatorState::InitContact(dContact* c, bool& do_collide, u16, u16) {}
 
 void CElevatorState::SetElevator(IClimableObject* climable) {
+    //
+    // Don't even attach actor physics to a ladder
+    // while an action animation owns the hands.
+    //
+    if (!IsActorLadderAllowed() && m_character && m_character->RestrictionType() == rtActor) {
+        return;
+    }
+
     Fvector d;
     float dist = climable->DDToAxis(m_character, d);
     if (m_ladder == climable || dist > out_dist)
