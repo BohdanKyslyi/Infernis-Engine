@@ -22,6 +22,12 @@ public:
 private:
     void Reset();
 
+    bool CanStartAnimation();
+    void BeginAnimation();
+
+    void LockActor();
+    void UnlockActor();
+
     void LoadAnimSound();
     void PlayAnimSound();
     void StopAnimSound();
@@ -41,6 +47,18 @@ private:
 
     bool m_active;
     bool m_effect_applied;
+
+    //
+    // Item use state.
+    //
+    bool m_waiting_for_weapon_hide;
+    bool m_actor_locked;
+
+    //
+    // Не хочемо випадково розблокувати inventory,
+    // якщо його до нас заблокувала інша система.
+    //
+    bool m_prev_inventory_disabled;
 
     HUD_SOUND_ITEM m_anim_sound;
     bool m_anim_sound_loaded;

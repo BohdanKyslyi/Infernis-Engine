@@ -6,6 +6,9 @@
 #include "player_hud.h"
 #include "inventory.h"
 
+#include "CustomDetector.h"
+#include "UIGameCustom.h"
+
 CItemUseController::CItemUseController(CActor* actor)
     : m_actor(actor),
       m_item(NULL),
@@ -14,6 +17,9 @@ CItemUseController::CItemUseController(CActor* actor)
       m_animation_duration(0),
       m_active(false),
       m_effect_applied(false),
+      m_waiting_for_weapon_hide(false),
+      m_actor_locked(false),
+      m_prev_inventory_disabled(false),
       m_anim_sound_loaded(false)
 {
 }
@@ -50,8 +56,7 @@ bool CItemUseController::Start(CInventoryItem* item)
     }
 
     //
-    // 2. Це повинна бути саме секція animated consumable.
-    // Простого параметра "hud" недостатньо.
+    // 2. Перевіряємо, що це саме animated consumable.
     //
     if (!pSettings->line_exist(m_use_section, "timing") ||
         !pSettings->line_exist(m_use_section, "hud")) {
@@ -67,7 +72,7 @@ bool CItemUseController::Start(CInventoryItem* item)
     }
 
     //
-    // 3. HUD-секція повинна мати нашу стартову анімацію.
+    // 3. HUD-секція повинна мати анімацію використання.
     //
     if (!pSettings->line_exist(m_hud_section, "anm_show")) {
         Reset();
@@ -81,85 +86,253 @@ bool CItemUseController::Start(CInventoryItem* item)
         return false;
     }
 
-    if (!g_player_hud->attach_controller_item(m_hud_section)) {
-        Reset();
-        return false;
-    }
-
-    LoadAnimSound();
-
-    m_animation_duration = g_player_hud->play_controller_motion("anm_show", TRUE);
-
-    if (m_animation_duration == 0) {
-        g_player_hud->detach_controller_item();
-        DestroyAnimSound();
-        Reset();
-        return false;
-    }
-
-    PlayAnimSound();
-
-    m_start_time = Device.dwTimeGlobal;
+    //
+    // ВАЖЛИВО:
+    // consumable HUD тут більше НЕ запускаємо.
+    // Спочатку починаємо штатне ховання зброї.
+    //
     m_active = true;
     m_effect_applied = false;
+    m_waiting_for_weapon_hide = true;
 
-    Msg("* ItemUse started: [%s], HUD [%s], duration [%u], effect [%u], sound [%s]",
-        m_item_section.c_str(), m_hud_section.c_str(), m_animation_duration, m_action_time,
-        m_anim_sound_loaded ? "yes" : "no");
+    m_start_time = 0;
+    m_animation_duration = 0;
+
+    LockActor();
+
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+
+    Msg("* ItemUse waiting for weapon hide: [%s]", m_item_section.c_str());
 
     return true;
 }
 
-void CItemUseController::Update(float dt)
+void CItemUseController::LockActor()
+{
+    if (!m_actor || m_actor_locked)
+        return;
+
+    //
+    // Запам'ятовуємо попередній стан.
+    //
+    m_prev_inventory_disabled = m_actor->inventory_disabled();
+
+    //
+    // Якщо використання запущено прямо з inventory —
+    // закриваємо його.
+    //
+    if (CurrentGameUI())
+        CurrentGameUI()->HideActorMenu();
+
+    //
+    // Забороняємо повторне відкриття inventory/PDA.
+    //
+    m_actor->set_inventory_disabled(true);
+
+    //
+    // Штатний X-Ray механізм:
+    // блокує слоти, починає ховати active item,
+    // запам'ятовує previous slot.
+    //
+    m_actor->SetWeaponHideState(INV_STATE_BLOCK_ALL, true);
+
+    m_actor_locked = true;
+
+    Msg("* ItemUse actor locked");
+}
+
+void CItemUseController::UnlockActor()
+{
+    if (!m_actor_locked)
+        return;
+
+    if (m_actor) {
+        //
+        // Штатний CInventory при розблокуванні
+        // сам спробує повернути previous active slot.
+        //
+        m_actor->SetWeaponHideState(INV_STATE_BLOCK_ALL, false);
+
+        //
+        // Повертаємо саме попередній стан inventory,
+        // а не тупо ставимо false.
+        //
+        m_actor->set_inventory_disabled(m_prev_inventory_disabled);
+    }
+
+    m_actor_locked = false;
+    m_prev_inventory_disabled = false;
+
+    Msg("* ItemUse actor unlocked");
+}
+
+bool CItemUseController::CanStartAnimation()
+{
+    if (!m_actor)
+        return false;
+
+    CInventory& inv = m_actor->inventory();
+
+    //
+    // Чекаємо завершення штатної hide-анімації.
+    //
+    if (inv.GetActiveSlot() != NO_ACTIVE_SLOT)
+        return false;
+
+    if (inv.GetNextActiveSlot() != NO_ACTIVE_SLOT)
+        return false;
+
+    //
+    // Detector — окремий HUD item, тому active slot
+    // сам по собі його не гарантує.
+    //
+    CCustomDetector* detector = smart_cast<CCustomDetector*>(inv.ItemFromSlot(DETECTOR_SLOT));
+
+    if (detector && !detector->IsHidden()) {
+        //
+        // Повторний виклик безпечний.
+        // Якщо detector ще showing/hiding —
+        // наступного кадру перевіримо знову.
+        //
+        detector->HideDetector(true);
+        return false;
+    }
+
+    return true;
+}
+
+void CItemUseController::BeginAnimation()
 {
     if (!m_active)
         return;
 
-    const u32 elapsed =
-        Device.dwTimeGlobal - m_start_time;
-
-    if (!m_effect_applied && elapsed >= m_action_time)
-    {
-            if (!m_item) {
-                Msg("! ItemUse: source item is NULL");
-                Cancel();
-                return;
-            }
-    
-            if (!m_actor) {
-                Msg("! ItemUse: actor is NULL");
-                Cancel();
-                return;
-            }
-    
-            bool became_empty = false;
-    
-            if (!m_actor->inventory().ApplyEat(m_item, became_empty)) {
-                Msg("! ItemUse: failed to apply effect for [%s]", m_item_section.c_str());
-    
-                Cancel();
-                return;
-            }
-    
-            m_effect_applied = true;
-    
-            Msg("* ItemUse effect applied: [%s]", m_item_section.c_str());
-    
-            //
-            // Предмет уже позначений SetDropManual(TRUE).
-            // Більше Controller'у pointer не потрібен.
-            //
-            if (became_empty)
-                m_item = NULL;
+    if (!m_actor || !g_player_hud) {
+        Cancel();
+        return;
     }
-    
+
+    if (!g_player_hud->attach_controller_item(m_hud_section)) {
+        Msg("! ItemUse: failed to attach HUD [%s]", m_hud_section.c_str());
+
+        Cancel();
+        return;
+    }
+
+    LoadAnimSound();
+
     //
-    // Для першого тесту закінчуємо по реальній
-    // довжині HUD animation.
+    // FALSE — наш уже перевірений фікс
+    // "руки прилітають з іншого виміру".
     //
-    if (m_animation_duration > 0 &&
-        elapsed >= m_animation_duration)
-    {
+    m_animation_duration = g_player_hud->play_controller_motion("anm_show", FALSE);
+
+    if (m_animation_duration == 0) {
+        Msg("! ItemUse: failed to play animation [%s]", m_hud_section.c_str());
+
+        Cancel();
+        return;
+    }
+
+    //
+    // Effect timing не може бути довшим
+    // за саму animation.
+    //
+    if (m_action_time > m_animation_duration)
+        m_action_time = m_animation_duration;
+
+    //
+    // Звук запускається саме разом із consumable animation,
+    // а не під час holster weapon.
+    //
+    PlayAnimSound();
+
+    m_start_time = Device.dwTimeGlobal;
+    m_waiting_for_weapon_hide = false;
+
+    Msg("* ItemUse started: [%s], HUD [%s], duration [%u], effect [%u], sound [%s]",
+        m_item_section.c_str(), m_hud_section.c_str(), m_animation_duration, m_action_time,
+        m_anim_sound_loaded ? "yes" : "no");
+}
+
+void CItemUseController::Update(float dt)
+{
+    (void)dt;
+
+    if (!m_active)
+        return;
+
+    //
+    // Actor зник / помер — abort без застосування item effect.
+    //
+    if (!m_actor || !m_actor->g_Alive()) {
+        Cancel();
+        return;
+    }
+
+    //
+    // Якщо HUD subsystem раптом недоступна —
+    // не залишаємо actor заблокованим назавжди.
+    //
+    if (!g_player_hud) {
+        Cancel();
+        return;
+    }
+
+    //
+    // Фаза 1:
+    // чекаємо weapon + detector hide.
+    //
+    if (m_waiting_for_weapon_hide) {
+        if (CanStartAnimation())
+            BeginAnimation();
+
+        return;
+    }
+
+    //
+    // Фаза 2:
+    // consumable animation уже йде.
+    //
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+
+    //
+    // Реальний effect moment.
+    //
+    if (!m_effect_applied && elapsed >= m_action_time) {
+        if (!m_item) {
+            Msg("! ItemUse: source item is NULL");
+            Cancel();
+            return;
+        }
+
+        bool became_empty = false;
+
+        if (!m_actor->inventory().ApplyEat(m_item, became_empty)) {
+            Msg("! ItemUse: failed to apply effect for [%s]", m_item_section.c_str());
+
+            Cancel();
+            return;
+        }
+
+        m_effect_applied = true;
+
+        Msg("* ItemUse effect applied: [%s]", m_item_section.c_str());
+
+        //
+        // Після останньої порції item уже
+        // позначений SetDropManual(TRUE).
+        //
+        if (became_empty)
+            m_item = NULL;
+    }
+
+    //
+    // Завершення animation.
+    //
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration) {
         Finish();
     }
 }
@@ -173,6 +346,8 @@ void CItemUseController::Cancel()
 
     if (g_player_hud)
         g_player_hud->detach_controller_item();
+
+    UnlockActor();
 
     Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
@@ -188,6 +363,8 @@ void CItemUseController::Finish()
 
     if (g_player_hud)
         g_player_hud->detach_controller_item();
+
+    UnlockActor();
 
     Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
@@ -208,6 +385,10 @@ void CItemUseController::Reset()
 
     m_active = false;
     m_effect_applied = false;
+
+    m_waiting_for_weapon_hide = false;
+    m_actor_locked = false;
+    m_prev_inventory_disabled = false;
 }
 
 void CItemUseController::LoadAnimSound() {

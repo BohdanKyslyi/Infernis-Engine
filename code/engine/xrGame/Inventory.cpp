@@ -956,10 +956,24 @@ bool CInventory::Eat(PIItem pIItem) {
     //
     // Animated consumable.
     //
-    if (actor && actor->m_inventory == this && actor->ItemUseController() &&
-        actor->ItemUseController()->Start(pIItem)) {
-        // Реальный эффект будет применён позже.
-        return true;
+    if (actor && actor->m_inventory == this && actor->ItemUseController()) {
+        CItemUseController* controller = actor->ItemUseController();
+
+        //
+        // Controller busy != "предмет без animation".
+        //
+        // Тут fallback на ApplyEat() робити НЕ можна.
+        //
+        if (controller->IsActive())
+            return false;
+
+        if (controller->Start(pIItem)) {
+            //
+            // Реальний effect буде застосований
+            // пізніше через ApplyEat().
+            //
+            return true;
+        }
     }
 
     //
