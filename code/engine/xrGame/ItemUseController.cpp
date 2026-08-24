@@ -22,8 +22,7 @@ CItemUseController::~CItemUseController()
     Cancel();
 }
 
-bool CItemUseController::Start(CInventoryItem* item)
-{
+bool CItemUseController::Start(CInventoryItem* item) {
     if (!item)
         return false;
 
@@ -34,85 +33,71 @@ bool CItemUseController::Start(CInventoryItem* item)
     m_item_section = item->object().cNameSect();
 
     //
-    // Немає HUD-анімації — controller цей предмет
-    // не обробляє.
+    // 1. Сам предмет повинен посилатися на use-section.
     //
-    if (!pSettings->line_exist(m_item_section, "hud"))
-    {
+    if (!pSettings->line_exist(m_item_section, "hud")) {
+        Reset();
+        return false;
+    }
+
+    m_use_section = pSettings->r_string(m_item_section, "hud");
+
+    if (!pSettings->section_exist(m_use_section)) {
         Reset();
         return false;
     }
 
     //
-    // [conserva]
-    // hud = conserva_beef_hud_model
+    // 2. Це повинна бути саме секція animated consumable.
+    // Простого параметра "hud" недостатньо.
     //
-    m_use_section =
-        pSettings->r_string(m_item_section, "hud");
+    if (!pSettings->line_exist(m_use_section, "timing") ||
+        !pSettings->line_exist(m_use_section, "hud")) {
+        Reset();
+        return false;
+    }
 
-    if (!pSettings->section_exist(m_use_section))
-    {
-        Msg("! ItemUse: missing use section [%s]",
-            m_use_section.c_str());
+    m_hud_section = pSettings->r_string(m_use_section, "hud");
 
+    if (!pSettings->section_exist(m_hud_section)) {
         Reset();
         return false;
     }
 
     //
-    // [conserva_beef_hud_model]
-    // hud = anm_conserva_hud
+    // 3. HUD-секція повинна мати нашу стартову анімацію.
     //
-    if (!pSettings->line_exist(m_use_section, "hud"))
-    {
-        Msg("! ItemUse: section [%s] has no HUD section",
-            m_use_section.c_str());
-
+    if (!pSettings->line_exist(m_hud_section, "anm_show")) {
         Reset();
         return false;
     }
 
-    m_hud_section =
-        pSettings->r_string(m_use_section, "hud");
+    m_action_time = pSettings->r_u32(m_use_section, "timing");
 
-    //
-    // GWR timing is milliseconds.
-    //
-    m_action_time =
-        pSettings->r_u32(m_use_section, "timing");
-
-    if (!g_player_hud)
-    {
+    if (!g_player_hud) {
         Reset();
         return false;
     }
 
-    if (!g_player_hud->attach_controller_item(m_hud_section))
-    {
+    if (!g_player_hud->attach_controller_item(m_hud_section)) {
         Reset();
         return false;
     }
 
-    //
-    // "anm_show" alias resolves to:
-    //
-    // anm_show = canned_beef_animation
-    //
-    m_animation_duration =
-        g_player_hud->play_controller_motion(
-            "anm_show",
-            TRUE
-        );
+    m_animation_duration = g_player_hud->play_controller_motion("anm_show", TRUE);
+
+    if (m_animation_duration == 0) {
+        g_player_hud->detach_controller_item();
+        Reset();
+        return false;
+    }
 
     m_start_time = Device.dwTimeGlobal;
     m_active = true;
     m_effect_applied = false;
 
-    Msg("* ItemUse started: [%s], HUD [%s], duration [%u], effect [%u]",
-        m_item_section.c_str(),
-        m_hud_section.c_str(),
-        m_animation_duration,
-        m_action_time);
+    Msg("* ItemUse started: [%s], HUD [%s], duration [%u], effect [%u]", m_item_section.c_str(),
+        m_hud_section.c_str(), m_animation_duration, m_action_time);
 
     return true;
 }
@@ -125,18 +110,38 @@ void CItemUseController::Update(float dt)
     const u32 elapsed =
         Device.dwTimeGlobal - m_start_time;
 
-    if (!m_effect_applied &&
-        elapsed >= m_action_time)
-    {
+if (!m_effect_applied && elapsed >= m_action_time) {
+        if (!m_item) {
+            Msg("! ItemUse: source item is NULL");
+            Cancel();
+            return;
+        }
+
+        if (!m_actor) {
+            Msg("! ItemUse: actor is NULL");
+            Cancel();
+            return;
+        }
+
+        bool became_empty = false;
+
+        if (!m_actor->inventory().ApplyEat(m_item, became_empty)) {
+            Msg("! ItemUse: failed to apply effect for [%s]", m_item_section.c_str());
+
+            Cancel();
+            return;
+        }
+
         m_effect_applied = true;
 
-        Msg("* ItemUse effect moment: [%s]",
-            m_item_section.c_str());
+        Msg("* ItemUse effect applied: [%s]", m_item_section.c_str());
 
         //
-        // Наступний етап:
-        // тут викличемо CEatableItem::UseBy()
+        // Предмет уже позначений SetDropManual(TRUE).
+        // Більше Controller'у pointer не потрібен.
         //
+        if (became_empty)
+            m_item = NULL;
     }
 
     //
