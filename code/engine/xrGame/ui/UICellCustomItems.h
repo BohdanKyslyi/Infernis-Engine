@@ -1,6 +1,7 @@
 #pragma once
 #include "UICellItem.h"
 #include "../Weapon.h"
+#include "../eatable_item.h"
 
 class CUIInventoryCellItem : public CUICellItem {
     typedef CUICellItem inherited;

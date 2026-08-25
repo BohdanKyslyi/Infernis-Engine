@@ -171,4 +171,13 @@ public:
 #ifdef DEBUG
     void draw_adjust_mode();
 #endif
+
+protected:
+    u32 m_quick_slots_inventory_revision;
+    bool m_quick_slots_force_refresh;
+
+    shared_str m_quick_slots_cached_sections[4];
+
+public:
+    void InvalidateQuickSlots() { m_quick_slots_force_refresh = true; }
 };

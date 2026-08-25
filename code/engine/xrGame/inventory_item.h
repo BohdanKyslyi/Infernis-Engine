@@ -84,9 +84,9 @@ public:
 public:
     virtual void Load(LPCSTR section);
 
-    LPCSTR NameItem(); // remove <virtual> by sea
-    LPCSTR NameShort();
-    shared_str ItemDescription() { return m_Description; }
+    virtual LPCSTR NameItem(); // return <virtual> by Infernis (ну я)
+    virtual LPCSTR NameShort();
+    virtual shared_str ItemDescription() { return m_Description; }
     virtual bool GetBriefInfo(II_BriefInfo& info) {
         info.clear();
         return false;
@@ -151,7 +151,7 @@ public:
     virtual void OnMoveToBelt(const SInvItemPlace& prev){};
     virtual void OnMoveToRuck(const SInvItemPlace& prev){};
 
-    Irect GetInvGridRect() const;
+    virtual Irect GetInvGridRect() const;
     Irect GetUpgrIconRect() const;
     const shared_str& GetIconName() const { return m_icon_name; };
     Frect GetKillMsgRect() const;

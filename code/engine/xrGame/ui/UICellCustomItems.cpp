@@ -36,18 +36,51 @@ CUIInventoryCellItem::CUIInventoryCellItem(CInventoryItem* itm) {
 
 bool CUIInventoryCellItem::EqualTo(CUICellItem* itm) {
     CUIInventoryCellItem* ci = smart_cast<CUIInventoryCellItem*>(itm);
-    if (!itm) {
+
+    if (!ci)
         return false;
-    }
+
+    //
+    // Different sections are never equal.
+    //
     if (object()->object().cNameSect() != ci->object()->object().cNameSect()) {
         return false;
     }
+
+    //
+    // Portion-aware stacking.
+    //
+    // Items with different remaining portions
+    // must be displayed separately.
+    //
+    CEatableItem* eatable_a = smart_cast<CEatableItem*>(object());
+
+    CEatableItem* eatable_b = smart_cast<CEatableItem*>(ci->object());
+
+    if (eatable_a || eatable_b) {
+        //
+        // Safety: one eatable and one non-eatable
+        // should never become one stack.
+        //
+        if (!eatable_a || !eatable_b)
+            return false;
+
+        if (eatable_a->PortionsNum() != eatable_b->PortionsNum()) {
+            return false;
+        }
+    }
+
+    //
+    // Existing vanilla checks.
+    //
     if (!fsimilar(object()->GetCondition(), ci->object()->GetCondition(), 0.01f)) {
         return false;
     }
+
     if (!object()->equal_upgrades(ci->object()->upgardes())) {
         return false;
     }
+
     return true;
 }
 

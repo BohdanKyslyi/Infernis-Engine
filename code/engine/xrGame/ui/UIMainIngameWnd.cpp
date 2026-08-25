@@ -75,8 +75,11 @@ const u32 g_clWhite = 0xffffffff;
 #define MAININGAME_XML "maingame.xml"
 
 CUIMainIngameWnd::CUIMainIngameWnd()
-    : /*m_pGrenade(NULL),m_pItem(NULL),*/ m_pPickUpItem(NULL), m_pMPChatWnd(NULL),
-      UIArtefactIcon(NULL), m_pMPLogWnd(NULL) {
+    : m_pPickUpItem(NULL), m_pMPChatWnd(NULL), UIArtefactIcon(NULL), m_pMPLogWnd(NULL),
+      m_quick_slots_inventory_revision(u32(-1)), m_quick_slots_force_refresh(true) {
+    for (u8 i = 0; i < 4; ++i)
+        m_quick_slots_cached_sections[i] = NULL;
+
     UIZoneMap = xr_new<CUIZoneMap>();
 }
 
@@ -305,6 +308,7 @@ void CUIMainIngameWnd::SetMPChatLog(CUIWindow* pChat, CUIWindow* pLog) {
 
 void CUIMainIngameWnd::Update() {
     CUIWindow::Update();
+
     CActor* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
 
     if (m_pMPChatWnd)
@@ -318,26 +322,16 @@ void CUIMainIngameWnd::Update() {
 
     UIZoneMap->Update();
 
-    //	UIHealthBar.SetProgressPos	(m_pActor->GetfHealth()*100.0f);
-    //	UIMotionIcon->SetPower		(m_pActor->conditions().GetPower()*100.0f);
-
     UpdatePickUpItem();
+
+    //
+    // Cheap revision check every frame.
+    // Heavy quick-slot rebuild occurs only on change.
+    //
+    UpdateQuickSlots();
 
     if (Device.dwFrame % 10)
         return;
-
-    game_PlayerState* lookat_player = Game().local_player;
-    if (Level().IsDemoPlayStarted()) {
-        lookat_player = Game().lookat_player();
-    }
-    bool b_God = (GodMode() || (!lookat_player))
-                     ? true
-                     : lookat_player->testFlag(GAME_PLAYER_FLAG_INVINCIBLE);
-    if (b_God) {
-        SetWarningIconColor(ewiInvincible, 0xffffffff);
-    } else {
-        SetWarningIconColor(ewiInvincible, 0x00ffffff);
-    }
 
     UpdateMainIndicators();
 } // update
@@ -568,7 +562,6 @@ void CUIMainIngameWnd::UpdateMainIndicators() {
     if (!pActor)
         return;
 
-    UpdateQuickSlots();
     if (IsGameTypeSingle())
         CurrentGameUI()->PdaMenu().UpdateRankingWnd();
 
@@ -711,6 +704,50 @@ void CUIMainIngameWnd::UpdateMainIndicators() {
 }
 
 void CUIMainIngameWnd::UpdateQuickSlots() {
+    CActor* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
+
+    if (!pActor)
+        return;
+
+    const u32 inventory_revision = pActor->inventory().StateRevision();
+
+    //
+    // Quick-slot bindings are not actual inventory mutations,
+    // so check the four section references separately.
+    //
+    bool bindings_changed = false;
+
+    for (u8 i = 0; i < 4; ++i) {
+        shared_str current_section = g_quick_use_slots[i];
+
+        if (m_quick_slots_cached_sections[i] != current_section) {
+            bindings_changed = true;
+            break;
+        }
+    }
+
+    //
+    // Nothing changed -> do absolutely nothing.
+    //
+    if (!m_quick_slots_force_refresh && !bindings_changed &&
+        m_quick_slots_inventory_revision == inventory_revision) {
+        return;
+    }
+
+    //
+    // Cache current state.
+    //
+    m_quick_slots_force_refresh = false;
+
+    m_quick_slots_inventory_revision = inventory_revision;
+
+    for (u8 i = 0; i < 4; ++i) {
+        m_quick_slots_cached_sections[i] = g_quick_use_slots[i];
+    }
+
+    //
+    // OLD UpdateQuickSlots() BODY CONTINUES HERE.
+    //
     string32 tmp;
     LPCSTR str = CStringTable().translate("quick_use_str_1").c_str();
     strncpy_s(tmp, sizeof(tmp), str, 3);
@@ -736,10 +773,6 @@ void CUIMainIngameWnd::UpdateQuickSlots() {
         tmp[1] = '\0';
     m_QuickSlotText4->SetTextST(tmp);
 
-    CActor* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
-    if (!pActor)
-        return;
-
     for (u8 i = 0; i < 4; i++) {
         CUIStatic* wnd = smart_cast<CUIStatic*>(m_quick_slots_icons[i]->FindChild("counter"));
         if (wnd) {
@@ -754,11 +787,41 @@ void CUIMainIngameWnd::UpdateQuickSlots() {
                 CUIStatic* main_slot = m_quick_slots_icons[i];
                 main_slot->SetShader(InventoryUtilities::GetEquipmentIconsShader());
                 Frect texture_rect;
-                texture_rect.x1 = pSettings->r_float(item_name, "inv_grid_x") * INV_GRID_WIDTH;
-                texture_rect.y1 = pSettings->r_float(item_name, "inv_grid_y") * INV_GRID_HEIGHT;
-                texture_rect.x2 = pSettings->r_float(item_name, "inv_grid_width") * INV_GRID_WIDTH;
-                texture_rect.y2 =
-                    pSettings->r_float(item_name, "inv_grid_height") * INV_GRID_HEIGHT;
+
+                //
+                // Try runtime item first.
+                //
+                // This allows CEatableItem::GetInvGridRect()
+                // to provide portion_state-specific icon coordinates.
+                //
+                PIItem runtime_item = pActor->inventory().GetAny(item_name.c_str());
+
+                if (runtime_item) {
+                    const Irect icon_rect = runtime_item->GetInvGridRect();
+
+                    texture_rect.x1 = float(icon_rect.x1) * INV_GRID_WIDTH;
+
+                    texture_rect.y1 = float(icon_rect.y1) * INV_GRID_HEIGHT;
+
+                    texture_rect.x2 = float(icon_rect.x2) * INV_GRID_WIDTH;
+
+                    texture_rect.y2 = float(icon_rect.y2) * INV_GRID_HEIGHT;
+                } else {
+                    //
+                    // No item in inventory:
+                    // show the normal config icon as disabled reference.
+                    //
+                    texture_rect.x1 = pSettings->r_float(item_name, "inv_grid_x") * INV_GRID_WIDTH;
+
+                    texture_rect.y1 = pSettings->r_float(item_name, "inv_grid_y") * INV_GRID_HEIGHT;
+
+                    texture_rect.x2 =
+                        pSettings->r_float(item_name, "inv_grid_width") * INV_GRID_WIDTH;
+
+                    texture_rect.y2 =
+                        pSettings->r_float(item_name, "inv_grid_height") * INV_GRID_HEIGHT;
+                }
+
                 texture_rect.rb.add(texture_rect.lt);
                 main_slot->SetTextureRect(texture_rect);
                 main_slot->TextureOn();

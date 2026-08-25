@@ -14,6 +14,7 @@
 #include "CustomOutfit.h"
 #include "ActorHelmet.h"
 #include "UserBackpack.h"
+#include "../eatable_item.h"
 
 CUICellItem* CUICellItem::m_mouse_selected_item = NULL;
 
@@ -185,7 +186,11 @@ void CUICellItem::UpdateConditionProgressBar() {
         CCustomOutfit* pOutfit = smart_cast<CCustomOutfit*>(itm);
         CHelmet* pHelmet = smart_cast<CHelmet*>(itm);
 		CBackpack* pBackpack = smart_cast<CBackpack*>(itm);
-		if(pWeapon || pOutfit || pHelmet || pBackpack)
+        CEatableItem* pEatable = smart_cast<CEatableItem*>(itm);
+
+        const bool show_eatable_portions = pEatable && pEatable->TotalPortions() > 1;
+        
+        if (pWeapon || pOutfit || pHelmet || pBackpack || show_eatable_portions)
 		{
 			Ivector2 itm_grid_size = GetGridSize();
 			if(m_pParentList->GetVerticalPlacement())
@@ -197,7 +202,18 @@ void CUICellItem::UpdateConditionProgressBar() {
 			float y = itm_grid_size.y * (cell_size.y + cell_space.y) - m_pConditionState->GetHeight() - 2.f;
 
 			m_pConditionState->SetWndPos(Fvector2().set(x,y));
-			m_pConditionState->SetProgressPos(iCeil(itm->GetCondition()*13.0f)/13.0f);
+            float progress = itm->GetCondition();
+            
+            //
+            // For multi-use consumables the same bar
+            // represents remaining portions instead of condition.
+            //
+            if (show_eatable_portions) {
+                progress =
+                    float(pEatable->PortionsNum()) / float(pEatable->TotalPortions());
+            }
+            
+            m_pConditionState->SetProgressPos(iCeil(progress * 13.0f) / 13.0f);
 			m_pConditionState->Show(true);
 			return;
 		}

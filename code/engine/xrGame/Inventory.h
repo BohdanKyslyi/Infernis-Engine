@@ -145,7 +145,20 @@ public:
     friend class CInventoryOwner;
 
     u32 ModifyFrame() const { return m_dwModifyFrame; }
-    void InvalidateState() { m_dwModifyFrame = Device.dwFrame; }
+    u32 StateRevision() const { return m_state_revision; }
+
+    void InvalidateState() {
+        m_dwModifyFrame = Device.dwFrame;
+
+        ++m_state_revision;
+
+        //
+        // Practically impossible, but keep zero
+        // as the initial/uninitialized value.
+        //
+        if (m_state_revision == 0)
+            m_state_revision = 1;
+    }
     void Items_SetCurrentEntityHud(bool current_entity);
     bool isBeautifulForActiveSlot(CInventoryItem* pIItem);
 
@@ -173,6 +186,13 @@ protected:
 
     //кадр на котором произошло последнее изменение в инвенторе
     u32 m_dwModifyFrame;
+    //
+    // Monotonic inventory state revision.
+    //
+    // Unlike Device.dwFrame this changes for every
+    // individual inventory invalidation.
+    //
+    u32 m_state_revision;
 
     bool m_drop_last_frame;
 

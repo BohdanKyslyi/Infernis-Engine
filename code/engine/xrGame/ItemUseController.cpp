@@ -1,3 +1,11 @@
+////////////////////////////////////////////////////////////////////////////
+//	Module 		: ItemUseController.cpp
+//	Created 	: 23.08.2026
+//  Modified 	: 25.08.2026
+//	Author		: Bohdan «Infernis» Kyslyi
+//	Description : Item use controller
+////////////////////////////////////////////////////////////////////////////
+
 #include "stdafx.h"
 #include "ItemUseController.h"
 
@@ -10,6 +18,25 @@
 #include "UIGameCustom.h"
 
 #include "../xrPhysics/ElevatorState.h"
+#include "eatable_item.h"
+
+static bool ConsumableAnimationsEnabled() {
+    static bool initialized = false;
+    static bool enabled = true;
+
+    if (!initialized) {
+        initialized = true;
+
+        if (pSettings->section_exist("items_animations") &&
+            pSettings->line_exist("items_animations", "enable_consumables_animations")) {
+            enabled = !!pSettings->r_bool("items_animations", "enable_consumables_animations");
+        }
+
+        Msg("* Consumable animations: [%s]", enabled ? "enabled" : "disabled");
+    }
+
+    return enabled;
+}
 
 CItemUseController::CItemUseController(CActor* actor)
     : m_actor(actor),
@@ -31,12 +58,20 @@ CItemUseController::~CItemUseController()
     Cancel();
 }
 
-bool CItemUseController::Start(CInventoryItem* item)
-{
+bool CItemUseController::Start(CInventoryItem* item) {
     if (!item)
         return false;
 
     if (m_active)
+        return false;
+
+    //
+    // Global engine_external switch.
+    //
+    // Returning false tells CInventory::Eat()
+    // to use the normal immediate ApplyEat() path.
+    //
+    if (!ConsumableAnimationsEnabled())
         return false;
 
     m_item = item;
@@ -60,13 +95,60 @@ bool CItemUseController::Start(CInventoryItem* item)
     //
     // 2. Ïåðåâ³ðÿºìî, ùî öå ñàìå animated consumable.
     //
-    if (!pSettings->line_exist(m_use_section, "timing") ||
-        !pSettings->line_exist(m_use_section, "hud")) {
+    if (!pSettings->line_exist(m_use_section, "timing")) {
         Reset();
         return false;
     }
 
-    m_hud_section = pSettings->r_string(m_use_section, "hud");
+    m_hud_section = NULL;
+    
+    //
+    // First try portion-specific HUD.
+    //
+    CEatableItem* eatable =
+        smart_cast<CEatableItem*>(item);
+    
+    if (eatable)
+    {
+        const shared_str& state =
+            eatable->PortionStateSection();
+    
+        if (state.size() &&
+            pSettings->line_exist(
+                state.c_str(),
+                "hud"))
+        {
+            m_hud_section =
+                pSettings->r_string(
+                    state.c_str(),
+                    "hud"
+                );
+        }
+    }
+    
+    //
+    // Backward-compatible fallback:
+    //
+    // old animated consumables can still use
+    // [use_section] hud = ...
+    //
+    if (!m_hud_section.size() &&
+        pSettings->line_exist(
+            m_use_section,
+            "hud"))
+    {
+        m_hud_section =
+            pSettings->r_string(
+                m_use_section,
+                "hud"
+            );
+    }
+    
+    if (!m_hud_section.size())
+    {
+        Reset();
+        return false;
+    }
 
     if (!pSettings->section_exist(m_hud_section)) {
         Reset();
@@ -79,6 +161,13 @@ bool CItemUseController::Start(CInventoryItem* item)
     if (!pSettings->line_exist(m_hud_section, "anm_show")) {
         Reset();
         return false;
+    }
+
+    if (eatable) {
+        Msg("* ItemUse portion: [%d/%d], use index [%d], state [%s]", eatable->PortionsNum(),
+            eatable->TotalPortions(), eatable->PortionIndex(),
+            eatable->PortionStateSection().size() ? eatable->PortionStateSection().c_str()
+                                                  : "default");
     }
 
     m_action_time = pSettings->r_u32(m_use_section, "timing");

@@ -64,7 +64,10 @@ CInventory::CInventory() {
     m_bBeltUseful = false;
 
     m_fTotalWeight = -1.f;
+
     m_dwModifyFrame = 0;
+    m_state_revision = 0;
+
     m_drop_last_frame = false;
 
     InitPriorityGroupsForQSwitch();
