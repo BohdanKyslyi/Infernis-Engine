@@ -1,9 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Module 		: xrServer_Objects.cpp
 //	Created 	: 19.09.2002
-//  Modified 	: 04.06.2003
-//	Author		: Oles Shyshkovtsov, Alexander Maksimchuk, Victor Reutskiy and Dmitriy
-//Iassenev 	Description : Server objects
+//	Author		: Oles Shyshkovtsov, Alexander Maksimchuk, Victor Reutskiy and Dmitriy Iassenev
+// 	Description : Server objects
+//  Modified 	: 25.08.2026
+//	by  		: Bohdan «Infernis» Kyslyi
 ////////////////////////////////////////////////////////////////////////////
 
 #include "stdafx.h"
@@ -163,7 +164,19 @@ item only"),	&m_spawn_flags,	flSpawnSingleItemOnly);
 ////////////////////////////////////////////////////////////////////////////
 CSE_PHSkeleton::CSE_PHSkeleton(LPCSTR caSection) {
     source_id = u16(-1);
+
     _flags.zero();
+
+    //
+    // Infernis Engine:
+    //
+    // Allow dynamically spawned physics skeletons
+    // to define their initial physical state directly
+    // from LTX.
+    //
+    if (pSettings->section_exist(caSection) && pSettings->line_exist(caSection, "active")) {
+        _flags.set(flActive, !!pSettings->r_bool(caSection, "active"));
+    }
 }
 
 CSE_PHSkeleton::~CSE_PHSkeleton() {}

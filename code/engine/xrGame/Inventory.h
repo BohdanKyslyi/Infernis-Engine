@@ -102,7 +102,7 @@ public:
     PIItem GetItemFromInventory(LPCSTR caItemName);
 
     bool Eat(PIItem pIItem);
-    bool ApplyEat(PIItem pIItem, bool& became_empty);
+    bool ApplyEat(PIItem pIItem, bool& became_empty, bool spawn_trash = true);
     bool ClientEat(PIItem pIItem);
 
     IC u16 GetActiveSlot() const { return m_iActiveSlot; }

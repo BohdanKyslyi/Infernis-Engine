@@ -994,10 +994,26 @@ bool CInventory::Eat(PIItem pIItem) {
     return !became_empty;
 }
 
-bool CInventory::ApplyEat(PIItem pIItem, bool& became_empty) {
+bool CInventory::ApplyEat(PIItem pIItem, bool& became_empty, bool spawn_trash) {
     became_empty = false;
 
     CEatableItem* pItemToEat = smart_cast<CEatableItem*>(pIItem);
+
+    if (!pItemToEat)
+        return false;
+
+    //
+    // Snapshot trash BEFORE UseBy(),
+    // because UseBy() changes portion_state.
+    //
+    shared_str trash_object = NULL;
+    u32 trash_count = 0;
+
+    if (spawn_trash && pItemToEat->HasTrash()) {
+        trash_object = pItemToEat->TrashObject();
+
+        trash_count = pItemToEat->TrashCount();
+    }
     if (!pItemToEat)
         return false;
 
@@ -1037,6 +1053,16 @@ bool CInventory::ApplyEat(PIItem pIItem, bool& became_empty) {
     Msg("--- Actor [%d] use or eat [%d][%s]", entity_alive->ID(), pItemToEat->object().ID(),
         pItemToEat->object().cNameSect().c_str());
 #endif
+
+    //
+    // Non-animated use path.
+    //
+    // Animated Controller passes spawn_trash = false
+    // and handles this itself at animation end.
+    //
+    if (spawn_trash && trash_object.size() && trash_count > 0) {
+        SpawnConsumableTrash(entity_alive, trash_object, trash_count);
+    }
 
     //
     // Оригінальний callback.

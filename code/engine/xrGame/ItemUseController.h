@@ -33,6 +33,8 @@ private:
     void StopAnimSound();
     void DestroyAnimSound();
 
+    void SpawnTrash();
+
 private:
     CActor* m_actor;
     CInventoryItem* m_item;
@@ -59,6 +61,16 @@ private:
     // якщо його до нас заблокувала інша система.
     //
     bool m_prev_inventory_disabled;
+
+    //
+    // Cached trash recipe of the CURRENT use.
+    //
+    // Must survive after ApplyEat(), because the source item
+    // can already be empty/destroying before animation Finish().
+    //
+    shared_str m_trash_section;
+    u32 m_trash_count;
+    bool m_trash_spawned;
 
     HUD_SOUND_ITEM m_anim_sound;
     bool m_anim_sound_loaded;

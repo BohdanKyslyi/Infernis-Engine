@@ -5,6 +5,14 @@
 class CPhysicItem;
 class CEntityAlive;
 
+//
+// Spawn physical waste produced by a consumable.
+//
+// Unlike next_section this object has NO parent
+// and therefore appears directly in the world.
+//
+void SpawnConsumableTrash(CEntityAlive* entity_alive, const shared_str& section, u32 count);
+
 struct SNextSectionItem {
     shared_str section;
     u32 count;
@@ -48,6 +56,12 @@ public:
     virtual float Weight() const override;
 
     virtual bool Empty() { return PortionsNum() == 0; };
+
+    const shared_str& TrashObject() const { return m_trash_object; }
+
+    u32 TrashCount() const { return m_trash_count; }
+
+    bool HasTrash() const { return m_trash_object.size() && m_trash_count > 0; }
 
     //
     // Current number of remaining portions.
@@ -107,6 +121,14 @@ protected:
     shared_str m_base_visual;
     shared_str m_portion_visual;
 
+    //
+    // Physical waste produced by the current use/state.
+    //
+    shared_str m_trash_object;
+    u32 m_trash_count;
+
+    void UpdateTrashState();
+    void ApplyTrashConfig(LPCSTR section);
 
     struct SNextRandomBundle {
         xr_vector<SNextSectionItem> items;

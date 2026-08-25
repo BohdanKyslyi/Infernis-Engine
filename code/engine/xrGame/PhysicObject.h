@@ -103,6 +103,15 @@ public:
     virtual void PH_I_CrPr(); // actions & operations after correction before prediction steps
     virtual void PH_A_CrPr(); // actions & operations after phisic correction-prediction steps
 protected:
+    //
+    // Infernis Engine:
+    // lifetime of disposable physics objects.
+    //
+    // milliseconds
+    // 0 = disabled
+    //
+    u32 m_trash_remove_time;
+
     virtual void SpawnInitPhysics(CSE_Abstract* D);
     virtual void RunStartupAnim(CSE_Abstract* D);
     virtual CPhysicsShellHolder* PPhysicsShellHolder() { return PhysicsShellHolder(); }

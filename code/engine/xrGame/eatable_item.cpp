@@ -36,6 +36,9 @@ CEatableItem::CEatableItem() {
     m_base_visual = NULL;
     m_portion_visual = NULL;
 
+    m_trash_object = NULL;
+    m_trash_count = 0;
+
     m_physic_item = 0;
 }
 
@@ -59,6 +62,169 @@ void CEatableItem::Load(LPCSTR section) {
     VERIFY(m_iTotalPortionsNum < 10000);
 
     UpdatePortionState();
+}
+
+void SpawnConsumableTrash(CEntityAlive* entity_alive, const shared_str& section, u32 count) {
+    if (!entity_alive)
+        return;
+
+    if (!section.size())
+        return;
+
+    if (count == 0)
+        return;
+
+    //
+    // Same authority rule as next_section / next_random.
+    //
+    if (!OnServer())
+        return;
+
+    if (!pSettings->section_exist(section.c_str())) {
+        Msg("! Eatable: trash section [%s] does not exist", section.c_str());
+
+        return;
+    }
+
+    CGameObject* owner = smart_cast<CGameObject*>(entity_alive);
+
+    if (!owner) {
+        Msg("! Eatable: trash owner is not CGameObject");
+        return;
+    }
+
+    //
+    // Spawn slightly in front of the actor and above the ground,
+    // rather than directly inside the actor's collision capsule.
+    //
+    Fvector position = owner->Position();
+
+    Fvector direction = owner->Direction();
+
+    direction.y = 0.0f;
+    direction.normalize_safe();
+
+    position.mad(direction, 0.35f);
+
+    position.y += 0.6f;
+
+    const u32 level_vertex_id = owner->ai_location().level_vertex_id();
+
+    for (u32 i = 0; i < count; ++i) {
+        Level().spawn_item(section.c_str(), position, level_vertex_id,
+
+                           //
+                           // 0xffff = no parent.
+                           // Trash is spawned into the world,
+                           // NOT into actor inventory.
+                           //
+                           u16(-1),
+
+                           false);
+    }
+
+#ifdef DEBUG
+
+    Msg("* Eatable trash spawned: [%s] x[%u]", section.c_str(), count);
+
+#endif
+}
+
+void CEatableItem::ApplyTrashConfig(LPCSTR section) {
+    if (!section || !section[0]) {
+        return;
+    }
+
+    if (!pSettings->section_exist(section))
+        return;
+
+    //
+    // trash_object
+    //
+    if (pSettings->line_exist(section, "trash_object")) {
+        LPCSTR value = pSettings->r_string(section, "trash_object");
+
+        //
+        // Explicit state override:
+        //
+        // trash_object = none
+        //
+        if (!value || !value[0] || !xr_strcmp(value, "none")) {
+            m_trash_object = NULL;
+        } else {
+            if (!pSettings->section_exist(value)) {
+                Msg("! Eatable: invalid trash_object [%s] in [%s]", value, section);
+
+                m_trash_object = NULL;
+            } else {
+                m_trash_object = value;
+            }
+        }
+    }
+
+    //
+    // trash_count
+    //
+    if (pSettings->line_exist(section, "trash_count")) {
+        m_trash_count = pSettings->r_u32(section, "trash_count");
+    }
+}
+
+void CEatableItem::UpdateTrashState() {
+    //
+    // Default:
+    //
+    // no trash object;
+    // if object appears, default count = 1.
+    //
+    m_trash_object = NULL;
+    m_trash_count = 1;
+
+    if (!m_section_id.size())
+        return;
+
+    //
+    // Priority #1:
+    // physical item section.
+    //
+    ApplyTrashConfig(m_section_id.c_str());
+
+    //
+    // Priority #2:
+    // animated use section.
+    //
+    // [conserva]
+    // hud = conserva_hud_model
+    //
+    if (pSettings->line_exist(m_section_id.c_str(), "hud")) {
+        LPCSTR use_section = pSettings->r_string(m_section_id.c_str(), "hud");
+
+        if (use_section && use_section[0] && pSettings->section_exist(use_section)) {
+            ApplyTrashConfig(use_section);
+        }
+    }
+
+    //
+    // Priority #3:
+    // current portion_state.
+    //
+    // Highest priority.
+    //
+    if (m_portion_state.size()) {
+        ApplyTrashConfig(m_portion_state.c_str());
+    }
+
+    if (!m_trash_object.size())
+        m_trash_count = 0;
+
+#ifdef DEBUG
+
+    if (HasTrash()) {
+        Msg("* Eatable trash recipe [%s]: [%s] x[%u]", m_section_id.c_str(), m_trash_object.c_str(),
+            m_trash_count);
+    }
+
+#endif
 }
 
 BOOL CEatableItem::net_Spawn(CSE_Abstract* DC) {
@@ -231,6 +397,7 @@ void CEatableItem::UpdatePortionState() {
     if (m_section_id.size() == 0) {
         ApplyPortionVisual();
         UpdateOutcomeRecipes();
+        UpdateTrashState();
         return;
     }
 
@@ -274,6 +441,7 @@ void CEatableItem::UpdatePortionState() {
     if (!m_portion_state.size()) {
         ApplyPortionVisual();
         UpdateOutcomeRecipes();
+        UpdateTrashState();
         return;
     }
 
@@ -369,6 +537,7 @@ void CEatableItem::UpdatePortionState() {
 #endif
     ApplyPortionVisual();
     UpdateOutcomeRecipes();
+    UpdateTrashState();
 }
 
 void CEatableItem::ApplyPortionVisual() {
@@ -580,6 +749,7 @@ void CEatableItem::SpawnNextSections(CEntityAlive* entity_alive) {
 void CEatableItem::UpdateOutcomeRecipes() {
     UpdateNextSections();
     UpdateNextRandom();
+    UpdateTrashState();
 }
 
 bool CEatableItem::HasNextRandom(LPCSTR section) const {

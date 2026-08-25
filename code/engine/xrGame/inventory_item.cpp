@@ -1,9 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Module 		: inventory_item.cpp
 //	Created 	: 24.03.2003
-//  Modified 	: 29.01.2004
 //	Author		: Victor Reutsky, Yuri Dobronravin
 //	Description : Inventory item
+//  Modified 	: 25.08.2026
+//	by  		: Bohdan «Infernis» Kyslyi
 ////////////////////////////////////////////////////////////////////////////
 
 //#include "stdafx.h"
@@ -60,6 +61,7 @@ CInventoryItem::CInventoryItem() {
     m_Description = "";
     m_section_id = 0;
     m_flags.set(FIsHelperItem, FALSE);
+
 }
 
 CInventoryItem::~CInventoryItem() {
@@ -113,6 +115,7 @@ void CInventoryItem::Load(LPCSTR section) {
         m_fControlInertionFactor = pSettings->r_float(section, "control_inertion_factor");
     }
     m_icon_name = READ_IF_EXISTS(pSettings, r_string, section, "icon_name", NULL);
+
 }
 
 void CInventoryItem::ChangeCondition(float fDeltaCondition) {
@@ -1071,8 +1074,10 @@ bool CInventoryItem::NeedToDestroyObject() const {
 
     if (object().Remote())
         return false;
-    if (TimePassedAfterIndependant() > ITEM_REMOVE_TIME)
+
+    if (TimePassedAfterIndependant() > ITEM_REMOVE_TIME) {
         return true;
+    }
 
     return false;
 }

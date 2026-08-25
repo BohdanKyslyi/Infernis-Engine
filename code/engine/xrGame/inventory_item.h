@@ -188,6 +188,7 @@ protected:
 protected:
     ALife::_TIME_ID m_dwItemIndependencyTime;
 
+
     float m_fControlInertionFactor;
     shared_str m_icon_name;
 

@@ -49,8 +49,10 @@ CItemUseController::CItemUseController(CActor* actor)
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
       m_prev_inventory_disabled(false),
-      m_anim_sound_loaded(false)
-{
+
+      m_trash_count(0), m_trash_spawned(false),
+
+      m_anim_sound_loaded(false) {
 }
 
 CItemUseController::~CItemUseController()
@@ -76,6 +78,10 @@ bool CItemUseController::Start(CInventoryItem* item) {
 
     m_item = item;
     m_item_section = item->object().cNameSect();
+
+    m_trash_section = NULL;
+    m_trash_count = 0;
+    m_trash_spawned = false;
 
     //
     // 1. Сам предмет повинен посилатися на use-section.
@@ -107,6 +113,15 @@ bool CItemUseController::Start(CInventoryItem* item) {
     //
     CEatableItem* eatable =
         smart_cast<CEatableItem*>(item);
+
+    //
+    // Cache physical waste for THIS exact portion/state.
+    //
+    if (eatable && eatable->HasTrash()) {
+        m_trash_section = eatable->TrashObject();
+
+        m_trash_count = eatable->TrashCount();
+    }
     
     if (eatable)
     {
@@ -398,7 +413,8 @@ void CItemUseController::Update(float dt)
 
         bool became_empty = false;
 
-        if (!m_actor->inventory().ApplyEat(m_item, became_empty)) {
+        // Controller will spawn physical waste exactly at animation end.
+        if (!m_actor->inventory().ApplyEat(m_item, became_empty, false)) {
             Msg("! ItemUse: failed to apply effect for [%s]", m_item_section.c_str());
 
             Cancel();
@@ -425,10 +441,17 @@ void CItemUseController::Update(float dt)
     }
 }
 
-void CItemUseController::Cancel()
-{
+void CItemUseController::Cancel() {
     if (!m_active)
         return;
+
+    //
+    // If effect has already happened,
+    // physical waste must not magically disappear.
+    //
+    if (m_effect_applied && !m_trash_spawned) {
+        SpawnTrash();
+    }
 
     DestroyAnimSound();
 
@@ -442,10 +465,17 @@ void CItemUseController::Cancel()
     Reset();
 }
 
-void CItemUseController::Finish()
-{
+void CItemUseController::Finish() {
     if (!m_active)
         return;
+
+    //
+    // Normal physical trash moment:
+    // real end of consumable animation.
+    //
+    if (m_effect_applied && !m_trash_spawned) {
+        SpawnTrash();
+    }
 
     DestroyAnimSound();
 
@@ -477,6 +507,10 @@ void CItemUseController::Reset()
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;
     m_prev_inventory_disabled = false;
+
+    m_trash_section = NULL;
+    m_trash_count = 0;
+    m_trash_spawned = false;
 }
 
 void CItemUseController::LoadAnimSound() {
@@ -518,4 +552,20 @@ void CItemUseController::DestroyAnimSound() {
     HUD_SOUND_ITEM::DestroySound(m_anim_sound);
 
     m_anim_sound_loaded = false;
+}
+
+void CItemUseController::SpawnTrash() {
+    if (m_trash_spawned)
+        return;
+
+    if (!m_actor)
+        return;
+
+    if (!m_trash_section.size() || m_trash_count == 0) {
+        return;
+    }
+
+    SpawnConsumableTrash(m_actor, m_trash_section, m_trash_count);
+
+    m_trash_spawned = true;
 }

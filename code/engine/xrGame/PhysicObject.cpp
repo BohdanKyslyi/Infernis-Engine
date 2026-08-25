@@ -20,7 +20,7 @@
 BOOL dbg_draw_doors = false;
 CPhysicObject::CPhysicObject(void)
     : m_anim_blend(0), m_type(epotBox), m_mass(10.f), m_collision_hit_callback(0),
-      bones_snd_player(0), m_net_updateData(0) {}
+      bones_snd_player(0), m_net_updateData(0), m_trash_remove_time(0) {}
 
 CPhysicObject::~CPhysicObject(void) { xr_delete(m_net_updateData); }
 
@@ -37,11 +37,32 @@ BOOL CPhysicObject::net_Spawn(CSE_Abstract* DC) {
     create_collision_model();
 
     CPHSkeleton::Spawn(e);
+
     setVisible(TRUE);
     setEnabled(TRUE);
 
-    if (!PPhysicsShell()->isBreakable() && !CScriptBinder::object() && !CPHSkeleton::IsRemoving())
+    //
+    // Infernis Engine:
+    // disposable O_PHYS_S lifetime.
+    //
+    if (m_trash_remove_time > 0) {
+        SetAutoRemove(m_trash_remove_time);
+
+#ifndef MASTER_GOLD
+        Msg("* [Trash] CPhysicObject autoremove started: [%s][%u], lifetime [%u] ms, local [%d]",
+            cNameSect().c_str(), ID(), m_trash_remove_time, Local());
+#endif
+    }
+
+    //
+    // Original X-Ray behaviour.
+    //
+    // SetAutoRemove() sets IsRemoving() == true,
+    // therefore disposable trash stays scheduled.
+    //
+    if (!PPhysicsShell()->isBreakable() && !CScriptBinder::object() && !CPHSkeleton::IsRemoving()) {
         SheduleUnregister();
+    }
 
     // if (PPhysicsShell()->Animated())
     //{
@@ -287,7 +308,23 @@ void CPhysicObject::CreateSkeleton(CSE_ALifeObjectPhysic* po) {
 
 void CPhysicObject::Load(LPCSTR section) {
     inherited::Load(section);
+
     CPHSkeleton::Load(section);
+
+    //
+    // Infernis Engine:
+    // disposable physics object lifetime.
+    //
+    // milliseconds
+    //
+    m_trash_remove_time = READ_IF_EXISTS(pSettings, r_u32, section, "timing_trash", 0);
+
+#ifndef MASTER_GOLD
+    if (m_trash_remove_time > 0) {
+        Msg("* [Trash] CPhysicObject loaded: [%s], timing_trash [%u]", section,
+            m_trash_remove_time);
+    }
+#endif
 }
 
 void CPhysicObject::shedule_Update(u32 dt) {
