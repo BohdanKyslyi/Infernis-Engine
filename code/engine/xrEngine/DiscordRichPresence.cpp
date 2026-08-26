@@ -5,6 +5,43 @@
 
 #include <ctime>
 
+namespace {
+
+constexpr UINT XRayCodePage = 1251;
+
+xr_string ToDiscordUTF8(LPCSTR source) {
+    if (!source || !source[0])
+        return xr_string();
+
+    const int wide_length = MultiByteToWideChar(XRayCodePage, 0, source, -1, nullptr, 0);
+
+    if (wide_length <= 0)
+        return xr_string(source);
+
+    xr_vector<wchar_t> wide_buffer(wide_length);
+
+    if (!MultiByteToWideChar(XRayCodePage, 0, source, -1, &wide_buffer[0], wide_length)) {
+        return xr_string(source);
+    }
+
+    const int utf8_length =
+        WideCharToMultiByte(CP_UTF8, 0, &wide_buffer[0], -1, nullptr, 0, nullptr, nullptr);
+
+    if (utf8_length <= 0)
+        return xr_string(source);
+
+    xr_vector<char> utf8_buffer(utf8_length);
+
+    if (!WideCharToMultiByte(CP_UTF8, 0, &wide_buffer[0], -1, &utf8_buffer[0], utf8_length, nullptr,
+                             nullptr)) {
+        return xr_string(source);
+    }
+
+    return xr_string(&utf8_buffer[0]);
+}
+
+} // namespace
+
 ENGINE_API CDiscordRichPresence g_discord;
 
 CDiscordRichPresence::CDiscordRichPresence()
@@ -77,26 +114,38 @@ void CDiscordRichPresence::SetStatus(LPCSTR details, LPCSTR state) {
     LPCSTR safe_details = details ? details : "";
     LPCSTR safe_state = state ? state : "";
 
+    const xr_string utf8_details = ToDiscordUTF8(safe_details);
+
+    const xr_string utf8_state = ToDiscordUTF8(safe_state);
+
     //
-    // Do not send identical presence repeatedly.
+    // Compare already converted UTF-8 strings.
     //
-    if (xr_strcmp(m_details, safe_details) == 0 && xr_strcmp(m_state, safe_state) == 0) {
+    if (xr_strcmp(m_details, utf8_details.c_str()) == 0 &&
+        xr_strcmp(m_state, utf8_state.c_str()) == 0) {
         return;
     }
 
-    xr_strcpy(m_details, sizeof(m_details), safe_details);
-    xr_strcpy(m_state, sizeof(m_state), safe_state);
+    xr_strcpy(m_details, sizeof(m_details), utf8_details.c_str());
+
+    xr_strcpy(m_state, sizeof(m_state), utf8_state.c_str());
 
     DiscordRichPresence presence{};
 
     presence.details = m_details[0] ? m_details : nullptr;
+
     presence.state = m_state[0] ? m_state : nullptr;
+
     presence.startTimestamp = m_show_playtime ? m_start_timestamp : 0;
 
     Discord_UpdatePresence(&presence);
 
-    Msg("* Discord RPC: status updated [%s] [%s]", m_details[0] ? m_details : "-",
-        m_state[0] ? m_state : "-");
+    //
+    // Log the original Windows-1251 text,
+    // because X-Ray log does not expect UTF-8.
+    //
+    Msg("* Discord RPC: status updated [%s] [%s]", safe_details[0] ? safe_details : "-",
+        safe_state[0] ? safe_state : "-");
 }
 
 void CDiscordRichPresence::Shutdown() {
