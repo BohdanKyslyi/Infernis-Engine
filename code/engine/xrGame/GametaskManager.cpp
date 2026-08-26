@@ -1,3 +1,4 @@
+
 #include "pch_script.h"
 #include "GameTaskManager.h"
 #include "alife_registry_wrappers.h"
@@ -11,6 +12,10 @@
 #include "ui/UIPDAWnd.h"
 #include "encyclopedia_article.h"
 #include "ui/UIMapWnd.h"
+
+#include "../xrEngine/DiscordRichPresence.h"
+#include "string_table.h"
+
 
 #pragma warning(push)
 #pragma warning(disable : 4995)
@@ -145,8 +150,12 @@ void CGameTaskManager::UpdateTasks() {
     Level().MapManager().DisableAllPointers();
 
     u32 task_count = GetGameTasks().size();
-    if (0 == task_count)
+    if (0 == task_count) {
+        if (m_flags.test(eChanged))
+            UpdateActiveTask();
+
         return;
+    }
 
     {
         typedef buffer_vector<SGameTaskKey> Tasks;
@@ -182,13 +191,15 @@ void CGameTaskManager::UpdateTasks() {
 void CGameTaskManager::UpdateActiveTask() {
     std::stable_sort(GetGameTasks().begin(), GetGameTasks().end(), task_prio_pred);
 
-    CGameTask* t = ActiveTask();
-    if (!t) {
-        CGameTask* front = IterateGet(NULL, eTaskStateInProgress, true);
-        if (front) {
-            SetActiveTask(front);
-        }
-    }
+    CGameTask* task = ActiveTask();
+
+    if (!task)
+        task = IterateGet(NULL, eTaskStateInProgress, true);
+
+    if (task)
+        SetActiveTask(task);
+    else
+        g_discord.ClearTaskStatus();
 
     m_flags.set(eChanged, FALSE);
     m_actual_frame = Device.dwFrame;
@@ -210,11 +221,17 @@ void CGameTaskManager::SetActiveTask(const shared_str& id)
 
 void CGameTaskManager::SetActiveTask(CGameTask* task) {
     VERIFY(task);
-    if (task) {
-        g_active_task_id = task->m_ID;
-        m_flags.set(eChanged, TRUE);
-        task->m_read = true;
-    }
+
+    if (!task)
+        return;
+
+    g_active_task_id = task->m_ID;
+    m_flags.set(eChanged, TRUE);
+    task->m_read = true;
+
+    const shared_str task_title = CStringTable().translate(task->m_Title);
+
+    g_discord.SetTaskStatus(task_title.c_str());
 }
 
 CUIMapWnd* GetMapWnd();
