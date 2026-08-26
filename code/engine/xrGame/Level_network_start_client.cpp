@@ -14,6 +14,9 @@
 
 #include "phcommander.h"
 #include "physics_game.h"
+
+#include "../xrEngine/DiscordRichPresence.h"
+
 extern pureFrame* g_pNetProcessor;
 
 BOOL CLevel::net_Start_client(LPCSTR options) { return FALSE; }
@@ -96,8 +99,14 @@ bool CLevel::net_start_client3() {
         map_data.m_map_loaded = true;
 
         deny_m_spawn = FALSE;
+
         // Load level
         R_ASSERT2(Load(level_id), "Loading failed.");
+
+        const shared_str location_name = CStringTable().translate(level_name);
+
+        g_discord.SetLocationStatus(location_name.c_str());
+
         map_data.m_level_geom_crc32 = 0;
         if (!IsGameTypeSingle())
             CalculateLevelCrc32();

@@ -7,6 +7,9 @@ public:
     void Initialize();
     void Shutdown();
 
+    void SetMenuStatus();
+    void SetLocationStatus(LPCSTR location_name);
+
     void SetStatus(LPCSTR details, LPCSTR state = nullptr);
 
     bool IsInitialized() const { return m_initialized; }
@@ -14,6 +17,7 @@ public:
 private:
     bool m_initialized;
     bool m_show_playtime;
+    bool m_show_location;
 
     s64 m_start_timestamp;
 

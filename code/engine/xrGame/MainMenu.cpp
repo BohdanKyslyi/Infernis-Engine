@@ -14,6 +14,8 @@
 #include "string_table.h"
 #include "../xrCore/os_clipboard.h"
 
+#include "../xrEngine/DiscordRichPresence.h"
+
 #include "DemoInfo.h"
 #include "DemoInfo_Loader.h"
 
@@ -173,6 +175,12 @@ void CMainMenu::Activate(bool bActivate) {
         Device.seqRender.Add(this, 4); // 1-console 2-cursor 3-tutorial
 
         Console->Execute("stat_memory");
+        //
+        // Do not replace location status when opening
+        // the in-game pause menu.
+        //
+        if (!g_pGameLevel)
+            g_discord.SetMenuStatus();
     } else {
         m_deactivated_frame = Device.dwFrame;
         m_Flags.set(flActive, FALSE);
