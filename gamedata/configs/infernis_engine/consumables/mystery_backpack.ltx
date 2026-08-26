@@ -1,0 +1,45 @@
+[mystery_backpack]:booster
+$spawn 				= "food and drugs\mystery_backpack"
+visual				= dynamics\devices\dev_rukzak\dev_rukzak.ogf
+
+inv_name			= st_mystery_backpack
+inv_name_short		= st_mystery_backpack
+description			= st_mystery_backpack_descr
+
+inv_grid_width     = 2 ; Довжина іконки
+inv_grid_height    = 3 ; Ширина іконки
+inv_grid_x         = 18 ; Положення іконки по X
+inv_grid_y         = 22 ; Положення іконки по Y
+
+inv_weight			= 1.0 ; Вага предмету
+cost				= 1000; Вартість (у гривнях)
+
+next_section = backpack_stalker ; Секція, яку ГГ гарантовано отримає розпакувавши цей предмет
+next_section_2 = medkit, 2 ; Декілька секцій одного виду, які ГГ гарантовано отримає розпакувавши цей предмет
+
+next_random   = snag_loot_food ; Набір секцій, з яких ГГ рандомно отримає якийсь предмет
+next_random_2 = snag_loot_detector
+next_random_3 = snag_loot_helmet
+next_random_4 = snag_loot_weapon
+
+[snag_loot_food]
+option = bandage, 5, medkit, 3, conserva, 2
+option_2 = medkit, 5, vodka, 3, kolbasa, 2
+option_3 = antirad, 3, medkit, 2, bandage, 1, kolbasa, 2, conserva, 1
+	
+[snag_loot_detector]
+option   = detector_elite
+option_2 = detector_advanced
+
+[snag_loot_helmet]
+option   = helm_hardhat
+option_2 = helm_respirator
+
+[snag_loot_weapon]
+option = wpn_val, 1, ammo_9x39_ap, 3
+option_2 = wpn_spas12, 1, ammo_12x70_buck, 4
+option_3 = wpn_desert_eagle, 1, ammo_11.43x23_fmj, 3, ammo_11.43x23_hydro, 2
+option_4 = wpn_abakan, 1, ammo_5.45x39_ap, 2
+option_5 = wpn_sig550, 1, ammo_5.56x45_ap, 2
+option_6 = wpn_ak74, 1, ammo_5.45x39_fmj, 2
+option_7 = wpn_l85, 1, ammo_5.56x45_ss190, 2

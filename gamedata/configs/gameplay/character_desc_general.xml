@@ -22,7 +22,8 @@
 			stalker_outfit \n
 
    			grenade_rgd5 = 2 \n
-   			backpack_stalker = 1 \n
+			
+   			mystery_backpack = 1 \n
 
 			wpn_pm_actor  \n
    			ammo_9x18_fmj = 3 \n
@@ -36,7 +37,7 @@
 
 			bread = 1 \n
 			kolbasa = 1 \n
-			conserva = 2 \n
+			conserva = 5 \n
     </supplies>
 
     <money min="2500"  max="2500"  infinitive="0"/>

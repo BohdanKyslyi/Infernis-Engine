@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="windows-1251" ?>
+<string_table>
+	<string id="st_currency_name">
+		<text>UAH</text>
+	</string>
+	<string id="st_undress_backpack">
+		<text>зняти рюкзак</text>
+	</string>
+	<string id="st_dress_backpack">
+		<text>одягти рюкзак</text>
+	</string>
+	<string id="st_move_to_bag">
+		<text>прибрати</text>
+	</string>
+	<string id="car_character_use">
+		<text>Використати кулемет ($$ACTION_USE$$)</text>
+	</string>
+	<string id="st_mystery_backpack">
+		<text>Рюкзак з речами</text>
+	</string>
+	<string id="st_mystery_backpack_descr">
+		<text>Втягнути з собою багато речей, не маючи переносного сховища навряд чи вийде. Для цього сталкерам потрібні рюкзаки. Цей рюкзак вже забитий барахлом нещасного сталкера, який не дожив до усвідомлення, що з Зони треба валити.</text>
+	</string>
+</string_table>

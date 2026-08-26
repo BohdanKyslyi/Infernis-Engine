@@ -1,0 +1,51 @@
+[conserva]:consumable
+$spawn 				= "food and drugs\conserva"
+visual				= dynamics\devices\dev_conserv\dev_conserv.ogf
+
+inv_name			= st_conserva
+inv_name_short		= st_conserva
+description			= st_conserva_descr
+
+inv_weight			= 0.3
+
+inv_grid_width		= 1
+inv_grid_height		= 1
+inv_grid_x			= 9
+inv_grid_y			= 13
+cost				= 40
+
+boost_time				= 5.0
+boost_health_restore	= 0.002
+eat_satiety				= 1
+
+use_sound			= $silent
+
+eat_portions_num = 2 ; Кількість порцій предмету
+hud = conserva_hud_model ; Підключення системи hud і анімацій використання
+
+portion_state   = conserva_state_1 ; Стан предмету, в якому можна робити йому унікальний HUD, анімацію та в цілому зовнішній вигляд
+portion_state_2 = conserva_state_2 ; Незалежно від кількості порцій, останні перехоплюватимуть останній portion_state_N
+
+[conserva_state_1]
+hud = anm_conserva_hud
+
+[conserva_state_2] ; Також в state можна записувати visual, inv_grid, inv_name/short та description
+inv_weight = 0.20
+cost_factor = 0.3
+hud = anm_conserva_hud
+trash_object = conserva_lid ; Наприкінці останнього використання, ГГ викине сміття через timing_trash часу (в мілісекундах)
+
+[conserva_lid]:base_trash
+visual				= dynamics\devices\dev_conserv\dev_conserv.ogf
+
+[conserva_hud_model]:base_consumable
+timing						= 4700
+main_sect					= conserva
+hud	                    	= anm_conserva_hud
+snd_using_anim	 			= interface\conserva
+
+[anm_conserva_hud]:base_consumable_hud
+item_visual	            	= dynamics\devices\dev_conserv\dev_conserv_hud.ogf
+anm_show					= hoc_canned
+hands_position				= 0,0.06,0.25
+hands_position_16x9			= 0,0.06,0.25

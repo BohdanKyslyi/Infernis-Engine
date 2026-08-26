@@ -609,9 +609,9 @@ void CMainMenu::OnConnectToMasterServerOkClicked(CUIWindow*, void*) { Hide_CTMS_
 LPCSTR CMainMenu::GetGSVer() {
     static string256 buff;
 #ifdef _M_X64
-    xr_strcpy(buff, 255, "0.2.3 x64");
+    xr_strcpy(buff, 255, "0.2.4 x64");
 #else
-    xr_strcpy(buff, 255, "0.2.3");
+    xr_strcpy(buff, 255, "0.2.4");
 #endif
     return buff;
 }

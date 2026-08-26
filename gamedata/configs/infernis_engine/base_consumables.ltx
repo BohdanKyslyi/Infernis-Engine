@@ -1,0 +1,42 @@
+[consumable]:booster
+eat_portions_num = 1
+visual				= dynamics\fake_object.ogf
+
+[base_consumable]:identity_immunities
+hud							= gwr_base_item_hud
+
+sprint_allowed					= false
+
+;звуки
+snd_using   = $silent
+
+[base_consumable_hud]:hud_base
+attach_place_idx				= 0
+
+hands_position 				= 0,0,0
+hands_position_16x9			= 0,0,0
+hands_orientation_16x9		= 0,0,0
+item_position				= 0,0,0
+item_orientation			= 0,0,0
+
+aim_hud_offset_pos			= 0.0,0.0,0.0
+aim_hud_offset_rot			= 0.0,0.0,0.0
+
+aim_hud_offset_pos_16x9		= 0.0,0.0,0.0
+aim_hud_offset_rot_16x9		= 0.0,0.0,0.0
+
+[base_trash]
+GroupControlSection = spawn_group
+$spawn        = "physics\base_trash"
+$prefetch       = 8
+class       = O_PHYS_S
+
+; CPHSkeleton
+remove_time = 5
+
+; IMPORTANT:
+; create physics shell already active
+active = true
+
+; Infernis Engine lifetime
+timing_trash = 30000
