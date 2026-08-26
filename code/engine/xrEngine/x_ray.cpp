@@ -23,6 +23,8 @@
 #include <process.h>
 #include <locale.h>
 
+#include "DiscordRichPresence.h"
+
 //---------------------------------------------------------------------
 ENGINE_API CInifile* pGameIni = nullptr;
 BOOL g_bIntroFinished = FALSE;

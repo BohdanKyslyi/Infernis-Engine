@@ -61,9 +61,11 @@ set(INTERFACES_RENDER_PARTICLE_SYSTEM PS_instance.h
 set(EDITOR_ENVIRONMENT_EFFECTS_MANAGER editor_environment_effects_manager.hpp
                                        editor_environment_effects_manager.cpp)
 
-set(ENGINE_CORE Engine.h
+set(ENGINE_CORE DiscordRichPresence.h
+                Engine.h
                 EngineAPI.h
                 EventAPI.h
+                DiscordRichPresence.cpp
                 Engine.cpp
                 EngineAPI.cpp
                 EventAPI.cpp
@@ -458,4 +460,5 @@ set_target_properties(xrEngine PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS")
 target_include_directories(xrEngine PUBLIC ${DXSDK_INCLUDE_DIR}
                                     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(xrEngine vfw32 libogg libtheora d3dx9 d3d9 dinput8 dxguid
-                               shlwapi xrCore xrCDB xrSound xrAPI xrNetServer winmm luabind)
+                               shlwapi xrCore xrCDB xrSound xrAPI xrNetServer winmm
+                               luabind DiscordRPC)
