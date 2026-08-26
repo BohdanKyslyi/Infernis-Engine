@@ -113,6 +113,7 @@ add_subdirectory(code/3rd-party/eax)
 add_subdirectory(code/3rd-party/cs)
 add_subdirectory(code/3rd-party/fmtlib EXCLUDE_FROM_ALL)
 add_subdirectory(code/3rd-party/boost)
+add_subdirectory(code/3rd-party/discord-rpc)
 
 if (BUILD_TESTS)
     set_target_properties(gmock PROPERTIES FOLDER "3rd-party/gtest")
