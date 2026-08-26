@@ -51,13 +51,13 @@ void CEngineAPI::InitializeNotDedicated() {
     LPCSTR r4_name = "xrRender_R4.dll";
 
     if (psDeviceFlags.test(rsR4)) {
-        // try to initialize R4
         Log("Loading DLL:", r4_name);
         hRender = LoadLibrary(r4_name);
         if (0 == hRender) {
-            // try to load R1
             Msg("! ...Failed - incompatible hardware/pre-Vista OS.");
             psDeviceFlags.set(rsR2, TRUE);
+        } else {
+            g_current_renderer = 4;
         }
     }
 
