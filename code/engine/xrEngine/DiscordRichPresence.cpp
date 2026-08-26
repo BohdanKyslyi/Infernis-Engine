@@ -81,6 +81,10 @@ CDiscordRichPresence::CDiscordRichPresence()
 
     m_renderer_image_key[0] = '\0';
     m_renderer_image_text[0] = '\0';
+
+    xr_strcpy(m_menu_state, sizeof(m_menu_state), "In Main Menu");
+    xr_strcpy(m_exploring_state, sizeof(m_exploring_state), "Exploring the Zone");
+    xr_strcpy(m_hidden_task_state, sizeof(m_hidden_task_state), "On a mission");
 }
 
 void CDiscordRichPresence::Initialize() {
@@ -148,7 +152,7 @@ void CDiscordRichPresence::SetMenuStatus() {
     m_location[0] = '\0';
     m_task[0] = '\0';
 
-    SetStatus("Infernis Engine", "In Main Menu");
+    SetStatus("Infernis Engine", m_menu_state);
 }
 
 void CDiscordRichPresence::SetLocationStatus(LPCSTR location_name) {
@@ -176,12 +180,12 @@ void CDiscordRichPresence::ClearTaskStatus() {
 }
 
 void CDiscordRichPresence::UpdateGameStatus() {
-    LPCSTR details = m_location[0] ? m_location : "Playing Infernis Engine";
+    LPCSTR details = m_location[0] ? m_location : "Infernis Engine";
 
-    LPCSTR state = "Exploring the Zone";
+    LPCSTR state = m_exploring_state;
 
     if (m_show_task && m_task[0])
-        state = m_show_task_name ? m_task : "On a mission";
+        state = m_show_task_name ? m_task : m_hidden_task_state;
 
     SetStatus(details, state);
 }
@@ -293,6 +297,18 @@ void CDiscordRichPresence::SetStatus(LPCSTR details, LPCSTR state) {
     //
     Msg("* Discord RPC: status updated [%s] [%s]", safe_details[0] ? safe_details : "-",
         safe_state[0] ? safe_state : "-");
+}
+
+void CDiscordRichPresence::SetLocalizedStatusTexts(LPCSTR menu_state, LPCSTR exploring_state,
+                                                   LPCSTR hidden_task_state) {
+    if (menu_state && menu_state[0])
+        xr_strcpy(m_menu_state, sizeof(m_menu_state), menu_state);
+
+    if (exploring_state && exploring_state[0])
+        xr_strcpy(m_exploring_state, sizeof(m_exploring_state), exploring_state);
+
+    if (hidden_task_state && hidden_task_state[0])
+        xr_strcpy(m_hidden_task_state, sizeof(m_hidden_task_state), hidden_task_state);
 }
 
 void CDiscordRichPresence::Shutdown() {

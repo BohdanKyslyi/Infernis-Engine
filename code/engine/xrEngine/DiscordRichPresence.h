@@ -14,6 +14,9 @@ public:
 
     void SetStatus(LPCSTR details, LPCSTR state = nullptr);
 
+    void SetLocalizedStatusTexts(LPCSTR menu_state, LPCSTR exploring_state,
+                                 LPCSTR hidden_task_state);
+
     bool IsInitialized() const { return m_initialized; }
 
 private:
@@ -37,6 +40,10 @@ private:
 
     string128 m_location;
     string256 m_task;
+
+    string128 m_menu_state;
+    string128 m_exploring_state;
+    string128 m_hidden_task_state;
 
     string64 m_large_image_key;
     string128 m_large_image_text;
