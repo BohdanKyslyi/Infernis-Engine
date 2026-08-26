@@ -208,6 +208,8 @@ void Startup() {
     g_SpatialSpace = xr_new<ISpatial_DB>();
     g_SpatialSpacePhysic = xr_new<ISpatial_DB>();
 
+    g_discord.Initialize();
+
     // Destroy LOGO
     DestroyWindow(logoWindow);
     logoWindow = NULL;
@@ -216,12 +218,13 @@ void Startup() {
     Memory.mem_usage();
     Device.Run();
 
+    g_discord.Shutdown();
+
     // Destroy APP
     xr_delete(g_SpatialSpacePhysic);
     xr_delete(g_SpatialSpace);
     DEL_INSTANCE(g_pGamePersistent);
     xr_delete(pApp);
-    Engine.Event.Dump();
 
     // Destroying
     //.	destroySound();
