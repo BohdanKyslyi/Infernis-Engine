@@ -34,6 +34,9 @@
 — Changed the cursor
 ![photo_2026-01-09_15-47-39 (2)](https://github.com/user-attachments/assets/d57eee48-22fe-43e0-bd13-9154de4ee213)
 
+— Added consumable items use animations
+![photo_2026-01-09_15-47-39 (2)](https://github.com/user-attachments/assets/50939109-dfa3-436b-b8eb-255a74e091fc)
+
 ### How do I build the updated engine?
 1) [Install **CMake**](https://cmake.org/download/) version **3.5** or higher
 2) **Clone the repository**
@@ -49,12 +52,13 @@ For **Visual Studio 2026**, or similar code for compiling on other versions of V
 ### Join the Infernis' Modding Community!
 **Site**: https://infernis-modding.com/
 
-**Infernis Engine page**: https://infernis-modding.com/pages/modifications/infernis_engine.html
+**Infernis Engine page**: https://infernis-modding.com/mods/infernis_engine
 
 **YouTube**: https://www.youtube.com/@Lord_Infernis
 
 **Telegram**:
+- https://t.me/Infernis_Team
 - https://t.me/Stalker_Modding_UA
-- https://t.me/Infernis_Group
+- https://t.me/Lord_Infernis
 
 **Discord**: https://discord.gg/xxTYFSzFz3
