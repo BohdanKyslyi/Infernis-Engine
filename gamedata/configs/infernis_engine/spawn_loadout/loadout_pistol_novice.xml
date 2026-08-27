@@ -1,0 +1,4 @@
+wpn_pm = weight=50, cond=0.75, ammo=2, ammo_type=0, drop_ammo=35-70
+wpn_pb = weight=50, cond=0.75, ammo=2, ammo_type=0, drop_ammo=35-70
+wpn_fort = weight=50, cond=0.75, ammo=2, ammo_type=0, drop_ammo=35-70
+wpn_hpsa = weight=50, cond=0.75, ammo=2, ammo_type=0, drop_ammo=35-70

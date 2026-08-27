@@ -1,0 +1,6 @@
+wpn_ak74u = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60
+wpn_ak74 = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60
+wpn_abakan = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60
+wpn_l85 = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60
+wpn_lr300 = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60, wpn_addon_scope_susat_custom
+wpn_sig550 = weight=50, ammo=2, ammo_type=1, keep_ammo

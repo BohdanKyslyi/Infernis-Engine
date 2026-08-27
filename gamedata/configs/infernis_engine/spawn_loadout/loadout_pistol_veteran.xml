@@ -1,0 +1,10 @@
+wpn_pm = weight=30, ammo=2, ammo_type=1, keep_ammo
+wpn_pb = weight=30, ammo=2, ammo_type=1, keep_ammo
+wpn_fort = weight=30, ammo=2, ammo_type=1, keep_ammo
+wpn_hpsa = weight=30, ammo=2, ammo_type=1, keep_ammo
+wpn_walther = weight=45, ammo=2, ammo_type=1, keep_ammo
+wpn_colt1911 = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_beretta = weight=40, ammo=2, ammo_type=1, keep_ammo
+wpn_usp = weight=70, ammo=2, ammo_type=1, keep_ammo, wpn_addon_silencer, wpn_addon_silencer
+wpn_sig220 = weight=70, ammo=2, ammo_type=1, keep_ammo, wpn_addon_silencer
+wpn_desert_eagle = weight=70, ammo=2, ammo_type=1, keep_ammo

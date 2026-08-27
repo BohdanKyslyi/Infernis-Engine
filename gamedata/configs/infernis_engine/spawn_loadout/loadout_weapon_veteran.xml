@@ -1,0 +1,8 @@
+wpn_spas12 = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_protecta = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_sig550 = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_g36 = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_fn2000 = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_val = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_groza = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_vintorez = weight=50, ammo=2, ammo_type=1, keep_ammo

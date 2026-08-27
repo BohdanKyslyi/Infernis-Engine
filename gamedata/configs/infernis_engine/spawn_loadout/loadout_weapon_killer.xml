@@ -1,0 +1,11 @@
+wpn_mp5 = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60, wpn_addon_silencer
+wpn_ak74u = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60
+wpn_ak74 = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60, wpn_addon_grenade_launcher
+wpn_l85 = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60
+wpn_lr300 = weight=50, ammo=2, ammo_type=0, keep_ammo, drop_ammo=35-60, wpn_addon_scope_susat_custom, wpn_addon_silencer, wpn_addon_grenade_launcher_m203
+wpn_wincheaster1300 = weight=50, ammo=2, ammo_type=0, drop_ammo=25-40
+wpn_spas12 = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_protecta = weight=50, ammo=2, ammo_type=1, keep_ammo, wpn_addon_scope_susat
+wpn_sig550 = weight=50, ammo=2, ammo_type=1, keep_ammo, wpn_addon_grenade_launcher_m203
+wpn_g36 = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_fn2000 = weight=50, ammo=2, ammo_type=1, keep_ammo

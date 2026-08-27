@@ -1,0 +1,3 @@
+wpn_pm = weight=50, ammo=2, ammo_type=1, drop_ammo=70-100
+wpn_pb = weight=50, ammo=2, ammo_type=1, drop_ammo=70-100
+wpn_fort = weight=50, ammo=2, ammo_type=1, drop_ammo=70-100

@@ -1,0 +1,2 @@
+wpn_bm16 = weight=30, cond=0.75, ammo=2, ammo_type=0, drop_ammo=15-30
+wpn_toz34 = weight=30, cond=0.75, ammo=2, ammo_type=0, drop_ammo=15-30
