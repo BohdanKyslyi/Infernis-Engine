@@ -95,7 +95,7 @@ struct ENGINE_API vertBoned2W // (1+3+3 + 1+3+3 + 2)*4 = 16*4 = 64 bytes
     Fvector B;
     float w;
     float u, v;
-    void get_pos(Fvector& p) { p.set(P); }
+    void get_pos(Fvector& p) const { p.set(P); }
 #ifdef DEBUG
     static const u8 bones_count = 2;
     u16 get_bone_id(u8 bone) const {
@@ -113,7 +113,7 @@ struct ENGINE_API vertBoned3W // 70 bytes
     Fvector B;
     float w[2];
     float u, v;
-    void get_pos(Fvector& p) { p.set(P); }
+    void get_pos(Fvector& p) const { p.set(P); }
 #ifdef DEBUG
     static const u8 bones_count = 3;
     u16 get_bone_id(u8 bone) const {
@@ -131,7 +131,7 @@ struct ENGINE_API vertBoned4W // 76 bytes
     Fvector B;
     float w[3];
     float u, v;
-    void get_pos(Fvector& p) { p.set(P); }
+    void get_pos(Fvector& p) const { p.set(P); }
 #ifdef DEBUG
     static const u8 bones_count = 4;
     u16 get_bone_id(u8 bone) const {
@@ -228,8 +228,8 @@ struct ECORE_API SJointIKData {
         F.w_u32(type);
         for (int k = 0; k < 3; k++) {
             // Kostya Slipchenko say:
-            // íàïðàâëåíèå âðàùåíèÿ â ÎÄÅ îòëè÷àåòñÿ îò íàïðàâëåíèÿ âðàùåíèå â X-Ray
-            // ïîýòîìó ìåíÿåì çíàê ó ëèìèòîâ
+            // Ã­Ã Ã¯Ã°Ã Ã¢Ã«Ã¥Ã­Ã¨Ã¥ Ã¢Ã°Ã Ã¹Ã¥Ã­Ã¨Ã¿ Ã¢ ÃŽÃ„Ã… Ã®Ã²Ã«Ã¨Ã·Ã Ã¥Ã²Ã±Ã¿ Ã®Ã² Ã­Ã Ã¯Ã°Ã Ã¢Ã«Ã¥Ã­Ã¨Ã¿ Ã¢Ã°Ã Ã¹Ã¥Ã­Ã¨Ã¥ Ã¢ X-Ray
+            // Ã¯Ã®Ã½Ã²Ã®Ã¬Ã³ Ã¬Ã¥Ã­Ã¿Ã¥Ã¬ Ã§Ã­Ã Ãª Ã³ Ã«Ã¨Ã¬Ã¨Ã²Ã®Ã¢
             // F.w_float	(_min(-limits[k].limit.x,-limits[k].limit.y)); // min (swap special for
             // ODE)  F.w_float	(_max(-limits[k].limit.x,-limits[k].limit.y)); // max (swap special
             // for ODE)
@@ -530,3 +530,4 @@ IC void CBoneInstance::construct() {
 }
 
 #endif
+

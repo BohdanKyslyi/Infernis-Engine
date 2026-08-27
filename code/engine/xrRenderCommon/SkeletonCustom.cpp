@@ -620,7 +620,7 @@ void CKinematics::AddWallmark(const Fmatrix* parent_xform, const Fvector3& start
         xr_new<CSkeletonWallmark>(this, parent_xform, shader, cp, RDEVICE.fTimeGlobal);
     wm->m_LocalBounds.set(cp, size * 2.f);
     wm->XFORM()->transform_tiny(wm->m_Bounds.P, cp);
-    wm->m_Bounds.R = wm->m_Bounds.R;
+    wm->m_Bounds.R = wm->m_LocalBounds.R;
 
     Fvector tmp;
     tmp.invert(D);
@@ -643,31 +643,25 @@ void CKinematics::AddWallmark(const Fmatrix* parent_xform, const Fvector3& start
 }
 
 static const float LIFE_TIME = 30.f;
-struct zero_wm_pred {
-    bool operator()(const intrusive_ptr<CSkeletonWallmark> x) { return x == 0; }
-};
-
 void CKinematics::CalculateWallmarks() {
-    if (!wallmarks.empty() && (wm_frame != RDEVICE.dwFrame)) {
-        wm_frame = RDEVICE.dwFrame;
-        bool need_remove = false;
-        for (auto it = wallmarks.begin(); it != wallmarks.end(); it++) {
-            intrusive_ptr<CSkeletonWallmark>& wm = *it;
-            float w = (RDEVICE.fTimeGlobal - wm->TimeStart()) / LIFE_TIME;
-            if (w < 1.f) {
-                // append wm to WallmarkEngine
-                if (::Render->ViewBase.testSphere_dirty(wm->m_Bounds.P, wm->m_Bounds.R))
-                    //::Render->add_SkeletonWallmark	(wm);
-                    ::RImplementation.add_SkeletonWallmark(wm);
-            } else {
-                // remove wallmark
-                need_remove = true;
-            }
+    if (wallmarks.empty() || wm_frame == RDEVICE.dwFrame)
+        return;
+
+    wm_frame = RDEVICE.dwFrame;
+
+    for (auto it = wallmarks.begin(); it != wallmarks.end();) {
+        intrusive_ptr<CSkeletonWallmark>& wm = *it;
+        const float age = (RDEVICE.fTimeGlobal - wm->TimeStart()) / LIFE_TIME;
+
+        if (age >= 1.f) {
+            it = wallmarks.erase(it);
+            continue;
         }
-        if (need_remove) {
-            auto new_end = std::remove_if(wallmarks.begin(), wallmarks.end(), zero_wm_pred());
-            wallmarks.erase(new_end, wallmarks.end());
-        }
+
+        if (::Render->ViewBase.testSphere_dirty(wm->m_Bounds.P, wm->m_Bounds.R))
+            ::RImplementation.add_SkeletonWallmark(wm);
+
+        ++it;
     }
 }
 
@@ -677,36 +671,76 @@ void CKinematics::RenderWallmark(intrusive_ptr<CSkeletonWallmark> wm, FVF::LIT*&
     VERIFY2(bones, "Invalid visual. Bones already released.");
     VERIFY2(bone_instances, "Invalid visual. bone_instances already deleted.");
 
-    if ((wm == 0) || (0 == bones) || (0 == bone_instances))
+    if (wm == 0 || !bones || !bone_instances)
         return;
 
-    // skin vertices
-    for (u32 f_idx = 0; f_idx < wm->m_Faces.size(); f_idx++) {
-        CSkeletonWallmark::WMFace F = wm->m_Faces[f_idx];
-        float w = (RDEVICE.fTimeGlobal - wm->TimeStart()) / LIFE_TIME;
-        for (u32 k = 0; k < 3; k++) {
-            Fvector P;
-            if (F.bone_id[k][0] == F.bone_id[k][1]) {
-                // 1-link
-                Fmatrix& xform0 = LL_GetBoneInstance(F.bone_id[k][0]).mRenderTransform;
-                xform0.transform_tiny(P, F.vert[k]);
-            } else {
-                // 2-link
+    for (u32 face_index = 0; face_index < wm->m_Faces.size(); ++face_index) {
+        const CSkeletonWallmark::WMFace& face = wm->m_Faces[face_index];
+        const float age = (RDEVICE.fTimeGlobal - wm->TimeStart()) / LIFE_TIME;
+
+        for (u32 vertex_index = 0; vertex_index < 3; ++vertex_index) {
+            Fvector position;
+
+            if (face.bone_id[vertex_index][0] == face.bone_id[vertex_index][1]) {
+                const Fmatrix& xform =
+                    LL_GetBoneInstance(face.bone_id[vertex_index][0]).mRenderTransform;
+                xform.transform_tiny(position, face.vert[vertex_index]);
+            } else if (face.bone_id[vertex_index][1] == face.bone_id[vertex_index][2]) {
                 Fvector P0, P1;
-                Fmatrix& xform0 = LL_GetBoneInstance(F.bone_id[k][0]).mRenderTransform;
-                Fmatrix& xform1 = LL_GetBoneInstance(F.bone_id[k][1]).mRenderTransform;
-                xform0.transform_tiny(P0, F.vert[k]);
-                xform1.transform_tiny(P1, F.vert[k]);
-                P.lerp(P0, P1, F.weight[k]);
+                LL_GetBoneInstance(face.bone_id[vertex_index][0])
+                    .mRenderTransform.transform_tiny(P0, face.vert[vertex_index]);
+                LL_GetBoneInstance(face.bone_id[vertex_index][1])
+                    .mRenderTransform.transform_tiny(P1, face.vert[vertex_index]);
+                position.lerp(P0, P1, face.weight[vertex_index][0]);
+            } else if (face.bone_id[vertex_index][2] == face.bone_id[vertex_index][3]) {
+                Fvector P0, P1, P2;
+                LL_GetBoneInstance(face.bone_id[vertex_index][0])
+                    .mRenderTransform.transform_tiny(P0, face.vert[vertex_index]);
+                LL_GetBoneInstance(face.bone_id[vertex_index][1])
+                    .mRenderTransform.transform_tiny(P1, face.vert[vertex_index]);
+                LL_GetBoneInstance(face.bone_id[vertex_index][2])
+                    .mRenderTransform.transform_tiny(P2, face.vert[vertex_index]);
+
+                const float w0 = face.weight[vertex_index][0];
+                const float w1 = face.weight[vertex_index][1];
+                P0.mul(w0);
+                P1.mul(w1);
+                P2.mul(1.f - w0 - w1);
+
+                position = P0;
+                position.add(P1);
+                position.add(P2);
+            } else {
+                Fvector skinned[4];
+                for (u32 bone_index = 0; bone_index < 4; ++bone_index) {
+                    LL_GetBoneInstance(face.bone_id[vertex_index][bone_index])
+                        .mRenderTransform.transform_tiny(skinned[bone_index],
+                                                        face.vert[vertex_index]);
+                }
+
+                float weight_sum = 0.f;
+                for (u32 bone_index = 0; bone_index < 3; ++bone_index) {
+                    skinned[bone_index].mul(face.weight[vertex_index][bone_index]);
+                    weight_sum += face.weight[vertex_index][bone_index];
+                }
+                skinned[3].mul(1.f - weight_sum);
+
+                position = skinned[0];
+                position.add(skinned[1]);
+                position.add(skinned[2]);
+                position.add(skinned[3]);
             }
-            wm->XFORM()->transform_tiny(V->p, P);
-            V->t.set(F.uv[k]);
-            int aC = iFloor(w * 255.f);
-            clamp(aC, 0, 255);
-            V->color = color_rgba(128, 128, 128, aC);
-            V++;
+
+            wm->XFORM()->transform_tiny(V->p, position);
+            V->t.set(face.uv[vertex_index]);
+
+            int alpha = iFloor(age * 255.f);
+            clamp(alpha, 0, 255);
+            V->color = color_rgba(128, 128, 128, alpha);
+            ++V;
         }
     }
+
     wm->XFORM()->transform_tiny(wm->m_Bounds.P, wm->m_LocalBounds.P);
 }
 
@@ -737,3 +771,4 @@ CSkeletonWallmark::~CSkeletonWallmark() {
     }
 }
 #endif
+
