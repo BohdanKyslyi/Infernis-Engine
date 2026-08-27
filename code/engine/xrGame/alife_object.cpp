@@ -11,6 +11,78 @@
 #include "alife_simulator.h"
 #include "xrServer_Objects_ALife_Items.h"
 
+namespace {
+struct SSpawnLoadoutEntry {
+    xr_string section;
+    float weight;
+    float condition;
+    u32 ammo_count;
+    s32 ammo_type;
+    bool scope;
+    bool silencer;
+    bool launcher;
+
+    SSpawnLoadoutEntry(LPCSTR item_section, LPCSTR value)
+        : section(item_section ? item_section : ""), weight(1.f), condition(1.f), ammo_count(1),
+          ammo_type(0), scope(false), silencer(false), launcher(false) {
+        if (!value || !xr_strlen(value))
+            return;
+
+        LPCSTR parameter = strstr(value, "weight=");
+        if (parameter)
+            weight = (float)atof(parameter + 7);
+
+        parameter = strstr(value, "cond=");
+        if (parameter)
+            condition = (float)atof(parameter + 5);
+
+        parameter = strstr(value, "ammo=");
+        if (parameter) {
+            const s32 parsed_ammo_count = atoi(parameter + 5);
+            ammo_count = parsed_ammo_count > 0 ? (u32)parsed_ammo_count : 0;
+        }
+
+        parameter = strstr(value, "ammo_type=");
+        if (parameter)
+            ammo_type = atoi(parameter + 10);
+
+        if (condition < 0.f)
+            condition = 0.f;
+        else if (condition > 1.f)
+            condition = 1.f;
+
+        scope = (NULL != strstr(value, "scope"));
+        silencer = (NULL != strstr(value, "silencer"));
+        launcher = (NULL != strstr(value, "launcher"));
+    }
+
+    bool is_empty() const { return 0 == xr_strcmp(section.c_str(), "none"); }
+};
+
+void apply_loadout_properties(CSE_Abstract* entity, const SSpawnLoadoutEntry& entry) {
+    if (!entity)
+        return;
+
+    CSE_ALifeItemWeapon* weapon = smart_cast<CSE_ALifeItemWeapon*>(entity);
+    if (weapon) {
+        if (weapon->m_scope_status == ALife::eAddonAttachable)
+            weapon->m_addon_flags.set(CSE_ALifeItemWeapon::eWeaponAddonScope, entry.scope);
+
+        if (weapon->m_silencer_status == ALife::eAddonAttachable)
+            weapon->m_addon_flags.set(CSE_ALifeItemWeapon::eWeaponAddonSilencer,
+                                      entry.silencer);
+
+        if (weapon->m_grenade_launcher_status == ALife::eAddonAttachable)
+            weapon->m_addon_flags.set(CSE_ALifeItemWeapon::eWeaponAddonGrenadeLauncher,
+                                      entry.launcher);
+    }
+
+    CSE_ALifeInventoryItem* inventory_item = smart_cast<CSE_ALifeInventoryItem*>(entity);
+    if (inventory_item)
+        inventory_item->m_fCondition = entry.condition;
+}
+} // namespace
+
 void CSE_ALifeObject::spawn_supplies() { spawn_supplies(*m_ini_string); }
 
 void CSE_ALifeObject::spawn_supplies(LPCSTR ini_string) {
@@ -25,6 +97,127 @@ void CSE_ALifeObject::spawn_supplies(LPCSTR ini_string) {
     CInifile ini(&IReader((void*)(ini_string), xr_strlen(ini_string)),
                  FS.get_path("$game_config$")->m_Path);
 #pragma warning(pop)
+
+    for (u32 loadout_index = 1;; ++loadout_index) {
+        string32 loadout_section;
+
+        if (loadout_index == 1)
+            xr_strcpy(loadout_section, "spawn_loadout");
+        else
+            xr_sprintf(loadout_section, "spawn_loadout%u", loadout_index);
+
+        if (!ini.section_exist(loadout_section))
+            break;
+
+        xr_vector<SSpawnLoadoutEntry> entries;
+        float total_weight = 0.f;
+        LPCSTR item_section;
+        LPCSTR value;
+
+        for (u32 line = 0; ini.r_line(loadout_section, line, &item_section, &value); ++line) {
+            if (!item_section || !xr_strlen(item_section)) {
+                Msg("! [%s] ignored an empty item section", loadout_section);
+                continue;
+            }
+
+            SSpawnLoadoutEntry entry(item_section, value);
+
+            if (entry.weight <= 0.f) {
+                Msg("! [%s] ignored [%s]: weight must be greater than zero", loadout_section,
+                    item_section);
+                continue;
+            }
+
+            if (!entry.is_empty() && (!pSettings || !pSettings->section_exist(item_section))) {
+                Msg("! [%s] ignored unknown item section [%s]", loadout_section, item_section);
+                continue;
+            }
+
+            total_weight += entry.weight;
+            entries.push_back(entry);
+        }
+
+        if (entries.empty() || total_weight <= 0.f) {
+            Msg("! [%s] contains no valid loadout entries", loadout_section);
+            continue;
+        }
+
+        const SSpawnLoadoutEntry* selected = &entries.back();
+
+        if (entries.size() > 1) {
+            float roll = Random.randF(total_weight);
+
+            for (u32 entry_index = 0; entry_index < entries.size(); ++entry_index) {
+                if (roll < entries[entry_index].weight) {
+                    selected = &entries[entry_index];
+                    break;
+                }
+
+                roll -= entries[entry_index].weight;
+            }
+        }
+
+        if (selected->is_empty())
+            continue;
+
+        CSE_Abstract* entity = alife().spawn_item(selected->section.c_str(), o_Position,
+                                                  m_tNodeID, m_tGraphID, ID);
+
+        if (!entity) {
+            Msg("! [%s] failed to spawn item [%s]", loadout_section,
+                selected->section.c_str());
+            continue;
+        }
+
+        apply_loadout_properties(entity, *selected);
+
+        CSE_ALifeItemWeapon* weapon = smart_cast<CSE_ALifeItemWeapon*>(entity);
+
+        if (!weapon || !selected->ammo_count)
+            continue;
+
+        LPCSTR ammo_classes = weapon->m_caAmmoSections;
+
+        if (!ammo_classes || !xr_strlen(ammo_classes))
+            continue;
+
+        const s32 ammo_type_count = _GetItemCount(ammo_classes);
+
+        if (ammo_type_count <= 0)
+            continue;
+
+        s32 ammo_type = selected->ammo_type;
+
+        if (ammo_type < 0 || ammo_type >= ammo_type_count) {
+            Msg("! [%s] item [%s] has invalid ammo_type=%d; using ammo_type=0",
+                loadout_section, selected->section.c_str(), ammo_type);
+            ammo_type = 0;
+        }
+
+        string128 ammo_section_buffer;
+        LPCSTR ammo_section = _GetItem(ammo_classes, ammo_type, ammo_section_buffer);
+
+        if (!ammo_section || !xr_strlen(ammo_section) ||
+            !pSettings->section_exist(ammo_section)) {
+            Msg("! [%s] item [%s] references unknown ammo section [%s]",
+                loadout_section, selected->section.c_str(),
+                ammo_section && xr_strlen(ammo_section) ? ammo_section : "<empty>");
+            continue;
+        }
+
+        weapon->ammo_type = (u8)ammo_type;
+
+        for (u32 ammo_index = 0; ammo_index < selected->ammo_count; ++ammo_index) {
+            CSE_Abstract* ammo = alife().spawn_item(ammo_section, o_Position, m_tNodeID,
+                                                    m_tGraphID, ID);
+
+            if (!ammo) {
+                Msg("! [%s] failed to spawn ammo [%s] for item [%s]", loadout_section,
+                    ammo_section, selected->section.c_str());
+                break;
+            }
+        }
+    }
 
     if (ini.section_exist("spawn")) {
         LPCSTR N, V;
@@ -60,7 +253,7 @@ void CSE_ALifeObject::spawn_supplies(LPCSTR ini_string) {
             for (u32 i = 0; i < j; ++i) {
                 if (randF(1.f) < p) {
                     CSE_Abstract* E = alife().spawn_item(N, o_Position, m_tNodeID, m_tGraphID, ID);
-                    //ïîäñîåäèíèòü àääîíû ê îðóæèþ, åñëè âêëþ÷åíû ñîîòâåòñòâóþùèå ôëàæêè
+                    //Ð¿Ð¾Ð´ÑÐ¾ÐµÐ´Ð¸Ð½Ð¸Ñ‚ÑŒ Ð°Ð´Ð´Ð¾Ð½Ñ‹ Ðº Ð¾Ñ€ÑƒÐ¶Ð¸ÑŽ, ÐµÑÐ»Ð¸ Ð²ÐºÐ»ÑŽÑ‡ÐµÐ½Ñ‹ ÑÐ¾Ð¾Ñ‚Ð²ÐµÑ‚ÑÑ‚Ð²ÑƒÑŽÑ‰Ð¸Ðµ Ñ„Ð»Ð°Ð¶ÐºÐ¸
                     CSE_ALifeItemWeapon* W = smart_cast<CSE_ALifeItemWeapon*>(E);
                     if (W) {
                         if (W->m_scope_status == ALife::eAddonAttachable)
