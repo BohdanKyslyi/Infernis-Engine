@@ -16,13 +16,15 @@ struct SSpawnLoadoutEntry {
     xr_string section;
     float weight;
     float condition;
+    u32 ammo_count;
+    s32 ammo_type;
     bool scope;
     bool silencer;
     bool launcher;
 
     SSpawnLoadoutEntry(LPCSTR item_section, LPCSTR value)
-        : section(item_section ? item_section : ""), weight(1.f), condition(1.f), scope(false),
-          silencer(false), launcher(false) {
+        : section(item_section ? item_section : ""), weight(1.f), condition(1.f), ammo_count(1),
+          ammo_type(0), scope(false), silencer(false), launcher(false) {
         if (!value || !xr_strlen(value))
             return;
 
@@ -33,6 +35,16 @@ struct SSpawnLoadoutEntry {
         parameter = strstr(value, "cond=");
         if (parameter)
             condition = (float)atof(parameter + 5);
+
+        parameter = strstr(value, "ammo=");
+        if (parameter) {
+            const s32 parsed_ammo_count = atoi(parameter + 5);
+            ammo_count = parsed_ammo_count > 0 ? (u32)parsed_ammo_count : 0;
+        }
+
+        parameter = strstr(value, "ammo_type=");
+        if (parameter)
+            ammo_type = atoi(parameter + 10);
 
         if (condition < 0.f)
             condition = 0.f;
@@ -158,6 +170,53 @@ void CSE_ALifeObject::spawn_supplies(LPCSTR ini_string) {
         }
 
         apply_loadout_properties(entity, *selected);
+
+        CSE_ALifeItemWeapon* weapon = smart_cast<CSE_ALifeItemWeapon*>(entity);
+
+        if (!weapon || !selected->ammo_count)
+            continue;
+
+        LPCSTR ammo_classes = weapon->m_caAmmoSections;
+
+        if (!ammo_classes || !xr_strlen(ammo_classes))
+            continue;
+
+        const s32 ammo_type_count = _GetItemCount(ammo_classes);
+
+        if (ammo_type_count <= 0)
+            continue;
+
+        s32 ammo_type = selected->ammo_type;
+
+        if (ammo_type < 0 || ammo_type >= ammo_type_count) {
+            Msg("! [%s] item [%s] has invalid ammo_type=%d; using ammo_type=0",
+                loadout_section, selected->section.c_str(), ammo_type);
+            ammo_type = 0;
+        }
+
+        string128 ammo_section_buffer;
+        LPCSTR ammo_section = _GetItem(ammo_classes, ammo_type, ammo_section_buffer);
+
+        if (!ammo_section || !xr_strlen(ammo_section) ||
+            !pSettings->section_exist(ammo_section)) {
+            Msg("! [%s] item [%s] references unknown ammo section [%s]",
+                loadout_section, selected->section.c_str(),
+                ammo_section && xr_strlen(ammo_section) ? ammo_section : "<empty>");
+            continue;
+        }
+
+        weapon->ammo_type = (u8)ammo_type;
+
+        for (u32 ammo_index = 0; ammo_index < selected->ammo_count; ++ammo_index) {
+            CSE_Abstract* ammo = alife().spawn_item(ammo_section, o_Position, m_tNodeID,
+                                                    m_tGraphID, ID);
+
+            if (!ammo) {
+                Msg("! [%s] failed to spawn ammo [%s] for item [%s]", loadout_section,
+                    ammo_section, selected->section.c_str());
+                break;
+            }
+        }
     }
 
     if (ini.section_exist("spawn")) {
