@@ -38,10 +38,13 @@ private:
     xr_vector<u32> sml_adjacency;
 
     std::recursive_mutex lock;
+    bool m_bloodmark_settings_loaded;
+    bool m_allow_bloodmarks_on_npc;
 
 private:
     wm_slot* FindSlot(ref_shader shader);
     wm_slot* AppendSlot(ref_shader shader);
+    void LoadBloodmarkSettings();
 
 private:
     void BuildMatrix(Fmatrix& dest, float invsz, const Fvector& from);
