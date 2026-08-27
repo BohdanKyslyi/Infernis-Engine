@@ -660,30 +660,6 @@ void CAI_Stalker::Die(CObject* who) {
     //запретить использование слотов в инвенторе
     inventory().SetSlotsUseful(false);
 
-    if (inventory().GetActiveSlot() == NO_ACTIVE_SLOT)
-        return;
-
-    CInventoryItem* active_item = inventory().ActiveItem();
-    if (!active_item)
-        return;
-
-    CWeapon* weapon = smart_cast<CWeapon*>(active_item);
-    if (!weapon)
-        return;
-
-    {
-        TIItemContainer::iterator I = inventory().m_all.begin();
-        TIItemContainer::iterator E = inventory().m_all.end();
-        for (; I != E; ++I) {
-            if (std::find(weapon->m_ammoTypes.begin(), weapon->m_ammoTypes.end(),
-                          (*I)->object().cNameSect()) == weapon->m_ammoTypes.end())
-                continue;
-
-            NET_Packet packet;
-            u_EventGen(packet, GE_DESTROY, (*I)->object().ID());
-            u_EventSend(packet);
-        }
-    }
 }
 
 void CAI_Stalker::Load(LPCSTR section) {
