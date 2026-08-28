@@ -200,23 +200,23 @@ float gbuf_unpack_mtl( float mtl_hemi )
 
 // ============================================================
 // Infernis Engine PBR G-buffer packing
-//
-// rt_Position is FP16.
-// Values in [2.0; 4.0) are reserved for PBR.
-//
-// 10 FP16 mantissa steps:
-//     5 bits = Metallic
-//     5 bits = Hemi * AO
-//
-// Roughness is stored separately in diffuse alpha.
 // ============================================================
+
+static const float IE_PBR_GBUFFER_BASE = 16.0f;
+static const float IE_PBR_GBUFFER_END = 32.0f;
+static const float IE_PBR_GBUFFER_SCALE = 64.0f;
 
 bool gbuf_is_pbr(float packed)
 {
-    return (packed >= 2.0f && packed < 4.0f);
+    return
+        packed >= IE_PBR_GBUFFER_BASE &&
+        packed < IE_PBR_GBUFFER_END;
 }
 
-float gbuf_pack_pbr(float hemiAO, float metallic)
+float gbuf_pack_pbr(
+    float hemiAO,
+    float metallic
+)
 {
     uint h =
         (uint)(saturate(hemiAO) * 31.0f + 0.5f);
@@ -228,8 +228,10 @@ float gbuf_pack_pbr(float hemiAO, float metallic)
         ((m & 31u) << 5) |
         (h & 31u);
 
-    // FP16 in range 2..4 has step 1/512.
-    return 2.0f + float(code) * (1.0f / 512.0f);
+    return
+        IE_PBR_GBUFFER_BASE +
+        float(code) *
+        (1.0f / IE_PBR_GBUFFER_SCALE);
 }
 
 void gbuf_unpack_pbr(
@@ -239,12 +241,17 @@ void gbuf_unpack_pbr(
 )
 {
     uint code =
-        (uint)((packed - 2.0f) * 512.0f + 0.5f);
+        (uint)(
+            (packed - IE_PBR_GBUFFER_BASE) *
+            IE_PBR_GBUFFER_SCALE +
+            0.5f
+            );
 
     code = min(code, 1023u);
 
     hemiAO =
-        float(code & 31u) * (1.0f / 31.0f);
+        float(code & 31u) *
+        (1.0f / 31.0f);
 
     metallic =
         float((code >> 5) & 31u) *
@@ -260,28 +267,33 @@ f_deffer pack_gbuffer( float4 norm, float4 pos, float4 col, uint imask )
  f_deffer res;
 
 #ifndef GBUFFER_OPTIMIZATION
+
  res.position = pos;
  res.Ne = norm;
  res.C = col;
+
 #else
- if (gbuf_is_pbr(pos.w))
- {
-     // PBR data is already encoded in pos.w.
-     res.position = float4(
-         gbuf_pack_normal(norm.xyz),
-         pos.z,
+
+#ifdef USE_PBR
+
+ res.position = float4(
+     gbuf_pack_normal(norm.xyz),
+     pos.z,
+     pos.w
+ );
+
+#else
+
+ res.position = float4(
+     gbuf_pack_normal(norm.xyz),
+     pos.z,
+     gbuf_pack_hemi_mtl(
+         norm.w,
          pos.w
-     );
- }
- else
- {
-     // Original X-Ray packing.
-     res.position = float4(
-         gbuf_pack_normal(norm.xyz),
-         pos.z,
-         gbuf_pack_hemi_mtl(norm.w, pos.w)
-     );
- }
+     )
+ );
+
+#endif
 
  res.C = col;
 

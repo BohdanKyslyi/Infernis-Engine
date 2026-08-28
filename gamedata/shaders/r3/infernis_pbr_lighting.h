@@ -151,6 +151,13 @@ float3 ie_pbr_direct_brdf(
 {
     metallic = saturate(metallic);
 
+// ============================================================
+// TEMPORARY PBR SANITY TEST
+// ============================================================
+
+    metallic = 0.0f;
+    roughness = 0.5f;
+
     roughness =
         clamp(
             roughness,
