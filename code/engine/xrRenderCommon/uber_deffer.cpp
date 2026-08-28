@@ -14,22 +14,11 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
     _t.create(fname);
 
 #ifdef USE_DX11
-
-    bool descriptorPBR = !!DEV->m_textures_description.UsePBRTextures(fname);
-
-    bool forcePBRDebug = strstr(fname, "ak74") != nullptr;
-
-    bool usePBR = descriptorPBR || forcePBRDebug;
-
-    if (strstr(fname, "ak74")) {
-        Msg("[PBR DEBUG] texture='%s' | THM_PBR=%d | FORCE=%d | RESULT=%d", fname,
-            descriptorPBR ? 1 : 0, forcePBRDebug ? 1 : 0, usePBR ? 1 : 0);
-    }
+    bool usePBR = !!DEV->m_textures_description.UsePBRTextures(fname);
 
     if (usePBR) {
         RImplementation.addShaderOption("USE_PBR", "1");
     }
-
 #endif
 
     bool bump = _t.bump_exist();
