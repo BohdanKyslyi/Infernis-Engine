@@ -92,6 +92,17 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
         xr_strcat(ps, "-hq");
     }
 
+#ifdef USE_DX11
+    // PBR needs its own shader resource/cache entry.
+    // ResourceManager strips everything after '(' when locating
+    // the actual shader source file, but keeps the full name as
+    // the compiled shader identifier.
+    if (usePBR) {
+        xr_strcat(vs, "(USE_PBR)");
+        xr_strcat(ps, "(USE_PBR)");
+    }
+#endif
+
 // Uber-construct
 #if defined(USE_DX10) || defined(USE_DX11)
 #ifdef USE_DX11
@@ -124,6 +135,10 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
         if (C.bDetail_Bump) {
             RImplementation.addShaderOption("USE_TDETAIL_BUMP", "1");
             xr_strcat(params, "USE_TDETAIL_BUMP,");
+        }
+
+        if (usePBR) {
+            xr_strcat(params, "USE_PBR,");
         }
 
         xr_strcat(params, ")");
