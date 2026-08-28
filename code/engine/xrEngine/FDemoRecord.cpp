@@ -377,12 +377,12 @@ void CDemoRecord::IR_OnKeyboardPress(int dik) {
     if (dik == DIK_ESCAPE)
         fLifeTime = -1;
 
-    if (dik == DIK_RETURN) {
-        if (g_pGameLevel->CurrentEntity())
-            if (g_pGameLevel->CurrentEntity() && strstr(Core.Params, "-dev_mode")) {
-                g_pGameLevel->CurrentEntity()->ForceTransform(m_Camera);
-                fLifeTime = -1;
-            }
+    const bool dev_mode = strstr(Core.Params, "-dev_mode") != nullptr ||
+                          strstr(Core.Params, "-developer_mode") != nullptr;
+
+    if (dik == DIK_RETURN && dev_mode && g_pGameLevel->CurrentEntity()) {
+        g_pGameLevel->CurrentEntity()->ForceTransform(m_Camera);
+        fLifeTime = -1;
     }
 
     if (dik == DIK_PAUSE)

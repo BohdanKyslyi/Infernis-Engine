@@ -37,7 +37,9 @@
 #include "script_process.h"
 #include "script_debugger.h"
 #include "xrServer_Objects.h"
+#include "xrServer_Objects_ALife_Monsters.h"
 #include "xrserver_objects_alife_items.h"
+#include "restriction_space.h"
 #include "string_table.h"
 #include "GameTask.h"
 #include "map_manager.h"
@@ -82,6 +84,7 @@ extern float psSqueezeVelocity;
 extern int psLUA_GCSTEP;
 ENGINE_API extern float g_console_sensitive;
 extern float g_fTimeFactor;
+extern float g_fov;
 BOOL g_bCheckTime = FALSE;
 
 // Game & Actor
@@ -238,6 +241,80 @@ public:
     }
 };
 
+class CCC_FovDev : public IConsole_Command {
+public:
+    CCC_FovDev(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = false; }
+
+    virtual void Execute(LPCSTR args) {
+        if (!is_dev_mode()) {
+            Msg("! Command available only in -dev_mode");
+            return;
+        }
+
+        float value = g_fov;
+        if (sscanf(args, "%f", &value) < 1) {
+            Msg("! Usage: fov <value> [5.0 - 180.0]");
+            return;
+        }
+
+        clamp(value, 5.0f, 180.0f);
+        g_fov = value;
+        Msg("~ FOV set to: %.2f", g_fov);
+    }
+
+    virtual void Status(TStatus& S) { xr_sprintf(S, sizeof(S), "%.2f", g_fov); }
+
+    virtual void Info(TInfo& I) { xr_strcpy(I, "[5.0 - 180.0]"); }
+
+    virtual void fill_tips(vecTips& tips, u32 mode) {
+        if (!is_dev_mode())
+            return;
+
+        tips.push_back("55");
+        tips.push_back("67.5");
+        tips.push_back("75");
+        tips.push_back("90");
+    }
+};
+
+class CCC_GlobalTimeFactorDev : public IConsole_Command {
+public:
+    CCC_GlobalTimeFactorDev(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = false; }
+
+    virtual void Execute(LPCSTR args) {
+        if (!is_dev_mode()) {
+            Msg("! Command available only in -dev_mode");
+            return;
+        }
+
+        float value = Device.time_factor();
+        if (sscanf(args, "%f", &value) < 1) {
+            Msg("! Usage: time_factor <value> [0.001 - 1000.0]");
+            return;
+        }
+
+        clamp(value, 0.001f, 1000.0f);
+        Device.time_factor(value);
+        Msg("~ Global time factor set to: %.3f", Device.time_factor());
+    }
+
+    virtual void Status(TStatus& S) { xr_sprintf(S, sizeof(S), "%.3f", Device.time_factor()); }
+
+    virtual void Info(TInfo& I) { xr_strcpy(I, "[0.001 - 1000.0]"); }
+
+    virtual void fill_tips(vecTips& tips, u32 mode) {
+        if (!is_dev_mode())
+            return;
+
+        tips.push_back("0.25");
+        tips.push_back("0.5");
+        tips.push_back("1");
+        tips.push_back("2");
+        tips.push_back("5");
+        tips.push_back("10");
+    }
+};
+
 // g_spawn_to_inventory [section] [count]
 class CCC_SpawnToInventory : public IConsole_Command {
 public:
@@ -326,8 +403,19 @@ public:
         if (tpGame) {
             for (int i = 0; i < count; ++i) {
                 // 0xffff (або ALife::_OBJECT_ID(-1)) - це спавн на землю
-                tpGame->alife().spawn_item(section, spawn_pos, lvid,
-                                           Actor()->ai_location().game_vertex_id(), 0xffff);
+                CSE_Abstract* entity = tpGame->alife().spawn_item(
+                    section, spawn_pos, lvid, Actor()->ai_location().game_vertex_id(),
+                    ALife::_OBJECT_ID(-1));
+
+                // Anomalous zones need a shape when spawned from the console.
+                if (CSE_ALifeAnomalousZone* anomaly = smart_cast<CSE_ALifeAnomalousZone*>(entity)) {
+                    CShapeData::shape_def shape;
+                    shape.data.sphere.P.set(0.0f, 0.0f, 0.0f);
+                    shape.data.sphere.R = 3.0f;
+                    shape.type = CShapeData::cfSphere;
+                    anomaly->assign_shapes(&shape, 1);
+                    anomaly->m_space_restrictor_type = RestrictionSpace::eRestrictorTypeNone;
+                }
             }
             Msg("~ Spawned %d of [%s] at crosshair.", count, section);
         }
@@ -424,7 +512,7 @@ public:
 
         float tf = 10.0f; // 10.0 - стандартное время в сталкере
         if (sscanf(args, "%f", &tf) < 1) {
-            Msg("! Usage: time_factor <value> (default is 10.0)");
+            Msg("! Usage: al_time_factor <value> (default is 10.0)");
             return;
         }
 
@@ -722,7 +810,8 @@ void CCC_RegisterCommands() {
     // --- GAME & ALIFE ---
     CMD1(CCC_GameDifficulty, "g_game_difficulty");
     CMD4(CCC_Integer, "g_sleep_time", &psActorSleepTime, 1, 24);
-    CMD1(CCC_TimeFactorDev, "time_factor");
+    CMD1(CCC_GlobalTimeFactorDev, "time_factor");
+    CMD1(CCC_TimeFactorDev, "al_time_factor");
     CMD4(CCC_Float, "con_sensitive", &g_console_sensitive, 0.01f, 1.0f);
     CMD4(CCC_Integer, "wpn_aim_toggle", &b_toggle_weapon_aim, 0, 1);
     CMD4(CCC_Integer, "keypress_on_start", &g_keypress_on_start, 0, 1);
@@ -762,6 +851,8 @@ void CCC_RegisterCommands() {
 
     // --- DEV MODE COMMANDS (-dev_mode) ---
     CMD1(CCC_SpawnToInventory, "g_spawn_to_inventory");
+    // Backward-compatible name used before the 0.2.2 engine migration.
+    CMD1(CCC_SpawnToInventory, "g_spawn_to_inv");
     CMD1(CCC_SpawnToCrosshair, "g_spawn");
     CMD2(CCC_InfoPortion, "g_info", true);  // Використовуємо CMD2
     CMD2(CCC_InfoPortion, "d_info", false); // Використовуємо CMD2
@@ -770,6 +861,7 @@ void CCC_RegisterCommands() {
     extern Flags32 psActorFlags;
     CMD3(CCC_Mask_Dev, "g_god", &psActorFlags, AF_GODMODE);
     CMD3(CCC_Mask_Dev, "g_unlimitedammo", &psActorFlags, AF_UNLIMITEDAMMO);
+    CMD1(CCC_FovDev, "fov");
 
     // --- PHYSICS & DEMO ---
     CMD1(CCC_PHFps, "ph_frequency");
@@ -789,8 +881,6 @@ void CCC_RegisterCommands() {
 
 #ifdef DEBUG_CAPS
     CMD4(CCC_Float, "hud_fov", &psHUD_FOV, 0.1f, 1.0f);
-    extern float g_fov;
-    CMD4(CCC_Float, "fov", &g_fov, 5.0f, 180.0f);
     CMD1(CCC_PHGravity, "ph_gravity");
 #endif
 }
