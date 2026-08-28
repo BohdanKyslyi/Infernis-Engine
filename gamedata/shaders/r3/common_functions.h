@@ -268,7 +268,7 @@ f_deffer pack_gbuffer( float4 norm, float4 pos, float4 col, uint imask )
  {
      // PBR data is already encoded in pos.w.
      res.position = float4(
-         gbuf_pack_normal(norm),
+         gbuf_pack_normal(norm.xyz),
          pos.z,
          pos.w
      );
@@ -277,7 +277,7 @@ f_deffer pack_gbuffer( float4 norm, float4 pos, float4 col, uint imask )
  {
      // Original X-Ray packing.
      res.position = float4(
-         gbuf_pack_normal(norm),
+         gbuf_pack_normal(norm.xyz),
          pos.z,
          gbuf_pack_hemi_mtl(norm.w, pos.w)
      );

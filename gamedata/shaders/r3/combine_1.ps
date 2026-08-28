@@ -52,6 +52,27 @@ _out main ( _input I, uint iSample : SV_SAMPLEINDEX )
 {
  gbuffer_data gbd = gbuffer_load_data( GLD_P(I.tc0, I.pos2d, ISAMPLE) );
  
+ if (gbd.pbr > 0.5f)
+{
+    _out dbg;
+
+    dbg.low = float4(
+        1.0f,
+        0.0f,
+        1.0f,
+        1.0f
+    );
+
+    dbg.high = float4(
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f
+    );
+
+    return dbg;
+}
+
  // Sample the buffers:
  float4 P = float4( gbd.P, gbd.mtl ); // position.(mtl or sun)
  float4 N = float4( gbd.N, gbd.hemi ); // normal.hemi
@@ -146,25 +167,6 @@ _out main ( _input I, uint iSample : SV_SAMPLEINDEX )
 // float3 color = C.rgb + (D.rgb*spec+spec)/0.5h;
  float3 color = C.rgb + spec ;
 // float3 color = C.rgb + D.rgb*spec+hspecular+hspecular ; // More realistic and contrast specular - Ugrumiy edition
-
-// ============================================================
-// Infernis Engine PBR G-buffer debug
-// ============================================================
-
-if (gbd.pbr > 0.5f)
-{
-    // Leave ONE enabled:
-
-    color = gbd.metallic.xxx;
-
-    //color = gbd.roughness.xxx;
-
-    // This is Hemi * AO, not raw AO:
-    //color = gbd.hemi.xxx;
-
-    // PBR marker test:
-    //color = float3(1.0f, 0.0f, 1.0f);
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// For Test ///////////////////////////////////////////////////////////////////
