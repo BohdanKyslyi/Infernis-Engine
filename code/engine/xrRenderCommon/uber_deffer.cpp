@@ -12,6 +12,15 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
     fix_texture_name(fname);
     ref_texture _t;
     _t.create(fname);
+
+#ifdef USE_DX11
+    bool usePBR = !!DEV->m_textures_description.UsePBRTextures(fname);
+
+    if (usePBR) {
+        RImplementation.addShaderOption("USE_PBR", "1");
+    }
+#endif
+
     bool bump = _t.bump_exist();
 
     // detect lmap
@@ -140,9 +149,14 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
         if (bHasDetailBump) {
             C.r_dx10Texture("s_tdetailBumpX", texDetailBumpX);
         }
-    } else
-#endif
+    } else {
         C.r_Pass(vs, ps, FALSE);
+
+        RImplementation.clearAllShaderOptions();
+    }
+#else
+    C.r_Pass(vs, ps, FALSE);
+#endif
     // C.r_Sampler		("s_base",		C.L_textures[0],	false,	D3DTADDRESS_WRAP,
     // D3DTEXF_ANISOTROPIC,D3DTEXF_LINEAR,	D3DTEXF_ANISOTROPIC);
     // C.r_Sampler		("s_bumpX",		fnameB,				false,	D3DTADDRESS_WRAP,

@@ -46,6 +46,7 @@ xr_token tmtl_token[] = { { "OrenNayar <-> Blin", STextureParams::tmOrenNayar_Bl
                           { "Blin <-> Phong", STextureParams::tmBlin_Phong },
                           { "Phong <-> Metal", STextureParams::tmPhong_Metal },
                           { "Metal <-> OrenNayar", STextureParams::tmMetal_OrenNayar },
+                          { "Infernis Engine -> PBR", STextureParams::tmPBR_Material },
                           { 0, 0 } };
 
 xr_token tbmode_token[] = { { "None", STextureParams::tbmNone },
