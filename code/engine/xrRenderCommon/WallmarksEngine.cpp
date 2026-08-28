@@ -49,7 +49,8 @@ CWallmarksEngine::wm_slot* CWallmarksEngine::AppendSlot(ref_shader shader) {
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 
-CWallmarksEngine::CWallmarksEngine() {
+CWallmarksEngine::CWallmarksEngine()
+    : m_bloodmark_settings_loaded(false), m_allow_bloodmarks_on_npc(true) {
     static_pool.reserve(256);
     marks.reserve(256);
     hGeom.create(FVF::F_LIT, RCache.Vertex.Buffer(), NULL);
@@ -283,9 +284,33 @@ void CWallmarksEngine::AddStaticWallmark(CDB::TRI* pTri, const Fvector* pVerts,
     AddWallmark_internal(pTri, pVerts, contact_point, hShader, sz);
 }
 
+void CWallmarksEngine::LoadBloodmarkSettings() {
+    if (m_bloodmark_settings_loaded)
+        return;
+
+    if (!pSettings) {
+        Msg("! Bloodmarks on NPC: settings are not initialized yet");
+        return;
+    }
+
+    m_bloodmark_settings_loaded = true;
+
+    if (!pSettings->section_exist("shader_extensions")) {
+        Msg("* Bloodmarks on NPC: [shader_extensions] is missing, enabled by default");
+        return;
+    }
+
+    m_allow_bloodmarks_on_npc =
+        READ_IF_EXISTS(pSettings, r_bool, "shader_extensions", "allow_bloodmarks_on_npc", true);
+
+    Msg("* Bloodmarks on NPC: %s", m_allow_bloodmarks_on_npc ? "enabled" : "disabled");
+}
+
 void CWallmarksEngine::AddSkeletonWallmark(const Fmatrix* xf, CKinematics* obj, ref_shader& sh,
                                            const Fvector& start, const Fvector& dir, float size) {
-    if (0 == g_r || ::RImplementation.phase != CRender::PHASE_NORMAL)
+    LoadBloodmarkSettings();
+    if (!m_allow_bloodmarks_on_npc ||
+        ::RImplementation.phase != CRender::PHASE_NORMAL)
         return;
     // optimization cheat: don't allow wallmarks more than 50 m from viewer/actor
     if (xf->c.distance_to_sqr(Device.vCameraPosition) > xr::sqr(50.f))
@@ -297,7 +322,9 @@ void CWallmarksEngine::AddSkeletonWallmark(const Fmatrix* xf, CKinematics* obj, 
 }
 
 void CWallmarksEngine::AddSkeletonWallmark(intrusive_ptr<CSkeletonWallmark> wm) {
-    if (0 == g_r || ::RImplementation.phase != CRender::PHASE_NORMAL)
+    LoadBloodmarkSettings();
+    if (!m_allow_bloodmarks_on_npc ||
+        ::RImplementation.phase != CRender::PHASE_NORMAL)
         return;
 
     if (!::RImplementation.val_bHUD) {
