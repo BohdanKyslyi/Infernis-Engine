@@ -23,6 +23,12 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
 
     bool bump = _t.bump_exist();
 
+#ifdef USE_DX11
+    if (strstr(fname, "wpn_ak74")) {
+        Msg("[PBR DEBUG] texture='%s' | PBR=%d | bump=%d", fname, usePBR ? 1 : 0, bump ? 1 : 0);
+    }
+#endif
+
     // detect lmap
     bool lmap = true;
     if (C.L_textures.size() < 3)
