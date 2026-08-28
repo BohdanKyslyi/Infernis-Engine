@@ -56,12 +56,35 @@ float4 plight_infinity_pbr(
     float3 light_direction
 )
 {
-    // TEMP DEBUG:
-    // Every PBR sun contribution must be RED.
+    float3 albedo =
+        ie_pbr_prepare_albedo(
+            gbd.C
+        );
+
+    // Position is view-space.
+    // Camera is at 0,0,0.
+    float3 V =
+        -normalize(gbd.P);
+
+    // Classic X-Ray gives us light ray direction,
+    // therefore surface -> light is the inverse.
+    float3 L =
+        -normalize(light_direction);
+
+    float3 result =
+        ie_pbr_direct_brdf(
+            albedo,
+            gbd.metallic,
+            gbd.roughness,
+            gbd.N,
+            V,
+            L
+        );
+
+    // PBR direct lighting is entirely RGB.
+    // Old scalar specular accumulator is unused.
     return float4(
-        1.0f,
-        0.0f,
-        0.0f,
+        result,
         0.0f
     );
 }

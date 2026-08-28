@@ -54,7 +54,7 @@ _out main ( _input I, uint iSample : SV_SAMPLEINDEX )
     gbuffer_load_data(
         GLD_P(I.tc0, I.pos2d, ISAMPLE)
     );
-
+    float mtl = gbd.mtl;
  // Sample the buffers:
  float4 P = float4( gbd.P, gbd.mtl ); // position.(mtl or sun)
  float4 N = float4( gbd.N, gbd.hemi ); // normal.hemi
@@ -83,9 +83,6 @@ _out main ( _input I, uint iSample : SV_SAMPLEINDEX )
 #ifdef USE_GAMMA_22
  D.rgb = ( D.rgb*D.rgb ); // pow(2.2)
 #endif
-
- // hemisphere
- float3 hdiffuse, hspecular;
 
  // Calculate SSAO
 
@@ -118,27 +115,99 @@ _out main ( _input I, uint iSample : SV_SAMPLEINDEX )
 #endif
 #endif // USE_HDAO
  
- hmodel (hdiffuse, hspecular, mtl, N.w, D.w, P.xyz, N.xyz);
-// hmodel (hdiffuse, hspecular, mtl, 1, D.w, P.xyz, N.xyz);
-// hdiffuse*=hdiffuse; //. high contrast hemi
-// hdiffuse*=(D.rgb*0.8 + 0.2h); // rise texture contrast for diffuse lighting
-// hdiffuse = 0.8;
-// hdiffuse *= (occ*(D.rgb + .1h));
- hdiffuse *= occ;
- hspecular *= occ;
+float3 hdiffuse =
+    float3(0.0f, 0.0f, 0.0f);
 
- float4 light = float4 (L.rgb + hdiffuse, L.w) ;
- float4 C = D*light ; // rgb.gloss * light(diffuse.specular)
-// float3 spec = (C.rgb*.5h + .5h)*C.w + hspecular + hspecular + hspecular; // replicated specular
- float3 spec = C.www + hspecular; // replicated specular
+float3 hspecular =
+    float3(0.0f, 0.0f, 0.0f);
+
+float3 spec =
+    float3(0.0f, 0.0f, 0.0f);
+
+float4 light =
+    float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+float4 C =
+    float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+float3 color =
+    float3(0.0f, 0.0f, 0.0f);
+
+
+// ============================================================
+// PBR
+// ============================================================
+
+if (gbd.pbr > 0.5f)
+{
+    // Direct lighting in accumulator is already
+    // a complete RGB PBR BRDF.
+    float3 direct =
+        L.rgb;
+
+    // Temporary simple indirect diffuse.
+    // Proper IBL comes later.
+    float3 ambientDiffuse =
+        L_ambient.rgb *
+        D.rgb *
+        (1.0f - gbd.metallic);
+
+    // gbd.hemi already includes texture AO.
+    ambientDiffuse *=
+        saturate(gbd.hemi) *
+        occ;
+
+    color =
+        direct +
+        ambientDiffuse;
+}
+
+
+// ============================================================
+// Legacy X-Ray
+// ============================================================
+
+else
+{
+    hmodel(
+        hdiffuse,
+        hspecular,
+        mtl,
+        N.w,
+        D.w,
+        P.xyz,
+        N.xyz
+    );
+
+    hdiffuse *= occ;
+    hspecular *= occ;
+
+    light =
+        float4(
+            L.rgb + hdiffuse,
+            L.w
+        );
+
+    C =
+        D * light;
+
+    spec =
+        C.www +
+        hspecular;
 
 #ifdef USE_SUPER_SPECULAR
- spec = (C.rgb*.5h + .5h)*C.w + hspecular ;
+
+    spec =
+        (C.rgb * 0.5h + 0.5h) *
+        C.w +
+        hspecular;
+
 #endif
-// float3 color = C.rgb + D.rgb*spec ;
-// float3 color = C.rgb + (D.rgb*spec+spec)/0.5h;
- float3 color = C.rgb + spec ;
-// float3 color = C.rgb + D.rgb*spec+hspecular+hspecular ; // More realistic and contrast specular - Ugrumiy edition
+
+    color =
+        C.rgb +
+        spec;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// For Test ///////////////////////////////////////////////////////////////////
