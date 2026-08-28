@@ -1,90 +1,107 @@
 #include "common.h"
 #include "sload.h"
 
-f_deffer main ( p_bumped I )
+f_deffer main(p_bumped I)
 {
- f_deffer O;
+    f_deffer O;
 
- surface_bumped S = sload (I);
+    surface_bumped S = sload(I);
 
 #ifdef USE_PBR
- float surface_height = 0.0f;
+    float surface_height = 0.0f;
 #else
- float surface_height = S.height;
+    float surface_height = S.height;
 #endif
 
- // Sample normal, rotate it by matrix, encode position 
- float3 Ne = mul (float3x3(I.M1, I.M2, I.M3), S.normal);
- Ne = normalize (Ne);
+    // Sample normal, rotate it by matrix, encode position
+    float3 Ne = mul(
+        float3x3(I.M1, I.M2, I.M3),
+        S.normal
+    );
 
- // hemi,sun,material
- float ms = xmaterial ;
+    Ne = normalize(Ne);
+
+    // hemi, sun, material
+    float ms = xmaterial;
+
 #ifdef USE_LM_HEMI
-// float4 lm = tex2D (s_hemi, I.lmh);
- float4 lm = s_hemi.Sample( smp_rtlinear, I.lmh);
-// float h = dot (lm.rgb,1.h/3.h);
- float h = get_hemi(lm);
-# ifdef USE_R2_STATIC_SUN
-// ms = lm.w;
- ms = get_sun(lm);
-# endif
+
+    float4 lm = s_hemi.Sample(
+        smp_rtlinear,
+        I.lmh
+    );
+
+    float h = get_hemi(lm);
+
+#ifdef USE_R2_STATIC_SUN
+    ms = get_sun(lm);
+#endif
+
+#else
+
+    float h = I.position.w;
+
+#ifdef USE_R2_STATIC_SUN
+    ms = I.tcdh.w;
+#endif
+
+#endif // USE_LM_HEMI
+
+
+    // =========================================================
+    // Infernis Engine PBR G-buffer data
+    // =========================================================
 
 #ifdef USE_PBR
 
-    // AO affects indirect / hemisphere lighting only.
+    // AO affects hemisphere / indirect lighting.
     float gbuffer_hemi =
         saturate(h * S.ao);
 
-    // position.w in range 2..4 means PBR.
+    // Encoded PBR marker + Metallic + Hemi*AO.
     float gbuffer_material =
         gbuf_pack_pbr(
             gbuffer_hemi,
             S.metallic
         );
 
-    // Alpha of albedo RT becomes Roughness.
+    // Diffuse RT alpha becomes Roughness.
     float gbuffer_surface =
         saturate(S.roughness);
 
 #else
 
+    // Original X-Ray values.
     float gbuffer_hemi =
         h;
 
     float gbuffer_material =
         ms;
 
-    // Original X-Ray gloss.
     float gbuffer_surface =
         S.gloss;
 
 #endif
 
-#else
- float h = I.position.w ;
-# ifdef USE_R2_STATIC_SUN
- ms = I.tcdh.w ;
-# endif
-#endif
 
-O = pack_gbuffer(
-    float4(
-        Ne,
-        gbuffer_hemi
-    ),
+    O = pack_gbuffer(
+        float4(
+            Ne,
+            gbuffer_hemi
+        ),
 
-    float4(
-        I.position.xyz +
-        Ne * surface_height * def_virtualh,
+        float4(
+            I.position.xyz +
+            Ne * surface_height * def_virtualh,
 
-        gbuffer_material
-    ),
+            gbuffer_material
+        ),
 
-    float4(
-        S.base.xyz,
-        gbuffer_surface
-    )
-);
+        float4(
+            S.base.xyz,
+            gbuffer_surface
+        )
+    );
 
- return O;
+    return O;
 }

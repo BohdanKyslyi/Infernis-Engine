@@ -403,55 +403,108 @@ gbuffer_data gbuffer_load_data_offset( float2 tc : TEXCOORD, float2 OffsetTC : T
 }
 
 #else // GBUFFER_OPTIMIZATION
-gbuffer_data gbuffer_load_data( float2 tc : TEXCOORD, uint iSample )
+
+gbuffer_data gbuffer_load_data(
+    float2 tc : TEXCOORD,
+    uint iSample
+)
 {
- gbuffer_data gbd;
+    gbuffer_data gbd;
 
 #ifndef USE_MSAA
- float4 P = s_position.Sample( smp_nofilter, tc );
+
+    float4 P =
+        s_position.Sample(
+            smp_nofilter,
+            tc
+        );
+
+    float4 N =
+        s_normal.Sample(
+            smp_nofilter,
+            tc
+        );
+
+    float4 C =
+        s_diffuse.Sample(
+            smp_nofilter,
+            tc
+        );
+
 #else
- float4 P = s_position.Load( int3( tc * pos_decompression_params2.xy, 0 ), iSample );
+
+    int3 pixelPos =
+        int3(
+            tc * pos_decompression_params2.xy,
+            0
+        );
+
+    float4 P =
+        s_position.Load(
+            pixelPos,
+            iSample
+        );
+
+    float4 N =
+        s_normal.Load(
+            pixelPos,
+            iSample
+        );
+
+    float4 C =
+        s_diffuse.Load(
+            pixelPos,
+            iSample
+        );
+
 #endif
 
- gbd.P = P.xyz;
- gbd.N = N.xyz;
+    gbd.P = P.xyz;
+    gbd.N = N.xyz;
 
- if (gbuf_is_pbr(P.w))
- {
-     gbd.pbr = 1.0f;
+    if (gbuf_is_pbr(P.w))
+    {
+        gbd.pbr = 1.0f;
 
-     gbuf_unpack_pbr(
-         P.w,
-         gbd.hemi,
-         gbd.metallic
-     );
+        gbuf_unpack_pbr(
+            P.w,
+            gbd.hemi,
+            gbd.metallic
+        );
 
-     gbd.mtl = 0.5f;
- }
- else
- {
-     gbd.pbr = 0.0f;
+        // Temporary legacy-lighting fallback.
+        gbd.mtl = 0.5f;
+    }
+    else
+    {
+        gbd.pbr = 0.0f;
 
-     gbd.mtl = P.w;
-     gbd.hemi = N.w;
+        gbd.mtl = P.w;
+        gbd.hemi = N.w;
 
-     gbd.metallic = 0.0f;
- }
+        gbd.metallic = 0.0f;
+    }
 
- gbd.C = C.xyz;
+    gbd.C = C.xyz;
 
- if (gbd.pbr > 0.5f)
- {
-     gbd.roughness = saturate(C.w);
-     gbd.gloss = 1.0f - gbd.roughness;
- }
- else
- {
-     gbd.gloss = C.w;
-     gbd.roughness = 1.0f - gbd.gloss;
- }
+    if (gbd.pbr > 0.5f)
+    {
+        gbd.roughness =
+            saturate(C.w);
 
- return gbd;
+        gbd.gloss =
+            1.0f - gbd.roughness;
+    }
+    else
+    {
+        gbd.gloss =
+            C.w;
+
+        gbd.roughness =
+            1.0f - gbd.gloss;
+    }
+
+    return gbd;
 }
 
 gbuffer_data gbuffer_load_data( float2 tc : TEXCOORD )
