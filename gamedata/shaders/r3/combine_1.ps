@@ -132,9 +132,13 @@ float3 ie_pbr_ambient_ibl(
 
     float NdotV = saturate(dot(N, V));
 
+    // Infernis PBR Stage 2.26:
+    // L_ambient is an engine lighting constant, not a sampled color texture.
+    // Gamma-decoding it a second time crushed rough dielectric world materials
+    // while their albedo, ORM data, and direct lighting remained correct.
     float3 diffuseIrradiance =
         ie_pbr_diffuse_irradiance(N) +
-        ie_pbr_prepare_radiance(L_ambient.rgb);
+        ie_pbr_prepare_dynamic_radiance(L_ambient.rgb);
 
     float3 specularIrradiance =
         ie_pbr_specular_irradiance(
