@@ -205,14 +205,9 @@ float3 ie_pbr_direct_brdf(
             0.0f
         );
     }
-    // ============================================================
-// TEMP: pure Lambert-like albedo test
-// No GGX, no Fresnel, no Metallic.
-// ============================================================
-
-    return
-        albedo *
-        NdotL;
+    // Infernis PBR Stage 2.7:
+    // the temporary Lambert diagnostic is complete. Continue into the
+    // metallic/roughness GGX + Smith + Fresnel-Schlick path below.
     float3 H =
         normalize(L + V);
 
