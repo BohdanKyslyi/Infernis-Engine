@@ -20,6 +20,10 @@ uniform Texture2D s_half_depth;
 
 static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 
+// Infernis PBR Stage 2.25: final G-buffer diagnostic.
+// 0 = production, 1 = route, 2 = M/R/hemi-AO, 3 = albedo, 4 = normal.
+#define IE_PBR_GBUFFER_DEBUG_MODE 0
+
 float2 ie_pbr_environment_brdf(
     float NdotV,
     float roughness
@@ -221,6 +225,39 @@ _out main ( _input I, uint iSample : SV_SAMPLEINDEX )
     gbuffer_load_data(
         GLD_P(I.tc0, I.pos2d, ISAMPLE)
     );
+
+#if IE_PBR_GBUFFER_DEBUG_MODE != 0
+    float3 debugColor = float3(0.0f, 0.0f, 0.0f);
+
+#if IE_PBR_GBUFFER_DEBUG_MODE == 1
+    // Green = PBR marker survived packing; magenta = legacy material.
+    debugColor =
+        gbd.pbr > 0.5f ?
+        float3(0.0f, 1.0f, 0.0f) :
+        float3(1.0f, 0.0f, 1.0f);
+#elif IE_PBR_GBUFFER_DEBUG_MODE == 2
+    // R = metallic, G = roughness, B = packed hemi * material AO.
+    debugColor =
+        float3(
+            saturate(gbd.metallic),
+            saturate(gbd.roughness),
+            saturate(gbd.hemi)
+        );
+#elif IE_PBR_GBUFFER_DEBUG_MODE == 3
+    // Exact base color stored by the deferred material pass.
+    debugColor = saturate(gbd.C);
+#elif IE_PBR_GBUFFER_DEBUG_MODE == 4
+    // View-space normal remapped from [-1,1] to [0,1].
+    debugColor =
+        normalize(gbd.N) * 0.5f + 0.5f;
+#endif
+
+    _out debugOutput;
+    debugOutput.low = float4(debugColor, 0.0f);
+    debugOutput.high = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    return debugOutput;
+#endif
+
     float mtl = gbd.mtl;
  // Sample the buffers:
  float4 P = float4( gbd.P, gbd.mtl ); // position.(mtl or sun)
