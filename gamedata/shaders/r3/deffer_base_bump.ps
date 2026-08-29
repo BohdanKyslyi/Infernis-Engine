@@ -59,14 +59,23 @@ f_deffer main(p_bumped I)
     // _bump#.G = Roughness
     // _bump#.A = AO
 
-    // Infernis PBR Stage 2.13:
-    // Material AO is independent from X-Ray's legacy baked/vertex hemi.
-    // Folding h into AO can reduce the complete IBL contribution to zero on
-    // PBR geometry that has no valid legacy hemisphere-lighting data. Screen
-    // occlusion remains applied separately in combine_1.ps.
+    // Infernis PBR Stage 2.22:
+    // Material AO describes small-scale occlusion; X-Ray hemi carries the
+    // large-scale sky visibility that distinguishes outdoors from interiors.
+    // Keep a conservative floor for meshes that have no authored legacy hemi,
+    // but no longer let full IBL illuminate a PBR surface under a solid roof.
+    static const float IE_PBR_HEMI_VISIBILITY_FLOOR = 0.20f;
+
+    float skyVisibility =
+        lerp(
+            IE_PBR_HEMI_VISIBILITY_FLOOR,
+            1.0f,
+            saturate(h)
+        );
+
     float gbuffer_hemi =
         saturate(
-            S.ao
+            S.ao * skyVisibility
         );
 
     float gbuffer_material =
