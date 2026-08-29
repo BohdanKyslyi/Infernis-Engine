@@ -68,7 +68,7 @@ static const float IE_PBR_SUN_RADIANCE_SCALE = 0.25f;
 
 // Stage 2.19 directional-pass diagnostic. Production = 0,
 // near = red, far = blue, fullscreen/luminance = yellow.
-#define IE_PBR_SUN_PASS_MODE 1
+#define IE_PBR_SUN_PASS_MODE 0
 
 float4 plight_infinity_pbr(
     gbuffer_data gbd,
