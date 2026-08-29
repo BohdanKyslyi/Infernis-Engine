@@ -102,7 +102,7 @@ else
  if (gbd.pbr > 0.5f)
  {
      float3 pbrTransport =
-         ie_pbr_prepare_radiance(Ldynamic_color.rgb) *
+         ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
          light.rgb *
          ie_pbr_prepare_light_factor(s * lightmap.rgb);
 

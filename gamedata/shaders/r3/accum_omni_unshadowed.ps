@@ -64,7 +64,7 @@ else
  {
      return blendp(
          float4(
-             ie_pbr_prepare_radiance(Ldynamic_color.rgb) * light.rgb,
+             ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) * light.rgb,
              0.0f
          ),
          tc

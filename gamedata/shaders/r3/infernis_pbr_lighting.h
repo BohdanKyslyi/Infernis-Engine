@@ -44,8 +44,15 @@ static const float IE_PBR_SPECULAR_AA_MAX_VARIANCE = 0.10f;
 // Infernis PBR Stage 2.6: private gamma-to-linear transport.
 //
 // USE_GAMMA_22 is disabled in the classic shader pack. Enabling it globally
-// would also alter every legacy material, so PBR owns its conversion here.
-// This mirrors IX-Ray's PushGamma(x) convention without touching legacy.
+// would also alter every legacy material, so sampled PBR colors own their
+// conversion here without touching legacy materials.
+//
+// Infernis PBR Stage 2.16: separate color and lighting domains.
+// Diffuse albedo and the existing environment maps keep their established
+// gamma decode. Ldynamic_color is already an HDR light value and must preserve
+// values above 1.0; pow(value, 2.2) can otherwise amplify 2.0 into 4.59 and
+// 4.0 into 21.1 before the classic FP16 accumulator. Shadow, attenuation, and
+// lightmap modulation are linear visibility factors and must not be decoded.
 // ------------------------------------------------------------
 
 static const float IE_PBR_GAMMA = 2.2f;
@@ -65,19 +72,30 @@ float3 ie_pbr_prepare_albedo(float3 albedo)
     return ie_pbr_to_linear(albedo);
 }
 
+// Environment cubemaps keep the Stage 2.9 transport until their sampler color
+// space is validated independently.
 float3 ie_pbr_prepare_radiance(float3 radiance)
 {
     return ie_pbr_to_linear(radiance);
 }
 
+// Dynamic sun/local colors already represent radiance and may be HDR.
+float3 ie_pbr_prepare_dynamic_radiance(float3 radiance)
+{
+    return max(
+        radiance,
+        float3(0.0f, 0.0f, 0.0f)
+    );
+}
+
 float3 ie_pbr_prepare_light_factor(float3 factor)
 {
-    return ie_pbr_to_linear(saturate(factor));
+    return saturate(factor);
 }
 
 float ie_pbr_prepare_light_factor(float factor)
 {
-    return ie_pbr_to_linear(saturate(factor));
+    return saturate(factor);
 }
 
 
