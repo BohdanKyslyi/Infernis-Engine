@@ -74,15 +74,20 @@ else
 //	float 	s 	= dot	( s_sum, 1.h/4.h);
 	float 	s 	= ((s_sum.x+s_sum.y)+(s_sum.z+s_sum.w))*(1.h/4.h);
 
-	float4 pbrLightColor = Ldynamic_color;
+	// Infernis PBR Stage 2.6: transport both sun radiance
+	// and the filtered shadow factor in linear light.
 	if (gbd.pbr > 0.5f)
 	{
-	    pbrLightColor.rgb =
-	        ie_pbr_prepare_radiance(Ldynamic_color.rgb);
+	    float3 pbrTransport =
+	        ie_pbr_prepare_radiance(Ldynamic_color.rgb) *
+	        light.rgb *
+	        ie_pbr_prepare_light_factor(s);
+
+	    return float4(pbrTransport, 0.0f);
 	}
 
 	return
-	    pbrLightColor *
+	    Ldynamic_color *
 	    light *
 	    s;
 }

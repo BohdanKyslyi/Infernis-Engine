@@ -58,5 +58,18 @@ else
             rsqr
         );
 }
+ // Infernis PBR Stage 2.6: local radiance is converted
+ // without changing the legacy omni-light path.
+ if (gbd.pbr > 0.5f)
+ {
+     return blendp(
+         float4(
+             ie_pbr_prepare_radiance(Ldynamic_color.rgb) * light.rgb,
+             0.0f
+         ),
+         tc
+     );
+ }
+
  return blendp( Ldynamic_color * light, tc);
 }

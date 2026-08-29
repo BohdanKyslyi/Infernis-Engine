@@ -147,9 +147,11 @@ if (gbd.pbr > 0.5f)
 
     // Temporary simple indirect diffuse.
     // Proper IBL comes later.
+    // Infernis PBR Stage 2.6: the temporary ambient term
+    // uses the same linear-light convention as direct PBR lighting.
     float3 ambientDiffuse =
-        L_ambient.rgb *
-        D.rgb *
+        ie_pbr_prepare_radiance(L_ambient.rgb) *
+        ie_pbr_prepare_albedo(D.rgb) *
         (1.0f - gbd.metallic);
 
     // gbd.hemi already includes texture AO.

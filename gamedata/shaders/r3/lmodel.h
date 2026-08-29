@@ -110,11 +110,15 @@ float4 plight_local_pbr(
             L2P
         );
 
-    // Preserve original X-Ray attenuation.
+    // Infernis PBR Stage 2.6:
+    // keep X-Ray's attenuation curve, but transport the visibility factor
+    // in the same linear-light domain as the PBR radiance.
     float att =
-        saturate(
-            1.0f -
-            rsqr * light_range_rsq
+        ie_pbr_prepare_light_factor(
+            saturate(
+                1.0f -
+                rsqr * light_range_rsq
+            )
         );
 
     float3 V =

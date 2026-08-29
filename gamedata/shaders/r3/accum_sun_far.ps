@@ -95,15 +95,23 @@ else
 	s			= lerp( s, 0.333h, f*f );
 #endif
 
-	float4 pbrLightColor = Ldynamic_color;
+	// Infernis PBR Stage 2.6: sun radiance and shadow are
+	// converted only for the PBR branch.
 	if (gbd.pbr > 0.5f)
 	{
-	    pbrLightColor.rgb =
-	        ie_pbr_prepare_radiance(Ldynamic_color.rgb);
+	    float3 pbrTransport =
+	        ie_pbr_prepare_radiance(Ldynamic_color.rgb) *
+	        light.rgb *
+	        ie_pbr_prepare_light_factor(s);
+
+	    return blend(
+	        float4(pbrTransport, 0.0f),
+	        I.Tex0
+	    );
 	}
 
 	return blend(
-	    pbrLightColor * light * s,
+	    Ldynamic_color * light * s,
 	    I.Tex0
 	);
 }

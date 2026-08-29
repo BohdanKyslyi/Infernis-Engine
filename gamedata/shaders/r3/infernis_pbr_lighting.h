@@ -17,33 +17,43 @@ static const float IE_PBR_MIN_ROUGHNESS = 0.045f;
 
 
 // ------------------------------------------------------------
-// Prepare albedo using the same gamma convention as
-// the rest of the old R3/R4 shader pack.
+// Infernis PBR Stage 2.6: private gamma-to-linear transport.
+//
+// USE_GAMMA_22 is disabled in the classic shader pack. Enabling it globally
+// would also alter every legacy material, so PBR owns its conversion here.
+// This mirrors IX-Ray's PushGamma(x) convention without touching legacy.
 // ------------------------------------------------------------
+
+static const float IE_PBR_GAMMA = 2.2f;
+
+float3 ie_pbr_to_linear(float3 value)
+{
+    return pow(abs(value), IE_PBR_GAMMA);
+}
+
+float ie_pbr_to_linear(float value)
+{
+    return pow(abs(value), IE_PBR_GAMMA);
+}
 
 float3 ie_pbr_prepare_albedo(float3 albedo)
 {
-#ifdef USE_GAMMA_22
-    return albedo * albedo;
-#else
-    return albedo;
-#endif
+    return ie_pbr_to_linear(albedo);
 }
-
-
-// ------------------------------------------------------------
-// Prepare dynamic-light radiance for the PBR path.
-// Keep the old shader pack's fast gamma convention.
-// Legacy X-Ray lighting is intentionally untouched.
-// ------------------------------------------------------------
 
 float3 ie_pbr_prepare_radiance(float3 radiance)
 {
-#ifdef USE_GAMMA_22
-    return radiance * radiance;
-#else
-    return radiance;
-#endif
+    return ie_pbr_to_linear(radiance);
+}
+
+float3 ie_pbr_prepare_light_factor(float3 factor)
+{
+    return ie_pbr_to_linear(saturate(factor));
+}
+
+float ie_pbr_prepare_light_factor(float factor)
+{
+    return ie_pbr_to_linear(saturate(factor));
 }
 
 

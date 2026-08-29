@@ -97,5 +97,20 @@ else
  lightmap = s_lmap.Sample( smp_rtlinear, PS.xy / PS.w ); //
  #endif
 
+ // Infernis PBR Stage 2.6: radiance and all local-light
+ // modulation are converted only for PBR pixels.
+ if (gbd.pbr > 0.5f)
+ {
+     float3 pbrTransport =
+         ie_pbr_prepare_radiance(Ldynamic_color.rgb) *
+         light.rgb *
+         ie_pbr_prepare_light_factor(s * lightmap.rgb);
+
+     return blendp(
+         float4(pbrTransport, 0.0f),
+         I.tc
+     );
+ }
+
  return blendp ( Ldynamic_color * light * s * lightmap, I.tc );
 }
