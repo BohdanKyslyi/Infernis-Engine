@@ -33,6 +33,12 @@ void CBlender_accum_point::Compile(CBlender_Compile& C) {
         // C.r_Sampler_rtf		("s_accumulator",	r2_RT_accum		);
         C.r_dx10Texture("s_position", r2_RT_P);
         C.r_dx10Texture("s_normal", r2_RT_N);
+
+        // Infernis Engine PBR:
+        // Albedo RGB + Roughness A for deferred PBR lighting.
+        C.r_dx10Texture("s_diffuse", r2_RT_albedo);
+
+
         C.r_dx10Texture("s_material", r2_material);
         C.r_dx10Texture("s_lmap", C.L_textures[0]);
         C.r_dx10Texture("s_accumulator", r2_RT_accum);

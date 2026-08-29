@@ -54,20 +54,24 @@ f_deffer main(p_bumped I)
 
 #ifdef USE_PBR
 
-    // AO affects hemisphere / indirect lighting.
-    float gbuffer_hemi =
-        saturate(h * S.ao);
+// =========================================================
+// TEMP: neutral dielectric material test
+// =========================================================
 
-    // Encoded PBR marker + Metallic + Hemi*AO.
-    float gbuffer_material =
-        gbuf_pack_pbr(
-            gbuffer_hemi,
-            S.metallic
-        );
+// Ignore texture AO for one test.
+float gbuffer_hemi =
+    saturate(h);
 
-    // Diffuse RT alpha becomes Roughness.
-    float gbuffer_surface =
-        saturate(S.roughness);
+// Force NON-metal.
+float gbuffer_material =
+    gbuf_pack_pbr(
+        gbuffer_hemi,
+        0.0f
+    );
+
+// Force fairly rough surface.
+float gbuffer_surface =
+    0.70f;
 
 #else
 

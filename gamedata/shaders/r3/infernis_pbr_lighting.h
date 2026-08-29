@@ -151,13 +151,6 @@ float3 ie_pbr_direct_brdf(
 {
     metallic = saturate(metallic);
 
-// ============================================================
-// TEMPORARY PBR SANITY TEST
-// ============================================================
-
-    metallic = 0.0f;
-    roughness = 0.5f;
-
     roughness =
         clamp(
             roughness,
@@ -186,7 +179,14 @@ float3 ie_pbr_direct_brdf(
             0.0f
         );
     }
+    // ============================================================
+// TEMP: pure Lambert-like albedo test
+// No GGX, no Fresnel, no Metallic.
+// ============================================================
 
+    return
+        albedo *
+        NdotL;
     float3 H =
         normalize(L + V);
 
