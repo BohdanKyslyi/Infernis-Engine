@@ -51,12 +51,12 @@ float4 plight_local( float m, float3 pnt, float3 normal, float3 light_position, 
 // Infernis Engine PBR directional light
 // ============================================================
 
-// Infernis PBR Stage 2.14:
-// X-Ray's directional-light color is authored for the legacy material LUT and
-// saturates a complete linear PBR BRDF. Calibrate the complete sun response
-// here, after BRDF evaluation, so diffuse and specular retain their ratio.
-// Local lights and ambient IBL use their original independent scales.
-static const float IE_PBR_SUN_RADIANCE_SCALE = 0.25f;
+// Infernis PBR Stage 2.27:
+// X-Ray's sun is authored around the legacy material LUT. Bridge the normalized
+// Lambert lobe back to those diffuse units, but keep the independently proven
+// GGX limit that prevents low-roughness metals from becoming white.
+static const float IE_PBR_SUN_DIFFUSE_SCALE = 3.14159265f;
+static const float IE_PBR_SUN_SPECULAR_SCALE = 0.25f;
 
 // Infernis PBR Stage 2.24:
 // X-Ray local-light colors are calibrated around the legacy material LUT.
@@ -120,17 +120,25 @@ float4 plight_infinity_pbr(
     );
 
 #if IE_PBR_SUN_LOBE_MODE == 1
-    float3 result = diffuseLobe;
+    float3 result =
+        diffuseLobe *
+        IE_PBR_SUN_DIFFUSE_SCALE;
 #elif IE_PBR_SUN_LOBE_MODE == 2
-    float3 result = specularLobe;
+    float3 result =
+        specularLobe *
+        IE_PBR_SUN_SPECULAR_SCALE;
 #else
-    float3 result = diffuseLobe + specularLobe;
+    float3 result =
+        diffuseLobe *
+        IE_PBR_SUN_DIFFUSE_SCALE +
+        specularLobe *
+        IE_PBR_SUN_SPECULAR_SCALE;
 #endif
 
     // PBR direct lighting is entirely RGB.
     // Old scalar specular accumulator is unused.
     return float4(
-        result * IE_PBR_SUN_RADIANCE_SCALE,
+        result,
         0.0f
     );
 }
