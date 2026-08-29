@@ -32,6 +32,22 @@ float3 ie_pbr_prepare_albedo(float3 albedo)
 
 
 // ------------------------------------------------------------
+// Prepare dynamic-light radiance for the PBR path.
+// Keep the old shader pack's fast gamma convention.
+// Legacy X-Ray lighting is intentionally untouched.
+// ------------------------------------------------------------
+
+float3 ie_pbr_prepare_radiance(float3 radiance)
+{
+#ifdef USE_GAMMA_22
+    return radiance * radiance;
+#else
+    return radiance;
+#endif
+}
+
+
+// ------------------------------------------------------------
 // GGX / Trowbridge-Reitz normal distribution
 // ------------------------------------------------------------
 

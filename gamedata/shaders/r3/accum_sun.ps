@@ -74,5 +74,15 @@ else
 //	float 	s 	= dot	( s_sum, 1.h/4.h);
 	float 	s 	= ((s_sum.x+s_sum.y)+(s_sum.z+s_sum.w))*(1.h/4.h);
 
-	return 		Ldynamic_color * light * s;
+	float4 pbrLightColor = Ldynamic_color;
+	if (gbd.pbr > 0.5f)
+	{
+	    pbrLightColor.rgb =
+	        ie_pbr_prepare_radiance(Ldynamic_color.rgb);
+	}
+
+	return
+	    pbrLightColor *
+	    light *
+	    s;
 }

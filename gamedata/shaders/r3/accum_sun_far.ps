@@ -95,6 +95,16 @@ else
 	s			= lerp( s, 0.333h, f*f );
 #endif
 
-	return 		blend( Ldynamic_color * light * s, I.Tex0 );
+	float4 pbrLightColor = Ldynamic_color;
+	if (gbd.pbr > 0.5f)
+	{
+	    pbrLightColor.rgb =
+	        ie_pbr_prepare_radiance(Ldynamic_color.rgb);
+	}
+
+	return blend(
+	    pbrLightColor * light * s,
+	    I.Tex0
+	);
 }
 #endif
