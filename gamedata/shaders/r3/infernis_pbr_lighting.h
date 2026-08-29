@@ -256,16 +256,25 @@ float3 ie_pbr_fresnel_schlick(
 // L = surface -> light
 // ------------------------------------------------------------
 
-float3 ie_pbr_direct_brdf(
+// Infernis PBR Stage 2.17:
+// Expose the diffuse and GGX/Fresnel lobes independently. Their sum is
+// algebraically identical to the previous lerp(diffuse, specular, F) result,
+// but the directional-sun path can now isolate either lobe for diagnosis.
+void ie_pbr_direct_brdf_lobes(
     float3 albedo,
     float metallic,
     float roughness,
     float3 N,
     float3 V,
     float3 L,
-    float directSpecularLimit
+    float directSpecularLimit,
+    out float3 diffuseLobe,
+    out float3 specularLobe
 )
 {
+    diffuseLobe = float3(0.0f, 0.0f, 0.0f);
+    specularLobe = float3(0.0f, 0.0f, 0.0f);
+
     metallic = saturate(metallic);
 
     roughness =
@@ -279,12 +288,6 @@ float3 ie_pbr_direct_brdf(
     V = normalize(V);
     L = normalize(L);
 
-    // Infernis PBR Stage 2.12.1:
-    // Keep analytical direct lights on the authored roughness. Stage 2.10/2.11
-    // already bound their extreme peaks; widening that clipped lobe creates a
-    // broad bright plateau in the classic X-Ray accumulator. Geometric
-    // roughness filtering remains enabled for cubemap IBL in combine_1.ps.
-
     float NdotL =
         saturate(dot(N, L));
 
@@ -296,15 +299,9 @@ float3 ie_pbr_direct_brdf(
         NdotV <= IE_PBR_EPSILON
         )
     {
-        return float3(
-            0.0f,
-            0.0f,
-            0.0f
-        );
+        return;
     }
-    // Infernis PBR Stage 2.7:
-    // the temporary Lambert diagnostic is complete. Continue into the
-    // metallic/roughness GGX + Smith + Fresnel-Schlick path below.
+
     float3 H =
         normalize(L + V);
 
@@ -327,15 +324,10 @@ float3 ie_pbr_direct_brdf(
             roughness
         );
 
-    // Standard dielectric F0.
-    // Metals get their F0 from Albedo.
+    // Standard dielectric F0. Metals get their F0 from Albedo.
     float3 F0 =
         lerp(
-            float3(
-                0.04f,
-                0.04f,
-                0.04f
-            ),
+            float3(0.04f, 0.04f, 0.04f),
             albedo,
             metallic
         );
@@ -346,9 +338,6 @@ float3 ie_pbr_direct_brdf(
             HdotV
         );
 
-    // Stage 2.10/2.11: prevent sub-pixel mirror peaks from saturating
-    // the old HDR/tonemap path. The caller selects a directional-sun or local
-    // light ceiling; GGX shape, Fresnel tint, and diffuse remain unchanged.
     float specularValue =
         min(
             D * G,
@@ -358,30 +347,53 @@ float3 ie_pbr_direct_brdf(
             )
         );
 
-    float3 specular =
-        float3(
-            specularValue,
-            specularValue,
-            specularValue
-        );
-
-    // Metals have no normal diffuse component.
     float3 diffuse =
         albedo *
         (1.0f - metallic) *
         IE_PBR_INV_PI;
 
-    // Same basic structure used by IX-Ray:
-    // Diffuse*(1-F) + Specular*F
-    float3 BRDF =
-        lerp(
-            diffuse,
-            specular,
-            F
-        );
+    // diffuse*(1-F) + specular*F, each with the shared cosine term.
+    diffuseLobe =
+        diffuse *
+        (1.0f - F) *
+        NdotL;
 
-    return
-        BRDF * NdotL;
+    specularLobe =
+        float3(
+            specularValue,
+            specularValue,
+            specularValue
+        ) *
+        F *
+        NdotL;
+}
+
+float3 ie_pbr_direct_brdf(
+    float3 albedo,
+    float metallic,
+    float roughness,
+    float3 N,
+    float3 V,
+    float3 L,
+    float directSpecularLimit
+)
+{
+    float3 diffuseLobe;
+    float3 specularLobe;
+
+    ie_pbr_direct_brdf_lobes(
+        albedo,
+        metallic,
+        roughness,
+        N,
+        V,
+        L,
+        directSpecularLimit,
+        diffuseLobe,
+        specularLobe
+    );
+
+    return diffuseLobe + specularLobe;
 }
 
 #endif

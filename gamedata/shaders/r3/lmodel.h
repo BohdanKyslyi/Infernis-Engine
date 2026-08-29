@@ -58,6 +58,10 @@ float4 plight_local( float m, float3 pnt, float3 normal, float3 light_position, 
 // Local lights and ambient IBL use their original independent scales.
 static const float IE_PBR_SUN_RADIANCE_SCALE = 0.25f;
 
+// Stage 2.17 diagnostic selector. Production/full = 0, diffuse-only = 1,
+// specular-only = 2. The companion script changes only this define.
+#define IE_PBR_SUN_LOBE_MODE 0
+
 float4 plight_infinity_pbr(
     gbuffer_data gbd,
     float3 light_direction
@@ -78,16 +82,28 @@ float4 plight_infinity_pbr(
     float3 L =
         -normalize(light_direction);
 
-    float3 result =
-        ie_pbr_direct_brdf(
-            albedo,
-            gbd.metallic,
-            gbd.roughness,
-            gbd.N,
-            V,
-            L,
-            IE_PBR_SUN_SPECULAR_LIMIT
-        );
+    float3 diffuseLobe;
+    float3 specularLobe;
+
+    ie_pbr_direct_brdf_lobes(
+        albedo,
+        gbd.metallic,
+        gbd.roughness,
+        gbd.N,
+        V,
+        L,
+        IE_PBR_SUN_SPECULAR_LIMIT,
+        diffuseLobe,
+        specularLobe
+    );
+
+#if IE_PBR_SUN_LOBE_MODE == 1
+    float3 result = diffuseLobe;
+#elif IE_PBR_SUN_LOBE_MODE == 2
+    float3 result = specularLobe;
+#else
+    float3 result = diffuseLobe + specularLobe;
+#endif
 
     // PBR direct lighting is entirely RGB.
     // Old scalar specular accumulator is unused.
