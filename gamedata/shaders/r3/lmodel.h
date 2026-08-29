@@ -70,6 +70,10 @@ static const float IE_PBR_SUN_RADIANCE_SCALE = 0.25f;
 // near = red, far = blue, fullscreen/luminance = yellow.
 #define IE_PBR_SUN_PASS_MODE 0
 
+// Stage 2.23 local-light route diagnostic. Production = 0,
+// PBR/legacy branch marker = 1.
+#define IE_PBR_LOCAL_ROUTE_MODE 0
+
 float4 plight_infinity_pbr(
     gbuffer_data gbd,
     float3 light_direction

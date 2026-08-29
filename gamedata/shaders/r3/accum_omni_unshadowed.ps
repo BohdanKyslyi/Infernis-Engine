@@ -33,6 +33,17 @@ float4 main ( float4 tc:TEXCOORD0 ) : SV_Target
 
  gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, pos2d, ISAMPLE) );
 
+#if IE_PBR_LOCAL_ROUTE_MODE == 1
+ // Cyan means this unshadowed omni-light pixel reached the PBR branch.
+ if (gbd.pbr > 0.5f)
+ {
+     return blendp(float4(0.0f, 0.30f, 0.30f, 0.0f), tc);
+ }
+
+ // Orange means the same local-light pixel was classified as legacy.
+ return blendp(float4(0.35f, 0.10f, 0.0f, 0.0f), tc);
+#endif
+
  float4 _P = float4( gbd.P,gbd.mtl );
  float4 _N = float4( gbd.N,gbd.hemi );
 

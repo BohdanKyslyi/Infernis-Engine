@@ -42,6 +42,17 @@ float4 main( p_volume I ) : SV_Target
 
  gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, pos2d, ISAMPLE) );
 
+#if IE_PBR_LOCAL_ROUTE_MODE == 1
+ // Cyan means this spotlight/point-light pixel reached the PBR branch.
+ if (gbd.pbr > 0.5f)
+ {
+     return blendp(float4(0.0f, 0.30f, 0.30f, 0.0f), I.tc);
+ }
+
+ // Orange means the same local-light pixel was classified as legacy.
+ return blendp(float4(0.35f, 0.10f, 0.0f, 0.0f), I.tc);
+#endif
+
 #ifdef GBUFFER_OPTIMIZATION
  // Emulate virtual offset
  gbd.P += gbd.N*0.015f;
