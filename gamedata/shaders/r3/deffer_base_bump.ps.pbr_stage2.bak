@@ -54,26 +54,24 @@ f_deffer main(p_bumped I)
 
 #ifdef USE_PBR
 
-    // Real PBR material data.
-    // _bump#.R = Metallic
-    // _bump#.G = Roughness
-    // _bump#.A = AO
+// =========================================================
+// TEMP: neutral dielectric material test
+// =========================================================
 
-    float gbuffer_hemi =
-        saturate(
-            h * S.ao
-        );
+// Ignore texture AO for one test.
+float gbuffer_hemi =
+    saturate(h);
 
-    float gbuffer_material =
-        gbuf_pack_pbr(
-            gbuffer_hemi,
-            S.metallic
-        );
+// Force NON-metal.
+float gbuffer_material =
+    gbuf_pack_pbr(
+        gbuffer_hemi,
+        0.0f
+    );
 
-    float gbuffer_surface =
-        saturate(
-            S.roughness
-        );
+// Force fairly rough surface.
+float gbuffer_surface =
+    0.70f;
 
 #else
 
