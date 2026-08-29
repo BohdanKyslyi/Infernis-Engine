@@ -51,6 +51,13 @@ float4 plight_local( float m, float3 pnt, float3 normal, float3 light_position, 
 // Infernis Engine PBR directional light
 // ============================================================
 
+// Infernis PBR Stage 2.14:
+// X-Ray's directional-light color is authored for the legacy material LUT and
+// saturates a complete linear PBR BRDF. Calibrate the complete sun response
+// here, after BRDF evaluation, so diffuse and specular retain their ratio.
+// Local lights and ambient IBL use their original independent scales.
+static const float IE_PBR_SUN_RADIANCE_SCALE = 0.25f;
+
 float4 plight_infinity_pbr(
     gbuffer_data gbd,
     float3 light_direction
@@ -85,7 +92,7 @@ float4 plight_infinity_pbr(
     // PBR direct lighting is entirely RGB.
     // Old scalar specular accumulator is unused.
     return float4(
-        result,
+        result * IE_PBR_SUN_RADIANCE_SCALE,
         0.0f
     );
 }
