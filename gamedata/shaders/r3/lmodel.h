@@ -62,6 +62,10 @@ static const float IE_PBR_SUN_RADIANCE_SCALE = 0.25f;
 // specular-only = 2. The companion script changes only this define.
 #define IE_PBR_SUN_LOBE_MODE 0
 
+// Stage 2.18 accumulator-route diagnostic. Production = 0,
+// zero PBR sun = 1, PBR/legacy branch marker = 2.
+#define IE_PBR_SUN_ROUTE_MODE 0
+
 float4 plight_infinity_pbr(
     gbuffer_data gbd,
     float3 light_direction

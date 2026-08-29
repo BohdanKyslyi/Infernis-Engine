@@ -103,6 +103,13 @@ else
 	// converted only for the PBR branch.
 	if (gbd.pbr > 0.5f)
 	{
+#if IE_PBR_SUN_ROUTE_MODE == 1
+	    // Prove whether the white contribution belongs to this PBR sun pass.
+	    return float4(0.0f, 0.0f, 0.0f, 0.0f);
+#elif IE_PBR_SUN_ROUTE_MODE == 2
+	    // Magenta means the runtime G-buffer classified this pixel as PBR.
+	    return float4(0.35f, 0.0f, 0.35f, 0.0f);
+#else
 	    float3 pbrTransport =
 	        ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
 	        light.rgb *
@@ -112,11 +119,20 @@ else
 	        float4(pbrTransport, 0.0f),
 	        I.Tex0
 	    );
+#endif
 	}
 
+#if IE_PBR_SUN_ROUTE_MODE == 2
+	// Green means the runtime G-buffer classified this pixel as legacy.
+	return blend(
+	    float4(0.0f, 0.35f, 0.0f, 0.0f),
+	    I.Tex0
+	);
+#else
 	return blend(
 	    Ldynamic_color * light * s,
 	    I.Tex0
 	);
+#endif
 }
 #endif
