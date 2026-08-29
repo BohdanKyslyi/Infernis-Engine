@@ -30,6 +30,11 @@ float4 	main	( p_aa_AA_sun I ) : SV_Target
 {
 	gbuffer_data gbd = gbuffer_load_data( GLD_P(I.tc, pos2d, ISAMPLE) );
 
+#if IE_PBR_SUN_PASS_MODE == 1
+	// Yellow: fullscreen/luminance directional pass.
+	return float4(0.35f, 0.35f, 0.0f, 0.0f);
+#endif
+
 //  float4 _P		= tex2D 	(s_position, 	I.tc); 
 //  float4  _N		= tex2D 	(s_normal,   	I.tc); 
 	float4 	_P	= float4( gbd.P, gbd.mtl );

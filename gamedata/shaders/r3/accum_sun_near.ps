@@ -26,6 +26,11 @@ float4 main ( v2p_TL2uv I  ) : SV_Target
 
 	gbuffer_data gbd = gbuffer_load_data( GLD_P(I.Tex0, I.HPos, ISAMPLE) );
 
+#if IE_PBR_SUN_PASS_MODE == 1
+	// Red: near/middle directional cascade.
+	return float4(0.35f, 0.0f, 0.0f, 0.0f);
+#endif
+
 #ifdef	GBUFFER_OPTIMIZATION
 	//	Emulate virtual offset
 	gbd.P += gbd.N*0.015f;
@@ -50,6 +55,11 @@ float4 main ( v2p_TL2uv I ) : SV_Target
 	//float4	_N	= tex2D( s_normal, tc );
 
 	gbuffer_data gbd = gbuffer_load_data( GLD_P(I.Tex0, I.HPos, ISAMPLE) );
+
+#if IE_PBR_SUN_PASS_MODE == 1
+	// Red: near/middle directional cascade.
+	return float4(0.35f, 0.0f, 0.0f, 0.0f);
+#endif
 
 #ifdef	GBUFFER_OPTIMIZATION
 	//	Emulate virtual offset
