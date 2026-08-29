@@ -261,13 +261,11 @@ float3 ie_pbr_direct_brdf(
     V = normalize(V);
     L = normalize(L);
 
-    // Stage 2.12: use the same authored roughness, widened only where the
-    // screen-space normal field contains unresolved sub-pixel variation.
-    roughness =
-        ie_pbr_filter_roughness(
-            N,
-            roughness
-        );
+    // Infernis PBR Stage 2.12.1:
+    // Keep analytical direct lights on the authored roughness. Stage 2.10/2.11
+    // already bound their extreme peaks; widening that clipped lobe creates a
+    // broad bright plateau in the classic X-Ray accumulator. Geometric
+    // roughness filtering remains enabled for cubemap IBL in combine_1.ps.
 
     float NdotL =
         saturate(dot(N, L));
