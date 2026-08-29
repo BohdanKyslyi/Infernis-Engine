@@ -32,6 +32,13 @@ static const float IE_PBR_INV_PI = 0.31830988618f;
 static const float IE_PBR_LOCAL_SPECULAR_LIMIT = 2.0f;
 static const float IE_PBR_SUN_SPECULAR_LIMIT = 0.25f;
 
+// Infernis PBR Stage 2.12:
+// Screen-space normal variance is converted into an additional squared
+// roughness term. The conservative cap stabilizes sub-pixel bump highlights
+// without turning genuinely smooth metal into a uniformly matte material.
+static const float IE_PBR_SPECULAR_AA_STRENGTH = 0.35f;
+static const float IE_PBR_SPECULAR_AA_MAX_VARIANCE = 0.10f;
+
 
 // ------------------------------------------------------------
 // Infernis PBR Stage 2.6: private gamma-to-linear transport.
@@ -71,6 +78,53 @@ float3 ie_pbr_prepare_light_factor(float3 factor)
 float ie_pbr_prepare_light_factor(float factor)
 {
     return ie_pbr_to_linear(saturate(factor));
+}
+
+
+// ------------------------------------------------------------
+// Infernis PBR Stage 2.12: geometric specular anti-aliasing
+//
+// A normal map can change faster than one screen pixel can represent. GGX then
+// sees many near-mirror microfacets and produces temporal sparkle. Fold the
+// local normal variance into perceptual roughness while keeping the authored
+// texture value as the lower bound.
+// ------------------------------------------------------------
+
+float ie_pbr_filter_roughness(
+    float3 normal,
+    float roughness
+)
+{
+    normal = normalize(normal);
+    roughness =
+        clamp(
+            roughness,
+            IE_PBR_MIN_ROUGHNESS,
+            1.0f
+        );
+
+    float3 normalDx = ddx(normal);
+    float3 normalDy = ddy(normal);
+
+    float normalVariance =
+        dot(normalDx, normalDx) +
+        dot(normalDy, normalDy);
+
+    float kernelRoughness2 =
+        min(
+            normalVariance * IE_PBR_SPECULAR_AA_STRENGTH,
+            IE_PBR_SPECULAR_AA_MAX_VARIANCE
+        );
+
+    return
+        clamp(
+            sqrt(
+                roughness * roughness +
+                kernelRoughness2
+            ),
+            IE_PBR_MIN_ROUGHNESS,
+            1.0f
+        );
 }
 
 
@@ -206,6 +260,14 @@ float3 ie_pbr_direct_brdf(
     N = normalize(N);
     V = normalize(V);
     L = normalize(L);
+
+    // Stage 2.12: use the same authored roughness, widened only where the
+    // screen-space normal field contains unresolved sub-pixel variation.
+    roughness =
+        ie_pbr_filter_roughness(
+            N,
+            roughness
+        );
 
     float NdotL =
         saturate(dot(N, L));

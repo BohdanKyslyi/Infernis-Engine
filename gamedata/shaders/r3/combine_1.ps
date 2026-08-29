@@ -117,6 +117,15 @@ float3 ie_pbr_ambient_ibl(
 
     float3 N = normalize(normalView);
     float3 V = -normalize(pointView);
+
+    // Stage 2.12: match the direct-light roughness filtering so the cubemap
+    // reflection cannot retain sparkle that direct GGX has already removed.
+    roughness =
+        ie_pbr_filter_roughness(
+            N,
+            roughness
+        );
+
     float NdotV = saturate(dot(N, V));
 
     float3 diffuseIrradiance =
