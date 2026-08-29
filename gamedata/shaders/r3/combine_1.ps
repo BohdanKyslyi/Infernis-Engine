@@ -267,19 +267,19 @@ else
  _out o;
  tonemap (o.low, o.high, color, tm_scale ) ;
 
- // Infernis PBR Stage 2.8 diagnostic.
+ // Infernis PBR Stage 2.8.1 diagnostic.
  // R = Metallic, G = Roughness, B = Hemi * texture AO.
- // This return bypasses every lighting pass and tonemapping contribution,
- // proving whether local lights can alter the stored material channels.
+ // Preserve combine_1's inverse-alpha sky blending: alpha must remain
+ // skyblend. Setting it to 1 would discard this RGB and reveal the background.
  if (gbd.pbr > 0.5f)
  {
      o.low = float4(
          saturate(gbd.metallic),
          saturate(gbd.roughness),
          saturate(gbd.hemi),
-         1.0f
+         skyblend
      );
-     o.high = float4(0.0f, 0.0f, 0.0f, 0.0f);
+     o.high = float4(0.0f, 0.0f, 0.0f, skyblend);
      return o;
  }
 
