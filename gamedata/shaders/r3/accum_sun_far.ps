@@ -13,7 +13,11 @@ float4 main( v2p_TL2uv I  ) : SV_Target
 {
 //  float4 	_P	= tex2D 	(s_position, 	tc);
 
-	gbuffer_data gbd = gbuffer_load_data( GLD_P(I.Tex0, I.HPos, ISAMPLE) );
+	// Infernis PBR Stage 2.20: derive the G-buffer UV from the exact raster
+	// pixel. Interpolated light-volume UVs can disagree with SV_Position at
+	// cascade edges and make position.w (the PBR marker) come from a neighbour.
+	float2 gbufferTC = I.HPos.xy / pos_decompression_params2.xy;
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.HPos, ISAMPLE) );
 
 #if IE_PBR_SUN_PASS_MODE == 1
 	// Blue: far directional cascade.
@@ -44,7 +48,11 @@ float4 main ( v2p_TL2uv I ) : SV_Target
 //  float4 _P		= tex2D 	(s_position, 	tc);
 //  float4  _N		= tex2D 	(s_normal,   	tc);
 
-	gbuffer_data gbd = gbuffer_load_data( GLD_P(I.Tex0, I.HPos, ISAMPLE) );
+	// Infernis PBR Stage 2.20: derive the G-buffer UV from the exact raster
+	// pixel. Interpolated light-volume UVs can disagree with SV_Position at
+	// cascade edges and make position.w (the PBR marker) come from a neighbour.
+	float2 gbufferTC = I.HPos.xy / pos_decompression_params2.xy;
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.HPos, ISAMPLE) );
 
 #if IE_PBR_SUN_PASS_MODE == 1
 	// Blue: far directional cascade.
