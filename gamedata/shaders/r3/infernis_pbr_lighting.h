@@ -24,7 +24,13 @@ static const float IE_PBR_INV_PI = 0.31830988618f;
 // A near-zero roughness GGX lobe can exceed the useful range of the classic
 // X-Ray FP16 accumulator by several orders of magnitude. Preserve the lobe
 // shape, but reject only its extreme analytical peak before Fresnel tinting.
-static const float IE_PBR_DIRECT_SPECULAR_LIMIT = 2.0f;
+//
+// Infernis PBR Stage 2.11:
+// Directional sun and local lights use different radiance scales in X-Ray.
+// Keep the proven local-light response, but calibrate the sun independently so
+// a low-roughness metal cannot saturate the complete weapon into white.
+static const float IE_PBR_LOCAL_SPECULAR_LIMIT = 2.0f;
+static const float IE_PBR_SUN_SPECULAR_LIMIT = 0.25f;
 
 
 // ------------------------------------------------------------
@@ -184,7 +190,8 @@ float3 ie_pbr_direct_brdf(
     float roughness,
     float3 N,
     float3 V,
-    float3 L
+    float3 L,
+    float directSpecularLimit
 )
 {
     metallic = saturate(metallic);
@@ -261,13 +268,16 @@ float3 ie_pbr_direct_brdf(
             HdotV
         );
 
-    // Stage 2.10: prevent sub-pixel mirror peaks from saturating the
-    // old HDR/tonemap path into an opaque white patch. Normal GGX values pass
-    // through unchanged; only the out-of-range peak is clipped.
+    // Stage 2.10/2.11: prevent sub-pixel mirror peaks from saturating
+    // the old HDR/tonemap path. The caller selects a directional-sun or local
+    // light ceiling; GGX shape, Fresnel tint, and diffuse remain unchanged.
     float specularValue =
         min(
             D * G,
-            IE_PBR_DIRECT_SPECULAR_LIMIT
+            max(
+                directSpecularLimit,
+                IE_PBR_EPSILON
+            )
         );
 
     float3 specular =

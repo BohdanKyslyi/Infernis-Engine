@@ -78,7 +78,8 @@ float4 plight_infinity_pbr(
             gbd.roughness,
             gbd.N,
             V,
-            L
+            L,
+            IE_PBR_SUN_SPECULAR_LIMIT
         );
 
     // PBR direct lighting is entirely RGB.
@@ -139,7 +140,8 @@ float4 plight_local_pbr(
             gbd.roughness,
             gbd.N,
             V,
-            L
+            L,
+            IE_PBR_LOCAL_SPECULAR_LIMIT
         );
 
     return float4(
