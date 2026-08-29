@@ -58,6 +58,12 @@ float4 plight_local( float m, float3 pnt, float3 normal, float3 light_position, 
 // Local lights and ambient IBL use their original independent scales.
 static const float IE_PBR_SUN_RADIANCE_SCALE = 0.25f;
 
+// Infernis PBR Stage 2.24:
+// X-Ray local-light colors are calibrated around the legacy material LUT.
+// A normalized Lambert lobe contributes 1/PI less diffuse energy, so bridge
+// those units once here. This affects only PBR point/spot lights.
+static const float IE_PBR_LOCAL_RADIANCE_SCALE = 3.14159265f;
+
 // Stage 2.17 diagnostic selector. Production/full = 0, diffuse-only = 1,
 // specular-only = 2. The companion script changes only this define.
 #define IE_PBR_SUN_LOBE_MODE 0
@@ -73,6 +79,10 @@ static const float IE_PBR_SUN_RADIANCE_SCALE = 0.25f;
 // Stage 2.23 local-light route diagnostic. Production = 0,
 // PBR/legacy branch marker = 1.
 #define IE_PBR_LOCAL_ROUTE_MODE 0
+
+// Stage 2.24 local-light lobe selector. Production/full = 0,
+// diffuse-only = 1, specular-only = 2, cosine/albedo probe = 3.
+#define IE_PBR_LOCAL_LOBE_MODE 0
 
 float4 plight_infinity_pbr(
     gbuffer_data gbd,
@@ -168,19 +178,43 @@ float4 plight_local_pbr(
             gbd.C
         );
 
-    float3 result =
-        ie_pbr_direct_brdf(
-            albedo,
-            gbd.metallic,
-            gbd.roughness,
-            gbd.N,
-            V,
-            L,
-            IE_PBR_LOCAL_SPECULAR_LIMIT
+    float3 diffuseLobe;
+    float3 specularLobe;
+
+    ie_pbr_direct_brdf_lobes(
+        albedo,
+        gbd.metallic,
+        gbd.roughness,
+        gbd.N,
+        V,
+        L,
+        IE_PBR_LOCAL_SPECULAR_LIMIT,
+        diffuseLobe,
+        specularLobe
+    );
+
+#if IE_PBR_LOCAL_LOBE_MODE == 1
+    float3 result = diffuseLobe;
+#elif IE_PBR_LOCAL_LOBE_MODE == 2
+    float3 result = specularLobe;
+#elif IE_PBR_LOCAL_LOBE_MODE == 3
+    // Independent probe for position, normal, and light direction.
+    float NdotL =
+        saturate(
+            dot(
+                normalize(gbd.N),
+                L
+            )
         );
+    float3 result = albedo * NdotL;
+#else
+    float3 result = diffuseLobe + specularLobe;
+#endif
 
     return float4(
-        result * att,
+        result *
+        att *
+        IE_PBR_LOCAL_RADIANCE_SCALE,
         0.0f
     );
 }
