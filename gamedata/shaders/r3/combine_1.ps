@@ -9,6 +9,164 @@
 
 uniform Texture2D s_half_depth;
 
+
+// ============================================================
+// Infernis PBR Stage 2.9 - ambient image-based lighting
+//
+// The combine pass already receives env_s0/env_s1 and sky_s0/sky_s1 from
+// blender_combine.cpp. Diffuse irradiance uses the environment cubemaps;
+// roughness-filtered specular irradiance uses the sky cubemaps.
+// ============================================================
+
+static const float IE_PBR_IBL_MAX_LOD = 8.0f;
+
+float2 ie_pbr_environment_brdf(
+    float NdotV,
+    float roughness
+)
+{
+    // IX-Ray's fitted split-sum environment BRDF approximation.
+    NdotV = min(saturate(NdotV), 0.998f);
+    roughness = saturate(roughness);
+
+    float nsqr = NdotV * NdotV;
+    float rsqr = roughness * roughness;
+
+    float4 fac =
+        float4(0.0187f, 1.0133f, 1.0000f, 1.0000f) +
+        float4(1.9496f, -2.4717f, -0.0333f, 2.0508f) * NdotV +
+        float4(1.2265f, -1.2172f, -1.3097f, 0.2342f) * roughness +
+        float4(-7.6907f, 3.4300f, 0.5972f, -26.9406f) * NdotV * roughness +
+        float4(18.3314f, 1.4794f, 19.3537f, 11.1429f) * nsqr +
+        float4(-0.2894f, 0.5564f, 1.5052f, 7.0828f) * rsqr +
+        float4(-19.3056f, -2.2456f, -28.2302f, 18.5470f) * nsqr * roughness +
+        float4(7.0144f, -1.8934f, 1.3307f, 50.6469f) * NdotV * rsqr +
+        float4(1.5728f, 1.3618f, 15.2939f, -63.3557f) * nsqr * rsqr;
+
+    return saturate(fac.xy / fac.zw);
+}
+
+float3 ie_pbr_diffuse_irradiance(float3 normalView)
+{
+    float3 normalWorld =
+        normalize(mul(m_v2w, normalize(normalView)));
+
+    float3 env0 =
+        env_s0.SampleLevel(smp_rtlinear, normalWorld, 0.0f).rgb;
+
+    float3 env1 =
+        env_s1.SampleLevel(smp_rtlinear, normalWorld, 0.0f).rgb;
+
+    float3 irradiance =
+        env_color.xyz *
+        lerp(env0, env1, env_color.w);
+
+    return ie_pbr_prepare_radiance(irradiance);
+}
+
+float3 ie_pbr_specular_irradiance(
+    float3 pointView,
+    float3 normalView,
+    float roughness
+)
+{
+    float3 viewRay = normalize(pointView);
+    float3 reflectionView =
+        reflect(viewRay, normalize(normalView));
+
+    float3 reflectionWorld =
+        normalize(mul(m_v2w, reflectionView));
+
+    float lod =
+        clamp(
+            roughness,
+            IE_PBR_MIN_ROUGHNESS,
+            1.0f
+        ) * IE_PBR_IBL_MAX_LOD;
+
+    float3 sky0 =
+        sky_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
+
+    float3 sky1 =
+        sky_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
+
+    float3 irradiance =
+        env_color.xyz *
+        lerp(sky0, sky1, env_color.w);
+
+    return ie_pbr_prepare_radiance(irradiance);
+}
+
+float3 ie_pbr_ambient_ibl(
+    float3 pointView,
+    float3 normalView,
+    float3 albedo,
+    float metallic,
+    float roughness,
+    float hemiAo,
+    float screenOcclusion
+)
+{
+    metallic = saturate(metallic);
+    roughness =
+        clamp(
+            roughness,
+            IE_PBR_MIN_ROUGHNESS,
+            1.0f
+        );
+
+    float3 N = normalize(normalView);
+    float3 V = -normalize(pointView);
+    float NdotV = saturate(dot(N, V));
+
+    float3 diffuseIrradiance =
+        ie_pbr_diffuse_irradiance(N) +
+        ie_pbr_prepare_radiance(L_ambient.rgb);
+
+    float3 specularIrradiance =
+        ie_pbr_specular_irradiance(
+            pointView,
+            N,
+            roughness
+        );
+
+    float3 diffuse =
+        diffuseIrradiance *
+        albedo *
+        (1.0f - metallic);
+
+    float3 F0 =
+        lerp(
+            float3(0.04f, 0.04f, 0.04f),
+            albedo,
+            metallic
+        );
+
+    float2 envBrdf =
+        ie_pbr_environment_brdf(
+            NdotV,
+            roughness
+        );
+
+    float3 environmentFresnel =
+        saturate(
+            F0 * envBrdf.x +
+            envBrdf.y
+        );
+
+    float3 ambient =
+        lerp(
+            diffuse,
+            specularIrradiance,
+            environmentFresnel
+        );
+
+    return
+        ambient *
+        saturate(hemiAo) *
+        saturate(screenOcclusion);
+}
+
 //#include "ssao_blur.ps"
 
 #ifdef HDAO
@@ -140,28 +298,24 @@ float3 color =
 
 if (gbd.pbr > 0.5f)
 {
-    // Direct lighting in accumulator is already
-    // a complete RGB PBR BRDF.
-    float3 direct =
-        L.rgb;
+    // Direct lighting in the accumulator is already a complete RGB BRDF.
+    float3 direct = L.rgb;
 
-    // Temporary simple indirect diffuse.
-    // Proper IBL comes later.
-    // Infernis PBR Stage 2.6: the temporary ambient term
-    // uses the same linear-light convention as direct PBR lighting.
-    float3 ambientDiffuse =
-        ie_pbr_prepare_radiance(L_ambient.rgb) *
-        ie_pbr_prepare_albedo(D.rgb) *
-        (1.0f - gbd.metallic);
+    // Infernis PBR Stage 2.9: diffuse + roughness-filtered specular IBL.
+    // Metallic surfaces receive their indirect color from reflected sky
+    // radiance instead of the removed Lambert fallback.
+    float3 ambient =
+        ie_pbr_ambient_ibl(
+            P.xyz,
+            N.xyz,
+            ie_pbr_prepare_albedo(D.rgb),
+            gbd.metallic,
+            gbd.roughness,
+            gbd.hemi,
+            occ
+        );
 
-    // gbd.hemi already includes texture AO.
-    ambientDiffuse *=
-        saturate(gbd.hemi) *
-        occ;
-
-    color =
-        direct +
-        ambientDiffuse;
+    color = direct + ambient;
 }
 
 
@@ -266,23 +420,6 @@ else
  //color = gbd.N;
  _out o;
  tonemap (o.low, o.high, color, tm_scale ) ;
-
- // Infernis PBR Stage 2.8.1 diagnostic.
- // R = Metallic, G = Roughness, B = Hemi * texture AO.
- // Preserve combine_1's inverse-alpha sky blending: alpha must remain
- // skyblend. Setting it to 1 would discard this RGB and reveal the background.
- if (gbd.pbr > 0.5f)
- {
-     o.low = float4(
-         saturate(gbd.metallic),
-         saturate(gbd.roughness),
-         saturate(gbd.hemi),
-         skyblend
-     );
-     o.high = float4(0.0f, 0.0f, 0.0f, skyblend);
-     return o;
- }
-
  o.low.a = skyblend ;
  o.high.a = skyblend ;
 // o.low = skyblend;

@@ -13,7 +13,12 @@
 // ============================================================
 
 static const float IE_PBR_EPSILON = 0.00001f;
-static const float IE_PBR_MIN_ROUGHNESS = 0.045f;
+
+// Infernis PBR Stage 2.9:
+// keep analytical highlights finite for the classic X-Ray HDR pipeline and
+// use physically normalized Lambert/GGX lobes.
+static const float IE_PBR_MIN_ROUGHNESS = 0.08f;
+static const float IE_PBR_INV_PI = 0.31830988618f;
 
 
 // ------------------------------------------------------------
@@ -86,6 +91,7 @@ float ie_pbr_distribution_ggx(
 
     return
         alpha2 *
+        IE_PBR_INV_PI *
         rcp(
             max(
                 divider * divider,
@@ -262,7 +268,8 @@ float3 ie_pbr_direct_brdf(
     // Metals have no normal diffuse component.
     float3 diffuse =
         albedo *
-        (1.0f - metallic);
+        (1.0f - metallic) *
+        IE_PBR_INV_PI;
 
     // Same basic structure used by IX-Ray:
     // Diffuse*(1-F) + Specular*F
