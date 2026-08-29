@@ -20,6 +20,12 @@ static const float IE_PBR_EPSILON = 0.00001f;
 static const float IE_PBR_MIN_ROUGHNESS = 0.08f;
 static const float IE_PBR_INV_PI = 0.31830988618f;
 
+// Infernis PBR Stage 2.10:
+// A near-zero roughness GGX lobe can exceed the useful range of the classic
+// X-Ray FP16 accumulator by several orders of magnitude. Preserve the lobe
+// shape, but reject only its extreme analytical peak before Fresnel tinting.
+static const float IE_PBR_DIRECT_SPECULAR_LIMIT = 2.0f;
+
 
 // ------------------------------------------------------------
 // Infernis PBR Stage 2.6: private gamma-to-linear transport.
@@ -255,8 +261,14 @@ float3 ie_pbr_direct_brdf(
             HdotV
         );
 
+    // Stage 2.10: prevent sub-pixel mirror peaks from saturating the
+    // old HDR/tonemap path into an opaque white patch. Normal GGX values pass
+    // through unchanged; only the out-of-range peak is clipped.
     float specularValue =
-        D * G;
+        min(
+            D * G,
+            IE_PBR_DIRECT_SPECULAR_LIMIT
+        );
 
     float3 specular =
         float3(
