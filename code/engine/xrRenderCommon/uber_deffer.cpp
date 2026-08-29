@@ -4,6 +4,13 @@ void fix_texture_name(LPSTR fn);
 
 #include "dxRenderDeviceRender.h"
 
+#ifdef USE_DX11
+static bool IsPBRDiagnosticTexture(LPCSTR name) {
+    return name &&
+        (strstr(name, "wpn_ak74") || strstr(name, "grnd_rocks_01"));
+}
+#endif
+
 void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOOL _aref,
                  LPCSTR _detail_replace, bool DO_NOT_FINISH) {
     // Uber-parse
@@ -100,6 +107,18 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
     if (usePBR) {
         xr_strcat(vs, "(USE_PBR)");
         xr_strcat(ps, "(USE_PBR)");
+    }
+#endif
+
+#ifdef USE_DX11
+    if (IsPBRDiagnosticTexture(fname)) {
+        const shared_str bumpName = DEV->m_textures_description.GetBumpName(fname);
+        LPCSTR resolvedBump = bumpName.size() ? bumpName.c_str() : "<none>";
+
+        Msg("[IE PBR DIAG][UBER] source=%s lookup=%s use_pbr=%s bump_exists=%s "
+            "bump=%s hq=%s vs=%s ps=%s",
+            C.L_textures[0].c_str(), fname, usePBR ? "YES" : "NO",
+            bump ? "YES" : "NO", resolvedBump, hq ? "YES" : "NO", vs, ps);
     }
 #endif
 

@@ -21,6 +21,11 @@ void fix_texture_thm_name(LPSTR fn) {
         *_ext = 0;
 }
 
+static bool IsPBRDiagnosticTexture(LPCSTR name) {
+    return name &&
+        (strstr(name, "wpn_ak74") || strstr(name, "grnd_rocks_01"));
+}
+
 void CTextureDescrMngr::LoadTHM(LPCSTR initial) {
     FS_FileSet flist;
     FS.file_list(flist, initial, FS_ListFiles, "*.thm");
@@ -43,6 +48,22 @@ void CTextureDescrMngr::LoadTHM(LPCSTR initial) {
         tp.Clear();
         tp.Load(*F);
         FS.r_close(F);
+
+        if (IsPBRDiagnosticTexture(fn)) {
+            const bool descriptorType =
+                STextureParams::ttImage == tp.type ||
+                STextureParams::ttTerrain == tp.type ||
+                STextureParams::ttNormalMap == tp.type;
+            LPCSTR bumpName = tp.bump_name.size() ? tp.bump_name.c_str() : "<none>";
+
+            Msg("[IE PBR DIAG][THM] root=%s name=%s type=%u accepted=%s material=%u "
+                "weight=%.3f pbr_material=%s bump_mode=%u bump=%s",
+                initial, fn, (u32)tp.type, descriptorType ? "YES" : "NO",
+                (u32)tp.material, tp.material_weight,
+                tp.material == STextureParams::tmPBR_Material ? "YES" : "NO",
+                (u32)tp.bump_mode, bumpName);
+        }
+
         if (STextureParams::ttImage == tp.type || STextureParams::ttTerrain == tp.type ||
             STextureParams::ttNormalMap == tp.type) {
             texture_desc& desc = m_texture_details[fn];
