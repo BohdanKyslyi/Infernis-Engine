@@ -23,7 +23,15 @@ float4 main ( float4 tc:TEXCOORD0 ) : SV_Target
 // float4 _N = tex2Dproj (s_normal, tc); 
  float2 tcProj = tc.xy / tc.w;
 
- gbuffer_data gbd = gbuffer_load_data( GLD_P(tcProj, pos2d, ISAMPLE) );
+#ifdef GBUFFER_OPTIMIZATION
+ // Infernis PBR Stage 2.21: sample material data at the exact raster pixel.
+ // Light-volume projective UVs are kept only for shadow/lightmap projection.
+ float2 gbufferTC = pos2d.xy / pos_decompression_params2.xy;
+#else
+ float2 gbufferTC = tcProj;
+#endif
+
+ gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, pos2d, ISAMPLE) );
 
  float4 _P = float4( gbd.P,gbd.mtl );
  float4 _N = float4( gbd.N,gbd.hemi );
