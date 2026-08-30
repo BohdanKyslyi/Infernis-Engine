@@ -70,3 +70,25 @@ py apply_pbr_stage2_30_material_override.py off
 
 The two metal modes use a neutral calibration F0 of `0.22`; authored materials
 are never forced to that value. Always restore `off` for normal gameplay.
+
+## Local-metal audit
+
+`apply_pbr_stage2_36_local_metal_audit.py` diagnoses a metallic material that
+looks correct in environment lighting but responds weakly to a local light such
+as the actor's headlamp. It coordinates the existing G-buffer and local-light
+diagnostic selectors so stale modes cannot overlap accidentally:
+
+```text
+py apply_pbr_stage2_36_local_metal_audit.py orm
+py apply_pbr_stage2_36_local_metal_audit.py albedo
+py apply_pbr_stage2_36_local_metal_audit.py normal
+py apply_pbr_stage2_36_local_metal_audit.py local_cosine
+py apply_pbr_stage2_36_local_metal_audit.py local_specular
+py apply_pbr_stage2_36_local_metal_audit.py production
+```
+
+The `orm` output is `R=metallic`, `G=roughness`, and `B=hemi*AO`. The Albedo
+and normal modes display the values that survived the deferred G-buffer. The
+local cosine probe checks position, light direction, and `NdotL` without GGX;
+the specular mode keeps only the local-light GGX/Fresnel lobe. Always restore
+`production` and delete `shaders_cache` after completing the audit.
