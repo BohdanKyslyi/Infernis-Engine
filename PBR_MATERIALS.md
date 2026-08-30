@@ -231,3 +231,24 @@ can miss the visible lobe of a rough conductor completely.
 This is deliberately an audit bridge, not a replacement for HUD SSLR.  The
 occlusion mode removes invalid through-wall sky energy; a later screen-space
 reflection pass can replace it with scene-visible indoor reflections.
+
+## Stage 2.43 - inline HUD SSLR
+
+Stage 2.42 proved that suppressing the weather cubemap without replacing its
+energy only turns conductors black. Stage 2.43 therefore leaves the cubemap as
+a fallback and ray-marches the current G-buffer for close metallic surfaces.
+A valid screen-space hit reflects the hit surface's accumulated direct light;
+inside a room this lets the lid reflect a flashlight-lit wall rather than the
+outdoor weather. Rays that leave the screen or miss geometry retain the
+`sky_linear` cubemap.
+
+```text
+py apply_pbr_stage2_43_hud_sslr.py hit_mask
+py apply_pbr_stage2_43_hud_sslr.py sslr
+py apply_pbr_stage2_43_hud_sslr.py baseline
+```
+
+The hit mask is green where the ray found visible scene geometry and red where
+the cubemap fallback remains. This first implementation is an inline,
+single-frame bridge; a dedicated reflection render target and temporal filter
+can follow after the ray/depth convention is validated in game.
