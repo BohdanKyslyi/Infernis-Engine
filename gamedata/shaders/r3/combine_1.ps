@@ -65,7 +65,7 @@ float3 ie_pbr_diffuse_irradiance(float3 normalView)
         env_color.xyz *
         lerp(env0, env1, env_color.w);
 
-    return ie_pbr_prepare_radiance(irradiance);
+    return ie_pbr_prepare_diffuse_radiance(irradiance);
 }
 
 float3 ie_pbr_specular_irradiance(
@@ -149,7 +149,7 @@ float3 ie_pbr_ambient_ibl(
 
     float3 diffuse =
         diffuseIrradiance *
-        albedo *
+        ie_pbr_prepare_diffuse_albedo(albedo) *
         (1.0f - metallic);
 
     float3 F0 =

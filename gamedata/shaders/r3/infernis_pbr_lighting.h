@@ -56,6 +56,14 @@ static const float IE_PBR_SPECULAR_AA_MAX_VARIANCE = 0.10f;
 // ------------------------------------------------------------
 
 static const float IE_PBR_GAMMA = 2.2f;
+static const float IE_PBR_INV_GAMMA = 0.45454545f;
+
+// Infernis PBR Stage 2.28:
+// The classic X-Ray combine/tonemap path keeps diffuse textures and diffuse
+// environment lighting in its established presentation domain. A private
+// gamma decode without a matching encode crushed rough dielectric materials.
+// Keep this bridge switchable while metallic F0 and specular IBL stay linear.
+#define IE_PBR_XRAY_DIFFUSE_BRIDGE 1
 
 float3 ie_pbr_to_linear(float3 value)
 {
@@ -72,11 +80,35 @@ float3 ie_pbr_prepare_albedo(float3 albedo)
     return ie_pbr_to_linear(albedo);
 }
 
+float3 ie_pbr_prepare_diffuse_albedo(float3 linearAlbedo)
+{
+#if IE_PBR_XRAY_DIFFUSE_BRIDGE
+    return pow(
+        saturate(linearAlbedo),
+        IE_PBR_INV_GAMMA
+    );
+#else
+    return linearAlbedo;
+#endif
+}
+
 // Environment cubemaps keep the Stage 2.9 transport until their sampler color
 // space is validated independently.
 float3 ie_pbr_prepare_radiance(float3 radiance)
 {
     return ie_pbr_to_linear(radiance);
+}
+
+float3 ie_pbr_prepare_diffuse_radiance(float3 radiance)
+{
+#if IE_PBR_XRAY_DIFFUSE_BRIDGE
+    return max(
+        radiance,
+        float3(0.0f, 0.0f, 0.0f)
+    );
+#else
+    return ie_pbr_prepare_radiance(radiance);
+#endif
 }
 
 // Dynamic sun/local colors already represent radiance and may be HDR.
@@ -348,7 +380,7 @@ void ie_pbr_direct_brdf_lobes(
         );
 
     float3 diffuse =
-        albedo *
+        ie_pbr_prepare_diffuse_albedo(albedo) *
         (1.0f - metallic) *
         IE_PBR_INV_PI;
 
