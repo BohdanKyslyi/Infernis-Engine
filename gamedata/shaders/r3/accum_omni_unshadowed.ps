@@ -33,6 +33,15 @@ float4 main ( float4 tc:TEXCOORD0 ) : SV_Target
 
  gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, pos2d, ISAMPLE) );
 
+#if IE_PBR_STAGE246_LOCAL_HUD_PROJECTION == 1
+ if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+ {
+     return blendp(float4(0.0f, 0.35f, 0.0f, 0.0f), tc);
+ }
+#elif IE_PBR_STAGE246_LOCAL_HUD_PROJECTION == 2
+ ie_pbr_stage246_correct_local_position(gbd);
+#endif
+
 #if IE_PBR_LOCAL_ROUTE_MODE == 1
  // Cyan means this unshadowed omni-light pixel reached the PBR branch.
  if (gbd.pbr > 0.5f)

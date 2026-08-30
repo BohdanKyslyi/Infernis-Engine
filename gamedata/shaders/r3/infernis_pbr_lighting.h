@@ -111,6 +111,40 @@ static const float IE_PBR_STAGE242_LOCAL_STRENGTH = 1.35f;
 static const float IE_PBR_STAGE242_HUD_MAX_DISTANCE = 2.0f;
 static const float IE_PBR_STAGE242_HUD_SKY_FLOOR = 0.0f;
 
+// Infernis PBR Stage 2.46: local-light HUD projection bridge.
+// R3/R4 reconstruct every G-buffer position with the world projection even
+// though HUD geometry was rasterized with psHUD_FOV * Device.fFOV.  That sends
+// the local GGX and its shadow lookup to different view-space coordinates.
+// 0 = baseline, 1 = selected-pixel mask, 2 = corrected local-light position.
+#define IE_PBR_STAGE246_LOCAL_HUD_PROJECTION 0
+
+static const float IE_PBR_STAGE246_HUD_MAX_DEPTH = 0.85f;
+
+uniform float4 ie_pbr_hud_projection_params;
+
+float ie_pbr_stage246_hud_weight(gbuffer_data gbd)
+{
+    return
+        (gbd.pbr > 0.5f &&
+         gbd.P.z > ie_pbr_hud_projection_params.z &&
+         gbd.P.z < IE_PBR_STAGE246_HUD_MAX_DEPTH) ?
+        1.0f :
+        0.0f;
+}
+
+void ie_pbr_stage246_correct_local_position(inout gbuffer_data gbd)
+{
+#if IE_PBR_STAGE246_LOCAL_HUD_PROJECTION == 2
+    float hudWeight = ie_pbr_stage246_hud_weight(gbd);
+    gbd.P.xy =
+        lerp(
+            gbd.P.xy,
+            gbd.P.xy * ie_pbr_hud_projection_params.xx,
+            hudWeight
+        );
+#endif
+}
+
 
 // ------------------------------------------------------------
 // Infernis PBR Stage 2.6: private gamma-to-linear transport.

@@ -31,27 +31,25 @@ static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 // Modes 2 and 3 mirror IX-Ray's resource split instead of adding irradiance
 // fill. Mode 3 diagnoses a possible double gamma decode only; it is not an
 // exposure boost and retains the reflection vector and roughness-selected mip.
-#define IE_PBR_STAGE241_SPECULAR_SKY_MODE 0
+#define IE_PBR_STAGE241_SPECULAR_SKY_MODE 2
 
 // Infernis PBR Stage 2.43: inline HUD screen-space local reflection.
 // 0 = baseline, 1 = SSR hit mask, 2 = scene-visible reflection with cubemap
 // fallback.  Unlike Stage 2.42 this never suppresses sky by distance alone.
-#define IE_PBR_STAGE243_HUD_SSLR_MODE 0
+#define IE_PBR_STAGE243_HUD_SSLR_MODE 2
 
 // Infernis PBR Stage 2.44: HUD/world projection bridge.
 // HUD geometry is rasterized with psHUD_FOV * Device.fFOV, while the combine
 // pass reconstructs G-buffer XY with the world FOV.  P.z stays in view-space
 // units, so correcting XY by tan(hudFov/2) / tan(worldFov/2) restores the real
 // ray origin without changing authored materials or scene exposure.
-#define IE_PBR_STAGE244_HUD_PROJECTION 0
+#define IE_PBR_STAGE244_HUD_PROJECTION 1
 
 // Infernis PBR Stage 2.45: robust screen-depth crossing.
 // The coarse ray may step completely through a thin surface.  Once its depth
 // changes from in front of the G-buffer to behind it, refine that interval
 // before applying the usual thickness guard.
-#define IE_PBR_STAGE245_BINARY_HIT 0
-
-uniform float4 ie_pbr_hud_projection_params;
+#define IE_PBR_STAGE245_BINARY_HIT 1
 
 static const int IE_PBR_STAGE243_STEPS = 32;
 static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
