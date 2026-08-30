@@ -81,6 +81,22 @@ static const float IE_PBR_CONDUCTOR_LOCAL_FILL_LIMIT = 0.20f;
 static const float IE_PBR_CONDUCTOR_AMBIENT_FILL_SCALE = 0.65f;
 static const float IE_PBR_CONDUCTOR_AMBIENT_FILL_LIMIT = 0.35f;
 
+// Infernis PBR Stage 2.39: conductor energy-route reference audit.
+// 0 = baseline, 1 = strong local-light reference,
+// 2 = strong IBL reference, 3 = both reference sources.
+//
+// These deliberately obvious upper-bound modes distinguish missing incident
+// radiance from a material/F0 error. They are calibration probes, not a
+// production energy model.
+#define IE_PBR_STAGE239_CONDUCTOR_REFERENCE_MODE 0
+
+// Roughness controls how much of the broad reference response is available.
+// The can lid's authored roughness near 0.40 reaches roughly 80% of the probe,
+// while smooth conductors retain their directional GGX character.
+static const float IE_PBR_CONDUCTOR_REFERENCE_ROUGHNESS_GAIN = 2.0f;
+static const float IE_PBR_CONDUCTOR_LOCAL_REFERENCE_STRENGTH = 1.0f;
+static const float IE_PBR_CONDUCTOR_IBL_REFERENCE_STRENGTH = 1.0f;
+
 
 // ------------------------------------------------------------
 // Infernis PBR Stage 2.6: private gamma-to-linear transport.
@@ -615,6 +631,27 @@ void ie_pbr_direct_brdf_lobes(
     specularLobe +=
         F0 *
         conductorLocalFillWeight *
+        IE_PBR_INV_PI *
+        NdotL;
+#endif
+
+#if IE_PBR_STAGE239_CONDUCTOR_REFERENCE_MODE == 1 || IE_PBR_STAGE239_CONDUCTOR_REFERENCE_MODE == 3
+    // Strong local reference: approximate the integrated footprint that a
+    // finite flashlight source would contribute across a rough conductor.
+    // It remains specular transport because the energy is conductor-F0
+    // colored, has no Albedo diffuse term, and is local-light-only.
+    float conductorReferenceWeight =
+        saturate(
+            materialRoughness *
+            IE_PBR_CONDUCTOR_REFERENCE_ROUGHNESS_GAIN
+        ) *
+        metallic *
+        localLightWeight;
+
+    specularLobe +=
+        F0 *
+        conductorReferenceWeight *
+        IE_PBR_CONDUCTOR_LOCAL_REFERENCE_STRENGTH *
         IE_PBR_INV_PI *
         NdotL;
 #endif
