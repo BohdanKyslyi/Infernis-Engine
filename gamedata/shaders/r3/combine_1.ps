@@ -33,6 +33,16 @@ static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 // exposure boost and retains the reflection vector and roughness-selected mip.
 #define IE_PBR_STAGE241_SPECULAR_SKY_MODE 0
 
+// Infernis PBR Stage 2.43: inline HUD screen-space local reflection.
+// 0 = baseline, 1 = SSR hit mask, 2 = scene-visible reflection with cubemap
+// fallback.  Unlike Stage 2.42 this never suppresses sky by distance alone.
+#define IE_PBR_STAGE243_HUD_SSLR_MODE 0
+
+static const int IE_PBR_STAGE243_STEPS = 18;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.12f;
+static const float IE_PBR_STAGE243_MAX_DISTANCE = 2.0f;
+static const float IE_PBR_STAGE243_THICKNESS = 0.08f;
+
 // Infernis PBR Stage 2.25: final G-buffer diagnostic.
 // 0 = production, 1 = route, 2 = M/R/hemi-AO, 3 = albedo, 4 = normal.
 #define IE_PBR_GBUFFER_DEBUG_MODE 0
@@ -183,6 +193,149 @@ float3 ie_pbr_specular_irradiance(
 #endif
 }
 
+float2 ie_pbr_stage243_project_view(float3 pointView)
+{
+    float2 pixel =
+        (pointView.xy / max(pointView.z, IE_PBR_EPSILON) +
+         pos_decompression_params.xy) /
+        pos_decompression_params.zw;
+
+    return pixel / pos_decompression_params2.xy;
+}
+
+float3 ie_pbr_stage243_screen_reflection(
+    float3 pointView,
+    float3 normalView,
+    float metallic,
+    float roughness,
+    int sampleIndex,
+    out float confidence
+)
+{
+    confidence = 0.0f;
+
+#if IE_PBR_STAGE243_HUD_SSLR_MODE != 0
+    float hudConductor =
+        saturate(metallic) *
+        (1.0f - smoothstep(
+            IE_PBR_STAGE243_MAX_DISTANCE * 0.75f,
+            IE_PBR_STAGE243_MAX_DISTANCE,
+            length(pointView)
+        ));
+
+    if (hudConductor <= IE_PBR_EPSILON)
+    {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+
+    float3 N = normalize(normalView);
+    float3 reflectionView =
+        normalize(reflect(normalize(pointView), N));
+
+    // Move the ray away from the originating surface so the first sample
+    // cannot immediately intersect the can lid itself.
+    float3 rayOrigin =
+        pointView +
+        N * max(0.025f, pointView.z * 0.002f);
+
+    float previousDelta = -IE_PBR_STAGE243_THICKNESS;
+
+    [unroll]
+    for (int stepIndex = 1; stepIndex <= IE_PBR_STAGE243_STEPS; ++stepIndex)
+    {
+        float travel =
+            IE_PBR_STAGE243_STEP_LENGTH *
+            float(stepIndex);
+
+        float3 rayPoint =
+            rayOrigin +
+            reflectionView * travel;
+
+        if (rayPoint.z <= 0.02f)
+        {
+            break;
+        }
+
+        float2 rayTC =
+            ie_pbr_stage243_project_view(rayPoint);
+
+        if (
+            rayTC.x <= 0.002f || rayTC.x >= 0.998f ||
+            rayTC.y <= 0.002f || rayTC.y >= 0.998f
+        )
+        {
+            break;
+        }
+
+        float4 packedPosition;
+        float4 hitBase;
+        float4 hitLight;
+
+#ifndef USE_MSAA
+        packedPosition =
+            s_position.Sample(smp_nofilter, rayTC);
+        hitBase =
+            s_diffuse.Sample(smp_nofilter, rayTC);
+        hitLight =
+            s_accumulator.Sample(smp_nofilter, rayTC);
+#else
+        int2 hitPixel =
+            int2(rayTC * pos_decompression_params2.xy);
+        packedPosition =
+            s_position.Load(int3(hitPixel, 0), sampleIndex);
+        hitBase =
+            s_diffuse.Load(int3(hitPixel, 0), sampleIndex);
+        hitLight =
+            s_accumulator.Load(int3(hitPixel, 0), sampleIndex);
+#endif
+
+        float sceneDepth = packedPosition.z;
+        float delta = rayPoint.z - sceneDepth;
+        float thickness =
+            IE_PBR_STAGE243_THICKNESS +
+            travel * 0.025f;
+
+        if (
+            sceneDepth > pointView.z + 0.03f &&
+            delta >= 0.0f &&
+            delta <= thickness &&
+            previousDelta < 0.0f
+        )
+        {
+            float pbrHit =
+                gbuf_is_pbr(packedPosition.w) ? 1.0f : 0.0f;
+
+            float3 legacyRadiance =
+                max(hitBase.rgb, float3(0.0f, 0.0f, 0.0f)) *
+                max(hitLight.rgb, float3(0.0f, 0.0f, 0.0f)) +
+                max(hitLight.www, float3(0.0f, 0.0f, 0.0f));
+
+            float3 pbrRadiance =
+                max(hitLight.rgb, float3(0.0f, 0.0f, 0.0f));
+
+            float edge =
+                saturate(
+                    min(
+                        min(rayTC.x, 1.0f - rayTC.x),
+                        min(rayTC.y, 1.0f - rayTC.y)
+                    ) * 12.0f
+                );
+
+            confidence =
+                hudConductor *
+                edge *
+                saturate(1.0f - roughness * 0.45f);
+
+            return lerp(legacyRadiance, pbrRadiance, pbrHit);
+        }
+
+        previousDelta = delta;
+    }
+#endif
+
+    return float3(0.0f, 0.0f, 0.0f);
+}
+
 float3 ie_pbr_environment_specular_weight(
     float3 F0,
     float2 envBrdf
@@ -239,7 +392,8 @@ float3 ie_pbr_ambient_ibl(
     float metallic,
     float roughness,
     float hemiAo,
-    float screenOcclusion
+    float screenOcclusion,
+    int sampleIndex
 )
 {
     ie_pbr_apply_material_override(
@@ -283,6 +437,37 @@ float3 ie_pbr_ambient_ibl(
             roughness
         ) *
         IE_PBR_CAL_AMBIENT_SPECULAR;
+
+#if IE_PBR_STAGE243_HUD_SSLR_MODE != 0
+    float sslrConfidence;
+    float3 sslrRadiance =
+        ie_pbr_stage243_screen_reflection(
+            pointView,
+            N,
+            metallic,
+            roughness,
+            sampleIndex,
+            sslrConfidence
+        );
+
+    #if IE_PBR_STAGE243_HUD_SSLR_MODE == 1
+        specularIrradiance =
+            lerp(
+                float3(0.35f, 0.0f, 0.0f),
+                float3(0.0f, 0.65f, 0.0f),
+                saturate(sslrConfidence)
+            );
+    #else
+        // A visible screen-space hit wins; leaving the screen or missing
+        // geometry keeps the directional sky cubemap as the fallback.
+        specularIrradiance =
+            lerp(
+                specularIrradiance,
+                sslrRadiance,
+                saturate(sslrConfidence)
+            );
+    #endif
+#endif
 
     float3 diffuse =
         diffuseIrradiance *
@@ -559,7 +744,12 @@ if (gbd.pbr > 0.5f)
             gbd.metallic,
             gbd.roughness,
             gbd.hemi,
-            occ
+            occ,
+#ifdef USE_MSAA
+            ISAMPLE
+#else
+            0
+#endif
         );
 
     color = direct + ambient;
