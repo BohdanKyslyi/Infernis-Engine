@@ -13,12 +13,25 @@ uniform Texture2D s_half_depth;
 // ============================================================
 // Infernis PBR Stage 2.9 - ambient image-based lighting
 //
-// The combine pass receives the dedicated env_s0/env_s1 cubemaps from
-// r4_rendertarget_phase_combine.cpp. Both PBR lobes use those resources.
+// X-Ray exposes two different sky resources to the combine pass. env_s0/env_s1
+// are the small sky_texture_env cubemaps used for diffuse irradiance, while
+// sky_s0/sky_s1 are the full visible sky cubemaps. Stage 2.41 keeps the
+// diffuse path on env_s* and audits the full sky mip chain for specular IBL.
 // ============================================================
 
 // Stage 2.31 verified the complete environment mip range.
 static const float IE_PBR_IBL_MAX_LOD = 8.0f;
+
+// Infernis PBR Stage 2.41: real specular-sky source audit.
+// 0 = current env_s* source with the Stage 2.31 fixed LOD range,
+// 1 = env_s* with the texture's real mip count,
+// 2 = full sky_s* with the real mip count and linear PBR transport,
+// 3 = full sky_s* with the real mip count in its sampled color domain.
+//
+// Modes 2 and 3 mirror IX-Ray's resource split instead of adding irradiance
+// fill. Mode 3 diagnoses a possible double gamma decode only; it is not an
+// exposure boost and retains the reflection vector and roughness-selected mip.
+#define IE_PBR_STAGE241_SPECULAR_SKY_MODE 0
 
 // Infernis PBR Stage 2.25: final G-buffer diagnostic.
 // 0 = production, 1 = route, 2 = M/R/hemi-AO, 3 = albedo, 4 = normal.
@@ -81,26 +94,93 @@ float3 ie_pbr_specular_irradiance(
     float3 reflectionWorld =
         normalize(mul(m_v2w, reflectionView));
 
-    float lod =
+    roughness =
         clamp(
             roughness,
             IE_PBR_MIN_ROUGHNESS,
             1.0f
-        ) * IE_PBR_IBL_MAX_LOD;
+        );
 
-    // Stage 2.32 verified that $user$env_s* is the reflection source;
-    // $user$sky* is only the visible skybox and must not feed specular IBL.
-    float3 reflection0 =
-        env_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
+    float2 lod = roughness * IE_PBR_IBL_MAX_LOD;
 
-    float3 reflection1 =
-        env_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
+#if IE_PBR_STAGE241_SPECULAR_SKY_MODE != 0
+    // TextureCube::GetDimensions takes mip 0 as the first argument and writes
+    // width, height, and the mip count to y/z/w. Sampling the last legal mip
+    // at roughness 1 avoids relying on an old hard-coded cubemap layout.
+    float4 dimensions0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 dimensions1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    #if IE_PBR_STAGE241_SPECULAR_SKY_MODE == 1
+        env_s0.GetDimensions(
+            dimensions0.x,
+            dimensions0.y,
+            dimensions0.z,
+            dimensions0.w
+        );
+        env_s1.GetDimensions(
+            dimensions1.x,
+            dimensions1.y,
+            dimensions1.z,
+            dimensions1.w
+        );
+    #else
+        sky_s0.GetDimensions(
+            dimensions0.x,
+            dimensions0.y,
+            dimensions0.z,
+            dimensions0.w
+        );
+        sky_s1.GetDimensions(
+            dimensions1.x,
+            dimensions1.y,
+            dimensions1.z,
+            dimensions1.w
+        );
+    #endif
+
+    lod.x =
+        roughness *
+        max(
+            dimensions0.w - 1.0f,
+            0.0f
+        );
+    lod.y =
+        roughness *
+        max(
+            dimensions1.w - 1.0f,
+            0.0f
+        );
+#endif
+
+    float3 reflection0;
+    float3 reflection1;
+
+#if IE_PBR_STAGE241_SPECULAR_SKY_MODE >= 2
+    reflection0 =
+        sky_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod.x).rgb;
+
+    reflection1 =
+        sky_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod.y).rgb;
+#else
+    reflection0 =
+        env_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod.x).rgb;
+
+    reflection1 =
+        env_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod.y).rgb;
+#endif
 
     float3 irradiance =
         env_color.xyz *
         lerp(reflection0, reflection1, env_color.w);
 
+#if IE_PBR_STAGE241_SPECULAR_SKY_MODE == 3
+    return max(
+        irradiance,
+        float3(0.0f, 0.0f, 0.0f)
+    );
+#else
     return ie_pbr_prepare_specular_radiance(irradiance);
+#endif
 }
 
 float3 ie_pbr_environment_specular_weight(
