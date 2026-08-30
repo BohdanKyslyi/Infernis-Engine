@@ -18,6 +18,8 @@ uniform Texture2D s_half_depth;
 // roughness-filtered specular irradiance uses the sky cubemaps.
 // ============================================================
 
+// Infernis PBR Stage 2.31: independently test the usable cubemap mip range.
+// The original Stage 2.9 value is 8.0; the diagnostic clamp uses 4.0.
 static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 
 // Infernis PBR Stage 2.25: final G-buffer diagnostic.
@@ -98,7 +100,7 @@ float3 ie_pbr_specular_irradiance(
         env_color.xyz *
         lerp(sky0, sky1, env_color.w);
 
-    return ie_pbr_prepare_radiance(irradiance);
+    return ie_pbr_prepare_specular_radiance(irradiance);
 }
 
 float3 ie_pbr_ambient_ibl(
