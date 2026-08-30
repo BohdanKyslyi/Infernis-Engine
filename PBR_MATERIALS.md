@@ -162,3 +162,24 @@ Keep Stage 2.30 authored, Stage 2.36 production, Stage 2.37 baseline, and Stage
 2.38 baseline. Capture the same open/closed can poses with the flashlight on;
 also capture `ibl_reference` with it off. Restore `baseline` and delete
 `shaders_cache` after the audit.
+
+## Combined conductor gain calibration
+
+Stage 2.40 keeps the Stage 2.39 `combined_reference` transport selected and
+calibrates only its local-light and IBL reference strengths. The two strengths
+move together so the conductor keeps the balance observed in the reference
+test, while dielectric PBR and legacy materials remain unchanged:
+
+```text
+py apply_pbr_stage2_40_conductor_gain.py baseline
+py apply_pbr_stage2_40_conductor_gain.py combined_100
+py apply_pbr_stage2_40_conductor_gain.py combined_110
+py apply_pbr_stage2_40_conductor_gain.py combined_115
+py apply_pbr_stage2_40_conductor_gain.py combined_120
+```
+
+`combined_100` reproduces Stage 2.39 exactly. The remaining modes add 10, 15,
+or 20 percent to both F0-tinted conductor reference terms; they do not add
+Lambert diffuse. Compare the same open and closed can poses with the flashlight
+on. `combined_115` is the preferred production candidate. Restore `baseline`
+and delete `shaders_cache` after calibration.
