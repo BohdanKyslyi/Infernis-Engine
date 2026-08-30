@@ -75,6 +75,34 @@ static const float IE_PBR_CAL_LOCAL_SPECULAR = 1.00f;
 static const float IE_PBR_CAL_AMBIENT_DIFFUSE = 0.90f;
 static const float IE_PBR_CAL_AMBIENT_SPECULAR = 1.00f;
 
+// Infernis PBR Stage 2.30: controlled material-response calibration.
+// 0 = authored material, 1 = rough dielectric, 2 = smooth dielectric,
+// 3 = rough metal, 4 = smooth metal.
+//
+// This is a lighting-only override: G-buffer diagnostics keep showing the
+// authored ORM values, so the calibration cannot hide a packing error.
+#define IE_PBR_MATERIAL_OVERRIDE_MODE 0
+
+void ie_pbr_apply_material_override(
+    inout float metallic,
+    inout float roughness
+)
+{
+#if IE_PBR_MATERIAL_OVERRIDE_MODE == 1
+    metallic = 0.0f;
+    roughness = 0.85f;
+#elif IE_PBR_MATERIAL_OVERRIDE_MODE == 2
+    metallic = 0.0f;
+    roughness = 0.20f;
+#elif IE_PBR_MATERIAL_OVERRIDE_MODE == 3
+    metallic = 1.0f;
+    roughness = 0.75f;
+#elif IE_PBR_MATERIAL_OVERRIDE_MODE == 4
+    metallic = 1.0f;
+    roughness = 0.15f;
+#endif
+}
+
 float3 ie_pbr_to_linear(float3 value)
 {
     return pow(abs(value), IE_PBR_GAMMA);
@@ -316,6 +344,11 @@ void ie_pbr_direct_brdf_lobes(
 {
     diffuseLobe = float3(0.0f, 0.0f, 0.0f);
     specularLobe = float3(0.0f, 0.0f, 0.0f);
+
+    ie_pbr_apply_material_override(
+        metallic,
+        roughness
+    );
 
     metallic = saturate(metallic);
 

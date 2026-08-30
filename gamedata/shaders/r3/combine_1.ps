@@ -111,6 +111,11 @@ float3 ie_pbr_ambient_ibl(
     float screenOcclusion
 )
 {
+    ie_pbr_apply_material_override(
+        metallic,
+        roughness
+    );
+
     metallic = saturate(metallic);
     roughness =
         clamp(
