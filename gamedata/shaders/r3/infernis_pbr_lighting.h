@@ -77,6 +77,12 @@ static const float IE_PBR_INV_GAMMA = 0.45454545f;
 // shared by direct GGX and ambient IBL so both paths describe one material.
 #define IE_PBR_STAGE33_IBL_DEBUG_MODE 0
 
+// Infernis PBR Stage 2.34: recover the energy lost when a rough GGX surface
+// reflects between its microfacets more than once. The classic split-sum term
+// accounts only for the first bounce, which makes rough conductors darken too
+// aggressively. Keep an A/B switch while the response is calibrated in-game.
+#define IE_PBR_STAGE34_MULTISCATTER 1
+
 // Infernis PBR Stage 2.29: independent energy calibration.
 // The balanced preset trims only the diffuse energy that Stage 2.28 restored.
 // Specular remains at the proven Stage 2.24/2.27 response.
@@ -352,6 +358,14 @@ float3 ie_pbr_resolve_f0(
             albedo,
             metallic
         );
+
+#if IE_PBR_MATERIAL_OVERRIDE_MODE == 3 || IE_PBR_MATERIAL_OVERRIDE_MODE == 4
+    // Stage 2.30 forces a stone material to behave as metal. Its original dark
+    // Albedo is not a useful conductor F0 and caused the rough-metal black-hole
+    // result. Use a moderate neutral linear reflectance for calibration only;
+    // authored materials remain untouched when the override is off.
+    F0 = float3(0.22f, 0.22f, 0.22f);
+#endif
 
 #if IE_PBR_STAGE33_IBL_DEBUG_MODE == 2
     // A forced-metal stone inherits the stone's very dark linear Albedo as

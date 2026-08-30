@@ -129,6 +129,59 @@ float3 ie_pbr_specular_irradiance(
 #endif
 }
 
+float3 ie_pbr_environment_specular_weight(
+    float3 F0,
+    float2 envBrdf
+)
+{
+    float3 singleScatter =
+        saturate(
+            F0 * envBrdf.x +
+            envBrdf.y
+        );
+
+#if IE_PBR_STAGE34_MULTISCATTER
+    // Energy-compensated split-sum approximation. Ess is the directional
+    // albedo for a perfect reflector; Ems is the energy available to bounce
+    // again between GGX microfacets. Favg is Schlick Fresnel averaged over the
+    // hemisphere. This restores only energy the first bounce lost and keeps
+    // the authored conductor tint instead of adding a white ambient floor.
+    float Ess =
+        saturate(
+            envBrdf.x +
+            envBrdf.y
+        );
+
+    float Ems = 1.0f - Ess;
+
+    float3 Favg =
+        saturate(
+            F0 +
+            (1.0f - F0) * (1.0f / 21.0f)
+        );
+
+    float3 multipleScatter =
+        singleScatter *
+        Favg /
+        max(
+            1.0f - Ems * Favg,
+            float3(
+                IE_PBR_EPSILON,
+                IE_PBR_EPSILON,
+                IE_PBR_EPSILON
+            )
+        );
+
+    return
+        saturate(
+            singleScatter +
+            multipleScatter * Ems
+        );
+#else
+    return singleScatter;
+#endif
+}
+
 float3 ie_pbr_ambient_ibl(
     float3 pointView,
     float3 normalView,
@@ -205,9 +258,9 @@ float3 ie_pbr_ambient_ibl(
         );
 
     float3 environmentFresnel =
-        saturate(
-            F0 * envBrdf.x +
-            envBrdf.y
+        ie_pbr_environment_specular_weight(
+            F0,
+            envBrdf
         );
 
     float3 ambient =
