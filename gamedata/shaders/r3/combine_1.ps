@@ -308,6 +308,28 @@ float3 ie_pbr_ambient_ibl(
             envBrdf
         );
 
+#if IE_PBR_STAGE242_HUD_CONDUCTOR_MODE == 2 || IE_PBR_STAGE242_HUD_CONDUCTOR_MODE == 3
+    // The global weather cubemap has no knowledge of rooms and therefore
+    // cannot be trusted for a near-camera conductor.  Until HUD SSLR supplies
+    // a scene-visible reflection, remove this unshadowed sky contribution
+    // rather than letting it shine through solid walls.  Direct local GGX is
+    // intentionally untouched and remains in the shadowed accumulator.
+    float hudConductor =
+        metallic *
+        (1.0f - smoothstep(
+            IE_PBR_STAGE242_HUD_MAX_DISTANCE * 0.75f,
+            IE_PBR_STAGE242_HUD_MAX_DISTANCE,
+            length(pointView)
+        ));
+
+    specularIrradiance *=
+        lerp(
+            1.0f,
+            IE_PBR_STAGE242_HUD_SKY_FLOOR,
+            saturate(hudConductor)
+        );
+#endif
+
     float3 ambient =
         lerp(
             diffuse,
