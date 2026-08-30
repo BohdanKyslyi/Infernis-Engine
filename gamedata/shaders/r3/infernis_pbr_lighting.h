@@ -57,6 +57,30 @@ static const float IE_PBR_LOCAL_SOURCE_ROUGHNESS = 0.30f;
 static const float IE_PBR_LOCAL_MULTISCATTER_ENERGY = 0.50f;
 static const float IE_PBR_LOCAL_MULTISCATTER_LIMIT = 0.25f;
 
+// Infernis PBR Stage 2.38: conductor transport calibration.
+// 0 = baseline, 1 = bounded F0 presentation bridge,
+// 2 = rough-conductor irradiance fill, 3 = both corrections.
+//
+// Stage 2.37 proved that merely widening the local GGX highlight cannot
+// restore the missing body response. X-Ray's diffuse bridge presents diffuse
+// Albedo in legacy display units, while conductor F0 and cubemap reflections
+// remain linear. Keep the two suspected compensations independently testable.
+#define IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE 0
+
+// Blend only part-way toward the legacy presentation domain. The correction
+// remains colored by authored conductor Albedo and cannot create a neutral
+// white F0.
+static const float IE_PBR_CONDUCTOR_F0_BRIDGE_STRENGTH = 0.35f;
+
+// A mathematical point light and a dark reflection direction underrepresent
+// the low-frequency response of a rough conductor in the classic renderer.
+// These bounded weights reuse existing irradiance, remain F0-tinted, and never
+// re-enable the dielectric Albedo diffuse lobe.
+static const float IE_PBR_CONDUCTOR_LOCAL_FILL_SCALE = 0.45f;
+static const float IE_PBR_CONDUCTOR_LOCAL_FILL_LIMIT = 0.20f;
+static const float IE_PBR_CONDUCTOR_AMBIENT_FILL_SCALE = 0.65f;
+static const float IE_PBR_CONDUCTOR_AMBIENT_FILL_LIMIT = 0.35f;
+
 
 // ------------------------------------------------------------
 // Infernis PBR Stage 2.6: private gamma-to-linear transport.
@@ -347,10 +371,30 @@ float3 ie_pbr_resolve_f0(
     float metallic
 )
 {
+    float3 conductorF0 = saturate(albedo);
+
+#if IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE == 1 || IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE == 3
+    // Stage 2.28 must bridge diffuse materials back to X-Ray's established
+    // presentation domain. Test a deliberately partial version of that bridge
+    // for conductor F0 instead of applying a global gamma change.
+    float3 presentedConductorF0 =
+        pow(
+            conductorF0,
+            IE_PBR_INV_GAMMA
+        );
+
+    conductorF0 =
+        lerp(
+            conductorF0,
+            presentedConductorF0,
+            IE_PBR_CONDUCTOR_F0_BRIDGE_STRENGTH
+        );
+#endif
+
     float3 F0 =
         lerp(
             float3(0.04f, 0.04f, 0.04f),
-            albedo,
+            conductorF0,
             metallic
         );
 
@@ -553,6 +597,26 @@ void ie_pbr_direct_brdf_lobes(
             multiScatterLobe,
             F0 * IE_PBR_LOCAL_MULTISCATTER_LIMIT * NdotL
         );
+#endif
+
+#if IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE == 2 || IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE == 3
+    // Low-frequency local conductor response. This approximates the angular
+    // footprint lost when X-Ray represents the flashlight as one delta-light
+    // sample. It is specular energy: F0 tinted, roughness dependent, and zero
+    // for dielectric materials, the sun, and non-local BRDF calls.
+    float conductorLocalFillWeight =
+        min(
+            materialRoughness * IE_PBR_CONDUCTOR_LOCAL_FILL_SCALE,
+            IE_PBR_CONDUCTOR_LOCAL_FILL_LIMIT
+        ) *
+        metallic *
+        localLightWeight;
+
+    specularLobe +=
+        F0 *
+        conductorLocalFillWeight *
+        IE_PBR_INV_PI *
+        NdotL;
 #endif
 }
 
