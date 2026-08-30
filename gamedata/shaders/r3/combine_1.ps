@@ -117,7 +117,16 @@ float3 ie_pbr_specular_irradiance(
         env_color.xyz *
         lerp(reflection0, reflection1, env_color.w);
 
+#if IE_PBR_STAGE33_IBL_DEBUG_MODE == 1
+    // Bypass gamma conversion so this mode shows the resource itself rather
+    // than the final PBR weighting or X-Ray color-domain bridge.
+    return max(
+        irradiance,
+        float3(0.0f, 0.0f, 0.0f)
+    );
+#else
     return ie_pbr_prepare_specular_radiance(irradiance);
+#endif
 }
 
 float3 ie_pbr_ambient_ibl(
@@ -172,6 +181,11 @@ float3 ie_pbr_ambient_ibl(
         ) *
         IE_PBR_CAL_AMBIENT_SPECULAR;
 
+#if IE_PBR_STAGE33_IBL_DEBUG_MODE == 1
+    // Raw source audit: no F0, BRDF fit, material AO, or screen-space AO.
+    return specularIrradiance;
+#endif
+
     float3 diffuse =
         diffuseIrradiance *
         ie_pbr_prepare_diffuse_albedo(albedo) *
@@ -179,8 +193,7 @@ float3 ie_pbr_ambient_ibl(
         IE_PBR_CAL_AMBIENT_DIFFUSE;
 
     float3 F0 =
-        lerp(
-            float3(0.04f, 0.04f, 0.04f),
+        ie_pbr_resolve_f0(
             albedo,
             metallic
         );
@@ -376,6 +389,10 @@ if (gbd.pbr > 0.5f)
 {
     // Direct lighting in the accumulator is already a complete RGB BRDF.
     float3 direct = L.rgb;
+
+#if IE_PBR_STAGE33_IBL_DEBUG_MODE == 1
+    direct = float3(0.0f, 0.0f, 0.0f);
+#endif
 
     // Infernis PBR Stage 2.9: diffuse + roughness-filtered specular IBL.
     // Metallic surfaces receive their indirect color from reflected sky

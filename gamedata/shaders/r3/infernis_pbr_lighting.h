@@ -71,6 +71,12 @@ static const float IE_PBR_INV_GAMMA = 0.45454545f;
 // authored material or the BRDF itself.
 #define IE_PBR_XRAY_SPECULAR_BRIDGE 0
 
+// Infernis PBR Stage 2.33: rough-metal IBL audit.
+// 0 = production, 1 = raw environment radiance, 2 = neutral metal F0.
+// The raw-radiance mode is consumed by combine_1.ps; the neutral F0 helper is
+// shared by direct GGX and ambient IBL so both paths describe one material.
+#define IE_PBR_STAGE33_IBL_DEBUG_MODE 0
+
 // Infernis PBR Stage 2.29: independent energy calibration.
 // The balanced preset trims only the diffuse energy that Stage 2.28 restored.
 // Specular remains at the proven Stage 2.24/2.27 response.
@@ -335,6 +341,31 @@ float3 ie_pbr_fresnel_schlick(
         (1.0f - F0) * factor;
 }
 
+float3 ie_pbr_resolve_f0(
+    float3 albedo,
+    float metallic
+)
+{
+    float3 F0 =
+        lerp(
+            float3(0.04f, 0.04f, 0.04f),
+            albedo,
+            metallic
+        );
+
+#if IE_PBR_STAGE33_IBL_DEBUG_MODE == 2
+    // A forced-metal stone inherits the stone's very dark linear Albedo as
+    // F0. Use a known neutral conductor reflectance to distinguish that valid
+    // material response from missing IBL energy.
+    if (metallic > 0.5f)
+    {
+        F0 = float3(0.65f, 0.65f, 0.65f);
+    }
+#endif
+
+    return F0;
+}
+
 
 // ------------------------------------------------------------
 // Direct PBR BRDF
@@ -419,8 +450,7 @@ void ie_pbr_direct_brdf_lobes(
 
     // Standard dielectric F0. Metals get their F0 from Albedo.
     float3 F0 =
-        lerp(
-            float3(0.04f, 0.04f, 0.04f),
+        ie_pbr_resolve_f0(
             albedo,
             metallic
         );
