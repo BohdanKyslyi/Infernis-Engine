@@ -37,6 +37,9 @@
 — Added consumable items use animations
 ![photo_2026-01-09_15-47-39 (2)](https://github.com/user-attachments/assets/50939109-dfa3-436b-b8eb-255a74e091fc)
 
+— Added a metallic/roughness PBR material pipeline for the DX11 renderer. See
+[PBR material authoring](PBR_MATERIALS.md) for texture packing and setup.
+
 ### How do I build the updated engine?
 1) [Install **CMake**](https://cmake.org/download/) version **3.5** or higher
 2) **Clone the repository**

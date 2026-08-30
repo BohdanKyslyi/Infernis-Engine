@@ -13,20 +13,12 @@ uniform Texture2D s_half_depth;
 // ============================================================
 // Infernis PBR Stage 2.9 - ambient image-based lighting
 //
-// The combine pass already receives env_s0/env_s1 and sky_s0/sky_s1 from
-// blender_combine.cpp. Both PBR lobes use the dedicated environment cubemaps;
-// the visible sky textures remain available only for source diagnostics.
+// The combine pass receives the dedicated env_s0/env_s1 cubemaps from
+// r4_rendertarget_phase_combine.cpp. Both PBR lobes use those resources.
 // ============================================================
 
-// Infernis PBR Stage 2.31: independently test the usable cubemap mip range.
-// The original Stage 2.9 value is 8.0; the diagnostic clamp uses 4.0.
+// Stage 2.31 verified the complete environment mip range.
 static const float IE_PBR_IBL_MAX_LOD = 8.0f;
-
-// Infernis PBR Stage 2.32:
-// $user$env_s* is bound to sky_texture_env, while $user$sky* is the visible
-// skybox texture. Reflections must sample the dedicated environment resource.
-// Set to 0 only to reproduce the old, incorrect sky-source path.
-#define IE_PBR_SPECULAR_SOURCE_ENV 1
 
 // Infernis PBR Stage 2.25: final G-buffer diagnostic.
 // 0 = production, 1 = route, 2 = M/R/hemi-AO, 3 = albedo, 4 = normal.
@@ -96,37 +88,19 @@ float3 ie_pbr_specular_irradiance(
             1.0f
         ) * IE_PBR_IBL_MAX_LOD;
 
-    float3 reflection0;
-    float3 reflection1;
-
-#if IE_PBR_SPECULAR_SOURCE_ENV
-    reflection0 =
+    // Stage 2.32 verified that $user$env_s* is the reflection source;
+    // $user$sky* is only the visible skybox and must not feed specular IBL.
+    float3 reflection0 =
         env_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
 
-    reflection1 =
+    float3 reflection1 =
         env_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
-#else
-    reflection0 =
-        sky_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
-
-    reflection1 =
-        sky_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
-#endif
 
     float3 irradiance =
         env_color.xyz *
         lerp(reflection0, reflection1, env_color.w);
 
-#if IE_PBR_STAGE33_IBL_DEBUG_MODE == 1
-    // Bypass gamma conversion so this mode shows the resource itself rather
-    // than the final PBR weighting or X-Ray color-domain bridge.
-    return max(
-        irradiance,
-        float3(0.0f, 0.0f, 0.0f)
-    );
-#else
     return ie_pbr_prepare_specular_radiance(irradiance);
-#endif
 }
 
 float3 ie_pbr_environment_specular_weight(
@@ -140,8 +114,7 @@ float3 ie_pbr_environment_specular_weight(
             envBrdf.y
         );
 
-#if IE_PBR_STAGE34_MULTISCATTER
-    // Energy-compensated split-sum approximation. Ess is the directional
+    // Stage 2.34 energy-compensated split-sum approximation. Ess is the directional
     // albedo for a perfect reflector; Ems is the energy available to bounce
     // again between GGX microfacets. Favg is Schlick Fresnel averaged over the
     // hemisphere. This restores only energy the first bounce lost and keeps
@@ -177,9 +150,6 @@ float3 ie_pbr_environment_specular_weight(
             singleScatter +
             multipleScatter * Ems
         );
-#else
-    return singleScatter;
-#endif
 }
 
 float3 ie_pbr_ambient_ibl(
@@ -233,11 +203,6 @@ float3 ie_pbr_ambient_ibl(
             roughness
         ) *
         IE_PBR_CAL_AMBIENT_SPECULAR;
-
-#if IE_PBR_STAGE33_IBL_DEBUG_MODE == 1
-    // Raw source audit: no F0, BRDF fit, material AO, or screen-space AO.
-    return specularIrradiance;
-#endif
 
     float3 diffuse =
         diffuseIrradiance *
@@ -442,10 +407,6 @@ if (gbd.pbr > 0.5f)
 {
     // Direct lighting in the accumulator is already a complete RGB BRDF.
     float3 direct = L.rgb;
-
-#if IE_PBR_STAGE33_IBL_DEBUG_MODE == 1
-    direct = float3(0.0f, 0.0f, 0.0f);
-#endif
 
     // Infernis PBR Stage 2.9: diffuse + roughness-filtered specular IBL.
     // Metallic surfaces receive their indirect color from reflected sky

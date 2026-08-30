@@ -65,24 +65,6 @@ static const float IE_PBR_INV_GAMMA = 0.45454545f;
 // Keep this bridge switchable while metallic F0 and specular IBL stay linear.
 #define IE_PBR_XRAY_DIFFUSE_BRIDGE 1
 
-// Infernis PBR Stage 2.31:
-// Rough metals expose the average-energy end of the specular cubemap. Test
-// whether that data belongs to X-Ray's presentation domain before changing the
-// authored material or the BRDF itself.
-#define IE_PBR_XRAY_SPECULAR_BRIDGE 0
-
-// Infernis PBR Stage 2.33: rough-metal IBL audit.
-// 0 = production, 1 = raw environment radiance, 2 = neutral metal F0.
-// The raw-radiance mode is consumed by combine_1.ps; the neutral F0 helper is
-// shared by direct GGX and ambient IBL so both paths describe one material.
-#define IE_PBR_STAGE33_IBL_DEBUG_MODE 0
-
-// Infernis PBR Stage 2.34: recover the energy lost when a rough GGX surface
-// reflects between its microfacets more than once. The classic split-sum term
-// accounts only for the first bounce, which makes rough conductors darken too
-// aggressively. Keep an A/B switch while the response is calibrated in-game.
-#define IE_PBR_STAGE34_MULTISCATTER 1
-
 // Infernis PBR Stage 2.29: independent energy calibration.
 // The balanced preset trims only the diffuse energy that Stage 2.28 restored.
 // Specular remains at the proven Stage 2.24/2.27 response.
@@ -157,14 +139,9 @@ float3 ie_pbr_prepare_radiance(float3 radiance)
 
 float3 ie_pbr_prepare_specular_radiance(float3 radiance)
 {
-#if IE_PBR_XRAY_SPECULAR_BRIDGE
-    return max(
-        radiance,
-        float3(0.0f, 0.0f, 0.0f)
-    );
-#else
+    // Stage 2.31 verified that the environment cubemap belongs to the linear
+    // specular transport path used by the PBR BRDF.
     return ie_pbr_prepare_radiance(radiance);
-#endif
 }
 
 float3 ie_pbr_prepare_diffuse_radiance(float3 radiance)
@@ -365,16 +342,6 @@ float3 ie_pbr_resolve_f0(
     // result. Use a moderate neutral linear reflectance for calibration only;
     // authored materials remain untouched when the override is off.
     F0 = float3(0.22f, 0.22f, 0.22f);
-#endif
-
-#if IE_PBR_STAGE33_IBL_DEBUG_MODE == 2
-    // A forced-metal stone inherits the stone's very dark linear Albedo as
-    // F0. Use a known neutral conductor reflectance to distinguish that valid
-    // material response from missing IBL energy.
-    if (metallic > 0.5f)
-    {
-        F0 = float3(0.65f, 0.65f, 0.65f);
-    }
 #endif
 
     return F0;
