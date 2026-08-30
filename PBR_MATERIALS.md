@@ -136,3 +136,29 @@ Use the original, non-inverted Metallic map. Keep Stage 2.30 authored,
 Stage 2.36 production, and Stage 2.37 baseline during the test. Sun geometry,
 dielectric PBR materials, and legacy materials remain on their established
 paths. Restore `baseline` and delete `shaders_cache` after calibration.
+
+## Conductor energy-route reference
+
+Stage 2.39 is an intentionally strong upper-bound audit. Stage 2.38 showed that
+partially bridging F0 and adding a conservative irradiance fill changed the can
+lid only slightly. This test therefore separates the two sources of incident
+specular energy instead of applying another small global multiplier:
+
+```text
+py apply_pbr_stage2_39_conductor_reference.py baseline
+py apply_pbr_stage2_39_conductor_reference.py local_reference
+py apply_pbr_stage2_39_conductor_reference.py ibl_reference
+py apply_pbr_stage2_39_conductor_reference.py combined_reference
+```
+
+`local_reference` adds a broad, roughness-weighted, F0-tinted upper bound only
+to PBR conductors under local lights. `ibl_reference` uses the validated diffuse
+sky irradiance as an upper bound for energy missing from the ordinary X-Ray
+environment cubemap mip. `combined_reference` enables both probes. None of the
+modes re-enables metallic Lambert diffuse or affects dielectric/legacy
+materials.
+
+Keep Stage 2.30 authored, Stage 2.36 production, Stage 2.37 baseline, and Stage
+2.38 baseline. Capture the same open/closed can poses with the flashlight on;
+also capture `ibl_reference` with it off. Restore `baseline` and delete
+`shaders_cache` after the audit.
