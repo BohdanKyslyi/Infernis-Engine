@@ -112,3 +112,27 @@ The corrections affect only PBR metallic response from local lights. Sun, IBL,
 dielectric diffuse, and legacy materials retain their production paths. Keep
 Stage 2.30 authored and Stage 2.36 production during this test. Restore
 `baseline` and delete `shaders_cache` after calibration.
+
+## Conductor transport calibration
+
+Stage 2.38 follows the Stage 2.37 can-lid test: finite-source broadening made
+edge highlights wider, but neither it nor conservative direct multi-scattering
+restored the broad body response. Inverting Metallic only appeared brighter
+because it re-enabled X-Ray's bridged dielectric diffuse lobe.
+
+The next A/B test separates the remaining transport mismatch. `f0_bridge`
+partly bridges metallic F0 toward X-Ray's presentation domain. The bounded
+`irradiance_fill` reuses local and sky irradiance as an F0-tinted,
+roughness-weighted conductor reflection; it does not add Lambert diffuse:
+
+```text
+py apply_pbr_stage2_38_conductor_transport.py baseline
+py apply_pbr_stage2_38_conductor_transport.py f0_bridge
+py apply_pbr_stage2_38_conductor_transport.py irradiance_fill
+py apply_pbr_stage2_38_conductor_transport.py combined
+```
+
+Use the original, non-inverted Metallic map. Keep Stage 2.30 authored,
+Stage 2.36 production, and Stage 2.37 baseline during the test. Sun geometry,
+dielectric PBR materials, and legacy materials remain on their established
+paths. Restore `baseline` and delete `shaders_cache` after calibration.
