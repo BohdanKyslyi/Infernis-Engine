@@ -14,13 +14,19 @@ uniform Texture2D s_half_depth;
 // Infernis PBR Stage 2.9 - ambient image-based lighting
 //
 // The combine pass already receives env_s0/env_s1 and sky_s0/sky_s1 from
-// blender_combine.cpp. Diffuse irradiance uses the environment cubemaps;
-// roughness-filtered specular irradiance uses the sky cubemaps.
+// blender_combine.cpp. Both PBR lobes use the dedicated environment cubemaps;
+// the visible sky textures remain available only for source diagnostics.
 // ============================================================
 
 // Infernis PBR Stage 2.31: independently test the usable cubemap mip range.
 // The original Stage 2.9 value is 8.0; the diagnostic clamp uses 4.0.
 static const float IE_PBR_IBL_MAX_LOD = 8.0f;
+
+// Infernis PBR Stage 2.32:
+// $user$env_s* is bound to sky_texture_env, while $user$sky* is the visible
+// skybox texture. Reflections must sample the dedicated environment resource.
+// Set to 0 only to reproduce the old, incorrect sky-source path.
+#define IE_PBR_SPECULAR_SOURCE_ENV 1
 
 // Infernis PBR Stage 2.25: final G-buffer diagnostic.
 // 0 = production, 1 = route, 2 = M/R/hemi-AO, 3 = albedo, 4 = normal.
@@ -90,15 +96,26 @@ float3 ie_pbr_specular_irradiance(
             1.0f
         ) * IE_PBR_IBL_MAX_LOD;
 
-    float3 sky0 =
+    float3 reflection0;
+    float3 reflection1;
+
+#if IE_PBR_SPECULAR_SOURCE_ENV
+    reflection0 =
+        env_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
+
+    reflection1 =
+        env_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
+#else
+    reflection0 =
         sky_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
 
-    float3 sky1 =
+    reflection1 =
         sky_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod).rgb;
+#endif
 
     float3 irradiance =
         env_color.xyz *
-        lerp(sky0, sky1, env_color.w);
+        lerp(reflection0, reflection1, env_color.w);
 
     return ie_pbr_prepare_specular_radiance(irradiance);
 }
