@@ -119,6 +119,7 @@ float4 plight_infinity_pbr(
         V,
         L,
         IE_PBR_SUN_SPECULAR_LIMIT,
+        0.0f,
         diffuseLobe,
         specularLobe
     );
@@ -201,6 +202,7 @@ float4 plight_local_pbr(
         V,
         L,
         IE_PBR_LOCAL_SPECULAR_LIMIT,
+        1.0f,
         diffuseLobe,
         specularLobe
     );
