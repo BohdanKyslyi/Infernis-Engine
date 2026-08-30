@@ -39,6 +39,24 @@ static const float IE_PBR_SUN_SPECULAR_LIMIT = 0.25f;
 static const float IE_PBR_SPECULAR_AA_STRENGTH = 0.35f;
 static const float IE_PBR_SPECULAR_AA_MAX_VARIANCE = 0.10f;
 
+// Infernis PBR Stage 2.37: local-metal response audit.
+// 0 = baseline, 1 = conductor multi-scattering, 2 = finite-source broadening,
+// 3 = both corrections. Production remains at the proven baseline until the
+// in-game A/B test selects the stable local-light response.
+#define IE_PBR_STAGE237_LOCAL_METAL_MODE 0
+
+// X-Ray local lights are mathematical points. Add a conservative angular
+// variance only in the finite-source audit modes; combining variances keeps
+// smooth authored metals smoother than rough ones instead of applying a hard
+// roughness floor.
+static const float IE_PBR_LOCAL_SOURCE_ROUGHNESS = 0.30f;
+
+// Approximate the fraction of single-scatter GGX energy available for another
+// bounce. The secondary lobe is conductor-tinted and capped independently so
+// it cannot turn a metal into a white Lambert surface.
+static const float IE_PBR_LOCAL_MULTISCATTER_ENERGY = 0.50f;
+static const float IE_PBR_LOCAL_MULTISCATTER_LIMIT = 0.25f;
+
 
 // ------------------------------------------------------------
 // Infernis PBR Stage 2.6: private gamma-to-linear transport.
@@ -368,6 +386,7 @@ void ie_pbr_direct_brdf_lobes(
     float3 V,
     float3 L,
     float directSpecularLimit,
+    float localLight,
     out float3 diffuseLobe,
     out float3 specularLobe
 )
@@ -388,6 +407,26 @@ void ie_pbr_direct_brdf_lobes(
             IE_PBR_MIN_ROUGHNESS,
             1.0f
         );
+
+    float materialRoughness = roughness;
+    float localLightWeight = saturate(localLight);
+
+#if IE_PBR_STAGE237_LOCAL_METAL_MODE == 2 || IE_PBR_STAGE237_LOCAL_METAL_MODE == 3
+    float sourceRoughness =
+        IE_PBR_LOCAL_SOURCE_ROUGHNESS *
+        metallic *
+        localLightWeight;
+
+    roughness =
+        clamp(
+            sqrt(
+                roughness * roughness +
+                sourceRoughness * sourceRoughness
+            ),
+            IE_PBR_MIN_ROUGHNESS,
+            1.0f
+        );
+#endif
 
     N = normalize(N);
     V = normalize(V);
@@ -470,6 +509,51 @@ void ie_pbr_direct_brdf_lobes(
         ) *
         F *
         NdotL;
+
+#if IE_PBR_STAGE237_LOCAL_METAL_MODE == 1 || IE_PBR_STAGE237_LOCAL_METAL_MODE == 3
+    // Kulla-Conty-inspired broad conductor return. Favg is Schlick Fresnel
+    // averaged over the hemisphere. This is still specular energy: it is
+    // metallic/F0 tinted, has no Albedo diffuse fallback, and vanishes for
+    // dielectric materials and non-local lights.
+    float missingEnergy =
+        saturate(
+            materialRoughness *
+            materialRoughness *
+            IE_PBR_LOCAL_MULTISCATTER_ENERGY
+        ) *
+        metallic *
+        localLightWeight;
+
+    float3 Favg =
+        saturate(
+            F0 +
+            (1.0f - F0) * (1.0f / 21.0f)
+        );
+
+    float3 multiScatterWeight =
+        Favg *
+        Favg *
+        missingEnergy /
+        max(
+            1.0f - Favg * missingEnergy,
+            float3(
+                IE_PBR_EPSILON,
+                IE_PBR_EPSILON,
+                IE_PBR_EPSILON
+            )
+        );
+
+    float3 multiScatterLobe =
+        multiScatterWeight *
+        IE_PBR_INV_PI *
+        NdotL;
+
+    specularLobe +=
+        min(
+            multiScatterLobe,
+            F0 * IE_PBR_LOCAL_MULTISCATTER_LIMIT * NdotL
+        );
+#endif
 }
 
 float3 ie_pbr_direct_brdf(
@@ -493,6 +577,7 @@ float3 ie_pbr_direct_brdf(
         V,
         L,
         directSpecularLimit,
+        0.0f,
         diffuseLobe,
         specularLobe
     );
