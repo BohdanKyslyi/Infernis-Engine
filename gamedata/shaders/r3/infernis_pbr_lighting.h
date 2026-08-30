@@ -97,6 +97,20 @@ static const float IE_PBR_CONDUCTOR_REFERENCE_ROUGHNESS_GAIN = 2.0f;
 static const float IE_PBR_CONDUCTOR_LOCAL_REFERENCE_STRENGTH = 1.0f;
 static const float IE_PBR_CONDUCTOR_IBL_REFERENCE_STRENGTH = 1.0f;
 
+// Infernis PBR Stage 2.42: shadow-aware HUD conductor transport audit.
+// 0 = baseline, 1 = integrated local conductor response,
+// 2 = suppress unoccluded sky IBL on near-camera conductors, 3 = both.
+//
+// The local term is evaluated inside the ordinary local-light pass, therefore
+// X-Ray's spotlight mask, range attenuation, projected lightmap, and shadow
+// factor still modulate it in accum_base.ps.  It is not ambient fill and it
+// cannot illuminate a metal when the local light is hidden or switched off.
+#define IE_PBR_STAGE242_HUD_CONDUCTOR_MODE 0
+
+static const float IE_PBR_STAGE242_LOCAL_STRENGTH = 1.35f;
+static const float IE_PBR_STAGE242_HUD_MAX_DISTANCE = 2.0f;
+static const float IE_PBR_STAGE242_HUD_SKY_FLOOR = 0.0f;
+
 
 // ------------------------------------------------------------
 // Infernis PBR Stage 2.6: private gamma-to-linear transport.
@@ -652,6 +666,25 @@ void ie_pbr_direct_brdf_lobes(
         F0 *
         conductorReferenceWeight *
         IE_PBR_CONDUCTOR_LOCAL_REFERENCE_STRENGTH *
+        IE_PBR_INV_PI *
+        NdotL;
+#endif
+
+#if IE_PBR_STAGE242_HUD_CONDUCTOR_MODE == 1 || IE_PBR_STAGE242_HUD_CONDUCTOR_MODE == 3
+    // A rough conductor reflects a finite local emitter over a wider angular
+    // domain than the single delta direction available in classic X-Ray.
+    // Integrate a conservative low-frequency part of that specular response.
+    // F0 supplies the authored metal colour; metallic/localLight make the term
+    // vanish for paper, legacy calls, the sun, and ambient lighting.
+    float localConductorCoverage =
+        saturate(materialRoughness * materialRoughness * 2.0f) *
+        metallic *
+        localLightWeight;
+
+    specularLobe +=
+        F0 *
+        localConductorCoverage *
+        IE_PBR_STAGE242_LOCAL_STRENGTH *
         IE_PBR_INV_PI *
         NdotL;
 #endif
