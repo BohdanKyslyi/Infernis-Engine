@@ -45,12 +45,19 @@ static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 // ray origin without changing authored materials or scene exposure.
 #define IE_PBR_STAGE244_HUD_PROJECTION 0
 
+// Infernis PBR Stage 2.45: robust screen-depth crossing.
+// The coarse ray may step completely through a thin surface.  Once its depth
+// changes from in front of the G-buffer to behind it, refine that interval
+// before applying the usual thickness guard.
+#define IE_PBR_STAGE245_BINARY_HIT 0
+
 uniform float4 ie_pbr_hud_projection_params;
 
 static const int IE_PBR_STAGE243_STEPS = 32;
 static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
 static const float IE_PBR_STAGE243_MAX_DISTANCE = 2.0f;
 static const float IE_PBR_STAGE243_THICKNESS = 0.08f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 5;
 
 // Infernis PBR Stage 2.25: final G-buffer diagnostic.
 // 0 = production, 1 = route, 2 = M/R/hemi-AO, 3 = albedo, 4 = normal.
@@ -254,6 +261,7 @@ float3 ie_pbr_stage243_screen_reflection(
         N * max(0.025f, pointView.z * 0.002f);
 
     float previousDelta = -IE_PBR_STAGE243_THICKNESS;
+    float previousTravel = 0.0f;
 
     [unroll]
     for (int stepIndex = 1; stepIndex <= IE_PBR_STAGE243_STEPS; ++stepIndex)
@@ -310,12 +318,111 @@ float3 ie_pbr_stage243_screen_reflection(
             IE_PBR_STAGE243_THICKNESS +
             travel * 0.025f;
 
+        bool validSceneDepth =
+            sceneDepth > pointView.z + 0.03f;
+
+        bool acceptedHit = false;
+
+#if IE_PBR_STAGE245_BINARY_HIT != 0
         if (
-            sceneDepth > pointView.z + 0.03f &&
+            validSceneDepth &&
             delta >= 0.0f &&
-            delta <= thickness &&
             previousDelta < 0.0f
         )
+        {
+            float lowTravel = previousTravel;
+            float highTravel = travel;
+            float2 refinedTC = rayTC;
+
+            [unroll]
+            for (
+                int binaryIndex = 0;
+                binaryIndex < IE_PBR_STAGE245_BINARY_STEPS;
+                ++binaryIndex
+            )
+            {
+                float middleTravel =
+                    (lowTravel + highTravel) * 0.5f;
+
+                float3 middlePoint =
+                    rayOrigin +
+                    reflectionView * middleTravel;
+
+                float2 middleTC =
+                    ie_pbr_stage243_project_view(middlePoint);
+
+                float4 middlePackedPosition;
+
+#ifndef USE_MSAA
+                middlePackedPosition =
+                    s_position.Sample(smp_nofilter, middleTC);
+#else
+                int2 middlePixel =
+                    int2(middleTC * pos_decompression_params2.xy);
+                middlePackedPosition =
+                    s_position.Load(int3(middlePixel, 0), sampleIndex);
+#endif
+
+                float middleSceneDepth = middlePackedPosition.z;
+                float middleDelta =
+                    middlePoint.z - middleSceneDepth;
+
+                if (
+                    middleSceneDepth <= pointView.z + 0.03f ||
+                    middleDelta < 0.0f
+                )
+                {
+                    lowTravel = middleTravel;
+                }
+                else
+                {
+                    highTravel = middleTravel;
+                    refinedTC = middleTC;
+                }
+            }
+
+            rayPoint =
+                rayOrigin +
+                reflectionView * highTravel;
+            rayTC = refinedTC;
+
+#ifndef USE_MSAA
+            packedPosition =
+                s_position.Sample(smp_nofilter, rayTC);
+            hitBase =
+                s_diffuse.Sample(smp_nofilter, rayTC);
+            hitLight =
+                s_accumulator.Sample(smp_nofilter, rayTC);
+#else
+            int2 refinedPixel =
+                int2(rayTC * pos_decompression_params2.xy);
+            packedPosition =
+                s_position.Load(int3(refinedPixel, 0), sampleIndex);
+            hitBase =
+                s_diffuse.Load(int3(refinedPixel, 0), sampleIndex);
+            hitLight =
+                s_accumulator.Load(int3(refinedPixel, 0), sampleIndex);
+#endif
+
+            sceneDepth = packedPosition.z;
+            delta = rayPoint.z - sceneDepth;
+            thickness =
+                IE_PBR_STAGE243_THICKNESS +
+                highTravel * 0.025f;
+
+            acceptedHit =
+                sceneDepth > pointView.z + 0.03f &&
+                abs(delta) <= thickness;
+        }
+#else
+        acceptedHit =
+            validSceneDepth &&
+            delta >= 0.0f &&
+            delta <= thickness &&
+            previousDelta < 0.0f;
+#endif
+
+        if (acceptedHit)
         {
             float pbrHit =
                 gbuf_is_pbr(packedPosition.w) ? 1.0f : 0.0f;
@@ -344,7 +451,11 @@ float3 ie_pbr_stage243_screen_reflection(
             return lerp(legacyRadiance, pbrRadiance, pbrHit);
         }
 
-        previousDelta = delta;
+        previousTravel = travel;
+        previousDelta =
+            validSceneDepth ?
+            delta :
+            -IE_PBR_STAGE243_THICKNESS;
     }
 #endif
 
