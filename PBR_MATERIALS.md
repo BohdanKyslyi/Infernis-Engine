@@ -211,3 +211,23 @@ Stages 2.37-2.40 to baseline so an older diagnostic cannot contaminate this
 test. Capture the same open and closed can poses outdoors with the flashlight
 on, plus one dark-room frame for `sky_linear` and `sky_native`. Restore
 `baseline` and delete `shaders_cache` after the audit.
+
+## Stage 2.42 - shadow-aware HUD conductor transport
+
+Stage 2.41 proved that the full sky cubemap provides useful directional metal
+reflections, but it also exposed two independent limitations of the classic
+renderer: the weather cubemap has no indoor visibility, and a delta local light
+can miss the visible lobe of a rough conductor completely.
+
+`apply_pbr_stage2_42_hud_conductor.py` separates those routes:
+
+- `baseline` restores the Stage 2.41 baseline;
+- `local_shadowed` adds an F0-coloured integrated conductor response inside the
+  ordinary local-light pass, so spotlight attenuation and shadows still apply;
+- `hud_occlusion` keeps `sky_linear` for the world but suppresses the unoccluded
+  weather cubemap on near-camera metallic surfaces;
+- `combined` enables both corrections and is the Stage 2.42 candidate.
+
+This is deliberately an audit bridge, not a replacement for HUD SSLR.  The
+occlusion mode removes invalid through-wall sky energy; a later screen-space
+reflection pass can replace it with scene-visible indoor reflections.
