@@ -92,3 +92,23 @@ and normal modes display the values that survived the deferred G-buffer. The
 local cosine probe checks position, light direction, and `NdotL` without GGX;
 the specular mode keeps only the local-light GGX/Fresnel lobe. Always restore
 `production` and delete `shaders_cache` after completing the audit.
+
+## Local-metal response calibration
+
+Stage 2.37 separates the two mechanisms that can make a conductor respond too
+weakly to X-Ray's mathematical point lights. The multi-scatter mode restores a
+conservative broad, F0-tinted conductor lobe. The source-radius mode combines
+the authored GGX variance with a finite-source variance so a local light does
+not behave like an infinitely small delta emitter:
+
+```text
+py apply_pbr_stage2_37_local_metal_response.py baseline
+py apply_pbr_stage2_37_local_metal_response.py multiscatter
+py apply_pbr_stage2_37_local_metal_response.py source_radius
+py apply_pbr_stage2_37_local_metal_response.py combined
+```
+
+The corrections affect only PBR metallic response from local lights. Sun, IBL,
+dielectric diffuse, and legacy materials retain their production paths. Keep
+Stage 2.30 authored and Stage 2.36 production during this test. Restore
+`baseline` and delete `shaders_cache` after calibration.
