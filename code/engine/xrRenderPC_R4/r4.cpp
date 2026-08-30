@@ -82,6 +82,18 @@ static class cl_pos_decompress_params2 : public R_constant_setup {
     }
 } binder_pos_decompress_params2;
 
+static class cl_ie_pbr_hud_projection_params : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        extern ENGINE_API float psHUD_FOV;
+
+        const float worldVertTan = tanf(deg2rad(Device.fFOV / 2.0f));
+        const float hudVertTan = tanf(deg2rad(psHUD_FOV * Device.fFOV / 2.0f));
+        const float hudToWorldTan = hudVertTan / std::max(worldVertTan, EPS_S);
+
+        RCache.set_c(C, hudToWorldTan, psHUD_FOV, IE_VIEWPORT_NEAR, 0.0f);
+    }
+} binder_ie_pbr_hud_projection_params;
+
 static class cl_water_intensity : public R_constant_setup {
     virtual void setup(R_constant* C) {
         CEnvDescriptor& E = *g_pGamePersistent->Environment().CurrentEnv;
@@ -396,6 +408,8 @@ void CRender::create() {
         "pos_decompression_params", &binder_pos_decompress_params);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
         "pos_decompression_params2", &binder_pos_decompress_params2);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "ie_pbr_hud_projection_params", &binder_ie_pbr_hud_projection_params);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("triLOD", &binder_LOD);
 
     c_lmaterial = "L_material";

@@ -252,3 +252,27 @@ The hit mask is green where the ray found visible scene geometry and red where
 the cubemap fallback remains. This first implementation is an inline,
 single-frame bridge; a dedicated reflection render target and temporal filter
 can follow after the ray/depth convention is validated in game.
+
+## Stage 2.44 - HUD projection bridge
+
+The Stage 2.43 hit mask proved that the combine shader executes on HUD PBR
+surfaces, but almost every lid pixel missed the scene. The cause is the HUD's
+separate projection: it is rasterized with `psHUD_FOV * Device.fFOV`, while
+the combine pass reconstructs G-buffer XY with the ordinary world FOV. The
+stored view-space Z is valid, but the reconstructed HUD ray origin is not.
+
+Stage 2.44 registers the exact tangent ratio from C++ and applies it only to
+the near metallic SSLR ray origin. It also extends the march range so the ray
+can reach a flashlight-lit room surface:
+
+```text
+py apply_pbr_stage2_44_hud_projection.py projection_mask
+py apply_pbr_stage2_44_hud_projection.py corrected_sslr
+py apply_pbr_stage2_44_hud_projection.py baseline
+```
+
+Use `projection_mask` first. Green now means that the projection-corrected ray
+intersected visible G-buffer geometry; red retains the sky cubemap fallback.
+If the lid has broad stable green coverage, test `corrected_sslr` in the same
+room with the flashlight off and on. The switcher keeps Stage 2.42 disabled,
+so this audit does not reintroduce the unshadowed weather-energy workaround.

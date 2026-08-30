@@ -38,8 +38,17 @@ static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 // fallback.  Unlike Stage 2.42 this never suppresses sky by distance alone.
 #define IE_PBR_STAGE243_HUD_SSLR_MODE 0
 
-static const int IE_PBR_STAGE243_STEPS = 18;
-static const float IE_PBR_STAGE243_STEP_LENGTH = 0.12f;
+// Infernis PBR Stage 2.44: HUD/world projection bridge.
+// HUD geometry is rasterized with psHUD_FOV * Device.fFOV, while the combine
+// pass reconstructs G-buffer XY with the world FOV.  P.z stays in view-space
+// units, so correcting XY by tan(hudFov/2) / tan(worldFov/2) restores the real
+// ray origin without changing authored materials or scene exposure.
+#define IE_PBR_STAGE244_HUD_PROJECTION 0
+
+uniform float4 ie_pbr_hud_projection_params;
+
+static const int IE_PBR_STAGE243_STEPS = 32;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
 static const float IE_PBR_STAGE243_MAX_DISTANCE = 2.0f;
 static const float IE_PBR_STAGE243_THICKNESS = 0.08f;
 
@@ -215,6 +224,12 @@ float3 ie_pbr_stage243_screen_reflection(
     confidence = 0.0f;
 
 #if IE_PBR_STAGE243_HUD_SSLR_MODE != 0
+    #if IE_PBR_STAGE244_HUD_PROJECTION != 0
+        // gbuffer_load_data reconstructed HUD XY with the world projection.
+        // Convert it back to the view-space position used before HUD rasterization.
+        pointView.xy *= ie_pbr_hud_projection_params.xx;
+    #endif
+
     float hudConductor =
         saturate(metallic) *
         (1.0f - smoothstep(
