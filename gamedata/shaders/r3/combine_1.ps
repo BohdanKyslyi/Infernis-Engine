@@ -235,6 +235,25 @@ float3 ie_pbr_ambient_ibl(
             environmentFresnel
         );
 
+#if IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE == 2 || IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE == 3
+    // Rough conductors need a low-frequency reflection term when the sampled
+    // cubemap direction is much darker than X-Ray's diffuse sky irradiance.
+    // Reusing that irradiance is a coverage approximation, not Lambert metal:
+    // the result remains F0 tinted, roughness weighted, and metallic-only.
+    float conductorAmbientFillWeight =
+        min(
+            roughness * IE_PBR_CONDUCTOR_AMBIENT_FILL_SCALE,
+            IE_PBR_CONDUCTOR_AMBIENT_FILL_LIMIT
+        ) *
+        metallic;
+
+    ambient +=
+        diffuseIrradiance *
+        F0 *
+        conductorAmbientFillWeight *
+        IE_PBR_CAL_AMBIENT_SPECULAR;
+#endif
+
     return
         ambient *
         saturate(hemiAo) *
