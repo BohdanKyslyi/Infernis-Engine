@@ -254,6 +254,25 @@ float3 ie_pbr_ambient_ibl(
         IE_PBR_CAL_AMBIENT_SPECULAR;
 #endif
 
+#if IE_PBR_STAGE239_CONDUCTOR_REFERENCE_MODE == 2 || IE_PBR_STAGE239_CONDUCTOR_REFERENCE_MODE == 3
+    // Strong IBL reference: use the already validated low-frequency sky
+    // irradiance as an upper bound for energy missing from the ordinary X-Ray
+    // cubemap mip sampled along the reflection vector. The probe stays
+    // metallic-only, F0 tinted, and roughness dependent.
+    float conductorIblReferenceWeight =
+        saturate(
+            roughness *
+            IE_PBR_CONDUCTOR_REFERENCE_ROUGHNESS_GAIN
+        ) *
+        metallic;
+
+    ambient +=
+        diffuseIrradiance *
+        F0 *
+        conductorIblReferenceWeight *
+        IE_PBR_CONDUCTOR_IBL_REFERENCE_STRENGTH;
+#endif
+
     return
         ambient *
         saturate(hemiAo) *
