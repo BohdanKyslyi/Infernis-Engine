@@ -145,12 +145,14 @@ float3 ie_pbr_ambient_ibl(
             pointView,
             N,
             roughness
-        );
+        ) *
+        IE_PBR_CAL_AMBIENT_SPECULAR;
 
     float3 diffuse =
         diffuseIrradiance *
         ie_pbr_prepare_diffuse_albedo(albedo) *
-        (1.0f - metallic);
+        (1.0f - metallic) *
+        IE_PBR_CAL_AMBIENT_DIFFUSE;
 
     float3 F0 =
         lerp(

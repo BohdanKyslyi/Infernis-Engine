@@ -65,6 +65,16 @@ static const float IE_PBR_INV_GAMMA = 0.45454545f;
 // Keep this bridge switchable while metallic F0 and specular IBL stay linear.
 #define IE_PBR_XRAY_DIFFUSE_BRIDGE 1
 
+// Infernis PBR Stage 2.29: independent energy calibration.
+// The balanced preset trims only the diffuse energy that Stage 2.28 restored.
+// Specular remains at the proven Stage 2.24/2.27 response.
+static const float IE_PBR_CAL_SUN_DIFFUSE = 0.90f;
+static const float IE_PBR_CAL_SUN_SPECULAR = 1.00f;
+static const float IE_PBR_CAL_LOCAL_DIFFUSE = 0.80f;
+static const float IE_PBR_CAL_LOCAL_SPECULAR = 1.00f;
+static const float IE_PBR_CAL_AMBIENT_DIFFUSE = 0.90f;
+static const float IE_PBR_CAL_AMBIENT_SPECULAR = 1.00f;
+
 float3 ie_pbr_to_linear(float3 value)
 {
     return pow(abs(value), IE_PBR_GAMMA);

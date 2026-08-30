@@ -55,14 +55,18 @@ float4 plight_local( float m, float3 pnt, float3 normal, float3 light_position, 
 // X-Ray's sun is authored around the legacy material LUT. Bridge the normalized
 // Lambert lobe back to those diffuse units, but keep the independently proven
 // GGX limit that prevents low-roughness metals from becoming white.
-static const float IE_PBR_SUN_DIFFUSE_SCALE = 3.14159265f;
-static const float IE_PBR_SUN_SPECULAR_SCALE = 0.25f;
+static const float IE_PBR_SUN_DIFFUSE_SCALE =
+    3.14159265f * IE_PBR_CAL_SUN_DIFFUSE;
+static const float IE_PBR_SUN_SPECULAR_SCALE =
+    0.25f * IE_PBR_CAL_SUN_SPECULAR;
 
-// Infernis PBR Stage 2.24:
-// X-Ray local-light colors are calibrated around the legacy material LUT.
-// A normalized Lambert lobe contributes 1/PI less diffuse energy, so bridge
-// those units once here. This affects only PBR point/spot lights.
-static const float IE_PBR_LOCAL_RADIANCE_SCALE = 3.14159265f;
+// Infernis PBR Stage 2.29:
+// X-Ray local-light colors are authored around the legacy material LUT.
+// Keep the Lambert PI bridge, but calibrate diffuse and GGX independently.
+static const float IE_PBR_LOCAL_DIFFUSE_SCALE =
+    3.14159265f * IE_PBR_CAL_LOCAL_DIFFUSE;
+static const float IE_PBR_LOCAL_SPECULAR_SCALE =
+    3.14159265f * IE_PBR_CAL_LOCAL_SPECULAR;
 
 // Stage 2.17 diagnostic selector. Production/full = 0, diffuse-only = 1,
 // specular-only = 2. The companion script changes only this define.
@@ -202,9 +206,13 @@ float4 plight_local_pbr(
     );
 
 #if IE_PBR_LOCAL_LOBE_MODE == 1
-    float3 result = diffuseLobe;
+    float3 result =
+        diffuseLobe *
+        IE_PBR_LOCAL_DIFFUSE_SCALE;
 #elif IE_PBR_LOCAL_LOBE_MODE == 2
-    float3 result = specularLobe;
+    float3 result =
+        specularLobe *
+        IE_PBR_LOCAL_SPECULAR_SCALE;
 #elif IE_PBR_LOCAL_LOBE_MODE == 3
     // Independent probe for position, normal, and light direction.
     float NdotL =
@@ -216,13 +224,15 @@ float4 plight_local_pbr(
         );
     float3 result = albedo * NdotL;
 #else
-    float3 result = diffuseLobe + specularLobe;
+    float3 result =
+        diffuseLobe *
+        IE_PBR_LOCAL_DIFFUSE_SCALE +
+        specularLobe *
+        IE_PBR_LOCAL_SPECULAR_SCALE;
 #endif
 
     return float4(
-        result *
-        att *
-        IE_PBR_LOCAL_RADIANCE_SCALE,
+        result * att,
         0.0f
     );
 }
