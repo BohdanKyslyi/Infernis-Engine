@@ -183,3 +183,31 @@ or 20 percent to both F0-tinted conductor reference terms; they do not add
 Lambert diffuse. Compare the same open and closed can poses with the flashlight
 on. `combined_115` is the preferred production candidate. Restore `baseline`
 and delete `shaders_cache` after calibration.
+
+## Specular sky source audit
+
+Stage 2.41 replaces the Stage 2.39/2.40 irradiance-fill experiment with a real
+reflection-source test. X-Ray binds the small `sky_texture_env` cubemaps as
+`env_s0/env_s1`, while the full visible sky cubemaps are available as
+`sky_s0/sky_s1`. Diffuse irradiance stays on `env_s*`; only specular IBL is
+switched during this audit:
+
+```text
+py apply_pbr_stage2_41_specular_sky.py baseline
+py apply_pbr_stage2_41_specular_sky.py env_auto_lod
+py apply_pbr_stage2_41_specular_sky.py sky_linear
+py apply_pbr_stage2_41_specular_sky.py sky_native
+```
+
+`env_auto_lod` isolates the old fixed-LOD assumption. `sky_linear` follows the
+IX-Ray resource split and keeps the private PBR gamma-to-linear transport.
+`sky_native` uses the same reflection vector, full sky cubemap, and
+roughness-selected mip but bypasses the manual specular gamma decode to expose
+a possible double conversion. None of these modes adds diffuse light to a
+metal or reuses diffuse irradiance as a conductor fill.
+
+The switcher automatically restores the Stage 2.30 material override and
+Stages 2.37-2.40 to baseline so an older diagnostic cannot contaminate this
+test. Capture the same open and closed can poses outdoors with the flashlight
+on, plus one dark-room frame for `sky_linear` and `sky_native`. Restore
+`baseline` and delete `shaders_cache` after the audit.
