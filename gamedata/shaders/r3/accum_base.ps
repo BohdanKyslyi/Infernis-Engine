@@ -126,14 +126,48 @@ else
  lightmap = s_lmap.Sample( smp_rtlinear, PS.xy / PS.w ); //
  #endif
 
+#if IE_PBR_STAGE247_LOCAL_SPLIT_MODE == 1
+ if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+ {
+     float3 rawPbr =
+         ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
+         light.rgb;
+     float rawSignal =
+         saturate(ie_pbr_stage247_luminance(rawPbr) * 8.0f);
+     float visibilitySignal =
+         saturate(
+             s *
+             ie_pbr_stage247_luminance(lightmap.rgb)
+         );
+
+     // Red = raw local GGX before visibility.
+     // Green = shadow/projected-light visibility.
+     // Yellow = both are present; black = neither is present.
+     return blendp(
+         float4(rawSignal, visibilitySignal, 0.0f, 0.0f),
+         I.tc
+     );
+ }
+#endif
+
  // Infernis PBR Stage 2.6: radiance and all local-light
  // modulation are converted only for PBR pixels.
  if (gbd.pbr > 0.5f)
  {
+     float3 pbrVisibility =
+         ie_pbr_prepare_light_factor(s * lightmap.rgb);
+
+#if IE_PBR_STAGE247_LOCAL_SPLIT_MODE == 2
+     if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+     {
+         pbrVisibility = float3(1.0f, 1.0f, 1.0f);
+     }
+#endif
+
      float3 pbrTransport =
          ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
          light.rgb *
-         ie_pbr_prepare_light_factor(s * lightmap.rgb);
+         pbrVisibility;
 
      return blendp(
          float4(pbrTransport, 0.0f),

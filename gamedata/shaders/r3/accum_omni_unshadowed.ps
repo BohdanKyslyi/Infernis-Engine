@@ -86,6 +86,25 @@ else
             rsqr
         );
 }
+
+#if IE_PBR_STAGE247_LOCAL_SPLIT_MODE == 1
+ if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+ {
+     float3 rawPbr =
+         ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
+         light.rgb;
+     float rawSignal =
+         saturate(ie_pbr_stage247_luminance(rawPbr) * 8.0f);
+
+     // Blue marks the unshadowed omni route.  A cyan HUD therefore means
+     // the tested light did not use accum_base's projected shadow path.
+     return blendp(
+         float4(rawSignal, 1.0f, 1.0f, 0.0f),
+         tc
+     );
+ }
+#endif
+
  // Infernis PBR Stage 2.6: local radiance is converted
  // without changing the legacy omni-light path.
  if (gbd.pbr > 0.5f)

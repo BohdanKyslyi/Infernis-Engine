@@ -118,6 +118,11 @@ static const float IE_PBR_STAGE242_HUD_SKY_FLOOR = 0.0f;
 // 0 = baseline, 1 = selected-pixel mask, 2 = corrected local-light position.
 #define IE_PBR_STAGE246_LOCAL_HUD_PROJECTION 0
 
+// Infernis PBR Stage 2.47: split the local-light result at the exact point
+// where a PBR BRDF is multiplied by the projected shadow/lightmap factor.
+// 0 = production, 1 = RGB split probe, 2 = bypass visibility on selected HUD.
+#define IE_PBR_STAGE247_LOCAL_SPLIT_MODE 0
+
 static const float IE_PBR_STAGE246_HUD_MAX_DEPTH = 0.85f;
 
 uniform float4 ie_pbr_hud_projection_params;
@@ -143,6 +148,14 @@ void ie_pbr_stage246_correct_local_position(inout gbuffer_data gbd)
             hudWeight
         );
 #endif
+}
+
+float ie_pbr_stage247_luminance(float3 value)
+{
+    return dot(
+        max(value, float3(0.0f, 0.0f, 0.0f)),
+        float3(0.2126f, 0.7152f, 0.0722f)
+    );
 }
 
 
