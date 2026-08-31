@@ -3,6 +3,7 @@
 void fix_texture_name(LPSTR fn);
 
 #include "dxRenderDeviceRender.h"
+#include "infernis_pbr_settings.h"
 
 void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOOL _aref,
                  LPCSTR _detail_replace, bool DO_NOT_FINISH) {
@@ -14,7 +15,9 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
     _t.create(fname);
 
 #ifdef USE_DX11
-    bool usePBR = !!DEV->m_textures_description.UsePBRTextures(fname);
+    bool usePBR =
+        infernis_pbr_rendering_enabled() &&
+        !!DEV->m_textures_description.UsePBRTextures(fname);
 
     if (usePBR) {
         RImplementation.addShaderOption("USE_PBR", "1");

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isolate the complete HUD SSLR cost without changing the rest of PBR."""
+"""Toggle HUD SSLR through engine_external.ltx for the Stage 2.54 probe."""
 
 from __future__ import annotations
 
@@ -9,38 +9,28 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-COMBINE = ROOT / "gamedata" / "shaders" / "r3" / "combine_1.ps"
-
-SSLR_RE = re.compile(
-    r"^(#define IE_PBR_STAGE243_HUD_SSLR_MODE )[0-2](\s*)$",
-    re.MULTILINE,
-)
+CONFIG = ROOT / "gamedata" / "configs" / "infernis_engine" / "engine_external.ltx"
+SSLR_RE = re.compile(r"^(\s*sslr_mode\s*=\s*)(\w+)(\s*(?:;.*)?)$", re.MULTILINE)
 
 MODES = {
-    "sslr_off": 0,
-    "off": 0,
-    "sslr_on": 2,
-    "on": 2,
-    "production": 2,
-}
-
-NAMES = {
-    0: "HUD SSLR disabled; sky IBL fallback retained",
-    1: "HUD SSLR diagnostic mask",
-    2: "HUD SSLR enabled with scene-visible reflections",
+    "sslr_off": "off",
+    "off": "off",
+    "sslr_on": "performance",
+    "on": "performance",
+    "production": "performance",
 }
 
 
-def read_mode(text: str) -> int:
+def read_mode(text: str) -> str:
     match = SSLR_RE.search(text)
     if match is None:
-        raise SystemExit(f"HUD SSLR define not found in {COMBINE}")
-    return int(match.group(0).split()[2])
+        raise SystemExit(f"sslr_mode was not found in {CONFIG}")
+    return match.group(2).lower()
 
 
 def main() -> None:
-    if not COMBINE.is_file():
-        raise SystemExit("Stage 2.54 shader file was not found")
+    if not CONFIG.is_file():
+        raise SystemExit("engine_external.ltx was not found")
 
     if len(sys.argv) != 2 or sys.argv[1] in {"-h", "--help"}:
         raise SystemExit(
@@ -49,24 +39,22 @@ def main() -> None:
         )
 
     command = sys.argv[1].lower()
-    text = COMBINE.read_text(encoding="utf-8")
+    text = CONFIG.read_text(encoding="utf-8")
 
     if command == "status":
-        print(f"Stage 2.54 performance probe: {NAMES[read_mode(text)]}")
+        print(f"Stage 2.54 performance probe: sslr_mode = {read_mode(text)}")
         return
     if command not in MODES:
         raise SystemExit(f"Unknown mode: {command}")
 
     mode = MODES[command]
-    updated, count = SSLR_RE.subn(rf"\g<1>{mode}\g<2>", text, count=1)
+    updated, count = SSLR_RE.subn(rf"\g<1>{mode}\g<3>", text, count=1)
     if count != 1:
-        raise SystemExit("Could not update the HUD SSLR mode")
+        raise SystemExit("Could not update sslr_mode")
+    CONFIG.write_text(updated, encoding="utf-8", newline="\n")
 
-    COMBINE.write_text(updated, encoding="utf-8", newline="\n")
-
-    print(f"Stage 2.54 performance probe: {NAMES[mode]}")
-    print("Sky IBL, local lighting, shadows, BRDF, and metallic 3.50x are unchanged.")
-    print("Delete shaders_cache before launching the game.")
+    print(f"Stage 2.54 performance probe: sslr_mode = {mode}")
+    print("Delete shaders_cache and restart the game after changing it.")
 
 
 if __name__ == "__main__":

@@ -36,7 +36,19 @@ static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 // Infernis PBR Stage 2.43: inline HUD screen-space local reflection.
 // 0 = baseline, 1 = SSR hit mask, 2 = scene-visible reflection with cubemap
 // fallback.  Unlike Stage 2.42 this never suppresses sky by distance alone.
+#ifndef IE_PBR_RENDERING_ENABLED
+#define IE_PBR_RENDERING_ENABLED 1
+#endif
+
+#ifndef IE_PBR_SSLR_MODE
+#define IE_PBR_SSLR_MODE 1
+#endif
+
+#if IE_PBR_RENDERING_ENABLED == 0 || IE_PBR_SSLR_MODE == 0
+#define IE_PBR_STAGE243_HUD_SSLR_MODE 0
+#else
 #define IE_PBR_STAGE243_HUD_SSLR_MODE 2
+#endif
 
 // Infernis PBR Stage 2.44: HUD/world projection bridge.
 // HUD geometry is rasterized with psHUD_FOV * Device.fFOV, while the combine
@@ -62,7 +74,15 @@ static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 // Stage 2.43 marched 32 * 0.20 = 6.40 view-space metres even though the
 // effect is admitted only for conductors inside two metres of the camera.
 // 1 = performance, 2 = balanced, 3 = quality, 4 = Stage 2.45 reference.
+#if IE_PBR_SSLR_MODE <= 1
 #define IE_PBR_STAGE255_SSLR_QUALITY 1
+#elif IE_PBR_SSLR_MODE == 2
+#define IE_PBR_STAGE255_SSLR_QUALITY 2
+#elif IE_PBR_SSLR_MODE == 3
+#define IE_PBR_STAGE255_SSLR_QUALITY 3
+#else
+#define IE_PBR_STAGE255_SSLR_QUALITY 4
+#endif
 
 #if IE_PBR_STAGE255_SSLR_QUALITY == 1
 static const int IE_PBR_STAGE243_STEPS = 8;
@@ -906,6 +926,7 @@ float3 color =
 // PBR
 // ============================================================
 
+#if IE_PBR_RENDERING_ENABLED != 0
 if (gbd.pbr > 0.5f)
 {
     // Direct lighting in the accumulator is already a complete RGB BRDF.
@@ -939,6 +960,7 @@ if (gbd.pbr > 0.5f)
 // ============================================================
 
 else
+#endif
 {
     hmodel(
         hdiffuse,

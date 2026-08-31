@@ -10,6 +10,7 @@
 #include "xrRenderCommon/dxRenderDeviceRender.h"
 #include "xrRenderCommon/dxWallMarkArray.h"
 #include "xrRenderCommon/dxUIShader.h"
+#include "xrRenderCommon/infernis_pbr_settings.h"
 
 #include "../xrRenderDX10/3DFluid/dx103DFluidManager.h"
 #include "xrRenderCommon/ShaderResourceTraits.h"
@@ -999,6 +1000,8 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     char c_sun_shafts[32];
     char c_ssao[32];
     char c_sun_quality[32];
+    char c_infernis_pbr[2];
+    char c_infernis_sslr[2];
 
     char sh_name[MAX_PATH] = "";
 
@@ -1007,6 +1010,18 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     }
 
     u32 len = xr_strlen(sh_name);
+
+    const bool infernisPbrEnabled = infernis_pbr_rendering_enabled();
+    const u32 infernisSslrMode = infernis_pbr_sslr_mode();
+    c_infernis_pbr[0] = infernisPbrEnabled ? '1' : '0';
+    c_infernis_pbr[1] = 0;
+    c_infernis_sslr[0] = '0' + char(infernisSslrMode);
+    c_infernis_sslr[1] = 0;
+
+    defines[def_it++] = { "IE_PBR_RENDERING_ENABLED", c_infernis_pbr };
+    defines[def_it++] = { "IE_PBR_SSLR_MODE", c_infernis_sslr };
+    sh_name[len++] = c_infernis_pbr[0];
+    sh_name[len++] = c_infernis_sslr[0];
     // options
     {
         xr_sprintf(c_smapsize, "%04d", u32(o.smapsize));
