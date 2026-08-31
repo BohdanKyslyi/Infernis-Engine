@@ -123,6 +123,18 @@ static const float IE_PBR_STAGE242_HUD_SKY_FLOOR = 0.0f;
 // 0 = production, 1 = RGB split probe, 2 = bypass visibility on selected HUD.
 #define IE_PBR_STAGE247_LOCAL_SPLIT_MODE 0
 
+// Infernis PBR Stage 2.48: near-HUD omni conductor response.
+// The actor torch intentionally uses a shadowed spotlight for the world and
+// a short unshadowed point light for first-person fill.  Stage 2.47 proved
+// that HUD items receive the latter route.  A delta point sample leaves a
+// rough conductor with only sparse GGX pixels, so integrate a bounded part of
+// the finite emitter footprint in accum_omni_unshadowed.ps only.
+// 0 = baseline, 1 = balanced production response, 2 = stronger comparison.
+#define IE_PBR_STAGE248_HUD_OMNI_CONDUCTOR_MODE 0
+
+static const float IE_PBR_STAGE248_BALANCED_STRENGTH = 1.15f;
+static const float IE_PBR_STAGE248_STRONG_STRENGTH = 1.35f;
+
 static const float IE_PBR_STAGE246_HUD_MAX_DEPTH = 0.85f;
 
 uniform float4 ie_pbr_hud_projection_params;
@@ -734,6 +746,71 @@ void ie_pbr_direct_brdf_lobes(
         IE_PBR_STAGE242_LOCAL_STRENGTH *
         IE_PBR_INV_PI *
         NdotL;
+#endif
+}
+
+float3 ie_pbr_stage248_hud_omni_conductor_return(
+    gbuffer_data gbd,
+    float3 lightPosition,
+    float lightRangeRsq
+)
+{
+#if IE_PBR_STAGE248_HUD_OMNI_CONDUCTOR_MODE == 0
+    return float3(0.0f, 0.0f, 0.0f);
+#else
+    float hudWeight = ie_pbr_stage246_hud_weight(gbd);
+    if (hudWeight <= 0.0f)
+    {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+
+    float metallic = gbd.metallic;
+    float roughness = gbd.roughness;
+    ie_pbr_apply_material_override(metallic, roughness);
+
+    metallic = saturate(metallic);
+    roughness = clamp(roughness, IE_PBR_MIN_ROUGHNESS, 1.0f);
+    if (metallic <= IE_PBR_EPSILON)
+    {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+
+    float3 lightToPoint = gbd.P - lightPosition;
+    float distanceSq = dot(lightToPoint, lightToPoint);
+    float attenuation = ie_pbr_prepare_light_factor(
+        saturate(1.0f - distanceSq * lightRangeRsq)
+    );
+
+    float3 L = -normalize(lightToPoint);
+    float NdotL = saturate(dot(normalize(gbd.N), L));
+    if (NdotL <= IE_PBR_EPSILON || attenuation <= IE_PBR_EPSILON)
+    {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+
+    float3 albedo = ie_pbr_prepare_albedo(gbd.C);
+    float3 F0 = ie_pbr_resolve_f0(albedo, metallic);
+    float emitterCoverage =
+        saturate(roughness * IE_PBR_CONDUCTOR_REFERENCE_ROUGHNESS_GAIN) *
+        metallic;
+
+#if IE_PBR_STAGE248_HUD_OMNI_CONDUCTOR_MODE == 2
+    float strength = IE_PBR_STAGE248_STRONG_STRENGTH;
+#else
+    float strength = IE_PBR_STAGE248_BALANCED_STRENGTH;
+#endif
+
+    // This remains reflected local-light energy, not emissive or diffuse:
+    // authored conductor F0 supplies its colour and the real omni light still
+    // supplies direction, range attenuation, radiance, and on/off state.
+    return
+        F0 *
+        emitterCoverage *
+        strength *
+        IE_PBR_INV_PI *
+        NdotL *
+        attenuation *
+        hudWeight;
 #endif
 }
 

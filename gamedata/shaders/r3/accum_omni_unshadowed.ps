@@ -73,6 +73,16 @@ if (gbd.pbr > 0.5f)
             Ldynamic_pos.w,
             rsqr
         );
+
+    // Stage 2.48: the actor torch's near-HUD fill is this unshadowed omni
+    // route, not accum_base's spotlight route.  Restore the finite-emitter
+    // response of rough conductors before multiplying by actual light RGB.
+    light.rgb +=
+        ie_pbr_stage248_hud_omni_conductor_return(
+            gbd,
+            Ldynamic_pos.xyz,
+            Ldynamic_pos.w
+        );
 }
 else
 {
