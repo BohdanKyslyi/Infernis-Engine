@@ -51,6 +51,13 @@ static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 // before applying the usual thickness guard.
 #define IE_PBR_STAGE245_BINARY_HIT 1
 
+// Infernis PBR Stage 2.53: defer SSLR radiance fetches until a depth hit.
+// The marcher only needs s_position while searching.  Stage 2.43 sampled
+// s_diffuse and s_accumulator at every step even though those values were
+// discarded unless that exact step became the final accepted intersection.
+// 0 = Stage 2.45 reference sampling, 1 = optimized identical-result sampling.
+#define IE_PBR_STAGE253_DEFER_HIT_RADIANCE 1
+
 static const int IE_PBR_STAGE243_STEPS = 32;
 static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
 static const float IE_PBR_STAGE243_MAX_DISTANCE = 2.0f;
@@ -295,19 +302,23 @@ float3 ie_pbr_stage243_screen_reflection(
 #ifndef USE_MSAA
         packedPosition =
             s_position.Sample(smp_nofilter, rayTC);
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE == 0
         hitBase =
             s_diffuse.Sample(smp_nofilter, rayTC);
         hitLight =
             s_accumulator.Sample(smp_nofilter, rayTC);
+#endif
 #else
         int2 hitPixel =
             int2(rayTC * pos_decompression_params2.xy);
         packedPosition =
             s_position.Load(int3(hitPixel, 0), sampleIndex);
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE == 0
         hitBase =
             s_diffuse.Load(int3(hitPixel, 0), sampleIndex);
         hitLight =
             s_accumulator.Load(int3(hitPixel, 0), sampleIndex);
+#endif
 #endif
 
         float sceneDepth = packedPosition.z;
@@ -387,19 +398,23 @@ float3 ie_pbr_stage243_screen_reflection(
 #ifndef USE_MSAA
             packedPosition =
                 s_position.Sample(smp_nofilter, rayTC);
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE == 0
             hitBase =
                 s_diffuse.Sample(smp_nofilter, rayTC);
             hitLight =
                 s_accumulator.Sample(smp_nofilter, rayTC);
+#endif
 #else
             int2 refinedPixel =
                 int2(rayTC * pos_decompression_params2.xy);
             packedPosition =
                 s_position.Load(int3(refinedPixel, 0), sampleIndex);
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE == 0
             hitBase =
                 s_diffuse.Load(int3(refinedPixel, 0), sampleIndex);
             hitLight =
                 s_accumulator.Load(int3(refinedPixel, 0), sampleIndex);
+#endif
 #endif
 
             sceneDepth = packedPosition.z;
@@ -422,6 +437,24 @@ float3 ie_pbr_stage243_screen_reflection(
 
         if (acceptedHit)
         {
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE != 0
+            // Fetch radiance once, after the depth-only march and optional
+            // binary refinement selected the final intersection coordinates.
+#ifndef USE_MSAA
+            hitBase =
+                s_diffuse.Sample(smp_nofilter, rayTC);
+            hitLight =
+                s_accumulator.Sample(smp_nofilter, rayTC);
+#else
+            int2 radiancePixel =
+                int2(rayTC * pos_decompression_params2.xy);
+            hitBase =
+                s_diffuse.Load(int3(radiancePixel, 0), sampleIndex);
+            hitLight =
+                s_accumulator.Load(int3(radiancePixel, 0), sampleIndex);
+#endif
+#endif
+
             float pbrHit =
                 gbuf_is_pbr(packedPosition.w) ? 1.0f : 0.0f;
 
