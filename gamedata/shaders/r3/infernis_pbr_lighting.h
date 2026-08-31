@@ -147,7 +147,7 @@ static const float IE_PBR_STAGE248_MIN_ANGULAR_WIDTH = 0.30f;
 // Stage 2.52 adds the final 3.00x/3.50x candidates while retaining 2.50x.
 // 0 = baseline, 1 = balanced, 2 = reference, 3 = boosted, 4 = high,
 // 5 = higher, 6 = maximum.
-#define IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE 5
+#define IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE 6
 
 static const float IE_PBR_STAGE250_BALANCED_STRENGTH = 0.72f;
 static const float IE_PBR_STAGE250_REFERENCE_STRENGTH = 1.0f;
