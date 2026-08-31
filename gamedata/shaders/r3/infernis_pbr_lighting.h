@@ -143,11 +143,14 @@ static const float IE_PBR_STAGE248_MIN_ANGULAR_WIDTH = 0.30f;
 // sparse single-scatter GGX sample.  Restore the low-frequency part of rough
 // conductor reflection at the BRDF split itself, using presented F0 rather
 // than reintroducing dielectric diffuse Albedo.
-// 0 = baseline, 1 = balanced production compensation, 2 = full reference.
+// Stage 2.51 extends the verified reference with two calibration levels.
+// 0 = baseline, 1 = balanced, 2 = reference, 3 = boosted, 4 = high.
 #define IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE 0
 
 static const float IE_PBR_STAGE250_BALANCED_STRENGTH = 0.72f;
 static const float IE_PBR_STAGE250_REFERENCE_STRENGTH = 1.0f;
+static const float IE_PBR_STAGE251_BOOSTED_STRENGTH = 1.75f;
+static const float IE_PBR_STAGE251_HIGH_STRENGTH = 2.50f;
 
 static const float IE_PBR_STAGE246_HUD_MAX_DEPTH = 0.85f;
 
@@ -657,7 +660,7 @@ void ie_pbr_direct_brdf_lobes(
         F *
         NdotL;
 
-#if IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 1 || IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 2
+#if IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE >= 1 && IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE <= 4
     // This is a broad specular return, not a metallic diffuse leak.  F0 keeps
     // the reflected colour authored by the conductor Albedo; roughness
     // controls how much energy escapes the unresolved single GGX direction;
@@ -674,7 +677,13 @@ void ie_pbr_direct_brdf_lobes(
     float3 presentedF0 =
         ie_pbr_prepare_diffuse_albedo(F0);
 
-#if IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 2
+#if IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 4
+    float conductorEnergyStrength =
+        IE_PBR_STAGE251_HIGH_STRENGTH;
+#elif IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 3
+    float conductorEnergyStrength =
+        IE_PBR_STAGE251_BOOSTED_STRENGTH;
+#elif IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 2
     float conductorEnergyStrength =
         IE_PBR_STAGE250_REFERENCE_STRENGTH;
 #else
