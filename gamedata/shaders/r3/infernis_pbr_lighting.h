@@ -137,6 +137,18 @@ static const float IE_PBR_STAGE248_STRONG_STRENGTH = 1.35f;
 static const float IE_PBR_STAGE248_OMNI_SOURCE_RADIUS = 0.35f;
 static const float IE_PBR_STAGE248_MIN_ANGULAR_WIDTH = 0.30f;
 
+// Infernis PBR Stage 2.50: local rough-conductor energy compensation.
+// X-Ray's diffuse bridge presents dielectric Albedo in its established
+// display domain, while metallic=1 removes that whole lobe and leaves only a
+// sparse single-scatter GGX sample.  Restore the low-frequency part of rough
+// conductor reflection at the BRDF split itself, using presented F0 rather
+// than reintroducing dielectric diffuse Albedo.
+// 0 = baseline, 1 = balanced production compensation, 2 = full reference.
+#define IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE 0
+
+static const float IE_PBR_STAGE250_BALANCED_STRENGTH = 0.72f;
+static const float IE_PBR_STAGE250_REFERENCE_STRENGTH = 1.0f;
+
 static const float IE_PBR_STAGE246_HUD_MAX_DEPTH = 0.85f;
 
 uniform float4 ie_pbr_hud_projection_params;
@@ -644,6 +656,39 @@ void ie_pbr_direct_brdf_lobes(
         ) *
         F *
         NdotL;
+
+#if IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 1 || IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 2
+    // This is a broad specular return, not a metallic diffuse leak.  F0 keeps
+    // the reflected colour authored by the conductor Albedo; roughness
+    // controls how much energy escapes the unresolved single GGX direction;
+    // localLight guarantees that only real dynamic local-light radiance can
+    // feed it.  The shared NdotL still preserves surface orientation.
+    float conductorEnergyCoverage =
+        saturate(
+            materialRoughness *
+            IE_PBR_CONDUCTOR_REFERENCE_ROUGHNESS_GAIN
+        ) *
+        metallic *
+        localLightWeight;
+
+    float3 presentedF0 =
+        ie_pbr_prepare_diffuse_albedo(F0);
+
+#if IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE == 2
+    float conductorEnergyStrength =
+        IE_PBR_STAGE250_REFERENCE_STRENGTH;
+#else
+    float conductorEnergyStrength =
+        IE_PBR_STAGE250_BALANCED_STRENGTH;
+#endif
+
+    specularLobe +=
+        presentedF0 *
+        conductorEnergyCoverage *
+        conductorEnergyStrength *
+        IE_PBR_INV_PI *
+        NdotL;
+#endif
 
 #if IE_PBR_STAGE237_LOCAL_METAL_MODE == 1 || IE_PBR_STAGE237_LOCAL_METAL_MODE == 3
     // Kulla-Conty-inspired broad conductor return. Favg is Schlick Fresnel
