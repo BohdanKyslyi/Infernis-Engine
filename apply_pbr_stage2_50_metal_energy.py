@@ -13,7 +13,7 @@ LIGHTING = ROOT / "gamedata" / "shaders" / "r3" / "infernis_pbr_lighting.h"
 COMBINE = ROOT / "gamedata" / "shaders" / "r3" / "combine_1.ps"
 
 ENERGY_RE = re.compile(
-    r"^(#define IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE )[0-4](\s*)$",
+    r"^(#define IE_PBR_STAGE250_LOCAL_CONDUCTOR_ENERGY_MODE )[0-6](\s*)$",
     re.MULTILINE,
 )
 OMNI_RE = re.compile(

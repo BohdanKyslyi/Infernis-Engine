@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Calibrate the verified Infernis PBR local-conductor energy return."""
+"""Switch the final Infernis PBR rough-metal strength candidates."""
 
 from __future__ import annotations
 
@@ -48,18 +48,16 @@ SKY_RE = re.compile(
 MODES = {
     "baseline": 0,
     "off": 0,
-    "balanced": 1,
-    "reference": 2,
-    "boosted": 3,
     "high": 4,
+    "higher": 5,
+    "maximum": 6,
 }
 
 NAMES = {
     0: "baseline single-scatter metallic GGX",
-    1: "balanced conductor return (0.72x)",
-    2: "verified conductor reference (1.00x)",
-    3: "boosted conductor return (1.75x)",
-    4: "high conductor return (2.50x)",
+    4: "retained high conductor return (2.50x)",
+    5: "higher conductor return (3.00x)",
+    6: "maximum conductor return (3.50x)",
 }
 
 
@@ -75,15 +73,15 @@ def replace_once(
 def read_mode(text: str) -> int:
     match = ENERGY_RE.search(text)
     if match is None:
-        raise SystemExit(f"Stage 2.51 define not found in {LIGHTING}")
+        raise SystemExit(f"Stage 2.52 define not found in {LIGHTING}")
     return int(match.group(0).split()[2])
 
 
 def main() -> None:
     if not LIGHTING.is_file() or not COMBINE.is_file():
-        raise SystemExit("Stage 2.51 shader files were not found")
+        raise SystemExit("Stage 2.52 shader files were not found")
 
-    choices = "baseline|balanced|reference|boosted|high|status"
+    choices = "baseline|high|higher|maximum|status"
     if len(sys.argv) != 2 or sys.argv[1] in {"-h", "--help"}:
         raise SystemExit(f"Usage: py {Path(__file__).name} [{choices}]")
 
@@ -92,7 +90,8 @@ def main() -> None:
     command = sys.argv[1].lower()
 
     if command == "status":
-        print(f"Stage 2.51: {NAMES[read_mode(lighting)]}")
+        mode = read_mode(lighting)
+        print(f"Stage 2.52: {NAMES.get(mode, f'legacy mode {mode}')}")
         return
     if command not in MODES:
         raise SystemExit(f"Unknown mode: {command}")
@@ -112,7 +111,7 @@ def main() -> None:
     LIGHTING.write_text(lighting, encoding="utf-8", newline="\n")
     COMBINE.write_text(combine, encoding="utf-8", newline="\n")
 
-    print(f"Stage 2.51: {NAMES[mode]}")
+    print(f"Stage 2.52: {NAMES[mode]}")
     print("Stages 2.46-2.49 diagnostics/corrections are disabled.")
     print("Stage 2.45 stable SSLR and sky-linear fallback remain enabled.")
     print("Delete shaders_cache before launching the game.")
