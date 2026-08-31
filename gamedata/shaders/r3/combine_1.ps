@@ -58,11 +58,32 @@ static const float IE_PBR_IBL_MAX_LOD = 8.0f;
 // 0 = Stage 2.45 reference sampling, 1 = optimized identical-result sampling.
 #define IE_PBR_STAGE253_DEFER_HIT_RADIANCE 1
 
+// Infernis PBR Stage 2.55: HUD-sized SSLR traversal budgets.
+// Stage 2.43 marched 32 * 0.20 = 6.40 view-space metres even though the
+// effect is admitted only for conductors inside two metres of the camera.
+// 1 = performance, 2 = balanced, 3 = quality, 4 = Stage 2.45 reference.
+#define IE_PBR_STAGE255_SSLR_QUALITY 1
+
+#if IE_PBR_STAGE255_SSLR_QUALITY == 1
+static const int IE_PBR_STAGE243_STEPS = 8;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.25f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 2;
+#elif IE_PBR_STAGE255_SSLR_QUALITY == 2
+static const int IE_PBR_STAGE243_STEPS = 12;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 3;
+#elif IE_PBR_STAGE255_SSLR_QUALITY == 3
+static const int IE_PBR_STAGE243_STEPS = 16;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 3;
+#else
 static const int IE_PBR_STAGE243_STEPS = 32;
 static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 5;
+#endif
+
 static const float IE_PBR_STAGE243_MAX_DISTANCE = 2.0f;
 static const float IE_PBR_STAGE243_THICKNESS = 0.08f;
-static const int IE_PBR_STAGE245_BINARY_STEPS = 5;
 
 // Infernis PBR Stage 2.25: final G-buffer diagnostic.
 // 0 = production, 1 = route, 2 = M/R/hemi-AO, 3 = albedo, 4 = normal.
