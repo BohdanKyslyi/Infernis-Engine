@@ -134,6 +134,8 @@ static const float IE_PBR_STAGE242_HUD_SKY_FLOOR = 0.0f;
 
 static const float IE_PBR_STAGE248_BALANCED_STRENGTH = 1.15f;
 static const float IE_PBR_STAGE248_STRONG_STRENGTH = 1.35f;
+static const float IE_PBR_STAGE248_OMNI_SOURCE_RADIUS = 0.35f;
+static const float IE_PBR_STAGE248_MIN_ANGULAR_WIDTH = 0.30f;
 
 static const float IE_PBR_STAGE246_HUD_MAX_DEPTH = 0.85f;
 
@@ -781,9 +783,30 @@ float3 ie_pbr_stage248_hud_omni_conductor_return(
         saturate(1.0f - distanceSq * lightRangeRsq)
     );
 
-    float3 L = -normalize(lightToPoint);
-    float NdotL = saturate(dot(normalize(gbd.N), L));
-    if (NdotL <= IE_PBR_EPSILON || attenuation <= IE_PBR_EPSILON)
+    float distanceToLight = sqrt(max(distanceSq, IE_PBR_EPSILON));
+    float3 L = -lightToPoint / distanceToLight;
+    float pointNdotL = dot(normalize(gbd.N), L);
+
+    // Stage 2.49: integrate the cosine response over a finite spherical
+    // emitter.  The original delta sample clamps pointNdotL to zero across
+    // most of a near-camera lid; only normal-map outliers survive as dots.
+    // A finite source crosses that geometric horizon and contributes over a
+    // continuous patch, as a real flashlight reflector does.
+    float angularWidth =
+        max(
+            IE_PBR_STAGE248_MIN_ANGULAR_WIDTH,
+            saturate(
+                IE_PBR_STAGE248_OMNI_SOURCE_RADIUS /
+                distanceToLight
+            )
+        );
+    float finiteEmitterNdotL =
+        saturate(
+            (pointNdotL + angularWidth) /
+            (1.0f + angularWidth)
+        );
+
+    if (finiteEmitterNdotL <= IE_PBR_EPSILON || attenuation <= IE_PBR_EPSILON)
     {
         return float3(0.0f, 0.0f, 0.0f);
     }
@@ -808,7 +831,7 @@ float3 ie_pbr_stage248_hud_omni_conductor_return(
         emitterCoverage *
         strength *
         IE_PBR_INV_PI *
-        NdotL *
+        finiteEmitterNdotL *
         attenuation *
         hudWeight;
 #endif

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Switch Infernis PBR Stage 2.48 HUD omni-conductor calibration."""
+"""Switch Infernis PBR Stage 2.49 finite HUD omni-emitter calibration."""
 
 from __future__ import annotations
 
@@ -49,9 +49,9 @@ MODES = {
 }
 
 NAMES = {
-    0: "baseline point-light GGX",
-    1: "balanced near-HUD omni conductor response (+15%)",
-    2: "strong near-HUD omni conductor response (+35%)",
+    0: "baseline delta point-light GGX",
+    1: "balanced finite-emitter HUD conductor response",
+    2: "strong finite-emitter HUD conductor response",
 }
 
 
@@ -84,7 +84,7 @@ def main() -> None:
     command = sys.argv[1].lower()
 
     if command == "status":
-        print(f"Stage 2.48: {NAMES[read_mode(lighting)]}")
+        print(f"Stage 2.49: {NAMES[read_mode(lighting)]}")
         return
     if command not in MODES:
         raise SystemExit(f"Unknown mode: {command}")
@@ -103,7 +103,7 @@ def main() -> None:
     LIGHTING.write_text(lighting, encoding="utf-8", newline="\n")
     COMBINE.write_text(combine, encoding="utf-8", newline="\n")
 
-    print(f"Stage 2.48: {NAMES[mode]}")
+    print(f"Stage 2.49: {NAMES[mode]}")
     print("Stage 2.47 diagnostics and Stage 2.46 projection are disabled.")
     print("Stage 2.45 stable SSLR and sky-linear fallback remain enabled.")
     print("Delete shaders_cache before launching the game.")
