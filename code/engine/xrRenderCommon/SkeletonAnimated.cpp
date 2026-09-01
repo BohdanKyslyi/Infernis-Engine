@@ -479,7 +479,7 @@ void CKinematicsAnimated::LL_UpdateTracks(float dt, bool b_force, bool leave_ble
             }
             // else{
             //	CMotionDef* m_def						=
-            //m_Motions[B.motionID.slot].motions.motion_def(B.motionID.idx); 	float timeCurrent
+            // m_Motions[B.motionID.slot].motions.motion_def(B.motionID.idx); 	float timeCurrent
             //= B.timeCurrent; 	xr_vector<motion_marks>::iterator it	= m_def->marks.begin();
             //	xr_vector<motion_marks>::iterator it_e	= m_def->marks.end();
             //	for(;it!=it_e; ++it)
@@ -661,77 +661,110 @@ void CKinematicsAnimated::Load(const char* N, IReader* data, u32 dwFlags) {
     m_Partition = NULL;
     Update_LastTime = 0;
 
+    // Load a single OMF motion file.
+    const auto load_omf = [&](LPCSTR motion_name) -> bool {
+        string_path fn;
+
+        if (!FS.exist(fn, "$level$", motion_name)) {
+            if (!FS.exist(fn, "$game_meshes$", motion_name)) {
+#ifdef _EDITOR
+                Msg("!Can't find motion file '%s'.", motion_name);
+                return false;
+#else
+                Debug.fatal(DEBUG_INFO, "Can't find motion file '%s'.", motion_name);
+                return false;
+#endif
+            }
+        }
+
+        // Check compatibility
+        m_Motions.push_back(SMotionsSlot());
+
+        bool create_res = true;
+        if (!g_pMotionsContainer->has(motion_name)) // optimize fs operations
+        {
+            IReader* MS = FS.r_open(fn);
+            create_res = m_Motions.back().motions.create(motion_name, MS, bones);
+            FS.r_close(MS);
+        }
+
+        if (create_res) {
+            m_Motions.back().motions.create(motion_name, NULL, bones);
+        } else {
+            m_Motions.pop_back();
+            Msg("! error in model [%s]. Unable to load motion file '%s'.", N, motion_name);
+        }
+
+        return create_res;
+    };
+
+    // Load either a normal motion reference or a folder wildcard:
+    // dynamics\...\hands       -> hands.omf
+    // dynamics\...\shared\*.omf -> every OMF in the folder
+    const auto load_motion_reference = [&](LPCSTR reference) -> bool {
+        const u32 length = xr_strlen(reference);
+        const LPCSTR wildcard = "\\*.omf";
+        const u32 wildcard_length = xr_strlen(wildcard);
+
+        const bool folder_reference =
+            length >= wildcard_length &&
+            xr_strcmp(reference + length - wildcard_length, wildcard) == 0;
+
+        if (folder_reference) {
+            FS_FileSet files;
+
+            FS.file_list(files, "$game_meshes$", FS_ListFiles, reference);
+            FS.file_list(files, "$level$", FS_ListFiles, reference);
+
+            if (files.empty()) {
+                Msg("! [motions] No OMF files found for reference [%s] in model [%s]", reference,
+                    N);
+                return true;
+            }
+
+            m_Motions.reserve(m_Motions.size() + files.size());
+
+            for (FS_FileSet::const_iterator it = files.begin(); it != files.end(); ++it) {
+                if (!load_omf((*it).name.c_str()))
+                    return false;
+            }
+
+            return true;
+        }
+
+        string_path motion_name;
+        xr_strcpy(motion_name, reference);
+        xr_strcat(motion_name, ".omf");
+
+        return load_omf(motion_name);
+    };
+
     // Load animation
     if (data->find_chunk(OGF_S_MOTION_REFS)) {
         string_path items_nm;
         data->r_stringZ(items_nm, sizeof(items_nm));
-        u32 set_cnt = _GetItemCount(items_nm);
+
+        const u32 set_cnt = _GetItemCount(items_nm);
         R_ASSERT(set_cnt < MAX_ANIM_SLOT);
         m_Motions.reserve(set_cnt);
-        string_path nm;
+
+        string_path reference;
         for (u32 k = 0; k < set_cnt; ++k) {
-            _GetItem(items_nm, k, nm);
-            xr_strcat(nm, ".omf");
-            string_path fn;
-            if (!FS.exist(fn, "$level$", nm)) {
-                if (!FS.exist(fn, "$game_meshes$", nm)) {
-#ifdef _EDITOR
-                    Msg("!Can't find motion file '%s'.", nm);
-                    return;
-#else
-                    Debug.fatal(DEBUG_INFO, "Can't find motion file '%s'.", nm);
-#endif
-                }
-            }
-            // Check compatibility
-            m_Motions.push_back(SMotionsSlot());
-            bool create_res = true;
-            if (!g_pMotionsContainer->has(nm)) // optimize fs operations
-            {
-                IReader* MS = FS.r_open(fn);
-                create_res = m_Motions.back().motions.create(nm, MS, bones);
-                FS.r_close(MS);
-            }
-            if (create_res)
-                m_Motions.back().motions.create(nm, NULL, bones);
-            else {
-                m_Motions.pop_back();
-                Msg("! error in model [%s]. Unable to load motion file '%s'.", N, nm);
-            }
+            _GetItem(items_nm, k, reference);
+
+            if (!load_motion_reference(reference))
+                return;
         }
     } else if (data->find_chunk(OGF_S_MOTION_REFS2)) {
-        u32 set_cnt = data->r_u32();
+        const u32 set_cnt = data->r_u32();
         m_Motions.reserve(set_cnt);
-        string_path nm;
+
+        string_path reference;
         for (u32 k = 0; k < set_cnt; ++k) {
-            data->r_stringZ(nm, sizeof(nm));
-            xr_strcat(nm, ".omf");
-            string_path fn;
-            if (!FS.exist(fn, "$level$", nm)) {
-                if (!FS.exist(fn, "$game_meshes$", nm)) {
-#ifdef _EDITOR
-                    Msg("!Can't find motion file '%s'.", nm);
-                    return;
-#else
-                    Debug.fatal(DEBUG_INFO, "Can't find motion file '%s'.", nm);
-#endif
-                }
-            }
-            // Check compatibility
-            m_Motions.push_back(SMotionsSlot());
-            bool create_res = true;
-            if (!g_pMotionsContainer->has(nm)) // optimize fs operations
-            {
-                IReader* MS = FS.r_open(fn);
-                create_res = m_Motions.back().motions.create(nm, MS, bones);
-                FS.r_close(MS);
-            }
-            if (create_res)
-                m_Motions.back().motions.create(nm, NULL, bones);
-            else {
-                m_Motions.pop_back();
-                Msg("! error in model [%s]. Unable to load motion file '%s'.", N, nm);
-            }
+            data->r_stringZ(reference, sizeof(reference));
+
+            if (!load_motion_reference(reference))
+                return;
         }
     } else {
         string_path nm;
@@ -760,6 +793,148 @@ void CKinematicsAnimated::Load(const char* N, IReader* data, u32 dwFlags) {
 
     //.	if (motions.cycle()->size()<2)
     //.		Msg("* WARNING: model '%s' has only one motion. Candidate for SkeletonRigid???",N);
+}
+
+u32 CKinematicsAnimated::LoadAdditionalMotions(LPCSTR references, bool fallback) {
+    if (!references || !references[0])
+        return 0;
+
+    MotionsSlotVec additional_motions;
+
+    const auto motion_already_loaded = [&](LPCSTR motion_name) -> bool {
+        for (const auto& slot : m_Motions) {
+            if (xr_strcmp(slot.motions.id().c_str(), motion_name) == 0)
+                return true;
+        }
+
+        for (const auto& slot : additional_motions) {
+            if (xr_strcmp(slot.motions.id().c_str(), motion_name) == 0)
+                return true;
+        }
+
+        return false;
+    };
+
+    const auto initialize_slot = [&](SMotionsSlot& slot) {
+        slot.bone_motions.resize(bones->size());
+
+        for (u32 i = 0; i < bones->size(); ++i) {
+            CBoneData* BD = (*bones)[i];
+            slot.bone_motions[i] = slot.motions.bone_motions(BD->name);
+        }
+    };
+
+    const auto load_omf = [&](LPCSTR motion_name) -> bool {
+        if (motion_already_loaded(motion_name))
+            return true;
+
+        if (m_Motions.size() + additional_motions.size() >= MAX_ANIM_SLOT) {
+            Msg("! [HUD motions] Maximum motion slot count reached while loading [%s]",
+                motion_name);
+            return false;
+        }
+
+        string_path fn;
+
+        if (!FS.exist(fn, "$level$", motion_name)) {
+            if (!FS.exist(fn, "$game_meshes$", motion_name)) {
+                Msg("! [HUD motions] Can't find additional motion file [%s]", motion_name);
+                return true;
+            }
+        }
+
+        additional_motions.push_back(SMotionsSlot());
+        SMotionsSlot& slot = additional_motions.back();
+
+        bool create_res = true;
+
+        if (!g_pMotionsContainer->has(motion_name)) {
+            IReader* MS = FS.r_open(fn);
+            create_res = slot.motions.create(motion_name, MS, bones);
+            FS.r_close(MS);
+        }
+
+        if (create_res) {
+            slot.motions.create(motion_name, NULL, bones);
+        } else {
+            additional_motions.pop_back();
+
+#ifdef DEBUG
+            Msg("! [HUD motions] Motion file [%s] is incompatible with model [%s]", motion_name,
+                getDebugName().c_str());
+#else
+            Msg("! [HUD motions] Motion file [%s] is incompatible with current model", motion_name);
+#endif
+
+            return true;
+        }
+
+        initialize_slot(slot);
+        return true;
+    };
+
+    const auto load_motion_reference = [&](LPCSTR reference) -> bool {
+        const LPCSTR wildcard = "\\*.omf";
+        const u32 length = xr_strlen(reference);
+        const u32 wildcard_length = xr_strlen(wildcard);
+
+        const bool folder_reference =
+            length >= wildcard_length &&
+            xr_strcmp(reference + length - wildcard_length, wildcard) == 0;
+
+        if (folder_reference) {
+            FS_FileSet files;
+
+            FS.file_list(files, "$game_meshes$", FS_ListFiles, reference);
+            FS.file_list(files, "$level$", FS_ListFiles, reference);
+
+            if (files.empty()) {
+                Msg("! [HUD motions] No OMF files found for reference [%s]", reference);
+                return true;
+            }
+
+            for (FS_FileSet::const_iterator it = files.begin(); it != files.end(); ++it) {
+                if (!load_omf((*it).name.c_str()))
+                    return false;
+            }
+
+            return true;
+        }
+
+        string_path motion_name;
+        xr_strcpy(motion_name, reference);
+        xr_strcat(motion_name, ".omf");
+
+        return load_omf(motion_name);
+    };
+
+    const u32 reference_count = _GetItemCount(references);
+    string_path reference;
+
+    for (u32 i = 0; i < reference_count; ++i) {
+        _GetItem(references, i, reference);
+
+        if (!reference[0])
+            continue;
+
+        if (!load_motion_reference(reference))
+            break;
+    }
+
+    const u32 loaded_count = (u32)additional_motions.size();
+
+    if (!loaded_count)
+        return 0;
+
+    // Motion lookup runs from the end of m_Motions to the beginning.
+    // Insert fallback libraries before model-specific OMFs so the OGF keeps priority.
+    if (fallback) {
+        m_Motions.insert(m_Motions.begin(), additional_motions.begin(), additional_motions.end());
+    } else {
+        m_Motions.insert(m_Motions.end(), additional_motions.begin(), additional_motions.end());
+    }
+
+    return loaded_count;
 }
 
 void CKinematicsAnimated::LL_BuldBoneMatrixDequatize(const CBoneData* bd, u8 channel_mask,
@@ -846,12 +1021,10 @@ void CKinematicsAnimated::LL_BoneMatrixBuild(CBoneInstance& bi, const Fmatrix* p
 void CKinematicsAnimated::BuildBoneMatrix(const CBoneData* bd, CBoneInstance& bi,
                                           const Fmatrix* parent, u8 channel_mask /*= (1<<0)*/) {
 
-    // CKey				R						[MAX_CHANNELS][MAX_BLENDED];	//all
-    // keys
-    // float				BA						[MAX_CHANNELS][MAX_BLENDED];	//all
-    // factors
-    // int				b_counts				[MAX_CHANNELS]	= {0,0,0,0}; //channel
-    // counts
+    // CKey				R
+    // [MAX_CHANNELS][MAX_BLENDED];	//all keys float				BA
+    // [MAX_CHANNELS][MAX_BLENDED];	//all factors int				b_counts
+    // [MAX_CHANNELS]	= {0,0,0,0}; //channel counts
     SKeyTable keys;
     LL_BuldBoneMatrixDequatize(bd, channel_mask, keys);
 

@@ -1,5 +1,5 @@
-wpn_spas12 = weight=50, ammo=2, ammo_type=1, keep_ammo
-wpn_protecta = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_spas12 = weight=50, ammo=2, ammo_type=0, keep_ammo
+wpn_protecta = weight=50, ammo=2, ammo_type=0, keep_ammo
 wpn_sig550 = weight=50, ammo=2, ammo_type=1, keep_ammo
 wpn_g36 = weight=50, ammo=2, ammo_type=1, keep_ammo
 wpn_fn2000 = weight=50, ammo=2, ammo_type=1, keep_ammo

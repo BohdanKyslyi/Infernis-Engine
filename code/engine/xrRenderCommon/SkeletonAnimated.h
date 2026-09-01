@@ -140,6 +140,8 @@ public:
     u16 LL_MotionsSlotCount() { return (u16)m_Motions.size(); }
     const shared_motions& LL_MotionsSlot(u16 idx) { return m_Motions[idx].motions; }
 
+    u32 LoadAdditionalMotions(LPCSTR references, bool fallback);
+
     IC CMotionDef* LL_GetMotionDef(MotionID id) {
         return m_Motions[id.slot].motions.motion_def(id.idx);
     }

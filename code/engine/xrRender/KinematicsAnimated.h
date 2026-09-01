@@ -48,6 +48,8 @@ public:
     virtual u16 LL_MotionsSlotCount() = 0;
     virtual const shared_motions& LL_MotionsSlot(u16 idx) = 0;
 
+    virtual u32 LoadAdditionalMotions(LPCSTR references, bool fallback) = 0;
+
     // IC CMotionDef*				LL_GetMotionDef	(MotionID id){return
     // m_Motions[id.slot].motions.motion_def(id.idx);}
     // IC CMotion*					LL_GetRootMotion(MotionID id){return

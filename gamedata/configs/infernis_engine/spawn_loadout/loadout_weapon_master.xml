@@ -1,13 +1,13 @@
-wpn_spas12 = weight=50, ammo=2, ammo_type=1, keep_ammo
-wpn_protecta = weight=50, ammo=2, ammo_type=1, keep_ammo, wpn_addon_scope_susat
+wpn_spas12 = weight=50, ammo=2, ammo_type=0, keep_ammo
+wpn_protecta = weight=50, ammo=2, ammo_type=0, keep_ammo, wpn_addon_scope_susat
 wpn_sig550 = weight=50, ammo=2, ammo_type=1, keep_ammo, wpn_addon_grenade_launcher_m203
 wpn_g36 = weight=50, ammo=2, ammo_type=1, keep_ammo
 wpn_fn2000 = weight=50, ammo=2, ammo_type=1, keep_ammo
 wpn_val = weight=50, ammo=2, ammo_type=1, keep_ammo, wpn_addon_scope_detector
 wpn_groza = weight=50, ammo=2, ammo_type=1, keep_ammo, wpn_addon_silencer
 wpn_vintorez = weight=50, ammo=2, ammo_type=1, keep_ammo
-wpn_svd = weight=50, ammo=2, ammo_type=1, keep_ammo
-wpn_svu = weight=50, ammo=2, ammo_type=1, keep_ammo
-wpn_pkm = weight=50, ammo=2, ammo_type=1, keep_ammo
-wpn_rpg7 = weight=50, ammo=2, ammo_type=1, keep_ammo
-wpn_rg-6 = weight=50, ammo=2, ammo_type=1, keep_ammo
+wpn_svd = weight=50, ammo=2, ammo_type=0, keep_ammo
+wpn_svu = weight=50, ammo=2, ammo_type=0, keep_ammo
+wpn_pkm = weight=50, ammo=2, ammo_type=0, keep_ammo
+wpn_rpg7 = weight=50, ammo=2, ammo_type=0, keep_ammo
+wpn_rg-6 = weight=50, ammo=2, ammo_type=0, keep_ammo

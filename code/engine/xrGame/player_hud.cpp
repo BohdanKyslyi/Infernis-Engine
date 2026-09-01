@@ -513,6 +513,16 @@ void player_hud::load(const shared_str& player_hud_sect) {
     const shared_str& model_name = pSettings->r_string(player_hud_sect, "visual");
     m_model = smart_cast<IKinematicsAnimated*>(::Render->model_Create(model_name.c_str()));
 
+    if (pSettings->line_exist("hud_extensions", "hands_animations_path")) {
+        LPCSTR hand_animations = pSettings->r_string("hud_extensions", "hands_animations_path");
+
+        const u32 loaded_motions = m_model->LoadAdditionalMotions(hand_animations, true);
+
+        if (loaded_motions) {
+            Msg("* HUD: loaded [%u] external hand motion file(s)", loaded_motions);
+        }
+    }
+
     CInifile::Sect& _sect = pSettings->r_section(player_hud_sect);
     auto _b = _sect.Data.cbegin();
     auto _e = _sect.Data.cend();
