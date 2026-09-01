@@ -1,0 +1,1070 @@
+#include "common.h"
+
+//#define USE_SUPER_SPECULAR
+//#define USE_ORIGINAL_SSAO
+//#define HBAO_WORLD_JITTER
+
+#include "lmodel.h"
+#include "hmodel.h"
+
+uniform Texture2D s_half_depth;
+
+
+// ============================================================
+// Infernis PBR Stage 2.9 - ambient image-based lighting
+//
+// X-Ray exposes two different sky resources to the combine pass. env_s0/env_s1
+// are the small sky_texture_env cubemaps used for diffuse irradiance, while
+// sky_s0/sky_s1 are the full visible sky cubemaps. Stage 2.41 keeps the
+// diffuse path on env_s* and audits the full sky mip chain for specular IBL.
+// ============================================================
+
+// Stage 2.31 verified the complete environment mip range.
+static const float IE_PBR_IBL_MAX_LOD = 8.0f;
+
+// Infernis PBR Stage 2.41: real specular-sky source audit.
+// 0 = current env_s* source with the Stage 2.31 fixed LOD range,
+// 1 = env_s* with the texture's real mip count,
+// 2 = full sky_s* with the real mip count and linear PBR transport,
+// 3 = full sky_s* with the real mip count in its sampled color domain.
+//
+// Modes 2 and 3 mirror IX-Ray's resource split instead of adding irradiance
+// fill. Mode 3 diagnoses a possible double gamma decode only; it is not an
+// exposure boost and retains the reflection vector and roughness-selected mip.
+#define IE_PBR_STAGE241_SPECULAR_SKY_MODE 2
+
+// Infernis PBR Stage 2.43: inline HUD screen-space local reflection.
+// 0 = baseline, 1 = SSR hit mask, 2 = scene-visible reflection with cubemap
+// fallback.  Unlike Stage 2.42 this never suppresses sky by distance alone.
+#ifndef IE_PBR_RENDERING_ENABLED
+#define IE_PBR_RENDERING_ENABLED 1
+#endif
+
+#ifndef IE_PBR_SSLR_MODE
+#define IE_PBR_SSLR_MODE 1
+#endif
+
+#if IE_PBR_RENDERING_ENABLED == 0 || IE_PBR_SSLR_MODE == 0
+#define IE_PBR_STAGE243_HUD_SSLR_MODE 0
+#else
+#define IE_PBR_STAGE243_HUD_SSLR_MODE 2
+#endif
+
+// Infernis PBR Stage 2.44: HUD/world projection bridge.
+// HUD geometry is rasterized with psHUD_FOV * Device.fFOV, while the combine
+// pass reconstructs G-buffer XY with the world FOV.  P.z stays in view-space
+// units, so correcting XY by tan(hudFov/2) / tan(worldFov/2) restores the real
+// ray origin without changing authored materials or scene exposure.
+#define IE_PBR_STAGE244_HUD_PROJECTION 1
+
+// Infernis PBR Stage 2.45: robust screen-depth crossing.
+// The coarse ray may step completely through a thin surface.  Once its depth
+// changes from in front of the G-buffer to behind it, refine that interval
+// before applying the usual thickness guard.
+#define IE_PBR_STAGE245_BINARY_HIT 1
+
+// Infernis PBR Stage 2.53: defer SSLR radiance fetches until a depth hit.
+// The marcher only needs s_position while searching.  Stage 2.43 sampled
+// s_diffuse and s_accumulator at every step even though those values were
+// discarded unless that exact step became the final accepted intersection.
+// 0 = Stage 2.45 reference sampling, 1 = optimized identical-result sampling.
+#define IE_PBR_STAGE253_DEFER_HIT_RADIANCE 1
+
+// Infernis PBR Stage 2.55: HUD-sized SSLR traversal budgets.
+// Stage 2.43 marched 32 * 0.20 = 6.40 view-space metres even though the
+// effect is admitted only for conductors inside two metres of the camera.
+// 1 = performance, 2 = balanced, 3 = quality, 4 = Stage 2.45 reference.
+#if IE_PBR_SSLR_MODE <= 1
+#define IE_PBR_STAGE255_SSLR_QUALITY 1
+#elif IE_PBR_SSLR_MODE == 2
+#define IE_PBR_STAGE255_SSLR_QUALITY 2
+#elif IE_PBR_SSLR_MODE == 3
+#define IE_PBR_STAGE255_SSLR_QUALITY 3
+#else
+#define IE_PBR_STAGE255_SSLR_QUALITY 4
+#endif
+
+#if IE_PBR_STAGE255_SSLR_QUALITY == 1
+static const int IE_PBR_STAGE243_STEPS = 8;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.25f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 2;
+#elif IE_PBR_STAGE255_SSLR_QUALITY == 2
+static const int IE_PBR_STAGE243_STEPS = 12;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 3;
+#elif IE_PBR_STAGE255_SSLR_QUALITY == 3
+static const int IE_PBR_STAGE243_STEPS = 16;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 3;
+#else
+static const int IE_PBR_STAGE243_STEPS = 32;
+static const float IE_PBR_STAGE243_STEP_LENGTH = 0.20f;
+static const int IE_PBR_STAGE245_BINARY_STEPS = 5;
+#endif
+
+static const float IE_PBR_STAGE243_MAX_DISTANCE = 2.0f;
+static const float IE_PBR_STAGE243_THICKNESS = 0.08f;
+
+// Infernis PBR Stage 2.25: final G-buffer diagnostic.
+// 0 = production, 1 = route, 2 = M/R/hemi-AO, 3 = albedo, 4 = normal.
+#define IE_PBR_GBUFFER_DEBUG_MODE 0
+
+float2 ie_pbr_environment_brdf(
+    float NdotV,
+    float roughness
+)
+{
+    // IX-Ray's fitted split-sum environment BRDF approximation.
+    NdotV = min(saturate(NdotV), 0.998f);
+    roughness = saturate(roughness);
+
+    float nsqr = NdotV * NdotV;
+    float rsqr = roughness * roughness;
+
+    float4 fac =
+        float4(0.0187f, 1.0133f, 1.0000f, 1.0000f) +
+        float4(1.9496f, -2.4717f, -0.0333f, 2.0508f) * NdotV +
+        float4(1.2265f, -1.2172f, -1.3097f, 0.2342f) * roughness +
+        float4(-7.6907f, 3.4300f, 0.5972f, -26.9406f) * NdotV * roughness +
+        float4(18.3314f, 1.4794f, 19.3537f, 11.1429f) * nsqr +
+        float4(-0.2894f, 0.5564f, 1.5052f, 7.0828f) * rsqr +
+        float4(-19.3056f, -2.2456f, -28.2302f, 18.5470f) * nsqr * roughness +
+        float4(7.0144f, -1.8934f, 1.3307f, 50.6469f) * NdotV * rsqr +
+        float4(1.5728f, 1.3618f, 15.2939f, -63.3557f) * nsqr * rsqr;
+
+    return saturate(fac.xy / fac.zw);
+}
+
+float3 ie_pbr_diffuse_irradiance(float3 normalView)
+{
+    float3 normalWorld =
+        normalize(mul(m_v2w, normalize(normalView)));
+
+    float3 env0 =
+        env_s0.SampleLevel(smp_rtlinear, normalWorld, 0.0f).rgb;
+
+    float3 env1 =
+        env_s1.SampleLevel(smp_rtlinear, normalWorld, 0.0f).rgb;
+
+    float3 irradiance =
+        env_color.xyz *
+        lerp(env0, env1, env_color.w);
+
+    return ie_pbr_prepare_diffuse_radiance(irradiance);
+}
+
+float3 ie_pbr_specular_irradiance(
+    float3 pointView,
+    float3 normalView,
+    float roughness
+)
+{
+    float3 viewRay = normalize(pointView);
+    float3 reflectionView =
+        reflect(viewRay, normalize(normalView));
+
+    float3 reflectionWorld =
+        normalize(mul(m_v2w, reflectionView));
+
+    roughness =
+        clamp(
+            roughness,
+            IE_PBR_MIN_ROUGHNESS,
+            1.0f
+        );
+
+    float2 lod = roughness * IE_PBR_IBL_MAX_LOD;
+
+#if IE_PBR_STAGE241_SPECULAR_SKY_MODE != 0
+    // TextureCube::GetDimensions takes mip 0 as the first argument and writes
+    // width, height, and the mip count to y/z/w. Sampling the last legal mip
+    // at roughness 1 avoids relying on an old hard-coded cubemap layout.
+    float4 dimensions0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 dimensions1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    #if IE_PBR_STAGE241_SPECULAR_SKY_MODE == 1
+        env_s0.GetDimensions(
+            dimensions0.x,
+            dimensions0.y,
+            dimensions0.z,
+            dimensions0.w
+        );
+        env_s1.GetDimensions(
+            dimensions1.x,
+            dimensions1.y,
+            dimensions1.z,
+            dimensions1.w
+        );
+    #else
+        sky_s0.GetDimensions(
+            dimensions0.x,
+            dimensions0.y,
+            dimensions0.z,
+            dimensions0.w
+        );
+        sky_s1.GetDimensions(
+            dimensions1.x,
+            dimensions1.y,
+            dimensions1.z,
+            dimensions1.w
+        );
+    #endif
+
+    lod.x =
+        roughness *
+        max(
+            dimensions0.w - 1.0f,
+            0.0f
+        );
+    lod.y =
+        roughness *
+        max(
+            dimensions1.w - 1.0f,
+            0.0f
+        );
+#endif
+
+    float3 reflection0;
+    float3 reflection1;
+
+#if IE_PBR_STAGE241_SPECULAR_SKY_MODE >= 2
+    reflection0 =
+        sky_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod.x).rgb;
+
+    reflection1 =
+        sky_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod.y).rgb;
+#else
+    reflection0 =
+        env_s0.SampleLevel(smp_rtlinear, reflectionWorld, lod.x).rgb;
+
+    reflection1 =
+        env_s1.SampleLevel(smp_rtlinear, reflectionWorld, lod.y).rgb;
+#endif
+
+    float3 irradiance =
+        env_color.xyz *
+        lerp(reflection0, reflection1, env_color.w);
+
+#if IE_PBR_STAGE241_SPECULAR_SKY_MODE == 3
+    return max(
+        irradiance,
+        float3(0.0f, 0.0f, 0.0f)
+    );
+#else
+    return ie_pbr_prepare_specular_radiance(irradiance);
+#endif
+}
+
+float2 ie_pbr_stage243_project_view(float3 pointView)
+{
+    float2 pixel =
+        (pointView.xy / max(pointView.z, IE_PBR_EPSILON) +
+         pos_decompression_params.xy) /
+        pos_decompression_params.zw;
+
+    return pixel / pos_decompression_params2.xy;
+}
+
+float3 ie_pbr_stage243_screen_reflection(
+    float3 pointView,
+    float3 normalView,
+    float metallic,
+    float roughness,
+    int sampleIndex,
+    out float confidence
+)
+{
+    confidence = 0.0f;
+
+#if IE_PBR_STAGE243_HUD_SSLR_MODE != 0
+    #if IE_PBR_STAGE244_HUD_PROJECTION != 0
+        // gbuffer_load_data reconstructed HUD XY with the world projection.
+        // Convert it back to the view-space position used before HUD rasterization.
+        pointView.xy *= ie_pbr_hud_projection_params.xx;
+    #endif
+
+    float hudConductor =
+        saturate(metallic) *
+        (1.0f - smoothstep(
+            IE_PBR_STAGE243_MAX_DISTANCE * 0.75f,
+            IE_PBR_STAGE243_MAX_DISTANCE,
+            length(pointView)
+        ));
+
+    if (hudConductor <= IE_PBR_EPSILON)
+    {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+
+    float3 N = normalize(normalView);
+    float3 reflectionView =
+        normalize(reflect(normalize(pointView), N));
+
+    // Move the ray away from the originating surface so the first sample
+    // cannot immediately intersect the can lid itself.
+    float3 rayOrigin =
+        pointView +
+        N * max(0.025f, pointView.z * 0.002f);
+
+    float previousDelta = -IE_PBR_STAGE243_THICKNESS;
+    float previousTravel = 0.0f;
+
+    [unroll]
+    for (int stepIndex = 1; stepIndex <= IE_PBR_STAGE243_STEPS; ++stepIndex)
+    {
+        float travel =
+            IE_PBR_STAGE243_STEP_LENGTH *
+            float(stepIndex);
+
+        float3 rayPoint =
+            rayOrigin +
+            reflectionView * travel;
+
+        if (rayPoint.z <= 0.02f)
+        {
+            break;
+        }
+
+        float2 rayTC =
+            ie_pbr_stage243_project_view(rayPoint);
+
+        if (
+            rayTC.x <= 0.002f || rayTC.x >= 0.998f ||
+            rayTC.y <= 0.002f || rayTC.y >= 0.998f
+        )
+        {
+            break;
+        }
+
+        float4 packedPosition;
+        float4 hitBase;
+        float4 hitLight;
+
+#ifndef USE_MSAA
+        packedPosition =
+            s_position.Sample(smp_nofilter, rayTC);
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE == 0
+        hitBase =
+            s_diffuse.Sample(smp_nofilter, rayTC);
+        hitLight =
+            s_accumulator.Sample(smp_nofilter, rayTC);
+#endif
+#else
+        int2 hitPixel =
+            int2(rayTC * pos_decompression_params2.xy);
+        packedPosition =
+            s_position.Load(int3(hitPixel, 0), sampleIndex);
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE == 0
+        hitBase =
+            s_diffuse.Load(int3(hitPixel, 0), sampleIndex);
+        hitLight =
+            s_accumulator.Load(int3(hitPixel, 0), sampleIndex);
+#endif
+#endif
+
+        float sceneDepth = packedPosition.z;
+        float delta = rayPoint.z - sceneDepth;
+        float thickness =
+            IE_PBR_STAGE243_THICKNESS +
+            travel * 0.025f;
+
+        bool validSceneDepth =
+            sceneDepth > pointView.z + 0.03f;
+
+        bool acceptedHit = false;
+
+#if IE_PBR_STAGE245_BINARY_HIT != 0
+        if (
+            validSceneDepth &&
+            delta >= 0.0f &&
+            previousDelta < 0.0f
+        )
+        {
+            float lowTravel = previousTravel;
+            float highTravel = travel;
+            float2 refinedTC = rayTC;
+
+            [unroll]
+            for (
+                int binaryIndex = 0;
+                binaryIndex < IE_PBR_STAGE245_BINARY_STEPS;
+                ++binaryIndex
+            )
+            {
+                float middleTravel =
+                    (lowTravel + highTravel) * 0.5f;
+
+                float3 middlePoint =
+                    rayOrigin +
+                    reflectionView * middleTravel;
+
+                float2 middleTC =
+                    ie_pbr_stage243_project_view(middlePoint);
+
+                float4 middlePackedPosition;
+
+#ifndef USE_MSAA
+                middlePackedPosition =
+                    s_position.Sample(smp_nofilter, middleTC);
+#else
+                int2 middlePixel =
+                    int2(middleTC * pos_decompression_params2.xy);
+                middlePackedPosition =
+                    s_position.Load(int3(middlePixel, 0), sampleIndex);
+#endif
+
+                float middleSceneDepth = middlePackedPosition.z;
+                float middleDelta =
+                    middlePoint.z - middleSceneDepth;
+
+                if (
+                    middleSceneDepth <= pointView.z + 0.03f ||
+                    middleDelta < 0.0f
+                )
+                {
+                    lowTravel = middleTravel;
+                }
+                else
+                {
+                    highTravel = middleTravel;
+                    refinedTC = middleTC;
+                }
+            }
+
+            rayPoint =
+                rayOrigin +
+                reflectionView * highTravel;
+            rayTC = refinedTC;
+
+#ifndef USE_MSAA
+            packedPosition =
+                s_position.Sample(smp_nofilter, rayTC);
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE == 0
+            hitBase =
+                s_diffuse.Sample(smp_nofilter, rayTC);
+            hitLight =
+                s_accumulator.Sample(smp_nofilter, rayTC);
+#endif
+#else
+            int2 refinedPixel =
+                int2(rayTC * pos_decompression_params2.xy);
+            packedPosition =
+                s_position.Load(int3(refinedPixel, 0), sampleIndex);
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE == 0
+            hitBase =
+                s_diffuse.Load(int3(refinedPixel, 0), sampleIndex);
+            hitLight =
+                s_accumulator.Load(int3(refinedPixel, 0), sampleIndex);
+#endif
+#endif
+
+            sceneDepth = packedPosition.z;
+            delta = rayPoint.z - sceneDepth;
+            thickness =
+                IE_PBR_STAGE243_THICKNESS +
+                highTravel * 0.025f;
+
+            acceptedHit =
+                sceneDepth > pointView.z + 0.03f &&
+                abs(delta) <= thickness;
+        }
+#else
+        acceptedHit =
+            validSceneDepth &&
+            delta >= 0.0f &&
+            delta <= thickness &&
+            previousDelta < 0.0f;
+#endif
+
+        if (acceptedHit)
+        {
+#if IE_PBR_STAGE253_DEFER_HIT_RADIANCE != 0
+            // Fetch radiance once, after the depth-only march and optional
+            // binary refinement selected the final intersection coordinates.
+#ifndef USE_MSAA
+            hitBase =
+                s_diffuse.Sample(smp_nofilter, rayTC);
+            hitLight =
+                s_accumulator.Sample(smp_nofilter, rayTC);
+#else
+            int2 radiancePixel =
+                int2(rayTC * pos_decompression_params2.xy);
+            hitBase =
+                s_diffuse.Load(int3(radiancePixel, 0), sampleIndex);
+            hitLight =
+                s_accumulator.Load(int3(radiancePixel, 0), sampleIndex);
+#endif
+#endif
+
+            float pbrHit =
+                gbuf_is_pbr(packedPosition.w) ? 1.0f : 0.0f;
+
+            float3 legacyRadiance =
+                max(hitBase.rgb, float3(0.0f, 0.0f, 0.0f)) *
+                max(hitLight.rgb, float3(0.0f, 0.0f, 0.0f)) +
+                max(hitLight.www, float3(0.0f, 0.0f, 0.0f));
+
+            float3 pbrRadiance =
+                max(hitLight.rgb, float3(0.0f, 0.0f, 0.0f));
+
+            float edge =
+                saturate(
+                    min(
+                        min(rayTC.x, 1.0f - rayTC.x),
+                        min(rayTC.y, 1.0f - rayTC.y)
+                    ) * 12.0f
+                );
+
+            confidence =
+                hudConductor *
+                edge *
+                saturate(1.0f - roughness * 0.45f);
+
+            return lerp(legacyRadiance, pbrRadiance, pbrHit);
+        }
+
+        previousTravel = travel;
+        previousDelta =
+            validSceneDepth ?
+            delta :
+            -IE_PBR_STAGE243_THICKNESS;
+    }
+#endif
+
+    return float3(0.0f, 0.0f, 0.0f);
+}
+
+float3 ie_pbr_environment_specular_weight(
+    float3 F0,
+    float2 envBrdf
+)
+{
+    float3 singleScatter =
+        saturate(
+            F0 * envBrdf.x +
+            envBrdf.y
+        );
+
+    // Stage 2.34 energy-compensated split-sum approximation. Ess is the directional
+    // albedo for a perfect reflector; Ems is the energy available to bounce
+    // again between GGX microfacets. Favg is Schlick Fresnel averaged over the
+    // hemisphere. This restores only energy the first bounce lost and keeps
+    // the authored conductor tint instead of adding a white ambient floor.
+    float Ess =
+        saturate(
+            envBrdf.x +
+            envBrdf.y
+        );
+
+    float Ems = 1.0f - Ess;
+
+    float3 Favg =
+        saturate(
+            F0 +
+            (1.0f - F0) * (1.0f / 21.0f)
+        );
+
+    float3 multipleScatter =
+        singleScatter *
+        Favg /
+        max(
+            1.0f - Ems * Favg,
+            float3(
+                IE_PBR_EPSILON,
+                IE_PBR_EPSILON,
+                IE_PBR_EPSILON
+            )
+        );
+
+    return
+        saturate(
+            singleScatter +
+            multipleScatter * Ems
+        );
+}
+
+float3 ie_pbr_ambient_ibl(
+    float3 pointView,
+    float3 normalView,
+    float3 albedo,
+    float metallic,
+    float roughness,
+    float hemiAo,
+    float screenOcclusion,
+    int sampleIndex
+)
+{
+    ie_pbr_apply_material_override(
+        metallic,
+        roughness
+    );
+
+    metallic = saturate(metallic);
+    roughness =
+        clamp(
+            roughness,
+            IE_PBR_MIN_ROUGHNESS,
+            1.0f
+        );
+
+    float3 N = normalize(normalView);
+    float3 V = -normalize(pointView);
+
+    // Stage 2.12: match the direct-light roughness filtering so the cubemap
+    // reflection cannot retain sparkle that direct GGX has already removed.
+    roughness =
+        ie_pbr_filter_roughness(
+            N,
+            roughness
+        );
+
+    float NdotV = saturate(dot(N, V));
+
+    // Infernis PBR Stage 2.26:
+    // L_ambient is an engine lighting constant, not a sampled color texture.
+    // Gamma-decoding it a second time crushed rough dielectric world materials
+    // while their albedo, ORM data, and direct lighting remained correct.
+    float3 diffuseIrradiance =
+        ie_pbr_diffuse_irradiance(N) +
+        ie_pbr_prepare_dynamic_radiance(L_ambient.rgb);
+
+    float3 specularIrradiance =
+        ie_pbr_specular_irradiance(
+            pointView,
+            N,
+            roughness
+        ) *
+        IE_PBR_CAL_AMBIENT_SPECULAR;
+
+#if IE_PBR_STAGE243_HUD_SSLR_MODE != 0
+    float sslrConfidence;
+    float3 sslrRadiance =
+        ie_pbr_stage243_screen_reflection(
+            pointView,
+            N,
+            metallic,
+            roughness,
+            sampleIndex,
+            sslrConfidence
+        );
+
+    #if IE_PBR_STAGE243_HUD_SSLR_MODE == 1
+        specularIrradiance =
+            lerp(
+                float3(0.35f, 0.0f, 0.0f),
+                float3(0.0f, 0.65f, 0.0f),
+                saturate(sslrConfidence)
+            );
+    #else
+        // A visible screen-space hit wins; leaving the screen or missing
+        // geometry keeps the directional sky cubemap as the fallback.
+        specularIrradiance =
+            lerp(
+                specularIrradiance,
+                sslrRadiance,
+                saturate(sslrConfidence)
+            );
+    #endif
+#endif
+
+    float3 diffuse =
+        diffuseIrradiance *
+        ie_pbr_prepare_diffuse_albedo(albedo) *
+        (1.0f - metallic) *
+        IE_PBR_CAL_AMBIENT_DIFFUSE;
+
+    float3 F0 =
+        ie_pbr_resolve_f0(
+            albedo,
+            metallic
+        );
+
+    float2 envBrdf =
+        ie_pbr_environment_brdf(
+            NdotV,
+            roughness
+        );
+
+    float3 environmentFresnel =
+        ie_pbr_environment_specular_weight(
+            F0,
+            envBrdf
+        );
+
+#if IE_PBR_STAGE242_HUD_CONDUCTOR_MODE == 2 || IE_PBR_STAGE242_HUD_CONDUCTOR_MODE == 3
+    // The global weather cubemap has no knowledge of rooms and therefore
+    // cannot be trusted for a near-camera conductor.  Until HUD SSLR supplies
+    // a scene-visible reflection, remove this unshadowed sky contribution
+    // rather than letting it shine through solid walls.  Direct local GGX is
+    // intentionally untouched and remains in the shadowed accumulator.
+    float hudConductor =
+        metallic *
+        (1.0f - smoothstep(
+            IE_PBR_STAGE242_HUD_MAX_DISTANCE * 0.75f,
+            IE_PBR_STAGE242_HUD_MAX_DISTANCE,
+            length(pointView)
+        ));
+
+    specularIrradiance *=
+        lerp(
+            1.0f,
+            IE_PBR_STAGE242_HUD_SKY_FLOOR,
+            saturate(hudConductor)
+        );
+#endif
+
+    float3 ambient =
+        lerp(
+            diffuse,
+            specularIrradiance,
+            environmentFresnel
+        );
+
+#if IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE == 2 || IE_PBR_STAGE238_CONDUCTOR_TRANSPORT_MODE == 3
+    // Rough conductors need a low-frequency reflection term when the sampled
+    // cubemap direction is much darker than X-Ray's diffuse sky irradiance.
+    // Reusing that irradiance is a coverage approximation, not Lambert metal:
+    // the result remains F0 tinted, roughness weighted, and metallic-only.
+    float conductorAmbientFillWeight =
+        min(
+            roughness * IE_PBR_CONDUCTOR_AMBIENT_FILL_SCALE,
+            IE_PBR_CONDUCTOR_AMBIENT_FILL_LIMIT
+        ) *
+        metallic;
+
+    ambient +=
+        diffuseIrradiance *
+        F0 *
+        conductorAmbientFillWeight *
+        IE_PBR_CAL_AMBIENT_SPECULAR;
+#endif
+
+#if IE_PBR_STAGE239_CONDUCTOR_REFERENCE_MODE == 2 || IE_PBR_STAGE239_CONDUCTOR_REFERENCE_MODE == 3
+    // Strong IBL reference: use the already validated low-frequency sky
+    // irradiance as an upper bound for energy missing from the ordinary X-Ray
+    // cubemap mip sampled along the reflection vector. The probe stays
+    // metallic-only, F0 tinted, and roughness dependent.
+    float conductorIblReferenceWeight =
+        saturate(
+            roughness *
+            IE_PBR_CONDUCTOR_REFERENCE_ROUGHNESS_GAIN
+        ) *
+        metallic;
+
+    ambient +=
+        diffuseIrradiance *
+        F0 *
+        conductorIblReferenceWeight *
+        IE_PBR_CONDUCTOR_IBL_REFERENCE_STRENGTH;
+#endif
+
+    return
+        ambient *
+        saturate(hemiAo) *
+        saturate(screenOcclusion);
+}
+
+//#include "ssao_blur.ps"
+
+#ifdef HDAO
+#define USE_HDAO 1
+#endif
+
+#ifdef SM_5
+Texture2D<float> s_occ;
+#endif // SM_5
+
+#include "ssao.ps"
+#ifdef USE_HDAO
+#include "ssao_hdao_new.ps"
+#define USE_HDAO_CODE
+//#include "ssao_hdao.ps"
+#else // USE_HDAO
+#ifdef USE_HBAO
+#include "ssao_hbao.ps"
+#endif // USE_HBAO
+#endif // USE_HDAO
+
+struct _input
+{
+ float4 tc0 : TEXCOORD0; // tc.xy, tc.w = tonemap scale
+ float2 tcJ : TEXCOORD1; // jitter coords
+ float4 pos2d : SV_Position;
+};
+
+struct _out
+{
+ float4 low : SV_Target0;
+ float4 high : SV_Target1;
+};
+
+// TODO: DX10: Replace Sample with Load
+#ifndef MSAA_OPTIMIZATION
+_out main ( _input I )
+#else
+_out main ( _input I, uint iSample : SV_SAMPLEINDEX )
+#endif
+{
+ gbuffer_data gbd =
+    gbuffer_load_data(
+        GLD_P(I.tc0, I.pos2d, ISAMPLE)
+    );
+
+#if IE_PBR_GBUFFER_DEBUG_MODE != 0
+    float3 debugColor = float3(0.0f, 0.0f, 0.0f);
+
+#if IE_PBR_GBUFFER_DEBUG_MODE == 1
+    // Green = PBR marker survived packing; magenta = legacy material.
+    debugColor =
+        gbd.pbr > 0.5f ?
+        float3(0.0f, 1.0f, 0.0f) :
+        float3(1.0f, 0.0f, 1.0f);
+#elif IE_PBR_GBUFFER_DEBUG_MODE == 2
+    // R = metallic, G = roughness, B = packed hemi * material AO.
+    debugColor =
+        float3(
+            saturate(gbd.metallic),
+            saturate(gbd.roughness),
+            saturate(gbd.hemi)
+        );
+#elif IE_PBR_GBUFFER_DEBUG_MODE == 3
+    // Exact base color stored by the deferred material pass.
+    debugColor = saturate(gbd.C);
+#elif IE_PBR_GBUFFER_DEBUG_MODE == 4
+    // View-space normal remapped from [-1,1] to [0,1].
+    debugColor =
+        normalize(gbd.N) * 0.5f + 0.5f;
+#endif
+
+    _out debugOutput;
+    debugOutput.low = float4(debugColor, 0.0f);
+    debugOutput.high = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    return debugOutput;
+#endif
+
+    float mtl = gbd.mtl;
+ // Sample the buffers:
+ float4 P = float4( gbd.P, gbd.mtl ); // position.(mtl or sun)
+ float4 N = float4( gbd.N, gbd.hemi ); // normal.hemi
+ float4 D = float4( gbd.C, gbd.gloss ); // rgb.gloss
+#ifndef USE_MSAA
+ float4 L = s_accumulator.Sample( smp_nofilter, I.tc0); // diffuse.specular
+#else
+# ifdef GBUFFER_OPTIMIZATION
+ float4 L = s_accumulator.Load( int3( I.pos2d.xy, 0 ), ISAMPLE); // diffuse.specular
+# else
+ float4 L = s_accumulator.Load( int3( I.tc0 * pos_decompression_params2.xy, 0 ), ISAMPLE );
+# endif
+#endif
+
+#ifdef USE_SUPER_SPECULAR
+ {
+ float ds = dot( D.rgb, 1.h/3.h );
+ D.w = max( D.w, ds*ds/8.h );
+ }
+#endif
+
+#ifdef FORCE_GLOSS
+ D.w = FORCE_GLOSS;
+#endif
+
+#ifdef USE_GAMMA_22
+ D.rgb = ( D.rgb*D.rgb ); // pow(2.2)
+#endif
+
+ // Calculate SSAO
+
+#ifdef USE_MSAA
+# ifdef GBUFFER_OPTIMIZATION
+ int2 texCoord = I.pos2d;
+# else
+ int2 texCoord = int2( I.tc0 * pos_decompression_params2.xy );
+# endif
+#endif
+ 
+/*#ifdef USE_SSAO_BLUR 
+# ifndef USE_MSAA
+ float occ = ssao_blur_ps(I.tc0);
+# else
+ float occ = ssao_blur_ps( texCoord, ISAMPLE );
+# endif*/
+
+#ifdef USE_HDAO
+#ifdef SM_5
+ float occ = s_occ.Sample( smp_nofilter, I.tc0); 
+#else // SM_5
+ float occ = calc_new_hdao( CS_P(P, N, I.tc0, I.tcJ, I.pos2d, ISAMPLE ) );
+#endif // SM_5
+#else // USE_HDAO
+#ifdef USE_HBAO
+ float occ = calc_hbao( P.z, N, I.tc0, I.pos2d );
+#else // USE_HBAO
+ float occ = calc_ssao( CS_P(P, N, I.tc0, I.tcJ, I.pos2d, ISAMPLE ) );
+#endif
+#endif // USE_HDAO
+ 
+float3 hdiffuse =
+    float3(0.0f, 0.0f, 0.0f);
+
+float3 hspecular =
+    float3(0.0f, 0.0f, 0.0f);
+
+float3 spec =
+    float3(0.0f, 0.0f, 0.0f);
+
+float4 light =
+    float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+float4 C =
+    float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+float3 color =
+    float3(0.0f, 0.0f, 0.0f);
+
+
+// ============================================================
+// PBR
+// ============================================================
+
+#if IE_PBR_RENDERING_ENABLED != 0
+if (gbd.pbr > 0.5f)
+{
+    // Direct lighting in the accumulator is already a complete RGB BRDF.
+    float3 direct = L.rgb;
+
+    // Infernis PBR Stage 2.9: diffuse + roughness-filtered specular IBL.
+    // Metallic surfaces receive their indirect color from reflected sky
+    // radiance instead of the removed Lambert fallback.
+    float3 ambient =
+        ie_pbr_ambient_ibl(
+            P.xyz,
+            N.xyz,
+            ie_pbr_prepare_albedo(D.rgb),
+            gbd.metallic,
+            gbd.roughness,
+            gbd.hemi,
+            occ,
+#ifdef USE_MSAA
+            ISAMPLE
+#else
+            0
+#endif
+        );
+
+    color = direct + ambient;
+}
+
+
+// ============================================================
+// Legacy X-Ray
+// ============================================================
+
+else
+#endif
+{
+    hmodel(
+        hdiffuse,
+        hspecular,
+        mtl,
+        N.w,
+        D.w,
+        P.xyz,
+        N.xyz
+    );
+
+    hdiffuse *= occ;
+    hspecular *= occ;
+
+    light =
+        float4(
+            L.rgb + hdiffuse,
+            L.w
+        );
+
+    C =
+        D * light;
+
+    spec =
+        C.www +
+        hspecular;
+
+#ifdef USE_SUPER_SPECULAR
+
+    spec =
+        (C.rgb * 0.5h + 0.5h) *
+        C.w +
+        hspecular;
+
+#endif
+
+    color =
+        C.rgb +
+        spec;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// For Test ///////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+#ifdef DBG_TEST_NMAP
+//. hemi + sun + lighting + specular
+ color = hdiffuse + L.rgb + N;
+#endif
+
+#ifdef DBG_TEST_NMAP_SPEC
+//. hemi + sun + lighting + specular
+ color = hdiffuse + L.rgb + N + spec;
+#endif
+
+#ifdef DBG_TEST_LIGHT
+//. hemi + sun + lighting + specular
+ color = hdiffuse + L.rgb;
+#endif
+
+#ifdef DBG_TEST_LIGHT_SPEC
+//. hemi + sun + lighting + specular
+ color = hdiffuse + L.rgb + spec;
+#endif
+
+#ifdef DBG_TEST_SPEC
+//. only lighting and specular
+ color = spec;
+#endif
+////////////////////////////////////////////////////////////////////////////////
+
+ // here should be distance fog
+ float3 pos = P.xyz;
+ float distance = length (pos);
+ float fog = saturate (distance*fog_params.w + fog_params.x); //
+ color = lerp (color,fog_color,fog); //
+ float skyblend = saturate (fog*fog);
+
+#ifdef DBG_TMAPPING
+ color = D.xyz;
+#endif
+ float tm_scale = I.tc0.w; // interpolated from VS
+
+#ifdef USE_SUPER_SPECULAR
+ color = spec - hspecular ;
+#endif
+// color = N; //show normals
+// color = D.xyz;
+// color 
+
+//float3 color = (0.5 * (sign( gbd.N - gbd.N_org ) + 1.0 ) );
+//color = float3( abs( gbd.hemi - gbd.hemi_org), 0, abs( gbd.mtl - gbd.mtl_org) );
+//color = abs( gbd.N - gbd.N_org );
+// color = occ; // holger test
+ //color = gbd.N;
+ _out o;
+ tonemap (o.low, o.high, color, tm_scale ) ;
+ o.low.a = skyblend ;
+ o.high.a = skyblend ;
+// o.low = skyblend;
+// o.hight = 0;
+
+ //o.low = float4(gbd.P,1);
+
+ //o.low = float4( 1.0f, 0.0f, 0.0f, 1.0f );
+
+ return o;
+}

@@ -10,6 +10,7 @@
 #include "xrRenderCommon/dxRenderDeviceRender.h"
 #include "xrRenderCommon/dxWallMarkArray.h"
 #include "xrRenderCommon/dxUIShader.h"
+#include "xrRenderCommon/infernis_pbr_settings.h"
 
 #include "..\xrRenderDX10\3DFluid\dx103DFluidManager.h"
 
@@ -76,6 +77,18 @@ static class cl_pos_decompress_params2 : public R_constant_setup {
                      1.0f / (float)Device.dwHeight);
     }
 } binder_pos_decompress_params2;
+
+static class cl_ie_pbr_hud_projection_params : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        extern ENGINE_API float psHUD_FOV;
+
+        const float worldVertTan = tanf(deg2rad(Device.fFOV / 2.0f));
+        const float hudVertTan = tanf(deg2rad(psHUD_FOV * Device.fFOV / 2.0f));
+        const float hudToWorldTan = hudVertTan / std::max(worldVertTan, EPS_S);
+
+        RCache.set_c(C, hudToWorldTan, psHUD_FOV, IE_VIEWPORT_NEAR, 0.0f);
+    }
+} binder_ie_pbr_hud_projection_params;
 
 static class cl_water_intensity : public R_constant_setup {
     virtual void setup(R_constant* C) {
@@ -384,6 +397,8 @@ void CRender::create() {
         "pos_decompression_params", &binder_pos_decompress_params);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
         "pos_decompression_params2", &binder_pos_decompress_params2);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "ie_pbr_hud_projection_params", &binder_ie_pbr_hud_projection_params);
 
     c_lmaterial = "L_material";
     c_sbase = "s_base";
@@ -902,9 +917,23 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     char c_sun_shafts[32];
     char c_ssao[32];
     char c_sun_quality[32];
+    char c_infernis_pbr[2];
+    char c_infernis_sslr[2];
 
     char sh_name[MAX_PATH] = "";
     u32 len = 0;
+
+    const bool infernisPbrEnabled = infernis_pbr_rendering_enabled();
+    const u32 infernisSslrMode = infernis_pbr_sslr_mode();
+    c_infernis_pbr[0] = infernisPbrEnabled ? '1' : '0';
+    c_infernis_pbr[1] = 0;
+    c_infernis_sslr[0] = '0' + char(infernisSslrMode);
+    c_infernis_sslr[1] = 0;
+
+    defines[def_it++] = { "IE_PBR_RENDERING_ENABLED", c_infernis_pbr };
+    defines[def_it++] = { "IE_PBR_SSLR_MODE", c_infernis_sslr };
+    sh_name[len++] = c_infernis_pbr[0];
+    sh_name[len++] = c_infernis_sslr[0];
     // options
     {
         xr_sprintf(c_smapsize, "%04d", u32(o.smapsize));

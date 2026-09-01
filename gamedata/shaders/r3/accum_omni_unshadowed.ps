@@ -1,0 +1,133 @@
+#include "common.h"
+#include "lmodel.h"
+
+// TODO: DX10: Move to Load
+#ifdef MSAA_OPTIMIZATION
+#ifdef GBUFFER_OPTIMIZATION
+float4 main ( float4 tc:TEXCOORD0, float4 pos2d : SV_Position, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#else
+float4 main ( float4 tc:TEXCOORD0, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#endif
+#else
+#ifdef GBUFFER_OPTIMIZATION
+float4 main ( float4 tc:TEXCOORD0, float4 pos2d : SV_Position ) : SV_Target
+#else
+float4 main ( float4 tc:TEXCOORD0 ) : SV_Target
+#endif
+#endif
+{
+ const float bias_mul = 0.999f;
+
+ // Sample the fat framebuffer:
+// float4 _P = tex2Dproj (s_position, tc); 
+// float4 _N = tex2Dproj (s_normal, tc); 
+ float2 tcProj = tc.xy / tc.w;
+
+#ifdef GBUFFER_OPTIMIZATION
+ // Infernis PBR Stage 2.21: sample material data at the exact raster pixel.
+ // Light-volume projective UVs are kept only for shadow/lightmap projection.
+ float2 gbufferTC = pos2d.xy / pos_decompression_params2.xy;
+#else
+ float2 gbufferTC = tcProj;
+#endif
+
+ gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, pos2d, ISAMPLE) );
+
+#if IE_PBR_STAGE246_LOCAL_HUD_PROJECTION == 1
+ if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+ {
+     return blendp(float4(0.0f, 0.35f, 0.0f, 0.0f), tc);
+ }
+#elif IE_PBR_STAGE246_LOCAL_HUD_PROJECTION == 2
+ ie_pbr_stage246_correct_local_position(gbd);
+#endif
+
+#if IE_PBR_LOCAL_ROUTE_MODE == 1
+ // Cyan means this unshadowed omni-light pixel reached the PBR branch.
+ if (gbd.pbr > 0.5f)
+ {
+     return blendp(float4(0.0f, 0.30f, 0.30f, 0.0f), tc);
+ }
+
+ // Orange means the same local-light pixel was classified as legacy.
+ return blendp(float4(0.35f, 0.10f, 0.0f, 0.0f), tc);
+#endif
+
+ float4 _P = float4( gbd.P,gbd.mtl );
+ float4 _N = float4( gbd.N,gbd.hemi );
+
+ float m = xmaterial ;
+# ifndef USE_R2_STATIC_SUN
+ m = _P.w ;
+# endif
+
+ float rsqr;
+float4 light;
+
+if (gbd.pbr > 0.5f)
+{
+    light =
+        plight_local_pbr(
+            gbd,
+            Ldynamic_pos.xyz,
+            Ldynamic_pos.w,
+            rsqr
+        );
+
+    // Stages 2.48/2.49: the actor torch's near-HUD fill is this unshadowed omni
+    // route, not accum_base's spotlight route.  Restore the finite-emitter
+    // response and its angular footprint before multiplying by actual light
+    // RGB.
+    light.rgb +=
+        ie_pbr_stage248_hud_omni_conductor_return(
+            gbd,
+            Ldynamic_pos.xyz,
+            Ldynamic_pos.w
+        );
+}
+else
+{
+    light =
+        plight_local(
+            m,
+            _P.xyz,
+            _N.xyz,
+            Ldynamic_pos.xyz,
+            Ldynamic_pos.w,
+            rsqr
+        );
+}
+
+#if IE_PBR_STAGE247_LOCAL_SPLIT_MODE == 1
+ if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+ {
+     float3 rawPbr =
+         ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
+         light.rgb;
+     float rawSignal =
+         saturate(ie_pbr_stage247_luminance(rawPbr) * 8.0f);
+
+     // Blue marks the unshadowed omni route.  A cyan HUD therefore means
+     // the tested light did not use accum_base's projected shadow path.
+     return blendp(
+         float4(rawSignal, 1.0f, 1.0f, 0.0f),
+         tc
+     );
+ }
+#endif
+
+ // Infernis PBR Stage 2.6: local radiance is converted
+ // without changing the legacy omni-light path.
+ if (gbd.pbr > 0.5f)
+ {
+     return blendp(
+         float4(
+             ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) * light.rgb,
+             0.0f
+         ),
+         tc
+     );
+ }
+
+ return blendp( Ldynamic_color * light, tc);
+}

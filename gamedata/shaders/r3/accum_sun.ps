@@ -1,0 +1,111 @@
+#include "common.h"
+#include "lmodel.h"
+#include "shadow.h"
+
+/*
+struct 	_input
+{
+	float2 	tc 	: TEXCOORD0;
+	float4 	tcJ : TEXCOORD1;
+	float2	LT	: TEXCOORD2;
+	float2	RT	: TEXCOORD3;
+	float2	LB	: TEXCOORD4;
+	float2 	RB	: TEXCOORD5;
+};
+*/
+
+#ifdef MSAA_OPTIMIZATION
+#ifdef GBUFFER_OPTIMIZATION
+float4 	main	( p_aa_AA_sun I, float4 pos2d : SV_Position, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#else
+float4 	main	( p_aa_AA_sun I, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#endif
+#else
+#ifdef GBUFFER_OPTIMIZATION
+float4 	main	( p_aa_AA_sun I, float4 pos2d : SV_Position ) : SV_Target
+#else
+float4 	main	( p_aa_AA_sun I ) : SV_Target
+#endif
+#endif
+{
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(I.tc, pos2d, ISAMPLE) );
+
+#if IE_PBR_SUN_PASS_MODE == 1
+	// Yellow: fullscreen/luminance directional pass.
+	return float4(0.35f, 0.35f, 0.0f, 0.0f);
+#endif
+
+//  float4 _P		= tex2D 	(s_position, 	I.tc); 
+//  float4  _N		= tex2D 	(s_normal,   	I.tc); 
+	float4 	_P	= float4( gbd.P, gbd.mtl );
+	float4	_N	= float4( gbd.N, gbd.hemi );
+
+	// ----- light-model
+	float 	m	= xmaterial	;
+# ifndef USE_R2_STATIC_SUN
+			m 	= _P.w		;
+# endif
+	float4 light;
+
+if (gbd.pbr > 0.5f)
+{
+    light =
+        plight_infinity_pbr(
+            gbd,
+            Ldynamic_dir.xyz
+        );
+}
+else
+{
+    light =
+        plight_infinity(
+            m,
+            _P.xyz,
+            _N.xyz,
+            Ldynamic_dir.xyz
+        );
+}
+
+	// ----- shadow
+	float4 	s_sum;
+//		s_sum.x	= tex2D	( s_smap, I.LT).x;
+//		s_sum.y = tex2D	( s_smap, I.RT).y;
+//		s_sum.z	= tex2D	( s_smap, I.LB).z;
+//		s_sum.w = tex2D	( s_smap, I.RB).w;
+		s_sum.x	= s_smap.Sample( smp_nofilter, I.LT).x;
+		s_sum.y = s_smap.Sample( smp_nofilter, I.RT).y;
+		s_sum.z	= s_smap.Sample( smp_nofilter, I.LB).z;
+		s_sum.w = s_smap.Sample( smp_nofilter, I.RB).w;
+//	float 	s 	= dot	( s_sum, 1.h/4.h);
+	float 	s 	= ((s_sum.x+s_sum.y)+(s_sum.z+s_sum.w))*(1.h/4.h);
+
+	// Infernis PBR Stage 2.6: transport both sun radiance
+	// and the filtered shadow factor in linear light.
+	if (gbd.pbr > 0.5f)
+	{
+#if IE_PBR_SUN_ROUTE_MODE == 1
+	    // Prove whether the white contribution belongs to this PBR sun pass.
+	    return float4(0.0f, 0.0f, 0.0f, 0.0f);
+#elif IE_PBR_SUN_ROUTE_MODE == 2
+	    // Magenta means the runtime G-buffer classified this pixel as PBR.
+	    return float4(0.35f, 0.0f, 0.35f, 0.0f);
+#else
+	    float3 pbrTransport =
+	        ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
+	        light.rgb *
+	        ie_pbr_prepare_light_factor(s);
+
+	    return float4(pbrTransport, 0.0f);
+#endif
+	}
+
+#if IE_PBR_SUN_ROUTE_MODE == 2
+	// Green means the runtime G-buffer classified this pixel as legacy.
+	return float4(0.0f, 0.35f, 0.0f, 0.0f);
+#else
+	return
+	    Ldynamic_color *
+	    light *
+	    s;
+#endif
+}
