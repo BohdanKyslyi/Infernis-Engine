@@ -44,7 +44,12 @@ float4 main ( v2p_TL2uv I  ) : SV_Target
 
 	float4 PS = mul( m_shadow,  _P );
 
-	float s	= shadowtest_sun( PS, I.Tex1 ) * sunmask( _P );
+	float s =
+    shadowtest_sun(
+        PS,
+        float4(I.Tex1, 0.0f, 0.0f)
+    ) *
+    sunmask(_P);
 
 	return s;
 }
@@ -108,7 +113,10 @@ else
 	float4 	PS	= mul( m_shadow, P4 );
 	float 	s 	= sunmask( P4 );
 	#ifdef 	USE_SJITTER
-	  		s 	*= shadowtest_sun( PS, I.Tex1 );
+	  		s *= shadowtest_sun(
+    PS,
+    float4(I.Tex1, 0.0f, 0.0f)
+);
 	#else
 #ifdef SM_MINMAX
 	  		s 	*= shadow_dx10_1( PS, I.Tex1, I.HPos.xy );

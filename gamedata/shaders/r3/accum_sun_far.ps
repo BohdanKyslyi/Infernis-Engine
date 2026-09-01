@@ -104,7 +104,10 @@ else
 	#if SUN_QUALITY==1
 		s 	*= shadow		(PS);
 	#elif SUN_QUALITY>=2
-		s 	*= shadowtest_sun 	(PS,I.Tex1);
+		s *= shadowtest_sun(
+    PS,
+    float4(I.Tex1, 0.0f, 0.0f)
+);
 	#endif
 #endif	//	SUN_QUALITY
 
