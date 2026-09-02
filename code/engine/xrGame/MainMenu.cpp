@@ -22,6 +22,7 @@
 #include <shellapi.h>
 
 #include "object_broker.h"
+#include "../xrRenderCommon/infernis_pbr_settings.h"
 
 string128 ErrMsgBoxTemplate[] = { "message_box_invalid_host",
                                   "message_box_session_full",
@@ -627,11 +628,20 @@ void CMainMenu::OnConnectToMasterServerOkClicked(CUIWindow*, void*) { Hide_CTMS_
 
 LPCSTR CMainMenu::GetGSVer() {
     static string256 buff;
+
 #ifdef _M_X64
-    xr_strcpy(buff, 255, "0.2.4 x64");
+    string256 fname;
+    bool usePBR = infernis_pbr_rendering_enabled();
+
+    if (usePBR) {
+        xr_strcpy(buff, 255, "0.2.5 x64 PBR");
+    } else {
+        xr_strcpy(buff, 255, "0.2.5 x64");
+    }
 #else
-    xr_strcpy(buff, 255, "0.2.4");
+    xr_strcpy(buff, 255, "0.2.5");
 #endif
+
     return buff;
 }
 
