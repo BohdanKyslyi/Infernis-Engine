@@ -4,7 +4,11 @@
  This project is the first **Ukrainian** modified **X-Ray 1.6 Engine** for general use and play. It aims to improve game features for modmakers and players who will play mods with it. Based on the original **X-Ray Engine 1.6**, all rights belong to the company GSC Game World.
 
 ### Main updates:
-— x64 Architecture
+
+— Physically-Based Rendering (PBR);
+<img width="1558" height="876" alt="image" src="https://github.com/user-attachments/assets/f662ebdb-96da-491b-9bf4-68abb1018bcd" />
+
+— x64 Architecture;
 
 — Added the ability to use a stationary machine gun, which was previously featured in the “Shadow of Chornobyl” mods. Previously, it was impossible to fire from it, but now everything works; modders simply need to integrate it via SDK or Perl, and it will function seamlessly in their new mods;
 ![photo_2024-04-02_12-25-43](https://github.com/user-attachments/assets/94fe879b-965a-466a-9566-bed44cf92bde)
