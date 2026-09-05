@@ -43,8 +43,8 @@ void CSE_ALifeItemHelmet::script_register(lua_State* L) {
     module(L)[luabind_class_item1(CSE_ALifeItemHelmet, "cse_alife_item_helmet", CSE_ALifeItem)];
 }
 
-void CSE_ALifeItemBackpack::script_register(lua_State *L) {
-	module(L)[ luabind_class_item1(CSE_ALifeItemBackpack, "cse_alife_item_backpack", CSE_ALifeItem)];
+void CSE_ALifeItemBackpack::script_register(lua_State* L) {
+    module(L)[luabind_class_item1(CSE_ALifeItemBackpack, "cse_alife_item_backpack", CSE_ALifeItem)];
 }
 
 void CSE_ALifeItemWeaponMagazined::script_register(lua_State* L) {

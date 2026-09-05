@@ -30,13 +30,13 @@
 #include "ai/monsters/basemonster/base_monster.h"
 #include "ai/trader/ai_trader.h"
 
-void CActor::AddGameNews(GAME_NEWS_DATA& news_data) {
+void CActor::AddGameNews(GAME_NEWS_DATA& news_data, bool bShowInHud) {
 
     GAME_NEWS_VECTOR& news_vector = game_news_registry->registry().objects();
     news_data.receive_time = Level().GetGameTime();
     news_vector.push_back(news_data);
 
-    if (CurrentGameUI()) {
+    if (bShowInHud && CurrentGameUI()) {
         CurrentGameUI()->UIMainIngameWnd->ReceiveNews(&news_data);
     }
 }

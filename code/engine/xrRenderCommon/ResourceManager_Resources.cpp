@@ -15,6 +15,12 @@
 
 void fix_texture_name(LPSTR fn);
 
+static void get_shader_source_name(string_path& result, LPCSTR resource_name) {
+    xr_strcpy(result, resource_name);
+    if (LPSTR options = strchr(result, '('))
+        *options = 0;
+}
+
 void simplify_texture(string_path& fn) {
     if (strstr(Core.Params, "-game_designer")) {
         if (strstr(fn, "$user"))
@@ -168,8 +174,9 @@ SVS* CResourceManager::_CreateVS(LPCSTR _name) {
             return _vs;
         }
 
-        string_path cname;
-        strconcat(sizeof(cname), cname, ::Render->getShaderPath(), _name, ".vs");
+        string_path cname, source_name;
+        get_shader_source_name(source_name, _name);
+        strconcat(sizeof(cname), cname, ::Render->getShaderPath(), source_name, ".vs");
         FS.update_path(cname, "$game_shaders$", cname);
         //		LPCSTR						target		= NULL;
 
@@ -250,9 +257,10 @@ SPS* CResourceManager::_CreatePS(LPCSTR name) {
         }
 
         // Open file
-        string_path cname;
+        string_path cname, source_name;
+        get_shader_source_name(source_name, name);
         LPCSTR shader_path = ::Render->getShaderPath();
-        strconcat(sizeof(cname), cname, shader_path, name, ".ps");
+        strconcat(sizeof(cname), cname, shader_path, source_name, ".ps");
         FS.update_path(cname, "$game_shaders$", cname);
 
         // duplicate and zero-terminate
@@ -723,8 +731,9 @@ SVS* CResourceManager::_CreateVS(LPCSTR _name) {
         LPD3DXBUFFER pErrorBuf = NULL;
         LPD3DXSHADER_CONSTANTTABLE pConstants = NULL;
         HRESULT _hr = S_OK;
-        string_path cname;
-        strconcat(sizeof(cname), cname, ::Render->getShaderPath(), _name, ".vs");
+        string_path cname, source_name;
+        get_shader_source_name(source_name, _name);
+        strconcat(sizeof(cname), cname, ::Render->getShaderPath(), source_name, ".vs");
         FS.update_path(cname, "$game_shaders$", cname);
         //		LPCSTR						target		= NULL;
 
@@ -830,9 +839,10 @@ SPS* CResourceManager::_CreatePS(LPCSTR name) {
 
         // Open file
         includer Includer;
-        string_path cname;
+        string_path cname, source_name;
+        get_shader_source_name(source_name, name);
         LPCSTR shader_path = ::Render->getShaderPath();
-        strconcat(sizeof(cname), cname, shader_path, name, ".ps");
+        strconcat(sizeof(cname), cname, shader_path, source_name, ".ps");
         FS.update_path(cname, "$game_shaders$", cname);
 
         // duplicate and zero-terminate

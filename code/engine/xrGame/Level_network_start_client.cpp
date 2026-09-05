@@ -120,10 +120,16 @@ bool CLevel::net_start_client4() {
         //		g_pGamePersistent->LoadTitle		("st_client_spawning");
         g_pGamePersistent->LoadTitle();
 
-        // Send physics to single or multithreaded mode
-
-        create_physics_world(!!psDeviceFlags.test(mtPhysics), &ObjectSpace, &Objects, &Device);
-
+        // ODE spaces reject geom/body changes while a collision traversal holds
+        // the space lock. The game can update physics shells from the main/render
+        // thread, so running CPHWorld in seqFrameMT creates an intermittent race
+        // ("invalid operation for locked space") and can also leave stale object
+        // pointers in the worker. Force the stable single-threaded physics path.
+        if (psDeviceFlags.test(mtPhysics)) {
+            Msg("! mt_physics was disabled: ODE collision spaces are not thread-safe here");
+            psDeviceFlags.set(mtPhysics, FALSE);
+        }
+        create_physics_world(false, &ObjectSpace, &Objects, &Device);
         R_ASSERT(physics_world());
 
         m_ph_commander_physics_worldstep = xr_new<CPHCommander>();

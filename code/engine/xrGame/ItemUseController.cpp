@@ -2,7 +2,7 @@
 //	Module 		: ItemUseController.cpp
 //	Created 	: 23.08.2026
 //  Modified 	: 25.08.2026
-//	Author		: Bohdan «Infernis» Kyslyi
+//	Author		: Bohdan В«InfernisВ» Kyslyi
 //	Description : Item use controller
 ////////////////////////////////////////////////////////////////////////////
 
@@ -84,7 +84,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
     m_trash_spawned = false;
 
     //
-    // 1. Сам предмет повинен посилатися на use-section.
+    // 1. РЎР°Рј РїСЂРµРґРјРµС‚ РїРѕРІРёРЅРµРЅ РїРѕСЃРёР»Р°С‚РёСЃСЏ РЅР° use-section.
     //
     if (!pSettings->line_exist(m_item_section, "hud")) {
         Reset();
@@ -99,7 +99,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
     }
 
     //
-    // 2. Перевіряємо, що це саме animated consumable.
+    // 2. РџРµСЂРµРІС–СЂСЏС”РјРѕ, С‰Рѕ С†Рµ СЃР°РјРµ animated consumable.
     //
     if (!pSettings->line_exist(m_use_section, "timing")) {
         Reset();
@@ -107,7 +107,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
     }
 
     m_hud_section = NULL;
-    
+
     //
     // First try portion-specific HUD.
     //
@@ -122,12 +122,12 @@ bool CItemUseController::Start(CInventoryItem* item) {
 
         m_trash_count = eatable->TrashCount();
     }
-    
+
     if (eatable)
     {
         const shared_str& state =
             eatable->PortionStateSection();
-    
+
         if (state.size() &&
             pSettings->line_exist(
                 state.c_str(),
@@ -140,7 +140,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
                 );
         }
     }
-    
+
     //
     // Backward-compatible fallback:
     //
@@ -158,7 +158,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
                 "hud"
             );
     }
-    
+
     if (!m_hud_section.size())
     {
         Reset();
@@ -171,7 +171,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
     }
 
     //
-    // 3. HUD-секція повинна мати анімацію використання.
+    // 3. HUD-СЃРµРєС†С–СЏ РїРѕРІРёРЅРЅР° РјР°С‚Рё Р°РЅС–РјР°С†С–СЋ РІРёРєРѕСЂРёСЃС‚Р°РЅРЅСЏ.
     //
     if (!pSettings->line_exist(m_hud_section, "anm_show")) {
         Reset();
@@ -193,9 +193,9 @@ bool CItemUseController::Start(CInventoryItem* item) {
     }
 
     //
-    // ВАЖЛИВО:
-    // consumable HUD тут більше НЕ запускаємо.
-    // Спочатку починаємо штатне ховання зброї.
+    // Р’РђР–Р›РР’Рћ:
+    // consumable HUD С‚СѓС‚ Р±С–Р»СЊС€Рµ РќР• Р·Р°РїСѓСЃРєР°С”РјРѕ.
+    // РЎРїРѕС‡Р°С‚РєСѓ РїРѕС‡РёРЅР°С”РјРѕ С€С‚Р°С‚РЅРµ С…РѕРІР°РЅРЅСЏ Р·Р±СЂРѕС—.
     //
     m_active = true;
     m_effect_applied = false;
@@ -280,7 +280,7 @@ bool CItemUseController::CanStartAnimation()
     CInventory& inv = m_actor->inventory();
 
     //
-    // Чекаємо завершення штатної hide-анімації.
+    // Р§РµРєР°С”РјРѕ Р·Р°РІРµСЂС€РµРЅРЅСЏ С€С‚Р°С‚РЅРѕС— hide-Р°РЅС–РјР°С†С–С—.
     //
     if (inv.GetActiveSlot() != NO_ACTIVE_SLOT)
         return false;
@@ -289,16 +289,16 @@ bool CItemUseController::CanStartAnimation()
         return false;
 
     //
-    // Detector — окремий HUD item, тому active slot
-    // сам по собі його не гарантує.
+    // Detector вЂ” РѕРєСЂРµРјРёР№ HUD item, С‚РѕРјСѓ active slot
+    // СЃР°Рј РїРѕ СЃРѕР±С– Р№РѕРіРѕ РЅРµ РіР°СЂР°РЅС‚СѓС”.
     //
     CCustomDetector* detector = smart_cast<CCustomDetector*>(inv.ItemFromSlot(DETECTOR_SLOT));
 
     if (detector && !detector->IsHidden()) {
         //
-        // Повторний виклик безпечний.
-        // Якщо detector ще showing/hiding —
-        // наступного кадру перевіримо знову.
+        // РџРѕРІС‚РѕСЂРЅРёР№ РІРёРєР»РёРє Р±РµР·РїРµС‡РЅРёР№.
+        // РЇРєС‰Рѕ detector С‰Рµ showing/hiding вЂ”
+        // РЅР°СЃС‚СѓРїРЅРѕРіРѕ РєР°РґСЂСѓ РїРµСЂРµРІС–СЂРёРјРѕ Р·РЅРѕРІСѓ.
         //
         detector->HideDetector(true);
         return false;
@@ -327,8 +327,8 @@ void CItemUseController::BeginAnimation()
     LoadAnimSound();
 
     //
-    // FALSE — наш уже перевірений фікс
-    // "руки прилітають з іншого виміру".
+    // FALSE вЂ” РЅР°С€ СѓР¶Рµ РїРµСЂРµРІС–СЂРµРЅРёР№ С„С–РєСЃ
+    // "СЂСѓРєРё РїСЂРёР»С–С‚Р°СЋС‚СЊ Р· С–РЅС€РѕРіРѕ РІРёРјС–СЂСѓ".
     //
     m_animation_duration = g_player_hud->play_controller_motion("anm_show", FALSE);
 
@@ -340,15 +340,15 @@ void CItemUseController::BeginAnimation()
     }
 
     //
-    // Effect timing не може бути довшим
-    // за саму animation.
+    // Effect timing РЅРµ РјРѕР¶Рµ Р±СѓС‚Рё РґРѕРІС€РёРј
+    // Р·Р° СЃР°РјСѓ animation.
     //
     if (m_action_time > m_animation_duration)
         m_action_time = m_animation_duration;
 
     //
-    // Звук запускається саме разом із consumable animation,
-    // а не під час holster weapon.
+    // Р—РІСѓРє Р·Р°РїСѓСЃРєР°С”С‚СЊСЃСЏ СЃР°РјРµ СЂР°Р·РѕРј С–Р· consumable animation,
+    // Р° РЅРµ РїС–Рґ С‡Р°СЃ holster weapon.
     //
     PlayAnimSound();
 
@@ -368,7 +368,7 @@ void CItemUseController::Update(float dt)
         return;
 
     //
-    // Actor зник / помер — abort без застосування item effect.
+    // Actor Р·РЅРёРє / РїРѕРјРµСЂ вЂ” abort Р±РµР· Р·Р°СЃС‚РѕСЃСѓРІР°РЅРЅСЏ item effect.
     //
     if (!m_actor || !m_actor->g_Alive()) {
         Cancel();
@@ -376,8 +376,8 @@ void CItemUseController::Update(float dt)
     }
 
     //
-    // Якщо HUD subsystem раптом недоступна —
-    // не залишаємо actor заблокованим назавжди.
+    // РЇРєС‰Рѕ HUD subsystem СЂР°РїС‚РѕРј РЅРµРґРѕСЃС‚СѓРїРЅР° вЂ”
+    // РЅРµ Р·Р°Р»РёС€Р°С”РјРѕ actor Р·Р°Р±Р»РѕРєРѕРІР°РЅРёРј РЅР°Р·Р°РІР¶РґРё.
     //
     if (!g_player_hud) {
         Cancel();
@@ -385,8 +385,8 @@ void CItemUseController::Update(float dt)
     }
 
     //
-    // Фаза 1:
-    // чекаємо weapon + detector hide.
+    // Р¤Р°Р·Р° 1:
+    // С‡РµРєР°С”РјРѕ weapon + detector hide.
     //
     if (m_waiting_for_weapon_hide) {
         if (CanStartAnimation())
@@ -396,13 +396,13 @@ void CItemUseController::Update(float dt)
     }
 
     //
-    // Фаза 2:
-    // consumable animation уже йде.
+    // Р¤Р°Р·Р° 2:
+    // consumable animation СѓР¶Рµ Р№РґРµ.
     //
     const u32 elapsed = Device.dwTimeGlobal - m_start_time;
 
     //
-    // Реальний effect moment.
+    // Р РµР°Р»СЊРЅРёР№ effect moment.
     //
     if (!m_effect_applied && elapsed >= m_action_time) {
         if (!m_item) {
@@ -426,15 +426,15 @@ void CItemUseController::Update(float dt)
         Msg("* ItemUse effect applied: [%s]", m_item_section.c_str());
 
         //
-        // Після останньої порції item уже
-        // позначений SetDropManual(TRUE).
+        // РџС–СЃР»СЏ РѕСЃС‚Р°РЅРЅСЊРѕС— РїРѕСЂС†С–С— item СѓР¶Рµ
+        // РїРѕР·РЅР°С‡РµРЅРёР№ SetDropManual(TRUE).
         //
         if (became_empty)
             m_item = NULL;
     }
 
     //
-    // Завершення animation.
+    // Р—Р°РІРµСЂС€РµРЅРЅСЏ animation.
     //
     if (m_animation_duration > 0 && elapsed >= m_animation_duration) {
         Finish();

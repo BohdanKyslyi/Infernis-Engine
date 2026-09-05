@@ -153,7 +153,7 @@ void CWeaponStatMgun::UpdateCL() {
     if (OwnerActor() && OwnerActor()->IsMyCamera()) {
         cam_Update(Device.fTimeDelta, g_fov);
         OwnerActor()->Cameras().UpdateFromCamera(Camera());
-        OwnerActor()->Cameras().ApplyDevice(VIEWPORT_NEAR);
+        OwnerActor()->Cameras().ApplyDevice(STATIONARY_NEAR);
     }
 }
 

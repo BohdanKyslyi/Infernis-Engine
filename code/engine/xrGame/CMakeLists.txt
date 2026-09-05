@@ -1135,7 +1135,10 @@ set(AI_ASCRIPT_SCRIPTCLASSES_UI_UIWINDOWS_STATIC ui/UIAnimatedStatic.h
                                                  ui/UILanimController.cpp
                                                  ui/UIStatic.cpp
                                                  ui/UIStatic_script.cpp
-                                                 UIStaticItem.cpp)
+                                                 UIStaticItem.cpp
+												 ui/UICinematicBorders.h
+												 ui/UICinematicBorders.cpp
+												 )
 
 set(AI_ACOMPONENTS_PROBLEMSOLVER_OPERATOR_CONDITION_SCRIPTWORLDPROPERTY script_world_property.h
                                                                         script_world_property_inline.h
@@ -2825,8 +2828,10 @@ set(AI_ACOMPONENTS_MOVEMENTMANAGER_PATHMANAGERS_GAMEPATHMANAGER game_path_manage
                                                                 game_path_manager_inline.h)
 
 set(CORE_CLIENT_OBJECTS_INVENTORY Inventory.h
+                                  NoirInventorySlots.h
                                   ../xrServerEntities/inventory_space.h
                                   Inventory.cpp
+                                  NoirInventorySlots.cpp
                                   inventory_quickswitch.cpp)
 
 set(AI_ALIFE_INVENTORY_UPGRADE inventory_upgrade_manager.h
@@ -2849,8 +2854,8 @@ set(CORE_CLIENT_OBJECTS_ACTOR_BASE Actor.h
                                    ActorCondition.h
                                    fire_disp_controller.h
                                    Actor.cpp
-								   ItemUseController.cpp
-								   ItemUseController.h
+                                   ItemUseController.cpp
+                                   ItemUseController.h
                                    actor_communication.cpp
                                    Actor_Events.cpp
                                    Actor_Feel.cpp
@@ -3896,6 +3901,7 @@ set_source_files_properties(HelicopterMovementManager.cpp PROPERTIES COMPILE_FLA
 set_source_files_properties(hit_memory_manager.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(InfoPortion.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(Inventory.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
+set_source_files_properties(NoirInventorySlots.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(inventory_item.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(inventory_item_object.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(inventory_item_upgrade.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")

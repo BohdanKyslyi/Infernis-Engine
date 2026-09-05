@@ -9,6 +9,9 @@ public:
     xr_vector<light*> v_shadowed;
 
 public:
-    void clear();
+    light_Package() = default;
+    ~light_Package() = default;
+
+    void clear() noexcept;
     void sort();
 };

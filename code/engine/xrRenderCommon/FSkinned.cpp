@@ -1337,7 +1337,7 @@ CBoneData::FacesVec& faces, SEnumVerticesCallback &C ) const
                 for (u32 k=0; k<3; k++){
                         vertBoned1W& vert		= Vertices1W[indices[idx+k]];
                 }}
-                                                        
+
 }
 void CSkeletonX_ext::TEnumBoneVertices	( Vertices2W &verteses, u16 bone_id, u16* indices,
 CBoneData::FacesVec& faces, SEnumVerticesCallback &C ) const
@@ -1349,7 +1349,7 @@ CBoneData::FacesVec& faces, SEnumVerticesCallback &C ) const
                         Fvector		P0,P1;
                         vertBoned2W& vert		= Vertices2W[indices[idx+k]];
                 }}
-                                                        
+
 }
 void CSkeletonX_ext::TEnumBoneVertices	( vertHW_1W &verteses, u16 bone_id, u16* indices,
 CBoneData::FacesVec& faces, SEnumVerticesCallback &C ) const
@@ -1360,7 +1360,7 @@ CBoneData::FacesVec& faces, SEnumVerticesCallback &C ) const
                 CSkeletonWallmark::WMFace F;
                 for (u32 k=0; k<3; k++){
                         vertHW_1W& vert			= vertices[indices[idx+k]];
-                                                        
+
 }
 void CSkeletonX_ext::TEnumBoneVertices	( vertHW_2W &verteses, u16 bone_id, u16* indices,
 CBoneData::FacesVec& faces, SEnumVerticesCallback &C ) const
@@ -1372,9 +1372,9 @@ CBoneData::FacesVec& faces, SEnumVerticesCallback &C ) const
                 for (u32 k=0; k<3; k++){
                         Fvector		P0,P1;
                         vertHW_2W& vert			= vertices[indices[idx+k]];
-                        
+
                 }}
-                                                        
+
 }
 */
 

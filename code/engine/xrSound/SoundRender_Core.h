@@ -5,7 +5,15 @@
 #include "SoundRender.h"
 #include "SoundRender_Environment.h"
 #include "SoundRender_Cache.h"
-#include "soundrender_environment.h"
+
+// ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ: Структура відкладеного звуку
+struct SDelayedSound {
+    ref_sound       snd;
+    CObject* obj;
+    Fvector         pos;
+    u32             flags;
+    float           play_time; 
+};
 
 class CSoundRender_Core : public CSound_manager_interface {
     volatile BOOL bLocked;
@@ -25,11 +33,15 @@ public:
     typedef std::pair<ref_sound_data_ptr, float> event;
     xr_vector<event> s_events;
 
+    // ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ: Черга звуків
+    xr_vector<SDelayedSound> m_delayed_sounds;
+    void update_delayed_sounds();
+
 public:
     BOOL bPresent;
     BOOL bUserEnvironment;
-    BOOL bEAX; // Boolean variable to indicate presence of EAX Extension
-    BOOL bDeferredEAX;
+    BOOL bEFX; 
+    BOOL bDeferredEFX;
     BOOL bReady;
 
     CTimer Timer;
@@ -38,7 +50,6 @@ public:
     sound_event* Handler;
 
 protected:
-// Collider
 #ifndef _EDITOR
     CDB::COLLIDER geom_DB;
 #endif
@@ -46,37 +57,29 @@ protected:
     CDB::MODEL* geom_MODEL;
     CDB::MODEL* geom_ENV;
 
-    // Containers
     xr_vector<CSoundRender_Source*> s_sources;
     xr_vector<CSoundRender_Emitter*> s_emitters;
-    u32 s_emitters_u; // emitter update marker
+    u32 s_emitters_u; 
     xr_vector<CSoundRender_Target*> s_targets;
     xr_vector<CSoundRender_Target*> s_targets_defer;
-    u32 s_targets_pu; // parameters update
+    u32 s_targets_pu; 
     SoundEnvironment_LIB* s_environment;
     CSoundRender_Environment s_user_environment;
 
     int m_iPauseCounter;
 
 public:
-    // Cache
     CSoundRender_Cache cache;
     u32 cache_bytes_per_line;
-
-protected:
-    virtual void i_eax_set(const GUID* guid, u32 prop, void* val, u32 sz) = 0;
-    virtual void i_eax_get(const GUID* guid, u32 prop, void* val, u32 sz) = 0;
 
 public:
     CSoundRender_Core();
     virtual ~CSoundRender_Core();
 
-    // General
     virtual void _initialize(int stage) = 0;
     virtual void _clear() = 0;
     virtual void _restart();
 
-    // Sound interface
     void verify_refsound(ref_sound& S);
     virtual void create(ref_sound& S, LPCSTR fName, esound_type sound_type, int game_type);
     virtual void attach_tail(ref_sound& S, LPCSTR fName);
@@ -89,6 +92,10 @@ public:
     virtual void play(ref_sound& S, CObject* O, u32 flags = 0, float delay = 0.f);
     virtual void play_at_pos(ref_sound& S, CObject* O, const Fvector& pos, u32 flags = 0,
                              float delay = 0.f);
+                             
+    // ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ
+    virtual void play_with_delay(ref_sound& S, CObject* O, const Fvector& pos, u32 flags = 0);
+
     virtual void play_no_feedback(ref_sound& S, CObject* O, u32 flags = 0, float delay = 0.f,
                                   Fvector* pos = 0, float* vol = 0, float* freq = 0,
                                   Fvector2* range = 0);
@@ -102,14 +109,16 @@ public:
     virtual void update_events();
     virtual void statistic(CSound_stats* dest, CSound_stats_ext* ext);
 
-    // listener
-    //	virtual const Fvector&				listener_position		( )=0;
     virtual void update_listener(const Fvector& P, const Fvector& D, const Fvector& N,
                                  float dt) = 0;
-    // eax listener
-    void i_eax_commit_setting();
-    void i_eax_listener_set(CSound_environment* E);
-    void i_eax_listener_get(CSound_environment* E);
+    virtual const Fvector& listener_position() = 0;
+
+    // EFX Рефакторинг: Замість старих EAX-костилів, ми передаємо середовище в CoreA
+    virtual void update_environment(CSound_environment* E) = 0;
+	
+	// NOIR ENGINE: Cinematic EFX Control
+    virtual void set_efx_override(bool bEnable, float room = -10000.0f, float room_hf = 0.0f, float decay_time = 1.0f, float decay_hf_ratio = 0.5f, float reflections_delay = 0.02f, float reverb_delay = 0.04f, float room_rolloff_factor = 0.0f, float diffusion = 1.0f, float reflections = -2602.0f, float reverb = 200.0f, float air_absorption_hf = -5.0f) {}
+    virtual void set_efx_override(LPCSTR preset_name) {}
 
 #ifdef _EDITOR
     virtual SoundEnvironment_LIB* get_env_library() { return s_environment; }

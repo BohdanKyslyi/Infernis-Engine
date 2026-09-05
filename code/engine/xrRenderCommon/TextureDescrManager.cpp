@@ -3,14 +3,16 @@
 #include "TextureDescrManager.h"
 #include "ETextureParams.h"
 
-// eye-params
-float r__dtex_range = 50;
+float r__dtex_range = 50.f;
+
 class cl_dt_scaler : public R_constant_setup {
 public:
     float scale;
 
-    cl_dt_scaler(float s) : scale(s){};
-    virtual void setup(R_constant* C) { RCache.set_c(C, scale, scale, scale, 1 / r__dtex_range); }
+    cl_dt_scaler(float s) : scale(s) {}
+    void setup(R_constant* C) override { 
+        RCache.set_c(C, scale, scale, scale, 1.f / r__dtex_range); 
+    }
 };
 
 void fix_texture_thm_name(LPSTR fn) {
@@ -24,64 +26,71 @@ void fix_texture_thm_name(LPSTR fn) {
 void CTextureDescrMngr::LoadTHM(LPCSTR initial) {
     FS_FileSet flist;
     FS.file_list(flist, initial, FS_ListFiles, "*.thm");
+    
 #ifdef DEBUG
     Msg("count of .thm files=%d", flist.size());
-#endif // #ifdef DEBUG
-    auto It = flist.begin();
-    auto It_e = flist.end();
+#endif
+
     STextureParams tp;
     string_path fn;
-    for (; It != It_e; ++It) {
 
-        FS.update_path(fn, initial, (*It).name.c_str());
+    // C++11 Range-based for loop
+    for (const auto& file : flist) {
+        FS.update_path(fn, initial, file.name.c_str());
+        
         IReader* F = FS.r_open(fn);
-        xr_strcpy(fn, (*It).name.c_str());
+        if (!F) continue; // Захист від відсутніх файлів
+
+        xr_strcpy(fn, file.name.c_str());
         fix_texture_thm_name(fn);
 
-        R_ASSERT(F->find_chunk(THM_CHUNK_TYPE));
+        // МАКСИМАЛЬНА БЕЗПЕКА: Замість вильоту гри (R_ASSERT), просто пропускаємо битий файл
+        if (!F->find_chunk(THM_CHUNK_TYPE)) {
+            FS.r_close(F);
+            continue;
+        }
+
         F->r_u32();
         tp.Clear();
         tp.Load(*F);
         FS.r_close(F);
 
-        if (STextureParams::ttImage == tp.type || STextureParams::ttTerrain == tp.type ||
-            STextureParams::ttNormalMap == tp.type) {
+        if (STextureParams::ttImage == tp.type || STextureParams::ttTerrain == tp.type || STextureParams::ttNormalMap == tp.type) {
             texture_desc& desc = m_texture_details[fn];
-            cl_dt_scaler*& dts = m_detail_scalers[fn];
 
-            if (tp.detail_name.size() &&
-                tp.flags.is_any(STextureParams::flDiffuseDetail | STextureParams::flBumpDetail)) {
-                if (desc.m_assoc)
-                    xr_delete(desc.m_assoc);
+            if (tp.detail_name.size() && tp.flags.is_any(STextureParams::flDiffuseDetail | STextureParams::flBumpDetail)) {
+                desc.bHasAssoc = true;
+                desc.assoc.detail_name = tp.detail_name;
+                desc.assoc.usage = 0;
 
-                desc.m_assoc = xr_new<texture_assoc>();
-                desc.m_assoc->detail_name = tp.detail_name;
-                if (dts)
+                if (tp.flags.is(STextureParams::flDiffuseDetail)) desc.assoc.usage |= (1 << 0);
+                if (tp.flags.is(STextureParams::flBumpDetail))    desc.assoc.usage |= (1 << 1);
+
+                cl_dt_scaler*& dts = m_detail_scalers[fn];
+                if (dts) {
                     dts->scale = tp.detail_scale;
-                else
-                    /*desc.m_assoc->cs*/ dts = xr_new<cl_dt_scaler>(tp.detail_scale);
-
-                desc.m_assoc->usage = 0;
-
-                if (tp.flags.is(STextureParams::flDiffuseDetail))
-                    desc.m_assoc->usage |= (1 << 0);
-
-                if (tp.flags.is(STextureParams::flBumpDetail))
-                    desc.m_assoc->usage |= (1 << 1);
+                } else {
+                    dts = xr_new<cl_dt_scaler>(tp.detail_scale);
+                }
             }
-            if (desc.m_spec)
-                xr_delete(desc.m_spec);
 
-            desc.m_spec = xr_new<texture_spec>();
-            desc.m_spec->m_material = tp.material + tp.material_weight;
-            desc.m_spec->m_use_steep_parallax = false;
-            desc.m_spec->m_use_pbr = (tp.material == STextureParams::tmPBR_Material);
+            desc.bHasSpec = true;
+            const bool isPBR = tp.material == STextureParams::tmPBR_Material;
+
+            // The legacy renderers address a four-slice material LUT. PBR is a
+            // texture-layout marker, not a fifth LUT slice, so give R2/R3 a
+            // defined Blinn fallback instead of letting material 4 wrap around.
+            desc.spec.m_material = isPBR
+                ? float(STextureParams::tmBlin_Phong)
+                : tp.material + tp.material_weight;
+            desc.spec.m_use_steep_parallax = false;
+            desc.spec.m_use_pbr = isPBR;
 
             if (tp.bump_mode == STextureParams::tbmUse) {
-                desc.m_spec->m_bump_name = tp.bump_name;
+                desc.spec.m_bump_name = tp.bump_name;
             } else if (tp.bump_mode == STextureParams::tbmUseParallax) {
-                desc.m_spec->m_bump_name = tp.bump_name;
-                desc.m_spec->m_use_steep_parallax = true;
+                desc.spec.m_bump_name = tp.bump_name;
+                desc.spec.m_use_steep_parallax = true;
             }
         }
     }
@@ -91,101 +100,78 @@ void CTextureDescrMngr::Load() {
 #ifdef DEBUG
     CTimer TT;
     TT.Start();
-#endif // #ifdef DEBUG
+#endif
 
     LoadTHM("$game_textures$");
     LoadTHM("$level$");
 
 #ifdef DEBUG
     Msg("load time=%d ms", TT.GetElapsed_ms());
-#endif // #ifdef DEBUG
+#endif
 }
 
 void CTextureDescrMngr::UnLoad() {
-    map_TD::iterator I = m_texture_details.begin();
-    map_TD::iterator E = m_texture_details.end();
-    for (; I != E; ++I) {
-        xr_delete(I->second.m_assoc);
-        xr_delete(I->second.m_spec);
-    }
+    // Всі структури тепер живуть всередині map і знищуються автоматично!
+    // Ми позбулися тисяч xr_delete, що радикально прискорює вивантаження рівня.
     m_texture_details.clear();
 }
 
 CTextureDescrMngr::~CTextureDescrMngr() {
-    map_CS::iterator I = m_detail_scalers.begin();
-    map_CS::iterator E = m_detail_scalers.end();
-
-    for (; I != E; ++I)
-        xr_delete(I->second);
-
+    // C++17 Structured Bindings
+    for (auto& [key, scaler] : m_detail_scalers) {
+        xr_delete(scaler);
+    }
     m_detail_scalers.clear();
 }
 
 shared_str CTextureDescrMngr::GetBumpName(const shared_str& tex_name) const {
-    map_TD::const_iterator I = m_texture_details.find(tex_name);
-    if (I != m_texture_details.end()) {
-        if (I->second.m_spec) {
-            return I->second.m_spec->m_bump_name;
-        }
+    const auto it = m_texture_details.find(tex_name);
+    if (it != m_texture_details.end() && it->second.bHasSpec) {
+        return it->second.spec.m_bump_name;
     }
     return "";
 }
 
 BOOL CTextureDescrMngr::UseSteepParallax(const shared_str& tex_name) const {
-    map_TD::const_iterator I = m_texture_details.find(tex_name);
-    if (I != m_texture_details.end()) {
-        if (I->second.m_spec) {
-            return I->second.m_spec->m_use_steep_parallax;
-        }
+    const auto it = m_texture_details.find(tex_name);
+    if (it != m_texture_details.end() && it->second.bHasSpec) {
+        return it->second.spec.m_use_steep_parallax;
     }
     return FALSE;
 }
 
 BOOL CTextureDescrMngr::UsePBRTextures(const shared_str& tex_name) const {
-    map_TD::const_iterator I = m_texture_details.find(tex_name);
-
-    if (I != m_texture_details.end()) {
-        if (I->second.m_spec) {
-            return I->second.m_spec->m_use_pbr;
-        }
+    const auto it = m_texture_details.find(tex_name);
+    if (it != m_texture_details.end() && it->second.bHasSpec) {
+        return it->second.spec.m_use_pbr;
     }
-
     return FALSE;
 }
 
 float CTextureDescrMngr::GetMaterial(const shared_str& tex_name) const {
-    map_TD::const_iterator I = m_texture_details.find(tex_name);
-    if (I != m_texture_details.end()) {
-        if (I->second.m_spec) {
-            return I->second.m_spec->m_material;
-        }
+    const auto it = m_texture_details.find(tex_name);
+    if (it != m_texture_details.end() && it->second.bHasSpec) {
+        return it->second.spec.m_material;
     }
     return 1.0f;
 }
 
-void CTextureDescrMngr::GetTextureUsage(const shared_str& tex_name, BOOL& bDiffuse,
-                                        BOOL& bBump) const {
-    map_TD::const_iterator I = m_texture_details.find(tex_name);
-    if (I != m_texture_details.end()) {
-        if (I->second.m_assoc) {
-            u8 usage = I->second.m_assoc->usage;
-            bDiffuse = !!(usage & (1 << 0));
-            bBump = !!(usage & (1 << 1));
-        }
+void CTextureDescrMngr::GetTextureUsage(const shared_str& tex_name, BOOL& bDiffuse, BOOL& bBump) const {
+    const auto it = m_texture_details.find(tex_name);
+    if (it != m_texture_details.end() && it->second.bHasAssoc) {
+        const u8 usage = it->second.assoc.usage;
+        bDiffuse = !!(usage & (1 << 0));
+        bBump = !!(usage & (1 << 1));
     }
 }
 
-BOOL CTextureDescrMngr::GetDetailTexture(const shared_str& tex_name, LPCSTR& res,
-                                         R_constant_setup*& CS) const {
-    map_TD::const_iterator I = m_texture_details.find(tex_name);
-    if (I != m_texture_details.end()) {
-        if (I->second.m_assoc) {
-            texture_assoc* TA = I->second.m_assoc;
-            res = TA->detail_name.c_str();
-            map_CS::const_iterator It2 = m_detail_scalers.find(tex_name);
-            CS = It2 == m_detail_scalers.end() ? 0 : It2->second; // TA->cs;
-            return TRUE;
-        }
+BOOL CTextureDescrMngr::GetDetailTexture(const shared_str& tex_name, LPCSTR& res, R_constant_setup*& CS) const {
+    const auto it = m_texture_details.find(tex_name);
+    if (it != m_texture_details.end() && it->second.bHasAssoc) {
+        res = it->second.assoc.detail_name.c_str();
+        const auto it2 = m_detail_scalers.find(tex_name);
+        CS = (it2 != m_detail_scalers.end()) ? it2->second : nullptr;
+        return TRUE;
     }
     return FALSE;
 }

@@ -462,7 +462,10 @@ bool CUIXmlInit::InitDragDropListEx(CUIXml& xml_doc, LPCSTR path, int index,
     tmp = xml_doc.ReadAttribInt(path, index, "virtual_cells", 0);
     pWnd->SetVirtualCells(tmp != 0);
 
-    if (tmp != 0) {
+    tmp = xml_doc.ReadAttribInt(path, index, "single_slot", 0);
+    pWnd->SetSingleSlot(tmp != 0);
+
+    if (pWnd->GetVirtualCells()) {
         xr_string vc_vert_align = xml_doc.ReadAttrib(path, index, "vc_vert_align", "");
         pWnd->SetCellsVertAlignment(vc_vert_align);
         xr_string vc_horiz_align = xml_doc.ReadAttrib(path, index, "vc_horiz_align", "");

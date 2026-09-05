@@ -21,6 +21,7 @@
 #include "static_cast_checked.hpp"
 #include "player_hud.h"
 #include "ItemUseController.h"
+#include "NoirInventorySlots.h"
 
 using namespace InventoryUtilities;
 
@@ -45,6 +46,8 @@ CInventory::CInventory() {
     m_fMaxWeight = pSettings->r_float("inventory", "max_weight");
 
     u32 sz = pSettings->r_s32("inventory", "slots_count");
+    if (sz < LastSlot())
+        sz = LastSlot();
     m_slots.resize(sz + 1); // first is [1]
 
     m_iActiveSlot = NO_ACTIVE_SLOT;
@@ -54,20 +57,20 @@ CInventory::CInventory() {
     string256 temp;
     for (u16 i = FirstSlot(); i <= LastSlot(); ++i) {
         xr_sprintf(temp, "slot_persistent_%d", i);
-        m_slots[i].m_bPersistent = !!pSettings->r_bool("inventory", temp);
+        if (pSettings->line_exist("inventory", temp))
+            m_slots[i].m_bPersistent = !!pSettings->r_bool("inventory", temp);
 
         xr_sprintf(temp, "slot_active_%d", i);
-        m_slots[i].m_bAct = !!pSettings->r_bool("inventory", temp);
+        if (pSettings->line_exist("inventory", temp))
+            m_slots[i].m_bAct = !!pSettings->r_bool("inventory", temp);
     };
 
     m_bSlotsUseful = true;
     m_bBeltUseful = false;
 
     m_fTotalWeight = -1.f;
-
     m_dwModifyFrame = 0;
     m_state_revision = 0;
-
     m_drop_last_frame = false;
 
     InitPriorityGroupsForQSwitch();
@@ -79,6 +82,17 @@ CInventory::CInventory() {
 }
 
 CInventory::~CInventory() {}
+
+bool CInventory::SlotIsPersistent(u16 slot_id) const {
+    VERIFY(slot_id >= FirstSlot() && slot_id <= LastSlot());
+
+    // Keep the original persistent-slot behavior for NPC inventories. The optional
+    // slots are a player inventory feature only.
+    if (smart_cast<CActor*>(m_pOwner) && NoirInventorySlots::IsSlotEnabled(slot_id))
+        return false;
+
+    return m_slots[slot_id].m_bPersistent;
+}
 
 void CInventory::Clear() {
     m_all.clear();
@@ -265,6 +279,19 @@ bool CInventory::DropItem(CGameObject* pObj, bool just_before_destroy, bool dont
 //положить вещь в слот
 bool CInventory::Slot(u16 slot_id, PIItem pIItem, bool bNotActivate, bool strict_placement) {
     VERIFY(pIItem);
+
+    if (slot_id < FirstSlot() || slot_id > LastSlot())
+        return false;
+
+    // Also check strict placement so an older save cannot restore an item into a
+    // disabled or incompatible optional slot.
+    if (slot_id == EXTRA_PISTOL_SLOT &&
+        (!smart_cast<CActor*>(m_pOwner) || !NoirInventorySlots::ExtraPistolEnabled() ||
+         pIItem->BaseSlot() != INV_SLOT_2))
+        return false;
+
+    if (slot_id == BACKPACK_SLOT && !NoirInventorySlots::BackpackEnabled())
+        return false;
 
     if (ItemFromSlot(slot_id) == pIItem)
         return false;
@@ -927,7 +954,6 @@ CInventoryItem* CInventory::get_object_by_id(ALife::_OBJECT_ID tObjectID) {
 #include "game_object_space.h"
 #include "script_callback_ex.h"
 #include "script_game_object.h"
-
 bool CInventory::Eat(PIItem pIItem) {
     CEatableItem* pItemToEat = smart_cast<CEatableItem*>(pIItem);
     if (!pItemToEat)
@@ -944,7 +970,6 @@ bool CInventory::Eat(PIItem pIItem) {
     CInventory* pInventory = pItemToEat->m_pInventory;
     if (!pInventory || pInventory != this)
         return false;
-
     if (pInventory != IO->m_inventory)
         return false;
 
@@ -956,41 +981,21 @@ bool CInventory::Eat(PIItem pIItem) {
 
     CActor* actor = smart_cast<CActor*>(entity_alive);
 
-    //
-    // Animated consumable.
-    //
-    if (actor && actor->m_inventory == this && actor->ItemUseController()) {
-        CItemUseController* controller = actor->ItemUseController();
+    if (actor && actor->m_inventory == this && actor->GetItemUseController()) {
+        CItemUseController* controller = actor->GetItemUseController();
 
-        //
-        // Controller busy != "предмет без animation".
-        //
-        // Тут fallback на ApplyEat() робити НЕ можна.
-        //
         if (controller->IsActive())
             return false;
 
-        if (controller->Start(pIItem)) {
-            //
-            // Реальний effect буде застосований
-            // пізніше через ApplyEat().
-            //
+        if (controller->Start(pIItem))
             return true;
-        }
     }
 
-    //
-    // Обычный предмет без анимации.
-    //
     bool became_empty = false;
 
     if (!ApplyEat(pIItem, became_empty))
         return false;
 
-    //
-    // Зберігаємо стару семантику:
-    // при останній порції Eat() повертав false.
-    //
     return !became_empty;
 }
 
@@ -998,22 +1003,6 @@ bool CInventory::ApplyEat(PIItem pIItem, bool& became_empty, bool spawn_trash) {
     became_empty = false;
 
     CEatableItem* pItemToEat = smart_cast<CEatableItem*>(pIItem);
-
-    if (!pItemToEat)
-        return false;
-
-    //
-    // Snapshot trash BEFORE UseBy(),
-    // because UseBy() changes portion_state.
-    //
-    shared_str trash_object = NULL;
-    u32 trash_count = 0;
-
-    if (spawn_trash && pItemToEat->HasTrash()) {
-        trash_object = pItemToEat->TrashObject();
-
-        trash_count = pItemToEat->TrashCount();
-    }
     if (!pItemToEat)
         return false;
 
@@ -1021,31 +1010,27 @@ bool CInventory::ApplyEat(PIItem pIItem, bool& became_empty, bool spawn_trash) {
     if (!entity_alive)
         return false;
 
-    CInventoryOwner* IO = smart_cast<CInventoryOwner*>(entity_alive);
-    if (!IO)
+    CInventoryOwner* inventory_owner = smart_cast<CInventoryOwner*>(entity_alive);
+    if (!inventory_owner)
         return false;
 
-    //
-    // Перевіряємо ще раз, бо для animated item
-    // між Start() і ApplyEat() може пройти кілька секунд.
-    //
-    CInventory* pInventory = pItemToEat->m_pInventory;
-
-    if (!pInventory || pInventory != this)
+    CInventory* item_inventory = pItemToEat->m_pInventory;
+    if (!item_inventory || item_inventory != this || item_inventory != inventory_owner->m_inventory)
         return false;
 
-    if (pInventory != IO->m_inventory)
+    if (!pItemToEat->object().H_Parent() ||
+        pItemToEat->object().H_Parent()->ID() != entity_alive->ID()) {
         return false;
+    }
 
-    if (!pItemToEat->object().H_Parent())
-        return false;
+    shared_str trash_object = NULL;
+    u32 trash_count = 0;
 
-    if (pItemToEat->object().H_Parent()->ID() != entity_alive->ID())
-        return false;
+    if (spawn_trash && pItemToEat->HasTrash()) {
+        trash_object = pItemToEat->TrashObject();
+        trash_count = pItemToEat->TrashCount();
+    }
 
-    //
-    // Реальне застосування предмета.
-    //
     if (!pItemToEat->UseBy(entity_alive))
         return false;
 
@@ -1054,27 +1039,15 @@ bool CInventory::ApplyEat(PIItem pIItem, bool& became_empty, bool spawn_trash) {
         pItemToEat->object().cNameSect().c_str());
 #endif
 
-    //
-    // Non-animated use path.
-    //
-    // Animated Controller passes spawn_trash = false
-    // and handles this itself at animation end.
-    //
-    if (spawn_trash && trash_object.size() && trash_count > 0) {
+    if (spawn_trash && trash_object.size() && trash_count > 0)
         SpawnConsumableTrash(entity_alive, trash_object, trash_count);
-    }
 
-    //
-    // Оригінальний callback.
-    //
-    if (IsGameTypeSingle() && Actor()->m_inventory == this) {
-        Actor()->callback(GameObject::eUseObject)(
+    CActor* actor = smart_cast<CActor*>(entity_alive);
+    if (IsGameTypeSingle() && actor && actor->m_inventory == this) {
+        actor->callback(GameObject::eUseObject)(
             (smart_cast<CGameObject*>(pIItem))->lua_game_object());
     }
 
-    //
-    // Якщо закінчились порції — штатно позначаємо предмет на видалення.
-    //
     if (pItemToEat->Empty()) {
         pIItem->SetDropManual(TRUE);
         became_empty = true;
@@ -1133,7 +1106,15 @@ bool CInventory::InRuck(const CInventoryItem* pIItem) const {
 }
 
 bool CInventory::CanPutInSlot(PIItem pIItem, u16 slot_id) const {
+    if (!pIItem || slot_id < FirstSlot() || slot_id > LastSlot())
+        return false;
+
     if (!m_bSlotsUseful)
+        return false;
+
+    if (slot_id == EXTRA_PISTOL_SLOT &&
+        (!smart_cast<CActor*>(m_pOwner) || !NoirInventorySlots::ExtraPistolEnabled() ||
+         pIItem->BaseSlot() != INV_SLOT_2))
         return false;
 
     if (!GetOwner()->CanPutInSlot(pIItem, slot_id))
@@ -1144,13 +1125,15 @@ bool CInventory::CanPutInSlot(PIItem pIItem, u16 slot_id) const {
         if (pOutfit && !pOutfit->bIsHelmetAvaliable)
             return false;
     }
-	
-	if(slot_id == BACKPACK_SLOT)
-	{
-		CCustomOutfit* pOutfit = m_pOwner->GetOutfit();
-		if(pOutfit && !pOutfit->bIsBackpackAvaliable)
-			return false;
-	}
+
+    if (slot_id == BACKPACK_SLOT) {
+        if (!NoirInventorySlots::BackpackEnabled())
+            return false;
+
+        CCustomOutfit* pOutfit = m_pOwner->GetOutfit();
+        if (pOutfit && !pOutfit->bIsBackpackAvaliable)
+            return false;
+    }
 
     if (slot_id != NO_ACTIVE_SLOT && NULL == ItemFromSlot(slot_id))
         return true;

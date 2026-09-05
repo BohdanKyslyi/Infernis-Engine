@@ -167,6 +167,8 @@ class_<CScriptGameObject> script_register_game_object2(class_<CScriptGameObject>
                                    &CScriptGameObject::GiveGameNews))
         .def("give_game_news", (void (CScriptGameObject::*)(LPCSTR, LPCSTR, LPCSTR, int, int, int))(
                                    &CScriptGameObject::GiveGameNews))
+        .def("give_game_news_silent", (void (CScriptGameObject::*)(LPCSTR, LPCSTR, LPCSTR, int, int))(
+                                   &CScriptGameObject::GiveGameNewsSilent))
 
         .def("give_talk_message",
              (void (CScriptGameObject::*)(LPCSTR, LPCSTR, LPCSTR))(
@@ -307,6 +309,12 @@ class_<CScriptGameObject> script_register_game_object2(class_<CScriptGameObject>
 
         // monster jumper
         .def("jump", &CScriptGameObject::jump)
+		
+		.def("set_reverse_gravity", &CScriptGameObject::SetReverseGravity)
+		
+		.def("start_orbit", &CScriptGameObject::StartOrbitAnomaly)
+		.def("attack_orbit", &CScriptGameObject::SetOrbitAttack)
+		.def("stop_orbit", &CScriptGameObject::StopOrbitAnomaly)
 
         .def("make_object_visible_somewhen", &CScriptGameObject::make_object_visible_somewhen)
 
@@ -377,5 +385,14 @@ class_<CScriptGameObject> script_register_game_object2(class_<CScriptGameObject>
 
         .def("set_level_changer_invitation", &CScriptGameObject::set_level_changer_invitation)
         .def("start_particles", &CScriptGameObject::start_particles)
-        .def("stop_particles", &CScriptGameObject::stop_particles);
+        .def("stop_particles", &CScriptGameObject::stop_particles)
+		
+		.def("actor_torch_enabled", &CScriptGameObject::actor_torch_enabled)
+		.def("get_luminocity", &CScriptGameObject::get_luminocity)
+		.def("get_suspicion_to_actor", &CScriptGameObject::get_suspicion_to_actor)
+		.def("is_in_actor_sight", &CScriptGameObject::is_in_actor_sight)
+
+		.def("force_bone_look_obj", &CScriptGameObject::force_bone_look_obj)
+		.def("force_bone_look_pos", &CScriptGameObject::force_bone_look_pos)
+		.def("restore_bone_look",   &CScriptGameObject::restore_bone_look);
 }

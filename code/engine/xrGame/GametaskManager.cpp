@@ -192,6 +192,12 @@ void CGameTaskManager::UpdateActiveTask() {
     std::stable_sort(GetGameTasks().begin(), GetGameTasks().end(), task_prio_pred);
 
     CGameTask* task = ActiveTask();
+			 
+																		
+					
+								 
+		 
+	 
 
     if (!task)
         task = IterateGet(NULL, eTaskStateInProgress, true);

@@ -1,20 +1,18 @@
-#ifndef SPECTATOR_CAMERA_FIRST_EYE
-#define SPECTATOR_CAMERA_FIRST_EYE
+#pragma once
 
 #include "../xrcore/ftimer.h"
 #include "CameraFirstEye.h"
 
 class CSpectrCameraFirstEye : public CCameraFirstEye {
 private:
-    typedef CCameraFirstEye inherited;
+    using inherited = CCameraFirstEye;
     float const& m_fTimeDelta;
 
 public:
     CSpectrCameraFirstEye(float const& fTimeDelta, CObject* p, u32 flags = 0);
-    virtual ~CSpectrCameraFirstEye();
-    CSpectrCameraFirstEye& operator=(CSpectrCameraFirstEye& copy){};
+    ~CSpectrCameraFirstEye() override = default;
+    CSpectrCameraFirstEye(const CSpectrCameraFirstEye&) = delete;
+    CSpectrCameraFirstEye& operator=(const CSpectrCameraFirstEye&) = delete;
 
-    virtual void Move(int cmd, float val = 0, float factor = 1.0f);
-}; // class SpectrCameraFirstEye
-
-#endif //#ifndef SPECTATOR_CAMERA_FIRST_EYE
+    virtual void Move(int cmd, float val = 0.0f, float factor = 1.0f) override;
+};

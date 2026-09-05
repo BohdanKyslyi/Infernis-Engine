@@ -38,6 +38,7 @@
 #include "sound_player.h"
 #include "stalker_decision_space.h"
 #include "space_restriction_manager.h"
+#include "xrRender/Kinematics.h"
 
 namespace MemorySpace {
 struct CVisibleObject;
@@ -1149,3 +1150,134 @@ bool CScriptGameObject::is_weapon_going_to_be_strapped(CScriptGameObject const* 
 
     return stalker->is_weapon_going_to_be_strapped(&object->object());
 }
+
+// --- Custom Bone IK Tracking ---
+struct SBoneLookTarget {
+    CGameObject* owner;
+    u16 target_id;          // 0xffff if looking at a static point
+    Fvector static_pos;
+};
+
+static void CustomBoneLookCallback(CBoneInstance* B) {
+    if (!B->callback_param()) return;
+    SBoneLookTarget* data = (SBoneLookTarget*)B->callback_param();
+    if (!data->owner) return;
+
+    Fvector target_world = data->static_pos;
+
+    // If there is a living target object, use its coordinates
+    if (data->target_id != 0xffff) {
+        CGameObject* target_obj = smart_cast<CGameObject*>(Level().Objects.net_Find(data->target_id));
+        if (target_obj) {
+            target_world = target_obj->Position();
+            target_world.y += 1.2f; // Raise to chest/face level
+        }
+    }
+
+    Fmatrix& M = B->mTransform;
+    Fvector bone_pos_world;
+    data->owner->XFORM().transform_tiny(bone_pos_world, M.c);
+
+    Fvector dir_world;
+    dir_world.sub(target_world, bone_pos_world).normalize_safe();
+
+    Fvector dir_local;
+    data->owner->XFORM().transform_dir(dir_local, dir_world);
+
+    // Build matrix axes manually
+    Fvector fwd = dir_local;
+    fwd.normalize_safe();
+
+    Fvector up;
+    up.set(0.f, 1.f, 0.f);
+
+    // Singularities protection (when NPC looks straight up or down)
+    if (fwd.y > 0.99f || fwd.y < -0.99f) {
+        up.set(1.f, 0.f, 0.f);
+    }
+
+    // Compute the "right" vector (cross product of Y and Z)
+    Fvector right;
+    right.crossproduct(up, fwd).normalize_safe();
+    
+    // Recompute the exact "up" vector (cross product of Z and X)
+    up.crossproduct(fwd, right).normalize_safe();
+
+    // Fill the matrix
+    Fmatrix look_at;
+    look_at.identity();
+    look_at.i = right;  // X axis
+    look_at.j = up;     // Y axis
+    look_at.k = fwd;    // Z axis (look direction)
+    look_at.c = M.c;    // Bone position remains unchanged
+
+    // AXIS FIX (X-Ray skeleton specifics)
+    /*
+    Fmatrix fixed_rot;
+    fixed_rot.i = look_at.k;      // X axis becomes Z
+    fixed_rot.j = look_at.j;      // Y axis stays the same
+    fixed_rot.k = look_at.i;      // Z axis becomes X
+    fixed_rot.c = M.c;
+    M = fixed_rot;
+    */
+
+    M = look_at; 
+}
+
+void CScriptGameObject::force_bone_look_obj(LPCSTR bone_name, CScriptGameObject* target) {
+    if (!target) return;
+    IKinematics* K = smart_cast<IKinematics*>(object().Visual());
+    if (!K) return;
+
+    u16 bone_id = K->LL_BoneID(bone_name);
+    if (bone_id == BI_NONE) return;
+
+    CBoneInstance& B = K->LL_GetBoneInstance(bone_id);
+    if (B.callback_param()) {
+        SBoneLookTarget* old_data = (SBoneLookTarget*)B.callback_param();
+        xr_delete(old_data);
+    }
+
+    SBoneLookTarget* data = xr_new<SBoneLookTarget>();
+    data->owner = &object();
+    data->target_id = target->object().ID();
+
+    B.set_callback(bctCustom, CustomBoneLookCallback, data, TRUE);
+}
+
+void CScriptGameObject::force_bone_look_pos(LPCSTR bone_name, Fvector pos) {
+    IKinematics* K = smart_cast<IKinematics*>(object().Visual());
+    if (!K) return;
+
+    u16 bone_id = K->LL_BoneID(bone_name);
+    if (bone_id == BI_NONE) return;
+
+    CBoneInstance& B = K->LL_GetBoneInstance(bone_id);
+    if (B.callback_param()) {
+        SBoneLookTarget* old_data = (SBoneLookTarget*)B.callback_param();
+        xr_delete(old_data);
+    }
+
+    SBoneLookTarget* data = xr_new<SBoneLookTarget>();
+    data->owner = &object();
+    data->target_id = 0xffff;
+    data->static_pos = pos;
+
+    B.set_callback(bctCustom, CustomBoneLookCallback, data, TRUE);
+}
+
+void CScriptGameObject::restore_bone_look(LPCSTR bone_name) {
+    IKinematics* K = smart_cast<IKinematics*>(object().Visual());
+    if (!K) return;
+
+    u16 bone_id = K->LL_BoneID(bone_name);
+    if (bone_id == BI_NONE) return;
+
+    CBoneInstance& B = K->LL_GetBoneInstance(bone_id);
+    if (B.callback_param()) {
+        SBoneLookTarget* data = (SBoneLookTarget*)B.callback_param();
+        xr_delete(data);
+    }
+    B.set_callback(bctCustom, NULL, NULL, FALSE);
+}
+// ----------------------------------------

@@ -42,7 +42,7 @@ protected:
     CUIStatic* m_ind_starvation;
     CUIStatic* m_ind_weapon_broken;
     CUIStatic* m_ind_helmet_broken;
-	CUIStatic* m_ind_backpack_broken;
+    CUIStatic* m_ind_backpack_broken;
     CUIStatic* m_ind_outfit_broken;
     CUIStatic* m_ind_overweight;
 
@@ -175,7 +175,6 @@ public:
 protected:
     u32 m_quick_slots_inventory_revision;
     bool m_quick_slots_force_refresh;
-
     shared_str m_quick_slots_cached_sections[4];
 
 public:

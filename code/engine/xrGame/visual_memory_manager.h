@@ -19,6 +19,7 @@ class CVisualMemoryManager {
 #ifdef DEBUG
     friend class CAI_Stalker;
 #endif
+friend class CScriptGameObject;
 public:
     typedef MemorySpace::CVisibleObject CVisibleObject;
     typedef MemorySpace::CNotYetVisibleObject CNotYetVisibleObject;

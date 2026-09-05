@@ -228,8 +228,8 @@ struct ECORE_API SJointIKData {
         F.w_u32(type);
         for (int k = 0; k < 3; k++) {
             // Kostya Slipchenko say:
-            // Ã­Ã Ã¯Ã°Ã Ã¢Ã«Ã¥Ã­Ã¨Ã¥ Ã¢Ã°Ã Ã¹Ã¥Ã­Ã¨Ã¿ Ã¢ ÃŽÃ„Ã… Ã®Ã²Ã«Ã¨Ã·Ã Ã¥Ã²Ã±Ã¿ Ã®Ã² Ã­Ã Ã¯Ã°Ã Ã¢Ã«Ã¥Ã­Ã¨Ã¿ Ã¢Ã°Ã Ã¹Ã¥Ã­Ã¨Ã¥ Ã¢ X-Ray
-            // Ã¯Ã®Ã½Ã²Ã®Ã¬Ã³ Ã¬Ã¥Ã­Ã¿Ã¥Ã¬ Ã§Ã­Ã Ãª Ã³ Ã«Ã¨Ã¬Ã¨Ã²Ã®Ã¢
+            // íàïðàâëåíèå âðàùåíèÿ â ÎÄÅ îòëè÷àåòñÿ îò íàïðàâëåíèÿ âðàùåíèå â X-Ray
+            // ïîýòîìó ìåíÿåì çíàê ó ëèìèòîâ
             // F.w_float	(_min(-limits[k].limit.x,-limits[k].limit.y)); // min (swap special for
             // ODE)  F.w_float	(_max(-limits[k].limit.x,-limits[k].limit.y)); // max (swap special
             // for ODE)
@@ -530,4 +530,3 @@ IC void CBoneInstance::construct() {
 }
 
 #endif
-

@@ -1,0 +1,115 @@
+-- ========================================================================
+-- Author: ADCU735 (CUDA735)
+-- Creation date: 13.03.2026
+-- Last edited: 05.04.2026
+-- ========================================================================
+
+class "UI_Subtitle" (CUIScriptWnd)
+
+function UI_Subtitle:__init() super()
+    self.end_time = 0
+    self.is_playing = false
+    self.subs_queue = {}
+    self:InitControls()
+end
+
+function UI_Subtitle:__finalize() end
+
+function UI_Subtitle:InitControls()
+    self:SetWndRect(Frect():set(0, 0, 1024, 768))
+    self:Enable(false)
+    
+    local xml = CScriptXmlInit()
+    xml:ParseFile("ui_cutscene_sub.xml")
+
+    self.dialog = xml:InitStatic("main", self)
+    self.speaker = xml:InitTextWnd("main:speaker_name", self.dialog)
+    self.divider = xml:InitStatic("main:divider", self.dialog)
+    self.message = xml:InitTextWnd("main:message_text", self.dialog)
+end
+
+-- Adds a new line to the queue instead of interrupting the current one
+function UI_Subtitle:EnqueueSub(speaker_text, message_text, duration, save_to_pda)
+    table.insert(self.subs_queue, {
+        speaker = speaker_text, 
+        message = message_text, 
+        duration = duration,
+        save_to_pda = save_to_pda 
+    })
+    self:CheckQueue()
+end
+
+function UI_Subtitle:CheckQueue()
+    if not self.is_playing and #self.subs_queue > 0 then
+        local next_sub = table.remove(self.subs_queue, 1)
+        self:ShowSub(next_sub.speaker, next_sub.message, next_sub.duration, next_sub.save_to_pda)
+    end
+end
+
+-- Main subtitle rendering function
+function UI_Subtitle:ShowSub(speaker_text, message_text, duration, save_to_pda)
+    self.is_playing = true
+    local translated_message = game.translate_string(message_text)
+    
+    local final_speaker_name = ""
+
+    -- Check if a name is provided
+    if speaker_text and speaker_text ~= "" and speaker_text ~= "none" and speaker_text ~= "nil" then
+        final_speaker_name = game.translate_string(speaker_text)
+        self.speaker:SetText(final_speaker_name)
+        self.speaker:Show(true)
+        if self.divider then self.divider:Show(true) end
+    else
+        self.speaker:Show(false)
+        if self.divider then self.divider:Show(false) end
+    end
+    
+    self.message:SetText(translated_message)
+    
+    if not duration then
+        duration = math.max(3, string.len(translated_message) * 0.06)
+    end
+    
+    -- CALL THE NEW C++ FUNCTION (silent write)
+    if save_to_pda and db.actor then
+        local caption = (final_speaker_name ~= "") and final_speaker_name or game.translate_string("st_default_subtitle_caption")
+        db.actor:give_game_news_silent(caption, translated_message, "ui_iconsTotal_grouping", 0, duration * 1000)
+    end
+    
+    self.end_time = time_global() + (duration * 1000)
+    self:Show(true)
+end
+
+function UI_Subtitle:Update()
+    CUIScriptWnd.Update(self)
+    -- Automatically hide subtitles and check the queue
+    if self:IsShown() and time_global() > self.end_time then
+        self:Show(false)
+        self.is_playing = false
+        self:CheckQueue()
+    end
+end
+
+-------------------------------------------------------------------
+-- Global interface for calls from other scripts (e.g., xr_effects)
+-------------------------------------------------------------------
+local sub_gui = nil
+
+function show(speaker, text, duration, save_to_pda)
+    if not sub_gui then
+        sub_gui = UI_Subtitle()
+        get_hud():AddDialogToRender(sub_gui)
+    end
+    sub_gui:EnqueueSub(speaker, text, duration, save_to_pda)
+end
+
+function hide()
+    if sub_gui then
+		-- Clear the queue
+        sub_gui.subs_queue = {} 
+        if sub_gui:IsShown() then
+            sub_gui:Show(false)
+            sub_gui.is_playing = false
+        end
+    end
+end

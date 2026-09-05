@@ -185,16 +185,14 @@ void attachable_hud_item::setup_firedeps(firedeps& fd) {
     }
 }
 
-bool attachable_hud_item::need_renderable()
-{
+bool attachable_hud_item::need_renderable() {
     if (m_controller_owned)
         return true;
 
     return m_parent_hud_item && m_parent_hud_item->need_renderable();
 }
 
-void attachable_hud_item::render()
-{
+void attachable_hud_item::render() {
     ::Render->set_Transform(&m_item_transform);
     ::Render->add_Visual(m_model->dcast_RenderVisual());
 
@@ -204,16 +202,14 @@ void attachable_hud_item::render()
         m_parent_hud_item->render_hud_mode();
 }
 
-bool attachable_hud_item::render_item_ui_query()
-{
+bool attachable_hud_item::render_item_ui_query() {
     if (!m_parent_hud_item)
         return false;
 
     return m_parent_hud_item->render_item_3d_ui_query();
 }
 
-void attachable_hud_item::render_item_ui()
-{
+void attachable_hud_item::render_item_ui() {
     if (!m_parent_hud_item)
         return;
 
@@ -362,53 +358,34 @@ u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, co
         m_model->CalculateBones_Invalidate();
     }
 
-    //
-	// Camera effector requires a real CHudItem parent.
-	// Controller-owned HUD visuals don't have one.
-	//
-	if (m_parent_hud_item)
-	{
-		CPhysicItem& parent_object = m_parent_hud_item->object();
-	
-		if (IsGameTypeSingle() &&
-			parent_object.H_Parent() == Level().CurrentControlEntity())
-		{
-			CActor* current_actor =
-				static_cast_checked<CActor*>(Level().CurrentControlEntity());
-	
-			VERIFY(current_actor);
-	
-			CEffectorCam* ec =
-				current_actor->Cameras().GetCamEffector(eCEWeaponAction);
-	
-			if (NULL == ec)
-			{
-				string_path ce_path;
-				string_path anm_name;
-	
-				strconcat(
-					sizeof(anm_name),
-					anm_name,
-					"camera_effects\\weapon\\",
-					M.name.c_str(),
-					".anm"
-				);
-	
-				if (FS.exist(ce_path, "$game_anims$", anm_name))
-				{
-					CAnimatorCamEffector* e =
-						xr_new<CAnimatorCamEffector>();
-	
-					e->SetType(eCEWeaponAction);
-					e->SetHudAffect(false);
-					e->SetCyclic(false);
-					e->Start(anm_name);
-	
-					current_actor->Cameras().AddCamEffector(e);
-				}
-			}
-		}
-	}
+    // Controller-owned HUD visuals do not have a CHudItem parent.
+    if (m_parent_hud_item) {
+        CPhysicItem& parent_object = m_parent_hud_item->object();
+
+        if (IsGameTypeSingle() &&
+            parent_object.H_Parent() == Level().CurrentControlEntity()) {
+            CActor* current_actor =
+                static_cast_checked<CActor*>(Level().CurrentControlEntity());
+            VERIFY(current_actor);
+
+            CEffectorCam* ec = current_actor->Cameras().GetCamEffector(eCEWeaponAction);
+            if (NULL == ec) {
+                string_path ce_path;
+                string_path anm_name;
+                strconcat(sizeof(anm_name), anm_name, "camera_effects\\weapon\\",
+                          M.name.c_str(), ".anm");
+
+                if (FS.exist(ce_path, "$game_anims$", anm_name)) {
+                    CAnimatorCamEffector* e = xr_new<CAnimatorCamEffector>();
+                    e->SetType(eCEWeaponAction);
+                    e->SetHudAffect(false);
+                    e->SetCyclic(false);
+                    e->Start(anm_name);
+                    current_actor->Cameras().AddCamEffector(e);
+                }
+            }
+        }
+    }
     return ret;
 }
 
@@ -416,7 +393,7 @@ player_hud::player_hud() {
     m_model = NULL;
     m_attached_items[0] = NULL;
     m_attached_items[1] = NULL;
-	m_controller_item = NULL;
+    m_controller_item = NULL;
     m_transform.identity();
 }
 
@@ -434,9 +411,7 @@ player_hud::~player_hud() {
     m_pool.clear();
 }
 
-attachable_hud_item* player_hud::attach_controller_item(
-    const shared_str& hud_section)
-{
+attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_section) {
     // На всякий случай удаляем предыдущий temporary HUD.
     if (m_controller_item)
         detach_controller_item();
@@ -449,8 +424,7 @@ attachable_hud_item* player_hud::attach_controller_item(
     const u16 item_idx = pi->m_attach_place_idx;
 
     // Пока для consumables ожидаем основной HUD slot.
-    if (item_idx > 1)
-    {
+    if (item_idx > 1) {
         Msg("! ItemUse: invalid HUD attach index [%d] for section [%s]",
             item_idx, hud_section.c_str());
         return NULL;
@@ -461,9 +435,7 @@ attachable_hud_item* player_hud::attach_controller_item(
     // убирать оружие.
     //
 
-    if (m_attached_items[item_idx] &&
-        m_attached_items[item_idx] != pi)
-    {
+    if (m_attached_items[item_idx] && m_attached_items[item_idx] != pi) {
         detach_item_idx(item_idx);
     }
 
@@ -479,8 +451,7 @@ attachable_hud_item* player_hud::attach_controller_item(
     return pi;
 }
 
-void player_hud::detach_controller_item()
-{
+void player_hud::detach_controller_item() {
     if (!m_controller_item)
         return;
 
@@ -492,8 +463,7 @@ void player_hud::detach_controller_item()
     m_controller_item->m_controller_owned = false;
     m_controller_item->m_parent_hud_item = NULL;
 
-    Msg("* ItemUse: detached HUD section [%s]",
-        m_controller_item->m_sect_name.c_str());
+    Msg("* ItemUse: detached HUD section [%s]", m_controller_item->m_sect_name.c_str());
 
     m_controller_item = NULL;
 
@@ -540,10 +510,10 @@ void player_hud::load(const shared_str& player_hud_sect) {
     if (!b_reload) {
         m_model->PlayCycle("hand_idle_doun");
     } else {
-        if (m_attached_items[1])
+        if (m_attached_items[1] && m_attached_items[1]->m_parent_hud_item)
             m_attached_items[1]->m_parent_hud_item->on_a_hud_attach();
 
-        if (m_attached_items[0])
+        if (m_attached_items[0] && m_attached_items[0]->m_parent_hud_item)
             m_attached_items[0]->m_parent_hud_item->on_a_hud_attach();
     }
     m_model->dcast_PKinematics()->CalculateBones_Invalidate();
@@ -569,18 +539,12 @@ void player_hud::render_item_ui() {
         m_attached_items[1]->render_item_ui();
 }
 
-void player_hud::render_hud()
-{
+void player_hud::render_hud() {
     if (!m_attached_items[0] && !m_attached_items[1])
         return;
 
-    bool b_r0 =
-        m_attached_items[0] &&
-        m_attached_items[0]->need_renderable();
-
-    bool b_r1 =
-        m_attached_items[1] &&
-        m_attached_items[1]->need_renderable();
+    bool b_r0 = m_attached_items[0] && m_attached_items[0]->need_renderable();
+    bool b_r1 = m_attached_items[1] && m_attached_items[1]->need_renderable();
 
     if (!b_r0 && !b_r1)
         return;
@@ -680,12 +644,8 @@ u32 player_hud::anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotio
     return motion_length(M, md, speed);
 }
 
-u32 player_hud::play_controller_motion(
-    const shared_str& motion_name,
-    BOOL bMixIn)
-{
-    if (!m_controller_item)
-    {
+u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixIn) {
+    if (!m_controller_item) {
         Msg("! ItemUse: no controller HUD item attached");
         return 0;
     }
@@ -693,12 +653,7 @@ u32 player_hud::play_controller_motion(
     const CMotionDef* md = NULL;
     u8 rnd = 0;
 
-    return m_controller_item->anim_play(
-        motion_name,
-        bMixIn,
-        md,
-        rnd
-    );
+    return m_controller_item->anim_play(motion_name, bMixIn, md, rnd);
 }
 
 void player_hud::update_additional(Fmatrix& trans) {
@@ -767,10 +722,11 @@ attachable_hud_item* player_hud::create_hud_item(const shared_str& sect) {
 }
 
 bool player_hud::allow_activation(CHudItem* item) {
-    if (m_attached_items[1])
-        return m_attached_items[1]->m_parent_hud_item->CheckCompatibility(item);
-    else
+    attachable_hud_item* attached = m_attached_items[1];
+    if (!attached || !attached->m_parent_hud_item)
         return true;
+
+    return attached->m_parent_hud_item->CheckCompatibility(item);
 }
 
 void player_hud::attach_item(CHudItem* item) {
@@ -786,12 +742,15 @@ void player_hud::attach_item(CHudItem* item) {
         m_attached_items[item_idx] = pi;
         pi->m_parent_hud_item = item;
 
-        if (item_idx == 0 && m_attached_items[1])
+        if (item_idx == 0 && m_attached_items[1] &&
+            m_attached_items[1]->m_parent_hud_item) {
             m_attached_items[1]->m_parent_hud_item->CheckCompatibility(item);
+        }
 
         item->on_a_hud_attach();
     }
     pi->m_parent_hud_item = item;
+    pi->m_controller_owned = false;
 }
 
 void player_hud::detach_item_idx(u16 idx) {

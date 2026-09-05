@@ -197,7 +197,8 @@ void CInventory::InitPriorityGroupsForQSwitch() {
     m_slot2_priorities[g_slot2_sniper_switch_priority] = &m_groups[epg_sniper_rifels];
     m_slot2_priorities[g_slot2_heavy_switch_priority] = &m_groups[epg_heavy_weapons];
 
-    m_slot3_priorities[g_slot3_pistol_switch_priority] = &m_groups[epg_assault]; //&m_groups[epg_pistols];
+    m_slot3_priorities[g_slot3_pistol_switch_priority] =
+        &m_groups[epg_assault]; //&m_groups[epg_pistols];
     m_slot3_priorities[g_slot3_shotgun_switch_priority] = &m_groups[epg_shotgun];
     m_slot3_priorities[g_slot3_assault_switch_priority] = &m_groups[epg_assault];
     m_slot3_priorities[g_slot3_sniper_switch_priority] = &m_groups[epg_sniper_rifels];

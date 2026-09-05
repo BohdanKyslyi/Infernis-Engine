@@ -45,12 +45,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "GSC Game World"
             VALUE "FileDescription", "X-Ray CPU-dependent helper library"
-            VALUE "FileVersion", "0.2.3.1"
+            VALUE "FileVersion", "1.6.02"
             VALUE "InternalName", "CPU Pipe"
             VALUE "LegalCopyright", "Copyright (C) 2009 GSC Game World"
             VALUE "OriginalFilename", "xrCPU_Pipe.dll"
-            VALUE "ProductName", "Infernis Engine x64"
-            VALUE "ProductVersion", "0.2.3.1"
+            VALUE "ProductName", "Infernis Engine"
+            VALUE "ProductVersion", "1.6.0.2"
         END
     END
     BLOCK "VarFileInfo"
@@ -59,7 +59,9 @@ BEGIN
     END
 END
 
-#endif
+#endif    // Russian resources
+/////////////////////////////////////////////////////////////////////////////
+
 
 /////////////////////////////////////////////////////////////////////////////
 // Ukrainian resources

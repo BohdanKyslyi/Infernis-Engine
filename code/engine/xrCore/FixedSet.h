@@ -45,8 +45,7 @@ private:
             }
         }
         if (nodes)
-        allocator:
-            dealloc(nodes);
+            allocator::dealloc(nodes);
 
         nodes = newNodes;
         limit = newLimit;
@@ -88,10 +87,7 @@ public:
         limit = 0;
         nodes = 0;
     }
-    ~FixedSET() {
-    allocator:
-        dealloc(nodes);
-    }
+    ~FixedSET() { allocator::dealloc(nodes); }
     IC TNode* insert(const K& k) {
         if (pool) {
             TNode* node = nodes;

@@ -67,7 +67,9 @@ struct attachable_hud_item {
 
     player_hud_motion_container m_hand_motions;
 
-    attachable_hud_item(player_hud* pparent) : m_parent(pparent), m_parent_hud_item(NULL), m_controller_owned(false), m_upd_firedeps_frame(u32(-1)){}
+    attachable_hud_item(player_hud* pparent)
+        : m_parent(pparent), m_parent_hud_item(NULL), m_controller_owned(false),
+          m_upd_firedeps_frame(u32(-1)) {}
     ~attachable_hud_item();
     void load(const shared_str& sect_name);
     void update(bool bForce);
@@ -101,7 +103,7 @@ public:
 
     attachable_hud_item* attach_controller_item(const shared_str& hud_section);
     void detach_controller_item();
-	
+
     void load(const shared_str& model_name);
     void load_default() { load("actor_hud_05"); };
     void update(const Fmatrix& trans);
@@ -133,8 +135,7 @@ public:
 
 private:
     attachable_hud_item* m_controller_item;
-	
-private:
+
     void update_inertion(Fmatrix& trans);
     void update_additional(Fmatrix& trans);
     bool inertion_allowed();

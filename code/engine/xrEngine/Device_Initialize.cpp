@@ -69,7 +69,7 @@ PROTECT_API void CRenderDevice::Initialize() {
         AdjustWindowRect(&rc, m_dwWindowStyle, FALSE);
 
         // Create the render window
-        m_hWnd = CreateWindowEx(WS_EX_TOPMOST, wndclass, "Infernis Engine x64",
+        m_hWnd = CreateWindowEx(WS_EX_TOPMOST, wndclass, "Infernis Engine",
                                 m_dwWindowStyle,
                                 /*rc.left, rc.top, */ CW_USEDEFAULT, CW_USEDEFAULT,
                                 (rc.right - rc.left), (rc.bottom - rc.top), 0L, 0, hInstance, 0L);

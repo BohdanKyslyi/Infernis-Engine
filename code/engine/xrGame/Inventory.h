@@ -46,7 +46,7 @@ public:
 
     IC u16 FirstSlot() const { return KNIFE_SLOT; }
     IC u16 LastSlot() const { return LAST_SLOT; } // not "end"
-    IC bool SlotIsPersistent(u16 slot_id) const { return m_slots[slot_id].m_bPersistent; }
+    bool SlotIsPersistent(u16 slot_id) const;
     bool Slot(u16 slot_id, PIItem pIItem, bool bNotActivate = false, bool strict_placement = false);
     bool Belt(PIItem pIItem, bool strict_placement = false);
     bool Ruck(PIItem pIItem, bool strict_placement = false);
@@ -151,11 +151,6 @@ public:
         m_dwModifyFrame = Device.dwFrame;
 
         ++m_state_revision;
-
-        //
-        // Practically impossible, but keep zero
-        // as the initial/uninitialized value.
-        //
         if (m_state_revision == 0)
             m_state_revision = 1;
     }
@@ -186,12 +181,6 @@ protected:
 
     //кадр на котором произошло последнее изменение в инвенторе
     u32 m_dwModifyFrame;
-    //
-    // Monotonic inventory state revision.
-    //
-    // Unlike Device.dwFrame this changes for every
-    // individual inventory invalidation.
-    //
     u32 m_state_revision;
 
     bool m_drop_last_frame;

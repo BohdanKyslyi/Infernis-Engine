@@ -37,7 +37,7 @@ public:
     void InitFromXml(CUIXml& xml_doc);
     void UpdateInfo(CCustomOutfit* cur_outfit, CCustomOutfit* slot_outfit = NULL);
     void UpdateInfo(CHelmet* cur_helmet, CHelmet* slot_helmet = NULL);
-	void UpdateInfo(CBackpack* cur_backpack, CBackpack* slot_backpack = NULL);
+    void UpdateInfo(CBackpack* cur_backpack, CBackpack* slot_backpack = NULL);
 
 protected:
     enum { max_count = ALife::eHitTypeMax - 4 };

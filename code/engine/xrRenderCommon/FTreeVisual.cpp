@@ -5,7 +5,6 @@
 #include "xrEngine/igame_level.h"
 #include "xrEngine/environment.h"
 #include "xrEngine/fmesh.h"
-#include "xrEngine/build_config_defines.h"
 
 #include "ftreevisual.h"
 
@@ -93,27 +92,24 @@ struct FTreeVisual_setup {
 
     FTreeVisual_setup() { dwFrame = 0; }
 
-    void calculate() {
+	void calculate() {
         dwFrame = Device.dwFrame;
 
-        // Calc wind-vector3, scale
-        float tm_rot = PI_MUL_2 * Device.fTimeGlobal / ps_r__Tree_w_rot;
+        // 1. Отримуємо дескриптор поточної погоди (CurrentEnv)
+        CEnvDescriptor* desc = g_pGamePersistent->Environment().CurrentEnv;
+        
+        // 2. Беремо реальні напрямок та силу вітру з дескриптора
+        // Якщо раптом desc ще не ініціалізовано, ставимо захист
+        float wind_dir = desc ? desc->wind_direction : 0.0f; 
+        float wind_vel = desc ? desc->wind_velocity  : 0.0f; 
 
-#ifdef TREE_WIND_EFFECT
-#define _sin std::sin
-#define _cos std::cos
-		CEnvDescriptor&	E = *g_pGamePersistent->Environment().CurrentEnv;
-		float fValue = E.m_fTreeAmplitudeIntensity;
-		wind.set(_sin(tm_rot), 0, _cos(tm_rot), 0);
-		wind.normalize();
-#if RENDER!=R_R1
-		wind.mul(fValue);
-#else
-		wind.mul(ps_r__Tree_w_amp);
-#endif
-#else
-		wind.set				(_sin(tm_rot),0,_cos(tm_rot),0);	wind.normalize	();	wind.mul(ps_r__Tree_w_amp);	// dir1*amplitude
-		#endif //-TREE_WIND_EFFECT
+        // 3. Переводимо кут у 3D вектор (X, 0, Z)
+        wind.set(std::sin(wind_dir), 0, std::cos(wind_dir), 0);
+        wind.normalize();
+        
+        // 4. Множимо напрямок на реальну швидкість вітру та консольний множник
+        wind.mul(wind_vel * ps_r__Tree_w_amp); 
+
         scale = 1.f / float(FTreeVisual_quant);
 
         // setup constants

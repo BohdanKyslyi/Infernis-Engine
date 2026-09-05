@@ -33,7 +33,6 @@
 #include "clsid_game.h"
 #include "hudmanager.h"
 #include "Weapon.h"
-
 #include "ItemUseController.h"
 
 extern u32 hud_adj_mode;
@@ -43,17 +42,14 @@ static bool ItemUseBlocksAction(int cmd) {
     case kDETECTOR:
     case kTORCH:
     case kNIGHT_VISION:
-
     case kWPN_1:
     case kWPN_2:
     case kWPN_3:
     case kWPN_4:
     case kWPN_5:
     case kWPN_6:
-
     case kARTEFACT:
     case kWPN_NEXT:
-
     case kWPN_FIRE:
     case kWPN_ZOOM:
     case kWPN_ZOOM_INC:
@@ -62,18 +58,14 @@ static bool ItemUseBlocksAction(int cmd) {
     case kWPN_FUNC:
     case kWPN_FIREMODE_PREV:
     case kWPN_FIREMODE_NEXT:
-
     case kNEXT_SLOT:
     case kPREV_SLOT:
-
     case kQUICK_USE_1:
     case kQUICK_USE_2:
     case kQUICK_USE_3:
     case kQUICK_USE_4:
-
     case kUSE:
         return true;
-
     default:
         return false;
     }
@@ -88,13 +80,11 @@ void CActor::IR_OnKeyboardPress(int cmd) {
 
     if (IsTalking())
         return;
-
     if (m_input_external_handler && !m_input_external_handler->authorized(cmd))
         return;
 
-    if (m_item_use && m_item_use->IsWeaponLocked() && ItemUseBlocksAction(cmd)) {
+    if (m_item_use && m_item_use->IsWeaponLocked() && ItemUseBlocksAction(cmd))
         return;
-    }
 
     switch (cmd) {
     case kWPN_FIRE: {
@@ -102,7 +92,8 @@ void CActor::IR_OnKeyboardPress(int cmd) {
             return;
 
         u16 slot = inventory().GetActiveSlot();
-        if (inventory().ActiveItem() && (slot == INV_SLOT_3 || slot == INV_SLOT_2))
+        if (inventory().ActiveItem() &&
+            (slot == INV_SLOT_3 || slot == INV_SLOT_2 || slot == EXTRA_PISTOL_SLOT))
             mstate_wishful &= ~mcSprint;
         //-----------------------------
         if (OnServer()) {
@@ -233,21 +224,14 @@ void CActor::IR_OnKeyboardPress(int cmd) {
 void CActor::IR_OnMouseWheel(int direction) {
     if (hud_adj_mode) {
         g_player_hud->tune(Ivector().set(0, 0, direction));
-
         return;
     }
 
-    //
-    // Не дозволяємо wheel zoom / weapon switch
-    // під час item-use animation.
-    //
-    if (m_item_use && m_item_use->IsWeaponLocked()) {
+    if (m_item_use && m_item_use->IsWeaponLocked())
         return;
-    }
 
-    if (inventory().Action((direction > 0) ? (u16)kWPN_ZOOM_DEC : (u16)kWPN_ZOOM_INC, CMD_START)) {
+    if (inventory().Action((direction > 0) ? (u16)kWPN_ZOOM_DEC : (u16)kWPN_ZOOM_INC, CMD_START))
         return;
-    }
 
     if (direction > 0)
         OnNextWeaponSlot();
@@ -519,11 +503,12 @@ BOOL CActor::HUDview() const {
 }
 
 static u16 SlotsToCheck[] = {
-    KNIFE_SLOT,    // 0
-    INV_SLOT_2,    // 1
-    INV_SLOT_3,    // 2
-    GRENADE_SLOT,  // 3
-    ARTEFACT_SLOT, // 10
+    KNIFE_SLOT,         // 0
+    INV_SLOT_2,         // 1
+    INV_SLOT_3,         // 2
+    EXTRA_PISTOL_SLOT,  // optional third weapon slot
+    GRENADE_SLOT,       // 3
+    ARTEFACT_SLOT,      // 10
 };
 
 void CActor::OnNextWeaponSlot() {
@@ -547,10 +532,14 @@ void CActor::OnNextWeaponSlot() {
 
     for (u32 i = CurSlot + 1; i < NumSlotsToCheck; i++) {
         if (inventory().ItemFromSlot(SlotsToCheck[i])) {
-            if (SlotsToCheck[i] == ARTEFACT_SLOT) {
+            const u16 slot = SlotsToCheck[i];
+            if (slot == ARTEFACT_SLOT) {
                 IR_OnKeyboardPress(kARTEFACT);
-            } else
-                IR_OnKeyboardPress(kWPN_1 + i);
+            } else if (slot == EXTRA_PISTOL_SLOT) {
+                inventory().ActiveWeapon(EXTRA_PISTOL_SLOT);
+            } else {
+                IR_OnKeyboardPress(kWPN_1 + slot - KNIFE_SLOT);
+            }
             return;
         }
     }
@@ -577,10 +566,14 @@ void CActor::OnPrevWeaponSlot() {
 
     for (s32 i = s32(CurSlot - 1); i >= 0; i--) {
         if (inventory().ItemFromSlot(SlotsToCheck[i])) {
-            if (SlotsToCheck[i] == ARTEFACT_SLOT) {
+            const u16 slot = SlotsToCheck[i];
+            if (slot == ARTEFACT_SLOT) {
                 IR_OnKeyboardPress(kARTEFACT);
-            } else
-                IR_OnKeyboardPress(kWPN_1 + i);
+            } else if (slot == EXTRA_PISTOL_SLOT) {
+                inventory().ActiveWeapon(EXTRA_PISTOL_SLOT);
+            } else {
+                IR_OnKeyboardPress(kWPN_1 + slot - KNIFE_SLOT);
+            }
             return;
         }
     }
@@ -618,11 +611,15 @@ void CActor::set_input_external_handler(CActorInputHandler* handler) {
 void CActor::SwitchNightVision() {
     CWeapon* wpn1 = NULL;
     CWeapon* wpn2 = NULL;
+    CWeapon* wpn_extra = NULL;
     if (inventory().ItemFromSlot(INV_SLOT_2))
         wpn1 = smart_cast<CWeapon*>(inventory().ItemFromSlot(INV_SLOT_2));
 
     if (inventory().ItemFromSlot(INV_SLOT_3))
         wpn2 = smart_cast<CWeapon*>(inventory().ItemFromSlot(INV_SLOT_3));
+
+    if (inventory().ItemFromSlot(EXTRA_PISTOL_SLOT))
+        wpn_extra = smart_cast<CWeapon*>(inventory().ItemFromSlot(EXTRA_PISTOL_SLOT));
 
     xr_vector<CAttachableItem*> const& all = CAttachmentOwner::attached_objects();
     xr_vector<CAttachableItem*>::const_iterator it = all.begin();
@@ -634,6 +631,9 @@ void CActor::SwitchNightVision() {
                 return;
 
             if (wpn2 && wpn2->IsZoomed())
+                return;
+
+            if (wpn_extra && wpn_extra->IsZoomed())
                 return;
 
             torch->SwitchNightVision();
@@ -657,6 +657,9 @@ void CActor::SwitchTorch() {
 
 #ifdef DEBUG
 void CActor::NoClipFly(int cmd) {
+    // Preserve the old 0.1 units-per-frame feel at 60 FPS without tying speed to FPS.
+    constexpr float NO_CLIP_SPEED = 6.0f;
+
     Fvector cur_pos; // = Position();
     cur_pos.set(0, 0, 0);
     float scale = 1.0f;
@@ -711,7 +714,8 @@ void CActor::NoClipFly(int cmd) {
         ActorUse();
         break;
     }
-    cur_pos.mul(scale);
+    const float frame_delta = std::clamp(Device.fTimeDeltaReal, 0.f, 0.1f);
+    cur_pos.mul(scale * NO_CLIP_SPEED * frame_delta);
     Fmatrix mOrient;
     mOrient.rotateY(-(cam_Active()->GetWorldYaw()));
     mOrient.transform_dir(cur_pos);

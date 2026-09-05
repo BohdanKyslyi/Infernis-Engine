@@ -43,7 +43,7 @@
 			<deadbody r="255" g="160" b="160" a="205"/>
 		</icon>
 	</actor_ch_info>
-	
+
 	<partner_ch_info x="11" y="10" width="321" height="89">
 		<name_static x="5" y="-3" width="112" height="16">
 			<text align="l" font="letterica18" color="ui_2"/>
@@ -72,11 +72,11 @@
 		<relation_static x="76" y="45" width="112" height="14">
 			<text align="r" font="letterica16" color="ui_3"/>
 		</relation_static>
-		<icon x="197" y="1" width="123" height="87" stretch="1">
-			<deadbody r="255" g="160" b="160" a="205"/>
-		</icon>
+	    <icon x="197" y="1" width="123" height="87" stretch="1">
+		    <deadbody r="255" g="160" b="160" a="205"/>
+	    </icon>
 	</partner_ch_info>
-	
+
 	<actor_money_static x="749" y="75" width="130" height="22">
 		<text align="r" font="graffiti22"/>
 	</actor_money_static>
@@ -84,7 +84,6 @@
 	<partner_money_static x="66" y="75" width="130" height="22">
 		<text align="r" font="graffiti22"/>
 	</partner_money_static>
-
 
 	<inv_slot2_highlight x="356" y="159" width="86" height="213" stretch="1">
 		<texture>ui_inGame2_weapon_highlighter</texture>
@@ -98,15 +97,6 @@
 	<outfit_slot_highlight x="463" y="142" width="96" height="161" stretch="1">
 		<texture>ui_inGame2_armor_highlighter</texture>
 	</outfit_slot_highlight>
-	<knife_slot_highlight x="355" y="18" width="88" height="58" stretch="1">
-		<texture>ui_inGame2_knife_highlighter</texture>
-	</knife_slot_highlight>
-	<binocular_slot_highlight x="355" y="88" width="88" height="58" stretch="1">
-		<texture>ui_inGame2_binocular_highlighter</texture>
-	</binocular_slot_highlight>
-	<backpack_slot_highlight x="579" y="14" width="91" height="130" stretch="1">
-		<texture>ui_inGame2_backpack_highlighter</texture>
-	</backpack_slot_highlight>
 	<detector_slot_highlight x="463" y="330" width="96" height="48" stretch="1">
 		<texture>ui_inGame2_detector_highlighter</texture>
 	</detector_slot_highlight>
@@ -216,16 +206,49 @@
 	</right_delimiter>
 
 	<belt_list_over x="352" y="472" width="59" height="59" dx="65" stretch="0">
-		<texture >ui_inGame2_artefact_blocker</texture>
+		<texture>ui_inGame2_artefact_blocker</texture>
 	</belt_list_over>
 
 	<helmet_over x="456" y="11" width="111" height="115" stretch="1">
-		<texture >ui_inGame2_helmet_blocker</texture>
+		<texture>ui_inGame2_helmet_blocker</texture>
 	</helmet_over>
 
 	<backpack_over x="579" y="14" width="85" height="136" stretch="1">
-		<texture >ui_inGame2_backpack_blocker</texture>
+		<texture>ui_inGame2_backpack_blocker</texture>
 	</backpack_over>
+
+	<!-- Optional modular equipment slots. They are instantiated only when enabled. -->
+	<knife_slot_highlight x="355" y="18" width="88" height="58" stretch="1">
+		<texture>ui_inGame2_knife_highlighter</texture>
+	</knife_slot_highlight>
+	<binocular_slot_highlight x="355" y="88" width="88" height="58" stretch="1">
+		<texture>ui_inGame2_binocular_highlighter</texture>
+	</binocular_slot_highlight>
+	<backpack_slot_highlight x="579" y="14" width="91" height="130" stretch="1">
+		<texture>ui_inGame2_backpack_highlighter</texture>
+	</backpack_slot_highlight>
+	<torch_slot_highlight x="532" y="447" width="41" height="33" stretch="1">
+		<texture>ui_inGame2_quick_item_highlighter</texture>
+	</torch_slot_highlight>
+	<pistol_extra_slot_highlight x="613" y="447" width="41" height="33" stretch="1">
+		<texture>ui_inGame2_quick_item_highlighter</texture>
+	</pistol_extra_slot_highlight>
+
+	<dragdrop_knife x="355" y="18" width="88" height="58"
+		cell_width="41" cell_height="41" rows_num="2" cols_num="2"
+		custom_placement="0" a="0" virtual_cells="1" single_slot="1" vc_vert_align="c" vc_horiz_align="c"/>
+	<dragdrop_binocular x="356" y="88" width="88" height="56"
+		cell_width="41" cell_height="41" rows_num="2" cols_num="2"
+		custom_placement="0" a="0" virtual_cells="1" single_slot="1" vc_vert_align="c" vc_horiz_align="c"/>
+	<dragdrop_backpack x="579" y="14" width="91" height="130"
+		cell_width="41" cell_height="41" rows_num="3" cols_num="2"
+		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c" vc_horiz_align="c"/>
+	<dragdrop_torch x="532" y="447" width="41" height="33"
+		cell_width="41" cell_height="33" rows_num="2" cols_num="1"
+		custom_placement="0" a="0" virtual_cells="1" single_slot="1" vc_vert_align="c" vc_horiz_align="c"/>
+	<dragdrop_pistol_extra x="613" y="447" width="41" height="33"
+		cell_width="41" cell_height="33" rows_num="2" cols_num="1"
+		custom_placement="0" a="0" virtual_cells="1" single_slot="1" vc_vert_align="c" vc_horiz_align="c"/>
 
 
   <dragdrop_trash x="0" y="0" width="340" height="768"
@@ -251,21 +274,6 @@
 
 	<dragdrop_detector x="458" y="328" width="106" height="55"
 		cell_width="41" cell_height="41" rows_num="1" cols_num="2"
-		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
-		vc_horiz_align="c"/>
-
-	<dragdrop_backpack x="579" y="14" width="91" height="130"
-		cell_width="41" cell_height="41" rows_num="3" cols_num="2"
-		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
-		vc_horiz_align="c"/>
-
-	<dragdrop_knife x="355" y="18" width="88" height="58"
-		cell_width="41" cell_height="41" rows_num="2" cols_num="2"
-		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
-		vc_horiz_align="c"/>
-
-	<dragdrop_binocular x="356" y="88" width="88" height="56"
-		cell_width="41" cell_height="41" rows_num="2" cols_num="2"
 		custom_placement="0" a="0" virtual_cells="1" vc_vert_align="c"
 		vc_horiz_align="c"/>
 

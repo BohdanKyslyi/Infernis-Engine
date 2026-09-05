@@ -21,4 +21,13 @@
 	<string id="st_mystery_backpack_descr">
 		<text>Втягнути з собою багато речей, не маючи переносного сховища навряд чи вийде. Для цього сталкерам потрібні рюкзаки. Цей рюкзак вже забитий барахлом нещасного сталкера, який не дожив до усвідомлення, що з Зони треба валити.</text>
 	</string>
+	<string id="st_discord_main_menu">
+		<text>У головному меню</text>
+	</string>
+	<string id="st_discord_exploring_zone">
+		<text>Досліджує Зону</text>
+	</string>
+	<string id="st_discord_on_mission">
+		<text>Виконує завдання</text>
+	</string>
 </string_table>

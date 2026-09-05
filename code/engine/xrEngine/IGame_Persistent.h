@@ -59,6 +59,10 @@ public:
     virtual void PreStart(LPCSTR op);
     virtual void Start(LPCSTR op);
     virtual void Disconnect();
+    
+    virtual void PlayParticle(LPCSTR name, const Fvector& pos) {} 
+	virtual void ApplyLightningDamage(const Fvector& pos, float radius, float power) {}
+
 #ifndef _EDITOR
     IGame_ObjectPool ObjectPool;
     CEnvironment* pEnvironment;
@@ -79,7 +83,6 @@ public:
     virtual void OnAppDeactivate();
     virtual void OnFrame();
 
-    // вызывается только когда изменяется тип игры
     virtual void OnGameStart();
     virtual void OnGameEnd();
 

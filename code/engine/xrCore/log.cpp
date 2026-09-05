@@ -11,44 +11,69 @@ static string_path logFName = "engine.log";
 static string_path log_file_name = "engine.log";
 static BOOL no_log = TRUE;
 static std::recursive_mutex logCS;
+static IWriter* logWriter = nullptr;
+static size_t flushedLineCount = 0;
 
 xr_vector<std::string>* LogFile = nullptr;
 static LogCallback LogCB = nullptr;
 
-void FlushLog() {
-    if (!no_log) {
-        std::lock_guard<decltype(logCS)> lock(logCS);
-        IWriter* f = FS.w_open(logFName);
-        if (f) {
-            for (size_t it = 0; it < LogFile->size(); it++) {
-                const char* s = (*LogFile)[it].c_str();
-                f->w_string(s ? s : "");
-            }
-            FS.w_close(f);
-        }
+static bool OpenLogWriter() {
+    const BOOL previousNoLog = no_log;
+    no_log = TRUE;
+    logWriter = FS.w_open(logFName);
+    no_log = previousNoLog;
+
+    if (logWriter && logWriter->valid())
+        return true;
+
+    FS.w_close(logWriter);
+    return false;
+}
+
+static void FlushLogLocked() {
+    if (no_log || !LogFile)
+        return;
+
+    // LogFile may be cleared by the console. Recreate the file in that case.
+    if (LogFile->size() < flushedLineCount) {
+        FS.w_close(logWriter);
+        flushedLineCount = 0;
     }
+
+    if (!logWriter && !OpenLogWriter())
+        return;
+
+    while (flushedLineCount < LogFile->size()) {
+        const char* line = (*LogFile)[flushedLineCount].c_str();
+        logWriter->w_string(line ? line : "");
+        ++flushedLineCount;
+    }
+
+    logWriter->flush();
+}
+
+void FlushLog() {
+    std::lock_guard<decltype(logCS)> lock(logCS);
+    FlushLogLocked();
 }
 
 void AddOne(const char* split) {
+    std::lock_guard<decltype(logCS)> lock(logCS);
     if (!LogFile)
         return;
 
-    {
-        std::lock_guard<decltype(logCS)> lock(logCS);
-
 #ifdef DEBUG
-        OutputDebugString(split);
-        OutputDebugString("\n");
+    OutputDebugString(split);
+    OutputDebugString("\n");
 #endif
 
-        LogFile->push_back(split);
+    LogFile->push_back(split);
 
-        // exec CallBack
-        if (LogExecCB && LogCB)
-            LogCB(split);
-    }
+    // exec CallBack
+    if (LogExecCB && LogCB)
+        LogCB(split);
 
-    FlushLog();
+    FlushLogLocked();
 }
 
 void Log(const char* s) {
@@ -144,6 +169,7 @@ void Log(const char* msg, const Fmatrix& dop) {
 void LogWinErr(const char* msg, long err_code) { Msg("%s: %s", msg, Debug.error2string(err_code)); }
 
 LogCallback SetLogCB(LogCallback cb) {
+    std::lock_guard<decltype(logCS)> lock(logCS);
     LogCallback result = LogCB;
     LogCB = cb;
     return (result);
@@ -152,29 +178,43 @@ LogCallback SetLogCB(LogCallback cb) {
 LPCSTR log_name() { return (log_file_name); }
 
 void InitLog() {
+    std::lock_guard<decltype(logCS)> lock(logCS);
     R_ASSERT(LogFile == NULL);
     LogFile = xr_new<xr_vector<std::string>>();
     LogFile->reserve(1000);
 }
 
 void CreateLog(BOOL nl) {
-    no_log = nl;
+    std::lock_guard<decltype(logCS)> lock(logCS);
+
+    no_log = TRUE;
+    FS.w_close(logWriter);
+    flushedLineCount = 0;
+
     strconcat(sizeof(log_file_name), log_file_name, Core.ApplicationName, "_", Core.UserName,
               ".log");
     if (FS.path_exist("$logs$"))
         FS.update_path(logFName, "$logs$", log_file_name);
-    if (!no_log) {
-        IWriter* f = FS.w_open(logFName);
-        if (f == NULL) {
+
+    if (!nl) {
+        if (!OpenLogWriter()) {
             MessageBox(NULL, "Can't create log file.", "Error", MB_ICONERROR);
             abort();
         }
-        FS.w_close(f);
+
+        no_log = FALSE;
+        FlushLogLocked();
     }
 }
 
 void CloseLog(void) {
-    FlushLog();
-    LogFile->clear();
+    std::lock_guard<decltype(logCS)> lock(logCS);
+    FlushLogLocked();
+    FS.w_close(logWriter);
+    flushedLineCount = 0;
+    no_log = TRUE;
+
+    if (LogFile)
+        LogFile->clear();
     xr_delete(LogFile);
 }

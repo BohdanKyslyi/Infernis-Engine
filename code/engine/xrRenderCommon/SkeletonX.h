@@ -169,4 +169,3 @@ BOOL pick_bone(CKinematics* Parent, IKinematics::pick_result& r, float dist, con
 #endif //	USE_DX10
 
 #endif // SkeletonXH
-

@@ -325,6 +325,11 @@ void CActor::cam_Update(float dt, float fFOV) {
     float _viewport_near = VIEWPORT_NEAR;
     // calc point
     xform.transform_tiny(point);
+	
+    if (m_fReverseGravityProgress > 0.0f) {
+        float ease = (1.0f - cosf(m_fReverseGravityProgress * PI)) / 2.0f;
+        dangle.z += ease * PI; 
+    }
 
     CCameraBase* C = cam_Active();
 

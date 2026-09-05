@@ -149,8 +149,8 @@ private:
     ref_shader s_combine_dbg_Accumulator;
     ref_shader s_combine;
     ref_shader s_combine_volumetric;
-	ref_geom g_rain_drops;
-	ref_shader s_rain_drops;
+    ref_geom g_rain_drops;
+    ref_shader s_rain_drops;
 
 public:
     ref_shader s_postprocess;
@@ -223,7 +223,7 @@ public:
     void phase_smap_spot_tsh(light* L);
     void phase_accumulator();
     void phase_vol_accumulator();
-	void PhaseRainDrops();
+    void PhaseRainDrops();
     void shadow_direct(light* L, u32 dls_phase);
 
     bool need_to_render_sunshafts();

@@ -30,10 +30,10 @@
 #include "../EntityCondition.h"
 #include "../CustomOutfit.h"
 #include "../ActorHelmet.h"
-#include "../UserBackpack.h"
 #include "../Inventory.h"
 #include "../Artefact.h"
 #include "../string_table.h"
+#include "../UserBackpack.h"
 ui_actor_state_wnd::ui_actor_state_wnd() {}
 
 ui_actor_state_wnd::~ui_actor_state_wnd() { delete_data(m_hint_wnd); }
@@ -113,8 +113,8 @@ void ui_actor_state_wnd::UpdateActorInfo(CInventoryOwner* owner) {
     CCustomOutfit* outfit = actor->GetOutfit();
     PIItem itm = actor->inventory().ItemFromSlot(HELMET_SLOT);
     CHelmet* helmet = smart_cast<CHelmet*>(itm);
-	PIItem bkp = actor->inventory().ItemFromSlot(BACKPACK_SLOT);
-	CBackpack* backpack = smart_cast<CBackpack*>(bkp);
+    PIItem bkp = actor->inventory().ItemFromSlot(BACKPACK_SLOT);
+    CBackpack* backpack = smart_cast<CBackpack*>(bkp);
 
     m_state[stt_fire]->set_progress(0.0f);
     m_state[stt_radia]->set_progress(0.0f);
@@ -182,22 +182,19 @@ void ui_actor_state_wnd::UpdateActorInfo(CInventoryOwner* owner) {
         u16 spine_bone = ikv->LL_BoneID("bip01_head");
         fwou_value += helmet->GetBoneArmor(spine_bone) * helmet->GetCondition();
     }
-	
-	if(backpack)
-	{
-		burn_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeBurn);
-		radi_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeRadiation);
-		cmbn_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeChemicalBurn);
-		tele_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeTelepatic);
-		woun_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeWound);
-		shoc_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeShock);
-
+    if (backpack) {
+        burn_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeBurn);
+        radi_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeRadiation);
+        cmbn_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeChemicalBurn);
+        tele_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeTelepatic);
+        woun_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeWound);
+        shoc_value += backpack->GetDefHitTypeProtection(ALife::eHitTypeShock);
 		IKinematics* ikv = smart_cast<IKinematics*>(actor->Visual());
 		VERIFY(ikv);
 		u16 spine_bone = ikv->LL_BoneID("bip01_spine1");
 		fwou_value += backpack->GetBoneArmor(spine_bone)*backpack->GetCondition();
 	}
-
+  
     // fire burn protection progress bar
     {
         burn_value += actor->GetProtection_ArtefactsOnBelt(ALife::eHitTypeBurn);
@@ -263,12 +260,12 @@ void ui_actor_state_wnd::update_round_states(CActor* actor, ALife::EHitType hit_
     CCustomOutfit* outfit = actor->GetOutfit();
     PIItem itm = actor->inventory().ItemFromSlot(HELMET_SLOT);
     CHelmet* helmet = smart_cast<CHelmet*>(itm);
-	PIItem bkp = actor->inventory().ItemFromSlot(BACKPACK_SLOT);
-	CBackpack* backpack = smart_cast<CBackpack*>(bkp);
+    PIItem bkp = actor->inventory().ItemFromSlot(BACKPACK_SLOT);
+    CBackpack* backpack = smart_cast<CBackpack*>(bkp);
     float value = (outfit) ? outfit->GetDefHitTypeProtection(hit_type) : 0.0f;
     value += actor->GetProtection_ArtefactsOnBelt(hit_type);
     value += helmet ? helmet->GetDefHitTypeProtection(ALife::eHitTypeShock) : 0.0f;
-	value += backpack?backpack->GetDefHitTypeProtection(ALife::eHitTypeShock):0.0f;
+    value += backpack ? backpack->GetDefHitTypeProtection(hit_type) : 0.0f;
 
     float max_power = actor->conditions().GetZoneMaxPower(hit_type);
     value = value / max_power; //  = 0..1

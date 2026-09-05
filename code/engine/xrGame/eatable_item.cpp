@@ -397,7 +397,6 @@ void CEatableItem::UpdatePortionState() {
     if (m_section_id.size() == 0) {
         ApplyPortionVisual();
         UpdateOutcomeRecipes();
-        UpdateTrashState();
         return;
     }
 
@@ -441,7 +440,6 @@ void CEatableItem::UpdatePortionState() {
     if (!m_portion_state.size()) {
         ApplyPortionVisual();
         UpdateOutcomeRecipes();
-        UpdateTrashState();
         return;
     }
 
@@ -537,7 +535,6 @@ void CEatableItem::UpdatePortionState() {
 #endif
     ApplyPortionVisual();
     UpdateOutcomeRecipes();
-    UpdateTrashState();
 }
 
 void CEatableItem::ApplyPortionVisual() {

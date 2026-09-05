@@ -226,6 +226,8 @@ using RTokenVec = xr_vector<xr_rtoken>;
 
 #include "net_utils.h"
 
+#include "JobSystem.h"
+
 // destructor
 template <class T>
 class destructor {

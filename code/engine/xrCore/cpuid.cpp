@@ -22,11 +22,11 @@
  *
  ****************************************************/
 #ifdef _EDITOR
-unsgined int query_processor_info(processor_info* pinfo) {
+unsigned int query_processor_info(processor_info* pinfo) {
     std::memset(pinfo, 0, sizeof(processor_info));
 
-    pinfo->feature = static_cast<u32>(CpuFeature::Mmx) | static_cast<u32>(CpuFeature::Sse);
-    return pinfo->feature;
+    pinfo->features = static_cast<u32>(CpuFeature::Mmx) | static_cast<u32>(CpuFeature::Sse);
+    return pinfo->features;
 }
 #else
 
@@ -72,8 +72,7 @@ unsigned int query_processor_info(processor_info* pinfo) {
     *reinterpret_cast<int*>(pinfo->vendor + 4) = data[0][3];
     *reinterpret_cast<int*>(pinfo->vendor + 8) = data[0][2];
 
-    // const bool isIntel = std::strncmp(pinfo->vendor, "GenuineIntel", 12);
-    const bool isAmd = std::strncmp(pinfo->vendor, "AuthenticAMD", 12) != 0;
+    const bool isAmd = std::strncmp(pinfo->vendor, "AuthenticAMD", 12) == 0;
 
     // load bitset with flags for function 0x00000001
     if (nIds >= 1) {
@@ -136,48 +135,66 @@ unsigned int query_processor_info(processor_info* pinfo) {
     if (hasMWait)
         pinfo->features |= static_cast<u32>(CpuFeature::MWait);
 
-    pinfo->family = (cpui[0] >> 8) & 0xf;
-    pinfo->model = (cpui[0] >> 4) & 0xf;
+    const u32 baseFamily = (cpui[0] >> 8) & 0xf;
+    const u32 baseModel = (cpui[0] >> 4) & 0xf;
+    const u32 extendedFamily = (cpui[0] >> 20) & 0xff;
+    const u32 extendedModel = (cpui[0] >> 16) & 0xf;
+
+    pinfo->family = static_cast<unsigned char>(
+        baseFamily == 0xf ? baseFamily + extendedFamily : baseFamily);
+    pinfo->model = static_cast<unsigned char>(
+        baseFamily == 0x6 || baseFamily == 0xf ? baseModel | (extendedModel << 4) : baseModel);
     pinfo->stepping = cpui[0] & 0xf;
 
     // Calculate available processors
-    ULONG_PTR pa_mask_save, sa_mask_stub = 0;
-    GetProcessAffinityMask(GetCurrentProcess(), &pa_mask_save, &sa_mask_stub);
+    SYSTEM_INFO systemInfo{};
+    GetSystemInfo(&systemInfo);
+
+    ULONG_PTR pa_mask_save = 0;
+    ULONG_PTR sa_mask_stub = 0;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &pa_mask_save, &sa_mask_stub))
+        pa_mask_save = systemInfo.dwActiveProcessorMask;
 
     DWORD returnedLength = 0;
-    DWORD byteOffset = 0;
     GetLogicalProcessorInformation(nullptr, &returnedLength);
-
-    auto buffer = std::make_unique<u8[]>(returnedLength);
-    auto ptr = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION>(buffer.get());
-    GetLogicalProcessorInformation(ptr, &returnedLength);
 
     auto processorCoreCount = 0u;
     auto logicalProcessorCount = 0u;
 
-    while (byteOffset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION) <= returnedLength) {
-        switch (ptr->Relationship) {
-        case RelationProcessorCore:
-            processorCoreCount++;
+    if (returnedLength >= sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION)) {
+        auto buffer = std::make_unique<u8[]>(returnedLength);
+        auto ptr = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION>(buffer.get());
 
-            // A hyperthreaded core supplies more than one logical processor.
-            logicalProcessorCount += countSetBits(ptr->ProcessorMask);
-            break;
+        if (GetLogicalProcessorInformation(ptr, &returnedLength)) {
+            DWORD byteOffset = 0;
+            while (byteOffset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION) <= returnedLength) {
+                if (ptr->Relationship == RelationProcessorCore) {
+                    const ULONG_PTR availableMask = ptr->ProcessorMask & pa_mask_save;
+                    if (availableMask != 0) {
+                        ++processorCoreCount;
+                        logicalProcessorCount += countSetBits(availableMask);
+                    }
+                }
 
-        default:
-            break;
+                byteOffset += sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
+                ++ptr;
+            }
         }
-
-        byteOffset += sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
-        ptr++;
     }
 
-    if (logicalProcessorCount != processorCoreCount)
+    if (logicalProcessorCount == 0)
+        logicalProcessorCount = countSetBits(pa_mask_save);
+    if (logicalProcessorCount == 0)
+        logicalProcessorCount = systemInfo.dwNumberOfProcessors;
+    if (processorCoreCount == 0)
+        processorCoreCount = logicalProcessorCount;
+
+    if (logicalProcessorCount > processorCoreCount)
         pinfo->features |= static_cast<u32>(CpuFeature::HT);
 
     // All logical processors
     pinfo->n_threads = logicalProcessorCount;
-    pinfo->affinity_mask = pa_mask_save;
+    pinfo->affinity_mask = static_cast<unsigned int>(pa_mask_save);
     pinfo->n_cores = processorCoreCount;
 
     return pinfo->features;

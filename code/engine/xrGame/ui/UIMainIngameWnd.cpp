@@ -75,8 +75,9 @@ const u32 g_clWhite = 0xffffffff;
 #define MAININGAME_XML "maingame.xml"
 
 CUIMainIngameWnd::CUIMainIngameWnd()
-    : m_pPickUpItem(NULL), m_pMPChatWnd(NULL), UIArtefactIcon(NULL), m_pMPLogWnd(NULL),
-      m_quick_slots_inventory_revision(u32(-1)), m_quick_slots_force_refresh(true) {
+    : /*m_pGrenade(NULL),m_pItem(NULL),*/ m_pPickUpItem(NULL), m_pMPChatWnd(NULL),
+      UIArtefactIcon(NULL), m_pMPLogWnd(NULL), m_quick_slots_inventory_revision(u32(-1)),
+      m_quick_slots_force_refresh(true) {
     for (u8 i = 0; i < 4; ++i)
         m_quick_slots_cached_sections[i] = NULL;
 
@@ -147,7 +148,7 @@ void CUIMainIngameWnd::Init() {
     m_ind_starvation = UIHelper::CreateStatic(uiXml, "indicator_starvation", this);
     m_ind_weapon_broken = UIHelper::CreateStatic(uiXml, "indicator_weapon_broken", this);
     m_ind_helmet_broken = UIHelper::CreateStatic(uiXml, "indicator_helmet_broken", this);
-	m_ind_backpack_broken = UIHelper::CreateStatic(uiXml, "indicator_backpack_broken", this);
+    m_ind_backpack_broken = UIHelper::CreateStatic(uiXml, "indicator_backpack_broken", this);
     m_ind_outfit_broken = UIHelper::CreateStatic(uiXml, "indicator_outfit_broken", this);
     m_ind_overweight = UIHelper::CreateStatic(uiXml, "indicator_overweight", this);
 
@@ -308,7 +309,6 @@ void CUIMainIngameWnd::SetMPChatLog(CUIWindow* pChat, CUIWindow* pLog) {
 
 void CUIMainIngameWnd::Update() {
     CUIWindow::Update();
-
     CActor* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
 
     if (m_pMPChatWnd)
@@ -322,16 +322,27 @@ void CUIMainIngameWnd::Update() {
 
     UIZoneMap->Update();
 
-    UpdatePickUpItem();
+    //	UIHealthBar.SetProgressPos	(m_pActor->GetfHealth()*100.0f);
+    //	UIMotionIcon->SetPower		(m_pActor->conditions().GetPower()*100.0f);
 
-    //
-    // Cheap revision check every frame.
-    // Heavy quick-slot rebuild occurs only on change.
-    //
+    UpdatePickUpItem();
     UpdateQuickSlots();
 
     if (Device.dwFrame % 10)
         return;
+
+    game_PlayerState* lookat_player = Game().local_player;
+    if (Level().IsDemoPlayStarted()) {
+        lookat_player = Game().lookat_player();
+    }
+    bool b_God = (GodMode() || (!lookat_player))
+                     ? true
+                     : lookat_player->testFlag(GAME_PLAYER_FLAG_INVINCIBLE);
+    if (b_God) {
+        SetWarningIconColor(ewiInvincible, 0xffffffff);
+    } else {
+        SetWarningIconColor(ewiInvincible, 0x00ffffff);
+    }
 
     UpdateMainIndicators();
 } // update
@@ -653,25 +664,25 @@ void CUIMainIngameWnd::UpdateMainIndicators() {
                 m_ind_helmet_broken->InitTexture("ui_inGame2_circle_Helmetbroken_red");
         }
     }
-	// Backpack broken icon
-	CBackpack* backpack = smart_cast<CBackpack*>(pActor->inventory().ItemFromSlot(BACKPACK_SLOT));
-	m_ind_backpack_broken->Show(false);
-	if (backpack) {
-		float condition = backpack->GetCondition();
-		if(condition < 0.75f) {
-			m_ind_backpack_broken->Show(true);
-			if(condition>0.5f)
-				m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_green");
-			else if(condition>0.25f)
-				m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_yellow");
-			else
-				m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_red");
-		}
-	}
+    // Backpack broken icon
+    CBackpack* backpack = smart_cast<CBackpack*>(pActor->inventory().ItemFromSlot(BACKPACK_SLOT));
+    m_ind_backpack_broken->Show(false);
+    if (backpack) {
+        float condition = backpack->GetCondition();
+        if (condition < 0.75f) {
+            m_ind_backpack_broken->Show(true);
+            if (condition > 0.5f)
+                m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_green");
+            else if (condition > 0.25f)
+                m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_yellow");
+            else
+                m_ind_backpack_broken->InitTexture("ui_inGame2_circle_Backpackbroken_red");
+        }
+    }
     // Weapon broken icon
     u16 slot = pActor->inventory().GetActiveSlot();
     m_ind_weapon_broken->Show(false);
-    if (slot == INV_SLOT_2 || slot == INV_SLOT_3) {
+    if (slot == INV_SLOT_2 || slot == INV_SLOT_3 || slot == EXTRA_PISTOL_SLOT) {
         CWeapon* weapon = smart_cast<CWeapon*>(pActor->inventory().ItemFromSlot(slot));
         if (weapon) {
             float condition = weapon->GetCondition();
@@ -705,49 +716,30 @@ void CUIMainIngameWnd::UpdateMainIndicators() {
 
 void CUIMainIngameWnd::UpdateQuickSlots() {
     CActor* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
-
     if (!pActor)
         return;
 
     const u32 inventory_revision = pActor->inventory().StateRevision();
-
-    //
-    // Quick-slot bindings are not actual inventory mutations,
-    // so check the four section references separately.
-    //
     bool bindings_changed = false;
 
     for (u8 i = 0; i < 4; ++i) {
-        shared_str current_section = g_quick_use_slots[i];
-
-        if (m_quick_slots_cached_sections[i] != current_section) {
+        if (m_quick_slots_cached_sections[i] != g_quick_use_slots[i]) {
             bindings_changed = true;
             break;
         }
     }
 
-    //
-    // Nothing changed -> do absolutely nothing.
-    //
     if (!m_quick_slots_force_refresh && !bindings_changed &&
         m_quick_slots_inventory_revision == inventory_revision) {
         return;
     }
 
-    //
-    // Cache current state.
-    //
     m_quick_slots_force_refresh = false;
-
     m_quick_slots_inventory_revision = inventory_revision;
 
-    for (u8 i = 0; i < 4; ++i) {
+    for (u8 i = 0; i < 4; ++i)
         m_quick_slots_cached_sections[i] = g_quick_use_slots[i];
-    }
 
-    //
-    // OLD UpdateQuickSlots() BODY CONTINUES HERE.
-    //
     string32 tmp;
     LPCSTR str = CStringTable().translate("quick_use_str_1").c_str();
     strncpy_s(tmp, sizeof(tmp), str, 3);
@@ -787,37 +779,19 @@ void CUIMainIngameWnd::UpdateQuickSlots() {
                 CUIStatic* main_slot = m_quick_slots_icons[i];
                 main_slot->SetShader(InventoryUtilities::GetEquipmentIconsShader());
                 Frect texture_rect;
-
-                //
-                // Try runtime item first.
-                //
-                // This allows CEatableItem::GetInvGridRect()
-                // to provide portion_state-specific icon coordinates.
-                //
                 PIItem runtime_item = pActor->inventory().GetAny(item_name.c_str());
 
                 if (runtime_item) {
                     const Irect icon_rect = runtime_item->GetInvGridRect();
-
                     texture_rect.x1 = float(icon_rect.x1) * INV_GRID_WIDTH;
-
                     texture_rect.y1 = float(icon_rect.y1) * INV_GRID_HEIGHT;
-
                     texture_rect.x2 = float(icon_rect.x2) * INV_GRID_WIDTH;
-
                     texture_rect.y2 = float(icon_rect.y2) * INV_GRID_HEIGHT;
                 } else {
-                    //
-                    // No item in inventory:
-                    // show the normal config icon as disabled reference.
-                    //
                     texture_rect.x1 = pSettings->r_float(item_name, "inv_grid_x") * INV_GRID_WIDTH;
-
                     texture_rect.y1 = pSettings->r_float(item_name, "inv_grid_y") * INV_GRID_HEIGHT;
-
                     texture_rect.x2 =
                         pSettings->r_float(item_name, "inv_grid_width") * INV_GRID_WIDTH;
-
                     texture_rect.y2 =
                         pSettings->r_float(item_name, "inv_grid_height") * INV_GRID_HEIGHT;
                 }

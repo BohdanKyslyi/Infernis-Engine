@@ -75,18 +75,6 @@ static class cl_water_intensity : public R_constant_setup {
     }
 } binder_water_intensity;
 
-#ifdef TREE_WIND_EFFECT
-static class cl_tree_amplitude_intensity : public R_constant_setup
-{
-	virtual void setup(R_constant* C)
-	{
-		CEnvDescriptor&	E = *g_pGamePersistent->Environment().CurrentEnv;
-		float fValue = E.m_fTreeAmplitudeIntensity;
-		RCache.set_c(C, fValue, fValue, fValue, 0);
-	}
-} binder_tree_amplitude_intensity;
-#endif
-
 static class cl_sun_shafts_intensity : public R_constant_setup {
     virtual void setup(R_constant* C) {
         CEnvDescriptor& E = *g_pGamePersistent->Environment().CurrentEnv;
@@ -699,6 +687,15 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
 
     char sh_name[MAX_PATH] = "";
     u32 len = 0;
+
+    // Shader resource options are encoded in the resource name so variants
+    // retain independent cache directories. The source loader removes the
+    // suffix only when resolving the physical .ps/.vs file.
+    if (strstr(name, "(USE_PBR)")) {
+        defines[def_it].Name = "USE_PBR";
+        defines[def_it].Definition = "1";
+        def_it++;
+    }
 
     // options
     {

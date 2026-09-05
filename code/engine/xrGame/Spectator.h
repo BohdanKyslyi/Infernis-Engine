@@ -1,6 +1,3 @@
-#ifndef __SPECTATOR_H__
-#define __SPECTATOR_H__
-
 #pragma once
 
 #include "../xrEngine/feel_touch.h"
@@ -9,16 +6,15 @@
 #include "entity.h"
 #include "actor_flags.h"
 
-// refs
 class CActor;
 
 class CSpectator : public CGameObject, public IInputReceiver {
 private:
-    typedef CGameObject inherited;
-    CTimer m_timer; // for pause case (in demo mode)
-    float m_fTimeDelta;
+    using inherited = CGameObject;
+    
+    CTimer m_timer; 
+    float m_fTimeDelta = EPS_S; 
 
-protected:
 public:
     enum EActorCameras {
         eacFreeFly = 0,
@@ -30,54 +26,49 @@ public:
     };
 
 private:
-    // Cameras
-    CCameraBase* cameras[eacMaxCam];
-    EActorCameras cam_active;
+    CCameraBase* cameras[eacMaxCam] = {nullptr};
+    EActorCameras cam_active = eacFreeLook;
+    EActorCameras m_last_camera = eacFreeLook;
 
-    int look_idx;
-
-    //------------------------------
-    void cam_Set(EActorCameras style);
-    void cam_Update(CActor* A = 0);
-
-    CActor* m_pActorToLookAt;
-    bool SelectNextPlayerToLook(bool const search_next);
-
-    void FirstEye_ToPlayer(CObject* pObject);
-
-    static const float cam_inert_value;
-    float prev_cam_inert_value;
+    int look_idx = 0;
+    CActor* m_pActorToLookAt = nullptr;
     shared_str m_last_player_name;
-    EActorCameras m_last_camera;
+
+    static constexpr float cam_inert_value = 0.7f; 
+    float prev_cam_inert_value = 0.0f;
+
+    void cam_Set(EActorCameras style);
+    void cam_Update(CActor* A = nullptr);
+    bool SelectNextPlayerToLook(bool const search_next);
+    void FirstEye_ToPlayer(CObject* pObject);
 
 public:
     CSpectator();
-    virtual ~CSpectator();
+    virtual ~CSpectator() override;
 
-    virtual void IR_OnMouseMove(int x, int y);
-    virtual void IR_OnKeyboardPress(int dik);
-    virtual void IR_OnKeyboardRelease(int dik);
-    virtual void IR_OnKeyboardHold(int dik);
-    virtual void shedule_Update(u32 T);
-    virtual void UpdateCL();
-    virtual BOOL net_Spawn(CSE_Abstract* DC);
-    virtual void net_Destroy();
+    // IInputReceiver Overrides
+    virtual void IR_OnMouseMove(int x, int y) override;
+    virtual void IR_OnKeyboardPress(int dik) override;
+    virtual void IR_OnKeyboardRelease(int dik) override;
+    virtual void IR_OnKeyboardHold(int dik) override;
 
-    virtual void Center(Fvector& C) const { C.set(Position()); }
-    virtual float Radius() const { return EPS; }
-    //	virtual const Fbox&		BoundingBox				()				const	{
-    //VERIFY2(renderable.visual,*cName()); return renderable.visual->vis.box;
-    //}
-    virtual CGameObject* cast_game_object() { return this; }
-    virtual IInputReceiver* cast_input_receiver() { return this; }
+    // CGameObject / CObject Overrides
+    virtual void shedule_Update(u32 T) override;
+    virtual void UpdateCL() override;
+    virtual BOOL net_Spawn(CSE_Abstract* DC) override;
+    virtual void net_Destroy() override;
+    virtual void net_Relcase(CObject* O) override;
 
-    virtual void net_Relcase(CObject* O);
-    void GetSpectatorString(string1024& pStr);
+    virtual void Center(Fvector& C) const override { C.set(Position()); }
+    [[nodiscard]] virtual float Radius() const override { return EPS; }
+    
+    [[nodiscard]] virtual CGameObject* cast_game_object() override { return this; }
+    [[nodiscard]] virtual IInputReceiver* cast_input_receiver() override { return this; }
 
-    virtual void On_SetEntity();
-    virtual void On_LostEntity();
+    void GetSpectatorString(string1024& pStr) const;
 
-    inline EActorCameras GetActiveCam() const { return cam_active; };
+    virtual void On_SetEntity() override;
+    virtual void On_LostEntity() override;
+
+    [[nodiscard]] inline EActorCameras GetActiveCam() const { return cam_active; }
 };
-
-#endif // __SPECTATOR_H__

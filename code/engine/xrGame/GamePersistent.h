@@ -91,6 +91,9 @@ public:
     virtual void SetBaseDof(const Fvector3& dof);
     virtual void OnSectorChanged(int sector);
     virtual void OnAssetsChanged();
+	
+    virtual void PlayParticle(LPCSTR name, const Fvector& pos) override;
+	virtual void ApplyLightningDamage(const Fvector& pos, float radius, float power) override;
 };
 
 IC CGamePersistent& GamePersistent() { return *((CGamePersistent*)g_pGamePersistent); }

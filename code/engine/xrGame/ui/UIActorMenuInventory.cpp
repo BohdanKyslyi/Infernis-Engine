@@ -28,13 +28,14 @@
 #include "../Antirad.h"
 #include "../CustomOutfit.h"
 #include "../ActorHelmet.h"
-#include "../UserBackpack.h"
 #include "../UICursor.h"
 #include "../player_hud.h"
 #include "../CustomDetector.h"
 #include "../PDA.h"
 
 #include "../actor_defs.h"
+#include "../UserBackpack.h"
+#include "../NoirInventorySlots.h"
 
 void move_item_from_to(u16 from_id, u16 to_id, u16 what_id);
 
@@ -44,11 +45,18 @@ void CUIActorMenu::InitInventoryMode() {
     m_pInventoryOutfitList->Show(true);
     m_pInventoryHelmetList->Show(true);
     m_pInventoryDetectorList->Show(true);
-	m_pInventoryKnifeList->Show(true);
-	m_pInventoryBinocularList->Show(true);
-	m_pInventoryBackpackList->Show(true);
     m_pInventoryPistolList->Show(true);
     m_pInventoryAutomaticList->Show(true);
+    if (m_pInventoryKnifeList)
+        m_pInventoryKnifeList->Show(true);
+    if (m_pInventoryBinocularList)
+        m_pInventoryBinocularList->Show(true);
+    if (m_pInventoryBackpackList)
+        m_pInventoryBackpackList->Show(true);
+    if (m_pInventoryTorchList)
+        m_pInventoryTorchList->Show(true);
+    if (m_pInventoryExtraPistolList)
+        m_pInventoryExtraPistolList->Show(true);
     m_pQuickSlot->Show(true);
     m_pTrashList->Show(true);
     m_RightDelimiter->Show(false);
@@ -211,12 +219,21 @@ bool RemoveItemFromList(CUIDragDropListEx* lst, PIItem pItem) { // fixme
 }
 
 void CUIActorMenu::OnInventoryAction(PIItem pItem, u16 action_type) {
-    CUIDragDropListEx* all_lists[] = { m_pInventoryBeltList,      m_pInventoryPistolList,
-                                       m_pInventoryAutomaticList, m_pInventoryOutfitList,
-                                       m_pInventoryHelmetList,    m_pInventoryDetectorList,
-									   m_pInventoryKnifeList,     m_pInventoryBinocularList,
-                                       m_pInventoryBackpackList,  m_pInventoryBagList,
-                                       m_pTradeActorBagList,      m_pTradeActorList, NULL };
+    CUIDragDropListEx* all_lists[] = { m_pInventoryBeltList,
+                                       m_pInventoryPistolList,
+                                       m_pInventoryAutomaticList,
+                                       m_pInventoryKnifeList,
+                                       m_pInventoryBinocularList,
+                                       m_pInventoryBackpackList,
+                                       m_pInventoryTorchList,
+                                       m_pInventoryExtraPistolList,
+                                       m_pInventoryOutfitList,
+                                       m_pInventoryHelmetList,
+                                       m_pInventoryDetectorList,
+                                       m_pInventoryBagList,
+                                       m_pTradeActorBagList,
+                                       m_pTradeActorList };
+    const u32 all_lists_count = sizeof(all_lists) / sizeof(all_lists[0]);
 
     switch (action_type) {
     case GE_TRADE_BUY:
@@ -246,8 +263,11 @@ void CUIActorMenu::OnInventoryAction(PIItem pItem, u16 action_type) {
                 lst_to_add = GetListByType(iDeadBodyBag);
         }
 
-        while (all_lists[i]) {
-            CUIDragDropListEx* curr = all_lists[i];
+        while (i < all_lists_count) {
+            CUIDragDropListEx* curr = all_lists[i++];
+            if (!curr)
+                continue;
+
             CUICellItem* ci = NULL;
 
             if (FindItemInList(curr, pItem, ci)) {
@@ -258,7 +278,6 @@ void CUIActorMenu::OnInventoryAction(PIItem pItem, u16 action_type) {
                 }
                 // break;
             }
-            ++i;
         }
         CUICellItem* ci = NULL;
         if (GetMenuMode() == mmDeadBodySearch && FindItemInList(m_pDeadBodyBagList, pItem, ci))
@@ -285,16 +304,17 @@ void CUIActorMenu::OnInventoryAction(PIItem pItem, u16 action_type) {
             }
         }
 
-        u32 i = 0;
-        while (all_lists[i]) {
+        for (u32 i = 0; i < all_lists_count; ++i) {
             CUIDragDropListEx* curr = all_lists[i];
+            if (!curr)
+                continue;
+
             if (RemoveItemFromList(curr, pItem)) {
 #ifndef MASTER_GOLD
                 Msg("all ok. item [%d] removed from list", pItem->object_id());
 #endif // #ifndef MASTER_GOLD
                 break;
             }
-            ++i;
         }
         if (m_pActorInvOwner)
             m_pQuickSlot->ReloadReferences(m_pActorInvOwner);
@@ -345,6 +365,9 @@ void CUIActorMenu::InitCellForSlot(u16 slot_idx) {
     }
 
     CUIDragDropListEx* curr_list = GetSlotList(slot_idx);
+    if (!curr_list)
+        return;
+
     CUICellItem* cell_item = create_cell_item(item);
     curr_list->SetItem(cell_item);
     if (m_currMenuMode == mmTrade && m_pPartnerInvOwner)
@@ -367,15 +390,17 @@ void CUIActorMenu::InitInventoryContents(CUIDragDropListEx* pBagList) {
 
     CUIDragDropListEx* curr_list = NULL;
     // Slots
+    InitCellForSlot(KNIFE_SLOT);
     InitCellForSlot(INV_SLOT_2);
     InitCellForSlot(INV_SLOT_3);
+    InitCellForSlot(BINOCULAR_SLOT);
+    InitCellForSlot(TORCH_SLOT);
+    InitCellForSlot(EXTRA_PISTOL_SLOT);
     InitCellForSlot(OUTFIT_SLOT);
     InitCellForSlot(DETECTOR_SLOT);
-	InitCellForSlot(KNIFE_SLOT);
-	InitCellForSlot(BINOCULAR_SLOT);
-	InitCellForSlot(BACKPACK_SLOT);
     InitCellForSlot(GRENADE_SLOT);
     InitCellForSlot(HELMET_SLOT);
+	InitCellForSlot(BACKPACK_SLOT);
 
     curr_list = m_pInventoryBeltList;
     TIItemContainer::iterator itb = m_pActorInvOwner->inventory().m_belt.begin();
@@ -440,12 +465,14 @@ bool CUIActorMenu::ToSlot(CUICellItem* itm, bool force_place, u16 slot_id) {
         if (pOutfit && !pOutfit->bIsHelmetAvaliable)
             return false;
     }
-	
-	if (slot_id == BACKPACK_SLOT) {
-		CCustomOutfit* pOutfit = m_pActorInvOwner->GetOutfit();
-		if(pOutfit && !pOutfit->bIsBackpackAvaliable)
-			return false;
-	}
+    if (slot_id == BACKPACK_SLOT) {
+        if (!NoirInventorySlots::BackpackEnabled())
+            return false;
+
+        CCustomOutfit* pOutfit = m_pActorInvOwner->GetOutfit();
+        if (pOutfit && !pOutfit->bIsBackpackAvaliable)
+            return false;
+    }
 
     if (m_pActorInvOwner->inventory().CanPutInSlot(iitem, slot_id)) {
         CUIDragDropListEx* new_owner = GetSlotList(slot_id);
@@ -463,13 +490,13 @@ bool CUIActorMenu::ToSlot(CUICellItem* itm, bool force_place, u16 slot_id) {
                     ToBag(helmet_cell, false);
                 }
             }
-			if (pOutfit && !pOutfit->bIsBackpackAvaliable) {
-				CUIDragDropListEx* backpack_list = GetSlotList(BACKPACK_SLOT);
-				if (backpack_list->ItemsCount() == 1) {
-					CUICellItem* backpack_cell = backpack_list->GetItemIdx(0);
-					ToBag(backpack_cell, false);
-				}
-			}
+            if (pOutfit && !pOutfit->bIsBackpackAvaliable) {
+                CUIDragDropListEx* backpack_list = GetSlotList(BACKPACK_SLOT);
+                if (backpack_list && backpack_list->ItemsCount() == 1) {
+                    CUICellItem* backpack_cell = backpack_list->GetItemIdx(0);
+                    ToBag(backpack_cell, false);
+                }
+            }
         }
 
         bool result = (!b_own_item) || m_pActorInvOwner->inventory().Slot(slot_id, iitem);
@@ -501,9 +528,14 @@ bool CUIActorMenu::ToSlot(CUICellItem* itm, bool force_place, u16 slot_id) {
         if (slot_id == INV_SLOT_3 && m_pActorInvOwner->inventory().CanPutInSlot(iitem, INV_SLOT_2))
             return ToSlot(itm, force_place, INV_SLOT_2);
 
+        if (iitem->BaseSlot() == INV_SLOT_2 && slot_id != EXTRA_PISTOL_SLOT &&
+            m_pActorInvOwner->inventory().CanPutInSlot(iitem, EXTRA_PISTOL_SLOT))
+            return ToSlot(itm, force_place, EXTRA_PISTOL_SLOT);
+
         PIItem _iitem = m_pActorInvOwner->inventory().ItemFromSlot(slot_id);
         CUIDragDropListEx* slot_list = GetSlotList(slot_id);
-        VERIFY(slot_list->ItemsCount() == 1);
+        if (!_iitem || !slot_list || slot_list->ItemsCount() != 1)
+            return false;
 
         CUICellItem* slot_cell = slot_list->GetItemIdx(0);
         VERIFY(slot_cell && ((PIItem)slot_cell->m_pData) == _iitem);
@@ -620,6 +652,9 @@ CUIDragDropListEx* CUIActorMenu::GetSlotList(u16 slot_idx) {
         return NULL;
     }
     switch (slot_idx) {
+    case KNIFE_SLOT:
+        return m_pInventoryKnifeList;
+
     case INV_SLOT_2:
         return m_pInventoryPistolList;
         break;
@@ -627,6 +662,15 @@ CUIDragDropListEx* CUIActorMenu::GetSlotList(u16 slot_idx) {
     case INV_SLOT_3:
         return m_pInventoryAutomaticList;
         break;
+
+    case BINOCULAR_SLOT:
+        return m_pInventoryBinocularList;
+
+    case TORCH_SLOT:
+        return m_pInventoryTorchList;
+
+    case EXTRA_PISTOL_SLOT:
+        return m_pInventoryExtraPistolList;
 
     case OUTFIT_SLOT:
         return m_pInventoryOutfitList;
@@ -639,14 +683,6 @@ CUIDragDropListEx* CUIActorMenu::GetSlotList(u16 slot_idx) {
     case DETECTOR_SLOT:
         return m_pInventoryDetectorList;
         break;
-		
-	case KNIFE_SLOT:
-		return m_pInventoryKnifeList;
-		break;
-		
-	case BINOCULAR_SLOT:
-		return m_pInventoryBinocularList;
-		break;
 
 	case BACKPACK_SLOT:
 		return m_pInventoryBackpackList;
@@ -779,7 +815,7 @@ void CUIActorMenu::ActivatePropertiesBox() {
 void CUIActorMenu::PropertiesBoxForSlots(PIItem item, bool& b_show) {
     CCustomOutfit* pOutfit = smart_cast<CCustomOutfit*>(item);
     CHelmet* pHelmet = smart_cast<CHelmet*>(item);
-	CBackpack* pBackpack = smart_cast<CBackpack*>( item );
+    CBackpack* pBackpack = smart_cast<CBackpack*>(item);
     CInventory& inv = m_pActorInvOwner->inventory();
 
     // Флаг-признак для невлючения пункта контекстного меню: Dreess Outfit, если костюм уже надет
@@ -799,14 +835,12 @@ void CUIActorMenu::PropertiesBoxForSlots(PIItem item, bool& b_show) {
     if (item->Ruck() && inv.CanPutInRuck(item) &&
         (cur_slot == NO_ACTIVE_SLOT || !inv.SlotIsPersistent(cur_slot))) {
         if (!pOutfit) {
-            if (!pHelmet)
-			{
-				if( !pBackpack )
-					m_UIPropertiesBox->AddItem( "st_move_to_bag",  NULL, INVENTORY_TO_BAG_ACTION );
-				else
-					m_UIPropertiesBox->AddItem( "st_undress_backpack",  NULL, INVENTORY_TO_BAG_ACTION );
-			}
-            else
+            if (!pHelmet) {
+                if (!pBackpack)
+                    m_UIPropertiesBox->AddItem("st_move_to_bag", NULL, INVENTORY_TO_BAG_ACTION);
+                else
+                    m_UIPropertiesBox->AddItem("st_undress_backpack", NULL, INVENTORY_TO_BAG_ACTION);
+            } else
                 m_UIPropertiesBox->AddItem("st_undress_helmet", NULL, INVENTORY_TO_BAG_ACTION);
         } else
             m_UIPropertiesBox->AddItem("st_undress_outfit", NULL, INVENTORY_TO_BAG_ACTION);
@@ -824,7 +858,7 @@ void CUIActorMenu::PropertiesBoxForSlots(PIItem item, bool& b_show) {
         m_UIPropertiesBox->AddItem("st_dress_helmet", NULL, INVENTORY_TO_SLOT_ACTION);
         b_show = true;
     }
-	if (pBackpack && !bAlreadyDressed && (!outfit_in_slot || outfit_in_slot->bIsBackpackAvaliable)) {
+	if (NoirInventorySlots::BackpackEnabled() && pBackpack && !bAlreadyDressed && (!outfit_in_slot || outfit_in_slot->bIsBackpackAvaliable)) {
 		m_UIPropertiesBox->AddItem( "st_dress_backpack",  NULL, INVENTORY_TO_SLOT_ACTION );
 		b_show = true;
 	}
@@ -879,76 +913,39 @@ void CUIActorMenu::PropertiesBoxForWeapon(CUICellItem* cell_item, PIItem item, b
 }
 #include "../string_table.h"
 void CUIActorMenu::PropertiesBoxForAddon(PIItem item, bool& b_show) {
-    //присоединение аддонов к активному слоту (2 или 3)
+    CScope* scope = smart_cast<CScope*>(item);
+    CSilencer* silencer = smart_cast<CSilencer*>(item);
+    CGrenadeLauncher* grenade_launcher = smart_cast<CGrenadeLauncher*>(item);
 
-    CScope* pScope = smart_cast<CScope*>(item);
-    CSilencer* pSilencer = smart_cast<CSilencer*>(item);
-    CGrenadeLauncher* pGrenadeLauncher = smart_cast<CGrenadeLauncher*>(item);
-    CInventory* inv = &m_pActorInvOwner->inventory();
-
-    PIItem item_in_slot_2 = inv->ItemFromSlot(INV_SLOT_2);
-    PIItem item_in_slot_3 = inv->ItemFromSlot(INV_SLOT_3);
-
-    if (!item_in_slot_2 && !item_in_slot_3)
-        return;
-
-    if (pScope) {
-        if (item_in_slot_2 && item_in_slot_2->CanAttach(pScope)) {
-            shared_str str = CStringTable().translate("st_attach_scope_to_pistol");
-            str.printf("%s %s", str.c_str(), item_in_slot_2->m_name.c_str());
-            m_UIPropertiesBox->AddItem(str.c_str(), (void*)item_in_slot_2, INVENTORY_ATTACH_ADDON);
-            //			m_UIPropertiesBox->AddItem( "st_attach_scope_to_pistol",  (void*)item_in_slot_2,
-            //INVENTORY_ATTACH_ADDON );
-            b_show = true;
-        }
-        if (item_in_slot_3 && item_in_slot_3->CanAttach(pScope)) {
-            shared_str str = CStringTable().translate("st_attach_scope_to_pistol");
-            str.printf("%s %s", str.c_str(), item_in_slot_3->m_name.c_str());
-            m_UIPropertiesBox->AddItem(str.c_str(), (void*)item_in_slot_3, INVENTORY_ATTACH_ADDON);
-            //			m_UIPropertiesBox->AddItem( "st_attach_scope_to_rifle",  (void*)item_in_slot_3,
-            //INVENTORY_ATTACH_ADDON );
-            b_show = true;
-        }
+    CInventoryItem* addon = NULL;
+    LPCSTR translation_id = NULL;
+    if (scope) {
+        addon = scope;
+        translation_id = "st_attach_scope_to_pistol";
+    } else if (silencer) {
+        addon = silencer;
+        translation_id = "st_attach_silencer_to_pistol";
+    } else if (grenade_launcher) {
+        addon = grenade_launcher;
+        translation_id = "st_attach_gl_to_rifle";
+    } else {
         return;
     }
 
-    if (pSilencer) {
-        if (item_in_slot_2 && item_in_slot_2->CanAttach(pSilencer)) {
-            shared_str str = CStringTable().translate("st_attach_silencer_to_pistol");
-            str.printf("%s %s", str.c_str(), item_in_slot_2->m_name.c_str());
-            m_UIPropertiesBox->AddItem(str.c_str(), (void*)item_in_slot_2, INVENTORY_ATTACH_ADDON);
-            //			m_UIPropertiesBox->AddItem( "st_attach_silencer_to_pistol",
-            //(void*)item_in_slot_2, INVENTORY_ATTACH_ADDON );
-            b_show = true;
-        }
-        if (item_in_slot_3 && item_in_slot_3->CanAttach(pSilencer)) {
-            shared_str str = CStringTable().translate("st_attach_silencer_to_pistol");
-            str.printf("%s %s", str.c_str(), item_in_slot_3->m_name.c_str());
-            m_UIPropertiesBox->AddItem(str.c_str(), (void*)item_in_slot_3, INVENTORY_ATTACH_ADDON);
-            //			m_UIPropertiesBox->AddItem( "st_attach_silencer_to_rifle",
-            //(void*)item_in_slot_3, INVENTORY_ATTACH_ADDON );
-            b_show = true;
-        }
-        return;
-    }
+    CInventory& inventory = m_pActorInvOwner->inventory();
+    PIItem weapon_slots[] = { inventory.ItemFromSlot(INV_SLOT_2),
+                              inventory.ItemFromSlot(INV_SLOT_3),
+                              inventory.ItemFromSlot(EXTRA_PISTOL_SLOT) };
 
-    if (pGrenadeLauncher) {
-        if (item_in_slot_2 && item_in_slot_2->CanAttach(pGrenadeLauncher)) {
-            shared_str str = CStringTable().translate("st_attach_gl_to_rifle");
-            str.printf("%s %s", str.c_str(), item_in_slot_2->m_name.c_str());
-            m_UIPropertiesBox->AddItem(str.c_str(), (void*)item_in_slot_2, INVENTORY_ATTACH_ADDON);
-            //			m_UIPropertiesBox->AddItem( "st_attach_gl_to_pistol",  (void*)item_in_slot_2,
-            //INVENTORY_ATTACH_ADDON );
-            b_show = true;
-        }
-        if (item_in_slot_3 && item_in_slot_3->CanAttach(pGrenadeLauncher)) {
-            shared_str str = CStringTable().translate("st_attach_gl_to_rifle");
-            str.printf("%s %s", str.c_str(), item_in_slot_3->m_name.c_str());
-            m_UIPropertiesBox->AddItem(str.c_str(), (void*)item_in_slot_3, INVENTORY_ATTACH_ADDON);
-            //			m_UIPropertiesBox->AddItem( "st_attach_gl_to_rifle",  (void*)item_in_slot_3,
-            //INVENTORY_ATTACH_ADDON );
-            b_show = true;
-        }
+    for (u32 i = 0; i < sizeof(weapon_slots) / sizeof(weapon_slots[0]); ++i) {
+        PIItem weapon = weapon_slots[i];
+        if (!weapon || !weapon->CanAttach(addon))
+            continue;
+
+        shared_str text = CStringTable().translate(translation_id);
+        text.printf("%s %s", text.c_str(), weapon->m_name.c_str());
+        m_UIPropertiesBox->AddItem(text.c_str(), (void*)weapon, INVENTORY_ATTACH_ADDON);
+        b_show = true;
     }
 }
 
@@ -1146,11 +1143,12 @@ void CUIActorMenu::UpdateOutfit() {
     else
         m_HelmetOver->Show(false);
 
-	if(outfit && !outfit->bIsBackpackAvaliable)
-		m_BackpackOver->Show(true);
-	else
-		m_BackpackOver->Show(false);
-	
+    if (m_BackpackOver) {
+        if (outfit && !outfit->bIsBackpackAvaliable)
+            m_BackpackOver->Show(true);
+        else
+            m_BackpackOver->Show(false);
+    }
     if (!outfit) {
         MoveArtefactsToBag();
         return;

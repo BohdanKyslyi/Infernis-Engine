@@ -591,3 +591,23 @@ LPCSTR CScriptGameObject::get_smart_cover_description() const {
 
 void CScriptGameObject::set_visual_name(LPCSTR visual) { object().cNameVisual_set(visual); }
 LPCSTR CScriptGameObject::get_visual_name() const { return object().cNameVisual().c_str(); }
+
+void CScriptGameObject::SetReverseGravity(bool state) {
+    CActor* actor = smart_cast<CActor*>(&object());
+    if (actor) {
+        actor->SetReverseGravity(state);
+    }
+}
+
+void CScriptGameObject::StartOrbitAnomaly(Fvector* center, float radius) {
+    CActor* actor = smart_cast<CActor*>(&object());
+    if (actor && center) actor->StartOrbitAnomaly(*center, radius);
+}
+void CScriptGameObject::SetOrbitAttack() {
+    CActor* actor = smart_cast<CActor*>(&object());
+    if (actor) actor->SetOrbitAttack();
+}
+void CScriptGameObject::StopOrbitAnomaly() {
+    CActor* actor = smart_cast<CActor*>(&object());
+    if (actor) actor->StopOrbitAnomaly();
+}

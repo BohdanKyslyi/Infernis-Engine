@@ -308,8 +308,8 @@ public:
     bool GiveInfoPortion(LPCSTR info_id);
     bool DisableInfoPortion(LPCSTR info_id);
     void GiveGameNews(LPCSTR caption, LPCSTR news, LPCSTR texture_name, int delay, int show_time);
-    void GiveGameNews(LPCSTR caption, LPCSTR news, LPCSTR texture_name, int delay, int show_time,
-                      int type);
+    void GiveGameNews(LPCSTR caption, LPCSTR news, LPCSTR texture_name, int delay, int show_time, int type);
+	void GiveGameNewsSilent(LPCSTR caption, LPCSTR news, LPCSTR texture_name, int delay, int show_time);
 
     void AddIconedTalkMessage_old(LPCSTR text, LPCSTR texture_name, LPCSTR templ_name){};
     void AddIconedTalkMessage(LPCSTR caption, LPCSTR text, LPCSTR texture_name, LPCSTR templ_name);
@@ -523,6 +523,12 @@ public:
                     u32 min_stop_time);
     void play_sound(u32 internal_type, u32 max_start_time, u32 min_start_time, u32 max_stop_time,
                     u32 min_stop_time, u32 id);
+					
+	void SetReverseGravity(bool state);
+	
+	void StartOrbitAnomaly(Fvector* center, float radius);
+	void SetOrbitAttack();
+	void StopOrbitAnomaly();
 
     void set_item(MonsterSpace::EObjectAction object_action);
     void set_item(MonsterSpace::EObjectAction object_action, CScriptGameObject* game_object);
@@ -776,7 +782,15 @@ public:
     void lock_door_for_npc();
     void unlock_door_for_npc();
     bool is_door_blocked_by_npc() const;
+	bool actor_torch_enabled() const;
+	float get_luminocity() const;
+	float get_suspicion_to_actor() const;
+	bool is_in_actor_sight() const;
     bool is_weapon_going_to_be_strapped(CScriptGameObject const* object) const;
+	// Custom Bone IK tracking
+    void force_bone_look_obj(LPCSTR bone_name, CScriptGameObject* target);
+    void force_bone_look_pos(LPCSTR bone_name, Fvector pos);
+    void restore_bone_look(LPCSTR bone_name);
 
     doors::door* m_door;
 

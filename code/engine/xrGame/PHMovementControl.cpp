@@ -908,6 +908,7 @@ void CPHMovementControl::CheckEnvironment(const Fvector& /**V/**/) {
         eEnvironment = peInAir;
         break;
     case peAtWall:
+		Msg("~ DEBUG [LADDER]: CheckEnvironment peAtWall!");
         eEnvironment = peAtWall;
         break;
     }

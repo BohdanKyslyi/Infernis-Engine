@@ -97,12 +97,9 @@ using xr_vector = std::vector<T, allocator>;
 
 template <typename T, typename Alloc>
 void clearAndReserve(xr_vector<T, Alloc>& vec) {
-    if (vec.capacity() <= (vec.size() / 2))
-        vec.clear();
-    else {
-        vec.shrink_to_fit();
-        vec.clear();
-    }
+    // This helper is used in per-frame/per-update hot paths. Releasing the
+    // capacity here forces the next fill to allocate it all over again.
+    vec.clear();
 }
 
 // deque

@@ -12,6 +12,7 @@
 #include "object_broker.h"
 #include "ActorHelmet.h"
 #include "UserBackpack.h"
+#include "NoirInventorySlots.h"
 
 #define MAX_HEALTH 1.0f
 #define MIN_HEALTH -0.01f
@@ -287,8 +288,8 @@ float CEntityCondition::HitOutfitEffect(float hit_power, ALife::EHitType hit_typ
 
     CCustomOutfit* pOutfit = (CCustomOutfit*)pInvOwner->inventory().ItemFromSlot(OUTFIT_SLOT);
     CHelmet* pHelmet = (CHelmet*)pInvOwner->inventory().ItemFromSlot(HELMET_SLOT);
-	CBackpack* pBackpack = (CBackpack*)pInvOwner->inventory().ItemFromSlot(BACKPACK_SLOT);
-	if(!pOutfit && !pHelmet && !pBackpack)
+    CBackpack* pBackpack = (CBackpack*)pInvOwner->inventory().ItemFromSlot(BACKPACK_SLOT);
+    if (!pOutfit && !pHelmet && !pBackpack)
         return hit_power;
 
     float new_hit_power = hit_power;
@@ -297,9 +298,9 @@ float CEntityCondition::HitOutfitEffect(float hit_power, ALife::EHitType hit_typ
 
     if (pHelmet)
         new_hit_power = pHelmet->HitThroughArmor(new_hit_power, element, ap, add_wound, hit_type);
-	
-	if (pBackpack)
-		new_hit_power = pBackpack->HitThroughArmor(new_hit_power, element, ap, add_wound, hit_type);
+
+    if (pBackpack && NoirInventorySlots::BackpackEnabled())
+        new_hit_power = pBackpack->HitThroughArmor(new_hit_power, element, ap, add_wound, hit_type);
 
     if (bDebug)
         Msg("new_hit_power = %.3f  hit_type = %s  ap = %.3f", new_hit_power,

@@ -84,7 +84,7 @@ public:
 public:
     virtual void Load(LPCSTR section);
 
-    virtual LPCSTR NameItem(); // return <virtual> by Infernis (ну я)
+    virtual LPCSTR NameItem(); // remove <virtual> by sea
     virtual LPCSTR NameShort();
     virtual shared_str ItemDescription() { return m_Description; }
     virtual bool GetBriefInfo(II_BriefInfo& info) {
@@ -187,7 +187,6 @@ protected:
 
 protected:
     ALife::_TIME_ID m_dwItemIndependencyTime;
-
 
     float m_fControlInertionFactor;
     shared_str m_icon_name;

@@ -26,7 +26,7 @@
 ENGINE_API CRenderDevice Device;
 ENGINE_API CLoadScreenRenderer load_screen_renderer;
 
-ENGINE_API float IE_VIEWPORT_NEAR; // 0.05f - ‰Îˇ ˛ÁÛ ÒÛ˜‡ÒÌËı Á·ÓÈÓ‚Ëı Ô‡Í≥‚, 0.2f - ‰Îˇ ‚‡Ì≥Î¸ÌËı
+ENGINE_API float IE_VIEWPORT_NEAR; // 0.05f - –¥–ª—è —é–∑—É —Å—É—á–∞—Å–Ω–∏—Ö –∑–±—Ä–æ–π–æ–≤–∏—Ö –ø–∞–∫—ñ–≤, 0.2f - –¥–ª—è –≤–∞–Ω—ñ–ª—å–Ω–∏—Ö
 
 ENGINE_API BOOL g_bRendering = FALSE;
 
@@ -52,6 +52,7 @@ if (FAILED(_hr))
             }
     }
     */
+
     switch (m_pRender->GetDeviceState()) {
     case IRenderDeviceRender::dsOK:
         break;
@@ -365,6 +366,12 @@ void CRenderDevice::FrameMove() {
 
     dwTimeContinual = TimerMM.GetElapsed_ms() - app_inactive_time;
 
+    // Keep an unpaused wall-clock delta for frame-driven tools. In particular,
+    // debug free flight must remain usable while the simulation timer is paused.
+    fTimeDeltaReal = TimerFrame.GetElapsed_sec();
+    TimerFrame.Start();
+    if (!xr::valid(fTimeDeltaReal) || fTimeDeltaReal < 0.f)
+        fTimeDeltaReal = 0.f;
     if (psDeviceFlags.test(rsConstantFPS)) {
         // 20ms = 50fps
         // fTimeDelta		=	0.020f;
@@ -385,11 +392,15 @@ void CRenderDevice::FrameMove() {
             0.9f * fPreviousFrameTime; // smooth random system activity - worst case ~7% error
         // fTimeDelta = 0.7f * fTimeDelta + 0.3f*fPreviousFrameTime;			// smooth random
         // system activity
-        if (fTimeDelta > .1f)
-            fTimeDelta = .1f; // limit to 15fps minimum
+		if (fTimeDelta > .1f)
+            fTimeDelta = .1f; // limit to 10fps minimum (–Ω–∏–∂–Ω—è –º–µ–∂–∞)
 
-        if (fTimeDelta <= 0.f)
-            fTimeDelta = EPS_S + EPS_S; // limit to 15fps minimum
+        // Never clamp a frame delta up to a positive minimum. Doing so makes
+        // simulation time run faster than real time whenever FPS exceeds the
+        // corresponding limit. A zero delta is valid: the fixed-step physics
+        // accumulator simply waits for measurable wall-clock time.
+        if (!xr::valid(fTimeDelta) || fTimeDelta < 0.f)
+            fTimeDelta = 0.f;
 
         if (Paused())
             fTimeDelta = 0.0f;

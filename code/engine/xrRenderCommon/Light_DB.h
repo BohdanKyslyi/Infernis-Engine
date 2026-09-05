@@ -14,6 +14,9 @@ public:
     light_Package package;
 
 public:
+    CLight_DB() = default;
+    ~CLight_DB() = default;
+
     void add_light(light* L);
 
     void Load(IReader* fs);
@@ -22,9 +25,6 @@ public:
 #endif
     void Unload();
 
-    light* Create();
+    [[nodiscard]] light* Create();
     void Update();
-
-    CLight_DB();
-    ~CLight_DB();
 };

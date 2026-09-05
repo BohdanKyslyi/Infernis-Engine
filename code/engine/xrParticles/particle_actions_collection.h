@@ -1,15 +1,18 @@
 //---------------------------------------------------------------------------
 #ifndef particle_actions_collectionH
 #define particle_actions_collectionH
+#pragma once
 
 #include "particle_actions.h"
 #include "particle_core.h"
+
 namespace PAPI {
-#define _METHODS                                                            \
-    virtual void Load(IReader& F);                                          \
-    virtual void Save(IWriter& F);                                          \
-    virtual void Execute(ParticleEffect* pe, const float dt, float& m_max); \
-    virtual void Transform(const Fmatrix& m);
+
+#define _METHODS                                                                     \
+    virtual void Load(IReader& F) override;                                          \
+    virtual void Save(IWriter& F) override;                                          \
+    virtual void Execute(ParticleEffect* pe, const float dt, float& m_max) override; \
+    virtual void Transform(const Fmatrix& m) override;
 
 struct PARTICLES_API PAAvoid : public ParticleAction {
     pDomain positionL; // Avoid region (in local space)
@@ -18,7 +21,7 @@ struct PARTICLES_API PAAvoid : public ParticleAction {
     float magnitude;   // what percent of the way to go each time
     float epsilon;     // add to r^2 for softening
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PABounce : public ParticleAction {
@@ -28,13 +31,13 @@ struct PARTICLES_API PABounce : public ParticleAction {
     float resilience;       // Resilence perpendicular to surface
     float cutoffSqr;        // cutoff velocity; friction applies iff v > cutoff
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PACopyVertexB : public ParticleAction {
     BOOL copy_pos; // True to copy pos to posB.
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PADamping : public ParticleAction {
@@ -42,7 +45,7 @@ struct PARTICLES_API PADamping : public ParticleAction {
     float vlowSqr;   // Low and high cutoff velocities
     float vhighSqr;
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAExplosion : public ParticleAction {
@@ -54,7 +57,7 @@ struct PARTICLES_API PAExplosion : public ParticleAction {
     float age;       // How long it's been going on
     float epsilon;   // Softening parameter
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAFollow : public ParticleAction {
@@ -62,7 +65,7 @@ struct PARTICLES_API PAFollow : public ParticleAction {
     float epsilon;    // Softening parameter
     float max_radius; // Only influence particles within max_radius
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAGravitate : public ParticleAction {
@@ -70,14 +73,14 @@ struct PARTICLES_API PAGravitate : public ParticleAction {
     float epsilon;    // Softening parameter
     float max_radius; // Only influence particles within max_radius
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAGravity : public ParticleAction {
     pVector directionL; // Amount to increment velocity (in local space)
     pVector direction;  // Amount to increment velocity
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAJet : public ParticleAction {
@@ -89,14 +92,14 @@ struct PARTICLES_API PAJet : public ParticleAction {
     float epsilon;    // Softening parameter
     float max_radius; // Only influence particles within max_radius
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAKillOld : public ParticleAction {
     float age_limit;     // Exact age at which to kill particles.
     BOOL kill_less_than; // True to kill particles less than limit.
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAMatchVelocity : public ParticleAction {
@@ -104,11 +107,11 @@ struct PARTICLES_API PAMatchVelocity : public ParticleAction {
     float epsilon;    // Softening parameter
     float max_radius; // Only influence particles within max_radius
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAMove : public ParticleAction {
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAOrbitLine : public ParticleAction {
@@ -118,7 +121,7 @@ struct PARTICLES_API PAOrbitLine : public ParticleAction {
     float epsilon;     // Softening parameter
     float max_radius;  // Only influence particles within max_radius
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAOrbitPoint : public ParticleAction {
@@ -128,34 +131,34 @@ struct PARTICLES_API PAOrbitPoint : public ParticleAction {
     float epsilon;    // Softening parameter
     float max_radius; // Only influence particles within max_radius
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PARandomAccel : public ParticleAction {
     pDomain gen_accL; // The domain of random accelerations.(in local space)
     pDomain gen_acc;  // The domain of random accelerations.
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PARandomDisplace : public ParticleAction {
     pDomain gen_dispL; // The domain of random displacements.(in local space)
     pDomain gen_disp;  // The domain of random displacements.
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PARandomVelocity : public ParticleAction {
     pDomain gen_velL; // The domain of random velocities.(in local space)
     pDomain gen_vel;  // The domain of random velocities.
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PARestore : public ParticleAction {
     float time_left; // Time remaining until they should be in position.
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAScatter : public ParticleAction {
@@ -165,7 +168,7 @@ struct PARTICLES_API PAScatter : public ParticleAction {
     float epsilon;    // Softening parameter
     float max_radius; // Only influence particles within max_radius
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PASink : public ParticleAction {
@@ -173,7 +176,7 @@ struct PARTICLES_API PASink : public ParticleAction {
     pDomain positionL; // Disposal region (in local space)
     pDomain position;  // Disposal region
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PASinkVelocity : public ParticleAction {
@@ -181,22 +184,22 @@ struct PARTICLES_API PASinkVelocity : public ParticleAction {
     pDomain velocityL; // Disposal region (in local space)
     pDomain velocity;  // Disposal region
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PASpeedLimit : public ParticleAction {
     float min_speed; // Clamp speed to this minimum.
     float max_speed; // Clamp speed to this maximum.
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PASource : public ParticleAction {
     enum {
-        flSingleSize = (1ul << 29ul), // True to get positionB from position.
-        flSilent = (1ul << 30ul),
+        flSingleSize     = (1ul << 29ul), // True to get positionB from position.
+        flSilent         = (1ul << 30ul),
         flVertexB_tracks = (1ul << 31ul), // True to get positionB from position.
-        fl_FORCEDWORD = u32(-1)
+        fl_FORCEDWORD    = u32(-1)
     };
     pDomain positionL;   // Choose a position in this domain. (local_space)
     pDomain velocityL;   // Choose a velocity in this domain. (local_space)
@@ -212,7 +215,7 @@ struct PARTICLES_API PASource : public ParticleAction {
     pVector parent_vel;
     float parent_motion;
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PATargetColor : public ParticleAction {
@@ -223,21 +226,21 @@ struct PARTICLES_API PATargetColor : public ParticleAction {
     float timeFrom;
     float timeTo;
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PATargetSize : public ParticleAction {
     pVector size;  // Size to shift towards
     pVector scale; // Amount to shift by per frame (1 == all the way)
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PATargetRotate : public ParticleAction {
     pVector rot; // Rotation to shift towards
     float scale; // Amount to shift by per frame (1 == all the way)
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PATargetVelocity : public ParticleAction {
@@ -245,7 +248,7 @@ struct PARTICLES_API PATargetVelocity : public ParticleAction {
     pVector velocity;  // Velocity to shift towards
     float scale;       // Amount to shift by (1 == all the way)
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PAVortex : public ParticleAction {
@@ -257,7 +260,7 @@ struct PARTICLES_API PAVortex : public ParticleAction {
     float epsilon;    // Softening parameter
     float max_radius; // Only influence particles within max_radius
 
-    _METHODS;
+    _METHODS
 };
 
 struct PARTICLES_API PATurbulence : public ParticleAction {
@@ -268,9 +271,11 @@ struct PARTICLES_API PATurbulence : public ParticleAction {
     pVector offset;  // Offset
     float age;
 
-    _METHODS;
+    _METHODS
 };
-};
+
+#undef _METHODS 
+}; // namespace PAPI
 
 //---------------------------------------------------------------------------
 #endif

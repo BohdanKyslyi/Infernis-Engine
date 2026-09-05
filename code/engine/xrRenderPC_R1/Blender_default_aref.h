@@ -1,28 +1,24 @@
-// Blender_default_aref.h: interface for the CBlender_default_aref class.
-//
-//////////////////////////////////////////////////////////////////////
-
-#if !defined(AFX_BLENDER_DEFAULT_AREF_H__E17F011F_C371_4464_B75A_01D68F55FC4E__INCLUDED_)
-#define AFX_BLENDER_DEFAULT_AREF_H__E17F011F_C371_4464_B75A_01D68F55FC4E__INCLUDED_
+#ifndef BLENDER_DEFAULT_AREF_H
+#define BLENDER_DEFAULT_AREF_H
 #pragma once
 
-class CBlender_default_aref : public IBlender {
+class CBlender_default_aref final : public IBlender {
 public:
     xrP_Integer oAREF;
     xrP_BOOL oBlend;
 
 public:
-    virtual LPCSTR getComment() { return "LEVEL: lmap*base.aref"; }
-    virtual BOOL canBeDetailed() { return TRUE; }
-    virtual BOOL canBeLMAPped() { return TRUE; }
-
-    virtual void Save(IWriter& fs);
-    virtual void Load(IReader& fs, u16 version);
-
-    virtual void Compile(CBlender_Compile& C);
-
     CBlender_default_aref();
-    virtual ~CBlender_default_aref();
+    ~CBlender_default_aref() override = default;
+
+    [[nodiscard]] LPCSTR getComment() override { return "LEVEL: lmap*base.aref"; }
+    [[nodiscard]] BOOL canBeDetailed() override { return TRUE; }
+    [[nodiscard]] BOOL canBeLMAPped() override { return TRUE; }
+
+    void Save(IWriter& fs) override;
+    void Load(IReader& fs, u16 version) override;
+
+    void Compile(CBlender_Compile& C) override;
 };
 
-#endif // !defined(AFX_BLENDER_DEFAULT_AREF_H__E17F011F_C371_4464_B75A_01D68F55FC4E__INCLUDED_)
+#endif // BLENDER_DEFAULT_AREF_H

@@ -6,6 +6,10 @@
 #include "script_game_object.h"
 #include "script_game_object_impl.h"
 #include "InventoryOwner.h"
+#include "Torch.h"
+#include "visual_memory_manager.h"
+#include "memory_space.h"
+#include "actor_memory.h"
 #include "Pda.h"
 #include "xrMessages.h"
 #include "character_info.h"
@@ -93,6 +97,24 @@ void CScriptGameObject::GiveGameNews(LPCSTR caption, LPCSTR news, LPCSTR texture
 void CScriptGameObject::GiveGameNews(LPCSTR caption, LPCSTR news, LPCSTR texture_name, int delay,
                                      int show_time, int type) {
     _give_news(caption, news, texture_name, delay, show_time, type);
+}
+
+void CScriptGameObject::GiveGameNewsSilent(LPCSTR caption, LPCSTR text, LPCSTR texture_name, int delay, int show_time) {
+    GAME_NEWS_DATA news_data;
+    news_data.m_type = (GAME_NEWS_DATA::eNewsType)0;
+    news_data.news_caption = caption;
+    news_data.news_text = text;
+    
+    if (show_time != 0)
+        news_data.show_time = show_time; 
+
+    VERIFY(xr_strlen(texture_name) > 0);
+    news_data.texture_name = texture_name;
+
+    // Pass false to disable on-screen display and sound
+    if (Actor()) {
+        Actor()->AddGameNews(news_data, false);
+    }
 }
 
 void _give_news(LPCSTR caption, LPCSTR text, LPCSTR texture_name, int delay, int show_time,
@@ -1569,4 +1591,75 @@ bool CScriptGameObject::is_door_blocked_by_npc() const {
     VERIFY2(m_door, make_string("object %s hasn't been registered as a door already",
                                 m_game_object->cName().c_str()));
     return ai().doors().is_door_blocked(m_door);
+}
+
+bool CScriptGameObject::actor_torch_enabled() const {
+    CActor* pActor = smart_cast<CActor*>(&object());
+    if (!pActor) return false;
+
+    CInventoryItem* item = pActor->inventory().ItemFromSlot(TORCH_SLOT);
+    if (!item) return false;
+
+    CTorch* pTorch = smart_cast<CTorch*>(item);
+    if (!pTorch) return false;
+
+    return pTorch->torch_active(); 
+}
+
+float CScriptGameObject::get_luminocity() const {
+    // Check whether the object has a Render Scanner
+    if (!object().ROS()) {
+        return 0.0f;
+    }
+    // Return the current light level
+    return object().ROS()->get_luminocity(); 
+}
+
+float CScriptGameObject::get_suspicion_to_actor() const {
+    CAI_Stalker* stalker = smart_cast<CAI_Stalker*>(&object());
+    if (!stalker || !Actor()) return 0.0f;
+
+    if (stalker->memory().visual().visible_now(Actor())) {
+        return 1.0f;
+    }
+
+    const CVisualMemoryManager::CNotYetVisibleObject* not_seen = stalker->memory().visual().not_yet_visible_object(Actor());
+    if (not_seen) {
+        float threshold = stalker->memory().visual().visibility_threshold();
+        if (threshold > 0.0f) {
+            return not_seen->m_value / threshold;
+        }
+    }
+
+    return 0.0f; 
+}
+
+bool CScriptGameObject::is_in_actor_sight() const {
+    CActor* pActor = Actor();
+    if (!pActor) return false;
+
+    // 1. Перевіряємо оклюзію (стіни, геометрію). 
+    // Використовуємо AI-пам'ять Актора: якщо між нами геометрія, поверне false.
+    if (!pActor->memory().visual().visible_now(&object())) {
+        return false;
+    }
+
+    // 2. Перевіряємо кут огляду (щоб монстр був саме на екрані гравця).
+    Fvector cam_pos = Device.vCameraPosition;
+    Fvector cam_dir = Device.vCameraDirection;
+
+    Fvector target_pos;
+    object().Center(target_pos); // Беремо центр монстра
+
+    // Знаходимо напрямок від камери до монстра
+    Fvector dir_to_target;
+    dir_to_target.sub(target_pos, cam_pos).normalize_safe();
+
+    // Вираховуємо косинус кута. 
+    // 0.707f — це приблизно 45 градусів від центру екрана (загальний FOV 90).
+    if (cam_dir.dotproduct(dir_to_target) < 0.707f) {
+        return false; 
+    }
+
+    return true; // Монстр на екрані і його не закриває стіна!
 }

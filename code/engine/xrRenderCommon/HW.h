@@ -1,8 +1,4 @@
-// HW.h: interface for the CHW class.
-//
-//////////////////////////////////////////////////////////////////////
-
-#if !defined(AFX_HW_H__0E25CF4A_FFEC_11D3_B4E3_4854E82A090D__INCLUDED_)
+#ifndef AFX_HW_H__0E25CF4A_FFEC_11D3_B4E3_4854E82A090D__INCLUDED_
 #define AFX_HW_H__0E25CF4A_FFEC_11D3_B4E3_4854E82A090D__INCLUDED_
 #pragma once
 
@@ -16,9 +12,8 @@ class CHW
 #if defined(USE_DX10) || defined(USE_DX11)
     : public pureAppActivate,
       public pureAppDeactivate
-#endif //	USE_DX10
+#endif
 {
-    //	Functions section
 public:
     CHW();
     ~CHW();
@@ -26,9 +21,7 @@ public:
     void CreateD3D();
     void DestroyD3D();
     void CreateDevice(HWND hw, bool move_window);
-
     void DestroyDevice();
-
     void Reset(HWND hw);
 
     void selectResolution(u32& dwWidth, u32& dwHeight, BOOL bWindowed);
@@ -41,48 +34,47 @@ public:
 
 #ifdef DEBUG
 #if defined(USE_DX10) || defined(USE_DX11)
-    void Validate(void){};
-#else  //	USE_DX10
+    void Validate(void) {};
+#else 
     void Validate(void) {
         VERIFY(pDevice);
         VERIFY(pD3D);
     };
-#endif //	USE_DX10
+#endif 
 #else
-    void Validate(void){};
+    void Validate(void) {};
 #endif
 
-//	Variables section
-#if defined(USE_DX11) //	USE_DX10
+#if defined(USE_DX11) 
 public:
-    IDXGIAdapter* m_pAdapter;      //	pD3D equivalent
-    ID3D11Device* pDevice;         //	combine with DX9 pDevice via typedef
-    ID3D11DeviceContext* pContext; //	combine with DX9 pDevice via typedef
+    IDXGIAdapter* m_pAdapter;      
+    ID3D11Device* pDevice;         
+    ID3D11DeviceContext* pContext; 
     IDXGISwapChain* m_pSwapChain;
-    ID3D11RenderTargetView* pBaseRT; //	combine with DX9 pBaseRT via typedef
+    ID3D11RenderTargetView* pBaseRT; 
     ID3D11DepthStencilView* pBaseZB;
 
     CHWCaps Caps;
 
-    D3D_DRIVER_TYPE m_DriverType;     //	DevT equivalent
-    DXGI_SWAP_CHAIN_DESC m_ChainDesc; //	DevPP equivalent
+    D3D_DRIVER_TYPE m_DriverType;     
+    DXGI_SWAP_CHAIN_DESC m_ChainDesc; 
     bool m_bUsePerfhud;
     D3D_FEATURE_LEVEL FeatureLevel;
 #elif defined(USE_DX10)
 public:
-    IDXGIAdapter* m_pAdapter; //	pD3D equivalent
-    ID3D10Device1* pDevice1;  //	combine with DX9 pDevice via typedef
-    ID3D10Device* pDevice;    //	combine with DX9 pDevice via typedef
-    ID3D10Device1* pContext1; //	combine with DX9 pDevice via typedef
-    ID3D10Device* pContext;   //	combine with DX9 pDevice via typedef
+    IDXGIAdapter* m_pAdapter; 
+    ID3D10Device1* pDevice1;  
+    ID3D10Device* pDevice;    
+    ID3D10Device1* pContext1; 
+    ID3D10Device* pContext;   
     IDXGISwapChain* m_pSwapChain;
-    ID3D10RenderTargetView* pBaseRT; //	combine with DX9 pBaseRT via typedef
+    ID3D10RenderTargetView* pBaseRT; 
     ID3D10DepthStencilView* pBaseZB;
 
     CHWCaps Caps;
 
-    D3D10_DRIVER_TYPE m_DriverType;   //	DevT equivalent
-    DXGI_SWAP_CHAIN_DESC m_ChainDesc; //	DevPP equivalent
+    D3D10_DRIVER_TYPE m_DriverType;   
+    DXGI_SWAP_CHAIN_DESC m_ChainDesc; 
     bool m_bUsePerfhud;
     D3D_FEATURE_LEVEL FeatureLevel;
 #else
@@ -90,8 +82,8 @@ private:
     HINSTANCE hD3D;
 
 public:
-    IDirect3D9* pD3D;          // D3D
-    IDirect3DDevice9* pDevice; // render device
+    IDirect3D9* pD3D;          
+    IDirect3DDevice9* pDevice; 
 
     IDirect3DSurface9* pBaseRT;
     IDirect3DSurface9* pBaseZB;
@@ -101,18 +93,19 @@ public:
     UINT DevAdapter;
     D3DDEVTYPE DevT;
     D3DPRESENT_PARAMETERS DevPP;
-#endif //	USE_DX10
+#endif 
 
 #ifndef _MAYA_EXPORT
     stats_manager stats_manager;
 #endif
+
 #if defined(USE_DX10) || defined(USE_DX11)
     void UpdateViews();
     DXGI_RATIONAL selectRefresh(u32 dwWidth, u32 dwHeight, DXGI_FORMAT fmt);
 
     virtual void OnAppActivate();
     virtual void OnAppDeactivate();
-#endif //	USE_DX10
+#endif 
 
 private:
     bool m_move_window;
@@ -120,4 +113,4 @@ private:
 
 extern ECORE_API CHW HW;
 
-#endif // !defined(AFX_HW_H__0E25CF4A_FFEC_11D3_B4E3_4854E82A090D__INCLUDED_)
+#endif // AFX_HW_H__0E25CF4A_FFEC_11D3_B4E3_4854E82A090D__INCLUDED_

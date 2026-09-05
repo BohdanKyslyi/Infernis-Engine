@@ -1,0 +1,141 @@
+-- =======================================================
+-- Cinematic Director Module (director.script)
+-- Author: ADCU735 (CUDA735)
+-- Creation date: 24.04.2026
+-- Last edited: 25.04.2026
+-- =======================================================
+
+function get_client_obj(name)
+    local obj = get_story_object(name)
+    if obj then return obj end
+    
+    local sid = story_ids and story_ids[name]
+    local sv_obj = sid and alife():story_object(sid) or alife():object(name)
+    
+    if sv_obj then 
+        return level.object_by_id(sv_obj.id) 
+    end
+    return nil
+end
+
+-- ==================== CAMERA & FOCUS ====================
+
+function set_cam_cinematic_obj(target_name, time, approach_dist, target_fov)
+    local obj = get_client_obj(target_name)
+    if obj then
+        local dist = approach_dist and tonumber(approach_dist) or 0.0
+        local fov = target_fov and tonumber(target_fov) or 0.0
+        level.run_cinematic_camera_obj(obj:id(), time, dist, fov)
+    else
+        abort("! ERROR: director.set_cam_cinematic_obj - Target '%s' not found!", tostring(target_name))
+    end
+end
+
+function set_cam_cinematic_pos(x, y, z, time, approach_dist, target_fov)
+    local pos = vector():set(tonumber(x), tonumber(y), tonumber(z))
+    local dist = approach_dist and tonumber(approach_dist) or 0.0
+    local fov = target_fov and tonumber(target_fov) or 0.0
+    level.run_cinematic_camera_pos(pos, time, dist, fov)
+end
+
+function restore_cam_look(maintain)
+    level.restore_camera_look(maintain == true)
+end
+
+function set_fov(fov_value, time)
+    if level.set_fov_script then level.set_fov_script(fov_value, time) end
+end
+
+function restore_fov()
+    if level.restore_fov_script then level.restore_fov_script() end
+end
+
+function set_dof(power)
+    if level.set_dof_script then level.set_dof_script(power, power, power) end
+end
+
+function set_dof_obj(target_name, power)
+    local obj = get_client_obj(target_name)
+    if obj and level.set_dof_obj_script then
+        level.set_dof_obj_script(obj:id(), power, power)
+    else
+        abort("! ERROR: director.set_dof_obj - Target '%s' not found!", tostring(target_name))
+    end
+end
+
+function restore_dof()
+    if level.restore_dof_script then level.restore_dof_script() end
+end
+
+-- ==================== FLIGHT PATHS ====================
+
+-- Reads a patrol path and flies the camera. 
+-- If focus_target is provided, the camera will track that object while flying.
+function start_camera_flight_path(patrol_name, time, focus_target)
+    local path = patrol(patrol_name)
+    if not path then
+        abort("! ERROR: director.start_camera_flight - Patrol '%s' not found!", tostring(patrol_name))
+        return
+    end
+
+    level.flight_clear()
+    local count = path:count()
+    for i = 0, count - 1 do
+        level.flight_add_point(path:point(i))
+    end
+
+    if focus_target then
+        local obj = get_client_obj(focus_target)
+        if obj then
+            level.flight_start_look_obj(tonumber(time), obj:id())
+            abort("~ director: Flight along '%s' focusing on '%s'", patrol_name, focus_target)
+            return
+        end
+    end
+    
+    -- Fallback: Look forward
+    level.flight_start(tonumber(time))
+    abort("~ director: Forward flight along '%s'", patrol_name)
+end
+
+function hide_weapon()
+    if db.actor then db.actor:hide_weapon() end
+end
+
+function restore_weapon()
+    if db.actor then db.actor:restore_weapon() end
+end
+
+-- ==================== ACTOR CONTROL ====================
+
+function play_hud_anim(anim_name)
+    if anim_name then
+        level.play_hud_anim(tostring(anim_name))
+    else
+        abort("! ERROR: director.play_hud_anim - Animation name is missing!")
+    end
+end
+
+function actor_shoot_start(target_name)
+    set_cam_cinematic_obj(target_name, 0.2, 0.0, 0.0)
+    level.actor_fire_start()
+end
+
+function actor_shoot_stop()
+    level.actor_fire_stop()
+end
+
+-- ==================== AUDIO ====================
+
+function play_3d_sound(path, target_name, vol, pitch)
+    local obj = get_client_obj(target_name)
+    if obj then
+        level.play_sound_3d(path, obj:position(), vol or 1.0, pitch or 1.0)
+    else
+        abort("! ERROR: director.play_3d_sound - Target '%s' not found!", tostring(target_name))
+    end
+end
+
+function stop_custom_sounds()
+    level.stop_custom_sounds()
+end

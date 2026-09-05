@@ -18,33 +18,34 @@ public:
         u32 bShadow : 1;
         u32 bVolumetric : 1;
         u32 bHudMode : 1;
+    } flags{};
 
-    } flags;
-    Fvector position;
-    Fvector direction;
-    Fvector right;
-    float range;
-    float cone;
-    Fcolor color;
+    // C++11/17 Default Member Initialization
+    Fvector position{0.f, -1000.f, 0.f};
+    Fvector direction{0.f, -1.f, 0.f};
+    Fvector right{0.f, 0.f, 0.f};
+    float range{8.f};
+    float cone{deg2rad(60.f)};
+    Fcolor color{1.f, 1.f, 1.f, 1.f};
 
     vis_data hom;
-    u32 frame_render;
+    u32 frame_render{0};
 
-    float m_volumetric_quality;
-    float m_volumetric_intensity;
-    float m_volumetric_distance;
+    float m_volumetric_quality{1.f};
+    float m_volumetric_intensity{1.f};
+    float m_volumetric_distance{1.f};
 
 #if (RENDER == R_R2) || (RENDER == R_R3) || (RENDER == R_R4)
-    float falloff;      // precalc to make light equal to zero at light range
-    float attenuation0; // Constant attenuation
-    float attenuation1; // Linear attenuation
-    float attenuation2; // Quadratic attenuation
+    float falloff{0.f};      
+    float attenuation0{0.f}; 
+    float attenuation1{0.f}; 
+    float attenuation2{0.f}; 
 
-    light* omnipart[6];
+    light* omnipart[6]{nullptr}; 
     xr_vector<light_indirect> indirect;
-    u32 indirect_photons;
+    u32 indirect_photons{0};
 
-    smapvis svis; // used for 6-cubemap faces
+    smapvis svis; 
 
     ref_shader s_spot;
     ref_shader s_point;
@@ -54,19 +55,19 @@ public:
     ref_shader s_spot_msaa[8];
     ref_shader s_point_msaa[8];
     ref_shader s_volumetric_msaa[8];
-#endif //	(RENDER==R_R3) || (RENDER==R_R4)
+#endif // (RENDER==R_R3) || (RENDER==R_R4)
 
-    u32 m_xform_frame;
+    u32 m_xform_frame{0};
     Fmatrix m_xform;
 
     struct _vis {
-        u32 frame2test;  // frame the test is sheduled to
-        u32 query_id;    // ID of occlusion query
-        u32 query_order; // order of occlusion query
-        bool visible;    // visible/invisible
-        bool pending;    // test is still pending
+        u32 frame2test;  
+        u32 query_id;    
+        u32 query_order; 
+        bool visible;    
+        bool pending;    
         u16 smap_ID;
-    } vis;
+    } vis{};
 
     union _xform {
         struct _D {
@@ -91,34 +92,37 @@ public:
             BOOL transluent;
         } S;
     } X;
-#endif //	(RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
+#endif // (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
 
 public:
-    virtual void set_type(LT type) { flags.type = type; }
-    virtual void set_active(bool b);
-    virtual bool get_active() { return flags.bActive; }
-    virtual void set_shadow(bool b) { flags.bShadow = b; }
-    virtual void set_volumetric(bool b) { flags.bVolumetric = b; }
+    light();
+    ~light() override;
 
-    virtual void set_volumetric_quality(float fValue) { m_volumetric_quality = fValue; }
-    virtual void set_volumetric_intensity(float fValue) { m_volumetric_intensity = fValue; }
-    virtual void set_volumetric_distance(float fValue) { m_volumetric_distance = fValue; }
+    void set_type(LT type) override { flags.type = type; }
+    void set_active(bool b) override;
+    bool get_active() override { return flags.bActive; }
+    void set_shadow(bool b) override { flags.bShadow = b; }
+    void set_volumetric(bool b) override { flags.bVolumetric = b; }
 
-    virtual void set_position(const Fvector& P);
-    virtual void set_rotation(const Fvector& D, const Fvector& R);
-    virtual void set_cone(float angle);
-    virtual void set_range(float R);
-    virtual void set_virtual_size(float R){};
-    virtual void set_color(const Fcolor& C) { color.set(C); }
-    virtual void set_color(float r, float g, float b) { color.set(r, g, b, 1); }
-    virtual void set_texture(LPCSTR name);
-    virtual void set_hud_mode(bool b) { flags.bHudMode = b; }
-    virtual bool get_hud_mode() { return flags.bHudMode; };
+    void set_volumetric_quality(float fValue) override { m_volumetric_quality = fValue; }
+    void set_volumetric_intensity(float fValue) override { m_volumetric_intensity = fValue; }
+    void set_volumetric_distance(float fValue) override { m_volumetric_distance = fValue; }
 
-    virtual void spatial_move();
-    virtual Fvector spatial_sector_point();
+    void set_position(const Fvector& P) override;
+    void set_rotation(const Fvector& D, const Fvector& R) override;
+    void set_cone(float angle) override;
+    void set_range(float R) override;
+    void set_virtual_size(float R) override {};
+    void set_color(const Fcolor& C) override { color.set(C); }
+    void set_color(float r, float g, float b) override { color.set(r, g, b, 1.f); }
+    void set_texture(LPCSTR name) override;
+    void set_hud_mode(bool b) override { flags.bHudMode = b; }
+    bool get_hud_mode() override { return flags.bHudMode; }
 
-    virtual IRender_Light* dcast_Light() { return this; }
+    void spatial_move() override;
+    Fvector spatial_sector_point() override;
+
+    IRender_Light* dcast_Light() override { return this; }
 
     vis_data& get_homdata();
 #if (RENDER == R_R2) || (RENDER == R_R3) || (RENDER == R_R4)
@@ -130,10 +134,7 @@ public:
     void set_attenuation_params(float a0, float a1, float a2, float fo);
 #endif // (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
 
-    float get_LOD();
-
-    light();
-    virtual ~light();
+    [[nodiscard]] float get_LOD() const;
 };
 
-#endif // #define LAYERS_XRRENDER_LIGHT_H_INCLUDED
+#endif // LAYERS_XRRENDER_LIGHT_H_INCLUDED

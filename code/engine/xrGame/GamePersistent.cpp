@@ -29,6 +29,9 @@
 #include "../xrServerEntities/xrServer_Object_Base.h"
 #include "UI/UIGameTutorial.h"
 
+#include "Hit.h"           
+#include "entity_alive.h"   
+
 #ifndef MASTER_GOLD
 #include "custommonster.h"
 #endif // MASTER_GOLD
@@ -782,4 +785,49 @@ void CGamePersistent::OnSectorChanged(int sector) {
 void CGamePersistent::OnAssetsChanged() {
     IGame_Persistent::OnAssetsChanged();
     CStringTable().rescan();
+}
+
+void CGamePersistent::PlayParticle(LPCSTR name, const Fvector& pos) {
+    if (!name || name[0] == '\0') return;
+
+    CParticlesObject* pEff = CParticlesObject::Create(name, TRUE);
+    if (pEff) {
+        Fmatrix pos_mat;
+        pos_mat.translate(pos);
+        pEff->UpdateParent(pos_mat, Fvector().set(0.f, 0.f, 0.f));
+        pEff->Play(false);
+    }
+}
+
+void CGamePersistent::ApplyLightningDamage(const Fvector& pos, float radius, float power) {
+    if (!g_pGameLevel || radius <= 0.f || power <= 0.f) return;
+
+    for (u32 i = 0; i < Level().Objects.o_count(); ++i) {
+        CObject* obj = Level().Objects.o_get_by_iterator(i);
+        if (!obj) continue;
+
+        CEntityAlive* entity = smart_cast<CEntityAlive*>(obj);
+        if (entity && entity->g_Alive()) {
+            float dist = entity->Position().distance_to(pos);
+            
+            if (dist <= radius) {
+                float hit_power = power * (1.0f - (dist / radius)); 
+                
+				if (hit_power > 0.05f) {
+					SHit hit;
+					hit.hit_type = ALife::eHitTypeShock; 
+					hit.power = hit_power;
+					hit.impulse = hit_power * 150.f;     
+					
+					hit.dir.sub(entity->Position(), pos).normalize_safe();
+					
+					hit.who = entity;                    
+					hit.whoID = entity->ID();            
+					hit.weaponID = u16(-1);              
+					
+					entity->Hit(&hit);
+				}
+            }
+        }
+    }
 }

@@ -7,21 +7,19 @@
 class dxRainRender : public IRainRender {
 public:
     dxRainRender();
-    virtual ~dxRainRender();
-    virtual void Copy(IRainRender& _in);
+    virtual ~dxRainRender() override;
+    
+    virtual void Copy(IRainRender& _in) override;
+    virtual void Render(CEffect_Rain& owner) override;
 
-    virtual void Render(CEffect_Rain& owner);
-
-    virtual const Fsphere& GetDropBounds() const;
+    [[nodiscard]] virtual const Fsphere& GetDropBounds() const override;
 
 private:
-    // Visualization	(rain)
     ref_shader SH_Rain;
     ref_geom hGeom_Rain;
 
-    // Visualization	(drops)
-    IRender_DetailModel* DM_Drop;
+    IRender_DetailModel* DM_Drop{ nullptr };
     ref_geom hGeom_Drops;
 };
 
-#endif //	RainRender_included
+#endif // dxRainRender_included

@@ -1,0 +1,511 @@
+; ==================================================================================
+; NOIR ENGINE - AAA Audio Environments (OpenAL EFX)
+; ==================================================================================
+
+; ==================================================================================
+; NOIR ENGINE - AAA Audio Environments (OpenAL EFX)
+; ==================================================================================
+
+; ----------------------------------------------------------------------------------
+; ЧАСТИНА 1: ІНДУСТРІАЛЬНІ ТА ЖИТЛОВІ ПРИМІЩЕННЯ (INDOORS)
+; ----------------------------------------------------------------------------------
+
+[bathroom]
+; Ванна кімната: Кахель ідеально відбиває високі частоти. Звук надзвичайно дзвінкий.
+room                  = -1000
+room_hf               = -200
+decay_time            = 1.49
+decay_hf_ratio        = 1.5      ; Високі частоти живуть довше за низькі (резонанс кахлю)
+reflections           = -400
+reflections_delay     = 0.007    ; Стіни дуже близько
+reverb                = 200
+reverb_delay          = 0.011
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[room]
+; Стандартна порожня кімната з бетонними/шпалерними стінами.
+room                  = -1000
+room_hf               = -600
+decay_time            = 1.1
+decay_hf_ratio        = 0.83
+reflections           = -600
+reflections_delay     = 0.01
+reverb                = -400
+reverb_delay          = 0.015
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[livingroom]
+; Житлова кімната: Килими, дивани, штори. Звук сухий і "домашній".
+room                  = -1000
+room_hf               = -1500    ; Меблі з'їдають високі частоти
+decay_time            = 0.5
+decay_hf_ratio        = 0.1      ; Жодної дзвінкості
+reflections           = -1200
+reflections_delay     = 0.005
+reverb                = -1500
+reverb_delay          = 0.01
+room_rolloff_factor   = 0.0
+diffusion             = 0.6
+air_absorption_hf     = -5.0
+
+[carpeted_hallway]
+; Коридор із килимовим покриттям. Кроки звучать глухо.
+room                  = -1000
+room_hf               = -2000
+decay_time            = 0.3
+decay_hf_ratio        = 0.1
+reflections           = -1000
+reflections_delay     = 0.01
+reverb                = -1500
+reverb_delay          = 0.015
+room_rolloff_factor   = 0.0
+diffusion             = 0.8
+air_absorption_hf     = -5.0
+
+[hallway]
+; Звичайний голий коридор. Ефект "пурхаючої луни" від паралельних стін.
+room                  = -1000
+room_hf               = -300
+decay_time            = 1.49
+decay_hf_ratio        = 0.59
+reflections           = -300
+reflections_delay     = 0.007
+reverb                = 100
+reverb_delay          = 0.011
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[padded_cell]
+; М'яка кімната (Психіатрія). Абсолютне поглинання, моторошна тиша, ефект "тиску на вуха".
+room                  = -1000
+room_hf               = -6000
+decay_time            = 0.17     ; Майже миттєве загасання
+decay_hf_ratio        = 0.1
+reflections           = -2000
+reflections_delay     = 0.001
+reverb                = -3000
+reverb_delay          = 0.002
+room_rolloff_factor   = 0.0
+diffusion             = 0.1
+air_absorption_hf     = -5.0
+
+[stone_room]
+; Кам'яна кімната. Холодний, масивний звук.
+room                  = -1000
+room_hf               = -300
+decay_time            = 2.31
+decay_hf_ratio        = 0.64
+reflections           = -700
+reflections_delay     = 0.011
+reverb                = 100
+reverb_delay          = 0.016
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[stone_corridor]
+; Кам'яний коридор (наприклад, підвали Агропрому).
+room                  = -1000
+room_hf               = -237
+decay_time            = 2.70
+decay_hf_ratio        = 0.79
+reflections           = -1200
+reflections_delay     = 0.013
+reverb                = 300
+reverb_delay          = 0.020
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+; ----------------------------------------------------------------------------------
+; ЧАСТИНА 2: ВЕЛИКІ ТА ВІДКРИТІ ПРОСТОРУ (OUTDOORS & LARGE)
+; ----------------------------------------------------------------------------------
+
+[alley]
+; Вузьке провулок між будинками.
+room                  = -1000
+room_hf               = -270
+decay_time            = 1.49
+decay_hf_ratio        = 0.86
+reflections           = -1200
+reflections_delay     = 0.007
+reverb                = -4
+reverb_delay          = 0.011
+room_rolloff_factor   = 0.0
+diffusion             = 0.3      ; Звук розсіюється у відкрите небо
+air_absorption_hf     = -5.0
+
+[city]
+; Відкрите місто / Прип'ять. Рідкісні відбиття від далеких будівель.
+room                  = -1000
+room_hf               = -800
+decay_time            = 1.49
+decay_hf_ratio        = 0.67
+reflections           = -2200
+reflections_delay     = 0.05
+reverb                = -1000
+reverb_delay          = 0.08
+room_rolloff_factor   = 0.0
+diffusion             = 0.5
+air_absorption_hf     = -5.0
+
+[parkinglot]
+; Підземна парковка. Низька стеля, бетонні колони.
+room                  = -1000
+room_hf               = -250
+decay_time            = 1.65
+decay_hf_ratio        = 0.6
+reflections           = -400
+reflections_delay     = 0.008
+reverb                = 100
+reverb_delay          = 0.012
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[sewer_pipe]
+; Труба / Каналізація. Ефект циліндричного резонансу (дуже гучне відлуння).
+room                  = -1000
+room_hf               = -1000
+decay_time            = 2.81
+decay_hf_ratio        = 1.4      ; Високі частоти гуляють по колу труби
+reflections           = -200
+reflections_delay     = 0.014
+reverb                = 500
+reverb_delay          = 0.021
+room_rolloff_factor   = 0.0
+diffusion             = 0.8
+air_absorption_hf     = -5.0
+
+[cave]
+; Печера. Нерівні кам'яні склепіння.
+room                  = -1000
+room_hf               = -1000
+decay_time            = 2.9
+decay_hf_ratio        = 0.5
+reflections           = -800
+reflections_delay     = 0.015
+reverb                = -300
+reverb_delay          = 0.022
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[quarry]
+; Кар'єр (Янів). Твердий ґрунт і скелі навколо. Відбиття приходять із затримкою.
+room                  = -1000
+room_hf               = -1000
+decay_time            = 1.49
+decay_hf_ratio        = 0.83
+reflections           = -10000
+reflections_delay     = 0.061
+reverb                = 500
+reverb_delay          = 0.08
+room_rolloff_factor   = 0.0
+diffusion             = 0.7
+air_absorption_hf     = -5.0
+
+[mountains]
+; Гори. Відлуння дуже далеке (Slapback echo).
+room                  = -1000
+room_hf               = -2500
+decay_time            = 2.5
+decay_hf_ratio        = 0.2
+reflections           = -2000
+reflections_delay     = 0.3      ; Максимальна затримка перед першим відбиттям (скеля далеко)
+reverb                = -500
+reverb_delay          = 0.1      ; Максимальна затримка пізньої луни
+room_rolloff_factor   = 0.0
+diffusion             = 0.2
+air_absorption_hf     = -5.0
+
+[plain]
+; Рівнина / Луг. Звук просто летить і не повертається.
+room                  = -1000
+room_hf               = -2000
+decay_time            = 1.49
+decay_hf_ratio        = 0.5
+reflections           = -8000    ; Відбиватися немає від чого
+reflections_delay     = 0.1
+reverb                = -10000   ; Луни немає
+reverb_delay          = 0.1
+room_rolloff_factor   = 0.0
+diffusion             = 0.2
+air_absorption_hf     = -8.0     ; Повітря сильно "з'їдає" високі частоти на відстані
+
+[forest]
+; Ліс. Дерева і листя дають хаотичні, глухі відбиття.
+room                  = -1000
+room_hf               = -3000
+decay_time            = 1.49
+decay_hf_ratio        = 0.15     ; Листя - це ідеальний звукоізолятор
+reflections           = -2000
+reflections_delay     = 0.04
+reverb                = -2000
+reverb_delay          = 0.06
+room_rolloff_factor   = 0.0
+diffusion             = 0.3
+air_absorption_hf     = -6.0
+
+; ----------------------------------------------------------------------------------
+; ЧАСТИНА 3: ВЕЛИЧЕЗНІ АКУСТИЧНІ ПРОСТОРИ (GIGANTIC)
+; ----------------------------------------------------------------------------------
+
+[arena]
+; Арена / Стадіон.
+room                  = -1000
+room_hf               = -698
+decay_time            = 7.24     ; Грандіозне загасання
+decay_hf_ratio        = 0.33
+reflections           = -1166
+reflections_delay     = 0.020
+reverb                = 16
+reverb_delay          = 0.030
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[hangar]
+; Металевий ангар. Класика X-Ray.
+room                  = -1000
+room_hf               = -1000
+decay_time            = 10.05
+decay_hf_ratio        = 0.23     ; Високі частоти губляться, залишається низький гул
+reflections           = -600
+reflections_delay     = 0.020
+reverb                = 100
+reverb_delay          = 0.030
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[auditorium]
+; Аудиторія (наприклад, зал засідань на базі Волі).
+room                  = -1000
+room_hf               = -476
+decay_time            = 4.32
+decay_hf_ratio        = 0.59
+reflections           = -789
+reflections_delay     = 0.020
+reverb                = -289
+reverb_delay          = 0.030
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[concert_hall]
+; Концертний зал. Ідеально спроєктована акустика для гучного звуку.
+room                  = -1000
+room_hf               = -500
+decay_time            = 3.92
+decay_hf_ratio        = 0.70
+reflections           = -1230
+reflections_delay     = 0.020
+reverb                = -2
+reverb_delay          = 0.029
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+; ----------------------------------------------------------------------------------
+; ЧАСТИНА 4: СПЕЦЕФЕКТИ ТА АНОМАЛІЇ (SPECIAL FX)
+; ----------------------------------------------------------------------------------
+
+[under_water]
+; Під водою. Радикальне зрізання всіх високих частот. Ефект "вакууму".
+room                  = -1000
+room_hf               = -4000
+decay_time            = 1.49
+decay_hf_ratio        = 0.1
+reflections           = -500
+reflections_delay     = 0.007
+reverb                = 200
+reverb_delay          = 0.011
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[dizzy]
+; Запаморочення. Звук "пливе".
+room                  = -1000
+room_hf               = -400
+decay_time            = 17.23
+decay_hf_ratio        = 0.56
+reflections           = -1713
+reflections_delay     = 0.020
+reverb                = -613
+reverb_delay          = 0.030
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[drugged]
+; Наркотичне сп'яніння / Аптечка. Неприродна луна.
+room                  = -1000
+room_hf               = 0
+decay_time            = 8.39
+decay_hf_ratio        = 1.39     ; Шум у вухах (дзвін високих частот)
+reflections           = -115
+reflections_delay     = 0.002
+reverb                = 985
+reverb_delay          = 0.030
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[psychotic]
+; Психоз / Атака Контролера. Повний акустичний хаос і тиск.
+room                  = -1000
+room_hf               = -151
+decay_time            = 7.56
+decay_hf_ratio        = 0.91
+reflections           = -626
+reflections_delay     = 0.020
+reverb                = 774
+reverb_delay          = 0.030
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[generic]
+; Стандартний безпечний пресет (на випадок помилки).
+room                  = -1000
+room_hf               = -100
+decay_time            = 1.49
+decay_hf_ratio        = 0.83
+reflections           = -2602
+reflections_delay     = 0.007
+reverb                = 200
+reverb_delay          = 0.011
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+; ----------------------------------------------------------------------------------
+; NOIR ENGINE SPECIFIC
+; ----------------------------------------------------------------------------------
+
+[secret_lab]
+; Секретна лабораторія (X-18, X-16). 
+; Величезні підземні пустоти, бетон і метал. Звук холодний, моторошний, відлуння гуляє довго, але розсіюється через апаратуру.
+room                  = -1000
+room_hf               = -300
+decay_time            = 4.5       ; Луна живе дуже довго, створюючи напругу
+decay_hf_ratio        = 0.75      ; Метал відбиває дзвінкі звуки
+reflections           = -500
+reflections_delay     = 0.025     ; Перший удар звуку приходить із запізненням (високі стелі)
+reverb                = 200
+reverb_delay          = 0.035
+room_rolloff_factor   = 0.0
+diffusion             = 0.8       ; Колби та комп'ютери трохи розбивають звук
+air_absorption_hf     = -5.0
+
+[wooden_shack]
+; Дерев'яна хата (Село новачків, хатинка на болотах).
+; Дерево ідеально поглинає як низькі, так і високі частоти. Звук стає неймовірно "теплим" і коротким.
+room                  = -1000
+room_hf               = -1200     ; Дерево сильно з'їдає "дзвін"
+decay_time            = 0.5       ; Майже миттєве загасання
+decay_hf_ratio        = 0.3
+reflections           = -800
+reflections_delay     = 0.005     ; Стіни дуже близько
+reverb                = -1200     ; Пізньої луни майже немає
+reverb_delay          = 0.010
+room_rolloff_factor   = 0.0
+diffusion             = 0.6
+air_absorption_hf     = -5.0
+
+[warehouse]
+; Склад (набитий ящиками).
+; Приміщення велике, як ангар, але ящики працюють як акустичні пастки. Луна довга, але дуже глуха і розсіяна.
+room                  = -1000
+room_hf               = -800
+decay_time            = 3.5
+decay_hf_ratio        = 0.5
+reflections           = -600
+reflections_delay     = 0.020
+reverb                = -100
+reverb_delay          = 0.030
+room_rolloff_factor   = 0.0
+diffusion             = 0.95      ; Ящики ідеально розсіюють звук (висока дифузія)
+air_absorption_hf     = -5.0
+
+[vent_shaft]
+; Вентиляційна шахта / Металевий короб.
+; Максимальна клаустрофобія. Неймовірно сильний резонанс металу, звук б'є по вухах.
+room                  = -1000
+room_hf               = -100
+decay_time            = 1.2
+decay_hf_ratio        = 1.4       ; Металевий гул (високі частоти живуть довше)
+reflections           = -100      ; Ранні відбиття оглушливі
+reflections_delay     = 0.002     ; Відстань до стінок — сантиметри
+reverb                = 150
+reverb_delay          = 0.005
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0
+
+[dirt_basement]
+; Земляний підвал / Погріб.
+; На відміну від бетонного підвалу, земляна підлога і стіни повністю вбивають відлуння. Глухий, могильний звук.
+room                  = -1000
+room_hf               = -2000     ; Земля працює як поролон
+decay_time            = 0.6
+decay_hf_ratio        = 0.2
+reflections           = -1500
+reflections_delay     = 0.005
+reverb                = -1800
+reverb_delay          = 0.010
+room_rolloff_factor   = 0.0
+diffusion             = 0.7
+air_absorption_hf     = -5.0
+
+[elevator_shaft]
+; Шахта ліфта.
+; Звук летить вгору і вниз, утворюючи специфічне "вертикальне" відлуння.
+room                  = -1000
+room_hf               = -400
+decay_time            = 3.2
+decay_hf_ratio        = 0.75
+reflections           = -400
+reflections_delay     = 0.010
+reverb                = 200
+reverb_delay          = 0.040     ; Пізня луна приходить зверху/знизу із сильною затримкою
+room_rolloff_factor   = 0.0
+diffusion             = 0.8
+air_absorption_hf     = -5.0
+
+[swamp]
+; Густе болото (з туманом і очеретом).
+; Специфічний відкритий простір, де густа вологість і рослинність глушать звук набагато сильніше, ніж на звичайній рівнини.
+room                  = -1000
+room_hf               = -2500
+decay_time            = 1.0
+decay_hf_ratio        = 0.1       ; Туман і вода з'їдають високі частоти
+reflections           = -3000
+reflections_delay     = 0.080
+reverb                = -3000
+reverb_delay          = 0.100
+room_rolloff_factor   = 0.0
+diffusion             = 0.1
+air_absorption_hf     = -9.0      ; Вологе повітря максимально ізолює звук
+
+[vehicle_interior]
+; Всередині техніки (БТР, УАЗік, зачинений вагон).
+; Дуже тісна металева коробка. Відлуння дуже коротке, але "коробочне".
+room                  = -1000
+room_hf               = -500
+decay_time            = 0.3
+decay_hf_ratio        = 0.9       ; Метал все одно трохи "дзвенить"
+reflections           = -200
+reflections_delay     = 0.002
+reverb                = -600
+reverb_delay          = 0.004
+room_rolloff_factor   = 0.0
+diffusion             = 1.0
+air_absorption_hf     = -5.0

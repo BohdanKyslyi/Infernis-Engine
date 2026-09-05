@@ -411,4 +411,3 @@ void CAI_Stalker::on_after_take(const CGameObject* object) {
     for (; I != E; ++I)
         update_conflicted(*I, new_weapon);
 }
-

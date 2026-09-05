@@ -1,37 +1,17 @@
 #include "stdafx.h"
 #pragma hdrstop
-
-/*
-#include "xrCore/xr_resource.h"
-
-// res
-class	test_resource	: public xr_resource	{
-public:
-        void				_release_	(test_resource * ptr)	{
-xr_delete	(ptr);	}
-};
-
-// ptr
-typedef	xr_resorce_ptr<test_resource>	test_ptr;
-
-// the test itself
-BOOL	AAA_test		()
-{
-        test_ptr	A		(xr_new<test_resource>());
-        test_ptr	B		= xr_new<test_resource>	();
-        A					= B;
-        return		A!=B;
-}
-*/
+#include "SH_Constant.h"
 
 void CConstant::Calculate() {
     if (dwFrame == RDEVICE.dwFrame)
         return;
+        
     dwFrame = RDEVICE.dwFrame;
+    
     if (modeProgrammable == dwMode)
         return;
 
-    float t = RDEVICE.fTimeGlobal;
+    const float t = RDEVICE.fTimeGlobal;
     set_float(_R.Calculate(t), _G.Calculate(t), _B.Calculate(t), _A.Calculate(t));
 }
 

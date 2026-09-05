@@ -1,12 +1,16 @@
-#ifndef _HW_CAPS_
-#define _HW_CAPS_
 #pragma once
 
-#define CAP_VERSION(a, b) (u32(a) * 10 + u32(b))
+#ifndef _HW_CAPS_
+#define _HW_CAPS_
+
+// C++17: Безпечна constexpr функція
+[[nodiscard]] constexpr u32 CAP_VERSION(u32 a, u32 b) noexcept {
+    return (a * 10 + b);
+}
 
 class CHWCaps {
 public:
-    enum { MAX_GPUS = 8 };
+    static constexpr size_t MAX_GPUS = 8;
 
 public:
     struct caps_Geometry {
@@ -19,6 +23,7 @@ public:
         u32 dwClipPlanes : 4;
         u32 dwVertexCache : 8;
     };
+    
     struct caps_Raster {
         u32 dwRegisters : 16;
         u32 dwInstructions : 16;
@@ -30,39 +35,41 @@ public:
     };
 
 public:
-    // force flags
-    BOOL bForceGPU_REF;
-    BOOL bForceGPU_SW;
-    BOOL bForceGPU_NonPure;
-    BOOL SceneMode;
+    BOOL bForceGPU_REF{ FALSE };
+    BOOL bForceGPU_SW{ FALSE };
+    BOOL bForceGPU_NonPure{ FALSE };
+    BOOL SceneMode{ FALSE };
 
-    u32 iGPUNum;
+    u32 iGPUNum{ 1 };
 
-    // device format
-    D3DFORMAT fTarget;
-    D3DFORMAT fDepth;
-    u32 dwRefreshRate;
+    D3DFORMAT fTarget{ D3DFMT_UNKNOWN };
+    D3DFORMAT fDepth{ D3DFMT_UNKNOWN };
+    u32 dwMAC_OQ{ 0 };
 
-    // caps itself
-    u16 geometry_major;
-    u16 geometry_minor;
-    caps_Geometry geometry;
-    u16 raster_major;
-    u16 raster_minor;
-    caps_Raster raster;
+    caps_Geometry geometry{};
+    caps_Raster raster{};
 
-    u32 id_vendor;
-    u32 id_device;
+    u16 geometry_major{ 0 };
+    u16 geometry_minor{ 0 };
+    u16 raster_major{ 0 };
+    u16 raster_minor{ 0 };
 
-    BOOL bStencil;  // stencil buffer present
-    BOOL bScissor;  // scissor rect supported
-    BOOL bTableFog; //
+    u32 id_vendor{ 0 };
+    u32 id_device{ 0 };
 
-    // some precalculated values
-    D3DSTENCILOP soDec, soInc; // best stencil OPs for shadows
-    u32 dwMaxStencilValue;     // maximum value the stencil buffer can hold
+    BOOL bStencil{ FALSE };
+    BOOL bScissor{ FALSE };
+    BOOL bTableFog{ FALSE };
 
-    void Update(void);
+    D3DSTENCILOP soDec{ D3DSTENCILOP_KEEP };
+    D3DSTENCILOP soInc{ D3DSTENCILOP_KEEP };
+    u32 dwMaxStencilValue{ 0 };
+
+public:
+    CHWCaps() = default;
+    ~CHWCaps() = default;
+    
+    void Update();
 };
 
-#endif
+#endif // _HW_CAPS_

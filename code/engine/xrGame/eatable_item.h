@@ -139,7 +139,6 @@ protected:
         xr_vector<SNextRandomBundle> bundles;
     };
 
-    protected:
     //
     // Native item outcome recipe.
     //
@@ -164,5 +163,3 @@ protected:
 
     void UpdateOutcomeRecipes();
 };
-
-

@@ -8,7 +8,7 @@ public:
     u32 version;
     shared_str name;
 
-    u32 Environment;            // sorce environment
+    u32 Environment;            // source environment
     float Room;                 // room effect level at low frequencies
     float RoomHF;               // room effect high-frequency level re. low frequency level
     float RoomRolloffFactor;    // like DS3D flRolloffFactor but for room effect

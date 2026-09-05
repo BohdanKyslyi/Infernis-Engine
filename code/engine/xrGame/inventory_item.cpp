@@ -1074,7 +1074,6 @@ bool CInventoryItem::NeedToDestroyObject() const {
 
     if (object().Remote())
         return false;
-
     if (TimePassedAfterIndependant() > ITEM_REMOVE_TIME) {
         return true;
     }

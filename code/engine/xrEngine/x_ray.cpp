@@ -225,6 +225,7 @@ void Startup() {
     xr_delete(g_SpatialSpace);
     DEL_INSTANCE(g_pGamePersistent);
     xr_delete(pApp);
+    //Engine.Event.Dump();
 
     // Destroying
     //.	destroySound();

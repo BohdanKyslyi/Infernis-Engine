@@ -2,18 +2,18 @@
 #define BLENDER_BLUR_H
 #pragma once
 
-class CBlender_Blur : public IBlender {
+class CBlender_Blur final : public IBlender {
 public:
-    virtual LPCSTR getComment() { return "INTERNAL: blur"; }
-    virtual BOOL canBeLMAPped() { return FALSE; }
-
-    virtual void Save(IWriter& fs);
-    virtual void Load(IReader& fs, u16 version);
-
-    virtual void Compile(CBlender_Compile& C);
-
     CBlender_Blur();
-    virtual ~CBlender_Blur();
+    ~CBlender_Blur() override = default;
+
+    [[nodiscard]] LPCSTR getComment() override { return "INTERNAL: blur"; }
+    [[nodiscard]] BOOL canBeLMAPped() override { return FALSE; }
+
+    void Save(IWriter& fs) override;
+    void Load(IReader& fs, u16 version) override;
+
+    void Compile(CBlender_Compile& C) override;
 };
 
 #endif // BLENDER_BLUR_H

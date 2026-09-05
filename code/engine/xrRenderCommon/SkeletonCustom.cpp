@@ -771,4 +771,3 @@ CSkeletonWallmark::~CSkeletonWallmark() {
     }
 }
 #endif
-

@@ -14,14 +14,20 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
     ref_texture _t;
     _t.create(fname);
 
+#if defined(USE_DX11) || !defined(USE_DX10)
+    const bool isPBRTexture = !!DEV->m_textures_description.UsePBRTextures(fname);
+#endif
+
 #ifdef USE_DX11
-    bool usePBR =
-        infernis_pbr_rendering_enabled() &&
-        !!DEV->m_textures_description.UsePBRTextures(fname);
+    const bool usePBR = infernis_pbr_rendering_enabled() && isPBRTexture;
 
     if (usePBR) {
         RImplementation.addShaderOption("USE_PBR", "1");
     }
+#elif !defined(USE_DX10)
+    // R2 still uses legacy lighting, but it must decode the PBR bump layout.
+    // This is layout-driven and intentionally independent of the R4 PBR toggle.
+    const bool usePBR = isPBRTexture;
 #endif
 
     bool bump = _t.bump_exist();
@@ -104,6 +110,10 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
         xr_strcat(vs, "(USE_PBR)");
         xr_strcat(ps, "(USE_PBR)");
     }
+#elif !defined(USE_DX10)
+    // Only the R2 pixel shader samples and decodes the packed bump textures.
+    if (usePBR)
+        xr_strcat(ps, "(USE_PBR)");
 #endif
 
 // Uber-construct

@@ -11,6 +11,7 @@
 #include "..\actor.h"
 #include "..\ActorCondition.h"
 #include "..\player_hud.h"
+#include "..\NoirInventorySlots.h"
 
 LPCSTR immunity_names[] = {
     "burn_immunity",      "shock_immunity", "chemical_burn_immunity", "radiation_immunity",
@@ -205,46 +206,45 @@ void CUIOutfitInfo::UpdateInfo(CHelmet* cur_helmet, CHelmet* slot_helmet) {
     }
 }
 
-void CUIOutfitInfo::UpdateInfo( CBackpack* cur_backpack, CBackpack* slot_backpack )
+void CUIOutfitInfo::UpdateInfo(CBackpack* cur_backpack, CBackpack* slot_backpack)
 {
-	CActor* actor = smart_cast<CActor*>( Level().CurrentViewEntity() );
-	if ( !actor || !cur_backpack )
-	{
-		return;
-	}
+    if (NoirInventorySlots::BackpackEnabled())
+    {
+        CActor* actor = smart_cast<CActor*>(Level().CurrentViewEntity());
+        if (!actor || !cur_backpack) {
+            return;
+        }
 
-	for ( u32 i = 0; i < max_count; ++i )
-	{
-		if ( i == ALife::eHitTypeFireWound )
-		{
-			continue;
-		}
-		
-		ALife::EHitType hit_type = (ALife::EHitType)i;
-		float max_power = actor->conditions().GetZoneMaxPower( hit_type );
+        for (u32 i = 0; i < max_count; ++i) {
+            if (i == ALife::eHitTypeFireWound) {
+                continue;
+            }
 
-		float cur = cur_backpack->GetDefHitTypeProtection( hit_type );
-		cur /= max_power; // = 0..1
-		float slot = cur;
-		
-		if ( slot_backpack )
-		{
-			slot = slot_backpack->GetDefHitTypeProtection( hit_type );
-			slot /= max_power; //  = 0..1
-		}
-		m_items[i]->SetProgressValue( cur, slot );
-	}
+            ALife::EHitType hit_type = (ALife::EHitType)i;
+            float max_power = actor->conditions().GetZoneMaxPower(hit_type);
 
-	if ( m_items[ALife::eHitTypeFireWound] )
-	{
-		IKinematics* ikv = smart_cast<IKinematics*>( actor->Visual() );
-		VERIFY( ikv );
-		u16 spine_bone = ikv->LL_BoneID( "bip01_spine1" );
+            float cur = cur_backpack->GetDefHitTypeProtection(hit_type);
+            cur /= max_power; // = 0..1
+            float slot = cur;
 
-		float cur = cur_backpack->GetBoneArmor( spine_bone )*cur_backpack->GetCondition();
-		float slot = (slot_backpack)? slot_backpack->GetBoneArmor( spine_bone )*slot_backpack->GetCondition() : cur;
-		
-		m_items[ALife::eHitTypeFireWound]->SetProgressValue( cur, slot );
-	}
+            if (slot_backpack) {
+                slot = slot_backpack->GetDefHitTypeProtection(hit_type);
+                slot /= max_power; //  = 0..1
+            }
+            m_items[i]->SetProgressValue(cur, slot);
+        }
 
+        if (m_items[ALife::eHitTypeFireWound]) {
+            IKinematics* ikv = smart_cast<IKinematics*>(actor->Visual());
+            VERIFY(ikv);
+            u16 spine_bone = ikv->LL_BoneID("bip01_spine1");
+
+            float cur = cur_backpack->GetBoneArmor(spine_bone) * cur_backpack->GetCondition();
+            float slot = (slot_backpack) ? slot_backpack->GetBoneArmor(spine_bone) *
+                                               slot_backpack->GetCondition()
+                                         : cur;
+
+            m_items[ALife::eHitTypeFireWound]->SetProgressValue(cur, slot);
+        }
+    }
 }

@@ -21,8 +21,8 @@
 #include "../GrenadeLauncher.h"
 #include "../trade_parameters.h"
 #include "../ActorHelmet.h"
-#include "../UserBackpack.h"
 #include "../CustomOutfit.h"
+#include "../UserBackpack.h"
 #include "../CustomDetector.h"
 #include "../eatable_item.h"
 
@@ -41,6 +41,7 @@
 #include "UIMainIngameWnd.h"
 #include "../Trade.h"
 #include "string_table.h"
+#include "../NoirInventorySlots.h"
 
 void CUIActorMenu::SetActor(CInventoryOwner* io) {
     R_ASSERT(!IsShown());
@@ -271,18 +272,23 @@ EDDListType CUIActorMenu::GetListType(CUIDragDropListEx* l) {
         return iActorSlot;
     if (l == m_pInventoryPistolList)
         return iActorSlot;
+    if (m_pInventoryKnifeList && l == m_pInventoryKnifeList)
+        return iActorSlot;
+    if (m_pInventoryBinocularList && l == m_pInventoryBinocularList)
+        return iActorSlot;
+    if (m_pInventoryTorchList && l == m_pInventoryTorchList)
+        return iActorSlot;
+    if (m_pInventoryExtraPistolList && l == m_pInventoryExtraPistolList)
+        return iActorSlot;
+    if (m_pInventoryBackpackList && l == m_pInventoryBackpackList)
+        return iActorSlot;
     if (l == m_pInventoryOutfitList)
         return iActorSlot;
     if (l == m_pInventoryHelmetList)
         return iActorSlot;
     if (l == m_pInventoryDetectorList)
         return iActorSlot;
-	if ( l== m_pInventoryKnifeList)
-		return iActorSlot;
-	if ( l== m_pInventoryBinocularList)
-		return iActorSlot;
-	if(l==m_pInventoryBackpackList)
-		return iActorSlot;
+
     if (l == m_pTradeActorBagList)
         return iActorBag;
     if (l == m_pTradeActorList)
@@ -440,9 +446,16 @@ void CUIActorMenu::clear_highlight_lists() {
     m_HelmetSlotHighlight->Show(false);
     m_OutfitSlotHighlight->Show(false);
     m_DetectorSlotHighlight->Show(false);
-	m_KnifeSlotHighlight->Show(false);
-	m_BinocularSlotHighlight->Show(false);
-	m_BackpackSlotHighlight->Show(false);
+    if (m_KnifeSlotHighlight)
+        m_KnifeSlotHighlight->Show(false);
+    if (m_BinocularSlotHighlight)
+        m_BinocularSlotHighlight->Show(false);
+    if (m_BackpackSlotHighlight)
+        m_BackpackSlotHighlight->Show(false);
+    if (m_TorchSlotHighlight)
+        m_TorchSlotHighlight->Show(false);
+    if (m_PistolExtraSlotHighlight)
+        m_PistolExtraSlotHighlight->Show(false);
     for (u8 i = 0; i < 4; i++)
         m_QuickSlotsHighlight[i]->Show(false);
     for (u8 i = 0; i < e_af_count; i++)
@@ -477,24 +490,31 @@ void CUIActorMenu::highlight_item_slot(CUICellItem* cell_item) {
     if (CUIDragDropListEx::m_drag_item)
         return;
 
-	CWeaponKnife* knife = smart_cast<CWeaponKnife*>(item);
-	CWeaponBinoculars* binocular = smart_cast<CWeaponBinoculars*>(item);
+    CWeaponKnife* knife = smart_cast<CWeaponKnife*>(item);
+    CWeaponBinoculars* binocular = smart_cast<CWeaponBinoculars*>(item);
+    CBackpack* backpack = smart_cast<CBackpack*>(item);
     CWeapon* weapon = smart_cast<CWeapon*>(item);
     CHelmet* helmet = smart_cast<CHelmet*>(item);
-	CBackpack* backpack = smart_cast<CBackpack*>(item);
     CCustomOutfit* outfit = smart_cast<CCustomOutfit*>(item);
     CCustomDetector* detector = smart_cast<CCustomDetector*>(item);
     CEatableItem* eatable = smart_cast<CEatableItem*>(item);
     CArtefact* artefact = smart_cast<CArtefact*>(item);
 
-	if (knife) {
-		m_KnifeSlotHighlight->Show(true);
-		return;
-	}
-	if (binocular) {
-		m_BinocularSlotHighlight->Show(true);
-		return;
-	}
+    if (knife) {
+        if (m_KnifeSlotHighlight)
+            m_KnifeSlotHighlight->Show(true);
+        return;
+    }
+    if (binocular) {
+        if (m_BinocularSlotHighlight)
+            m_BinocularSlotHighlight->Show(true);
+        return;
+    }
+    if (backpack) {
+        if (m_BackpackSlotHighlight)
+            m_BackpackSlotHighlight->Show(true);
+        return;
+    }
     if (weapon) {
         m_InvSlot2Highlight->Show(true);
         m_InvSlot3Highlight->Show(true);
@@ -504,10 +524,6 @@ void CUIActorMenu::highlight_item_slot(CUICellItem* cell_item) {
         m_HelmetSlotHighlight->Show(true);
         return;
     }
-	if (backpack) {
-		m_BackpackSlotHighlight->Show(true);
-		return;
-	}
     if (outfit) {
         m_OutfitSlotHighlight->Show(true);
         return;
@@ -742,9 +758,16 @@ void CUIActorMenu::ClearAllLists() {
     m_pInventoryDetectorList->ClearAll(true);
     m_pInventoryPistolList->ClearAll(true);
     m_pInventoryAutomaticList->ClearAll(true);
-	m_pInventoryKnifeList->ClearAll(true);
-	m_pInventoryBinocularList->ClearAll(true);
-	m_pInventoryBackpackList->ClearAll(true);
+    if (m_pInventoryKnifeList)
+        m_pInventoryKnifeList->ClearAll(true);
+    if (m_pInventoryBinocularList)
+        m_pInventoryBinocularList->ClearAll(true);
+    if (m_pInventoryBackpackList)
+        m_pInventoryBackpackList->ClearAll(true);
+    if (m_pInventoryTorchList)
+        m_pInventoryTorchList->ClearAll(true);
+    if (m_pInventoryExtraPistolList)
+        m_pInventoryExtraPistolList->ClearAll(true);
     m_pQuickSlot->ClearAll(true);
 
     m_pTradeActorBagList->ClearAll(true);
@@ -811,6 +834,12 @@ bool CUIActorMenu::CanSetItemToList(PIItem item, CUIDragDropListEx* l, u16& ret_
         return true;
     }
 
+    if (item_slot == INV_SLOT_2 && m_pInventoryExtraPistolList &&
+        l == m_pInventoryExtraPistolList) {
+        ret_slot = EXTRA_PISTOL_SLOT;
+        return true;
+    }
+
     return false;
 }
 void CUIActorMenu::UpdateConditionProgressBars() {
@@ -837,9 +866,13 @@ void CUIActorMenu::UpdateConditionProgressBars() {
         m_Helmet_progress->SetProgressPos(iCeil(itm->GetCondition() * 15.0f) / 15.0f);
     else
         m_Helmet_progress->SetProgressPos(0);
-	itm = m_pActorInvOwner->inventory().ItemFromSlot(BACKPACK_SLOT);
-	if(itm)
-		m_Backpack_progress->SetProgressPos(iCeil(itm->GetCondition()*15.0f)/15.0f);
-	else
-		m_Backpack_progress->SetProgressPos(0);
+
+    if (m_Backpack_progress)
+    {
+        itm = m_pActorInvOwner->inventory().ItemFromSlot(BACKPACK_SLOT);
+        if (itm)
+            m_Backpack_progress->SetProgressPos(iCeil(itm->GetCondition() * 15.0f) / 15.0f);
+        else
+            m_Backpack_progress->SetProgressPos(0);
+    }
 }

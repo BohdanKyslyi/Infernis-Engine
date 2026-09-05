@@ -21,7 +21,6 @@ class CLensFlareDescriptor;
 
 #include "xrRender/FactoryPtr.h"
 #include "xrRender/EnvironmentRender.h"
-#include "build_config_defines.h"
 
 #ifdef INGAME_EDITOR
 #define INGAME_EDITOR_VIRTUAL virtual
@@ -166,10 +165,6 @@ public:
     Fvector3 sun_dir;
     float m_fSunShaftsIntensity;
     float m_fWaterIntensity;
-
-#ifdef TREE_WIND_EFFECT
-	float m_fTreeAmplitudeIntensity;
-#endif
 
     //	int					lens_flare_id;
     //	int					tb_id;

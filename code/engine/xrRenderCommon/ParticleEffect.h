@@ -1,6 +1,7 @@
 //---------------------------------------------------------------------------
 #ifndef ParticleEffectH
 #define ParticleEffectH
+#pragma once
 //---------------------------------------------------------------------------
 
 #include "ParticleEffectDef.h"
@@ -15,26 +16,22 @@
 
 namespace PS {
 class ECORE_API CParticleEffect : public dxParticleCustom {
-    //		friend void ParticleRenderStream( LPVOID lpvParams );
     friend class CPEDef;
 
 protected:
-    float m_fElapsedLimit;
-
-    int m_HandleEffect;
-    int m_HandleActionList;
-
-    s32 m_MemDT;
-
-    Fvector m_InitialPosition;
+    float m_fElapsedLimit = 0.0f;
+    int m_HandleEffect = -1;
+    int m_HandleActionList = -1;
+    s32 m_MemDT = 0;
+    Fvector m_InitialPosition = {0.0f, 0.0f, 0.0f};
 
 public:
-    CPEDef* m_Def;
+    CPEDef* m_Def = nullptr;
     Fmatrix m_XFORM;
 
 protected:
-    DestroyCallback m_DestroyCallback;
-    CollisionCallback m_CollisionCallback;
+    DestroyCallback m_DestroyCallback = nullptr;
+    CollisionCallback m_CollisionCallback = nullptr;
 
 public:
     enum {
@@ -53,38 +50,38 @@ protected:
 
 public:
     CParticleEffect();
-    virtual ~CParticleEffect();
+    virtual ~CParticleEffect() override;
 
     void OnFrame(u32 dt);
 
     u32 RenderTO();
-    virtual void Render(float LOD);
-    virtual void Copy(dxRender_Visual* pFrom);
+    virtual void Render(float LOD) override;
+    virtual void Copy(dxRender_Visual* pFrom) override;
 
-    virtual void OnDeviceCreate();
-    virtual void OnDeviceDestroy();
+    virtual void OnDeviceCreate() override;
+    virtual void OnDeviceDestroy() override;
 
-    virtual void UpdateParent(const Fmatrix& m, const Fvector& velocity, BOOL bXFORM);
+    virtual void UpdateParent(const Fmatrix& m, const Fvector& velocity, BOOL bXFORM) override;
 
     BOOL Compile(CPEDef* def);
 
-    IC CPEDef* GetDefinition() { return m_Def; }
-    IC int GetHandleEffect() { return m_HandleEffect; }
-    IC int GetHandleActionList() { return m_HandleActionList; }
+    [[nodiscard]] IC CPEDef* GetDefinition() const { return m_Def; }
+    [[nodiscard]] IC int GetHandleEffect() const { return m_HandleEffect; }
+    [[nodiscard]] IC int GetHandleActionList() const { return m_HandleActionList; }
 
-    virtual void Play();
-    virtual void Stop(BOOL bDefferedStop = TRUE);
-    virtual BOOL IsPlaying() { return m_RT_Flags.is(flRT_Playing); }
+    virtual void Play() override;
+    virtual void Stop(BOOL bDefferedStop = TRUE) override;
+    [[nodiscard]] virtual BOOL IsPlaying() override { return m_RT_Flags.is(flRT_Playing); }
 
     virtual void SetHudMode(BOOL b) { m_RT_Flags.set(flRT_HUDmode, b); }
-    virtual BOOL GetHudMode() { return m_RT_Flags.is(flRT_HUDmode); }
+    [[nodiscard]] virtual BOOL GetHudMode() { return m_RT_Flags.is(flRT_HUDmode); }
 
-    virtual float GetTimeLimit() {
+    [[nodiscard]] virtual float GetTimeLimit() override {
         VERIFY(m_Def);
-        return m_Def->m_Flags.is(CPEDef::dfTimeLimit) ? m_Def->m_fTimeLimit : -1.f;
+        return m_Def->m_Flags.is(CPEDef::dfTimeLimit) ? m_Def->m_fTimeLimit : -1.0f;
     }
 
-    virtual const shared_str Name() {
+    [[nodiscard]] virtual const shared_str Name() override {
         VERIFY(m_Def);
         return m_Def->m_Name;
     }
@@ -93,8 +90,9 @@ public:
     void SetCollisionCB(CollisionCallback collision_cb) { m_CollisionCallback = collision_cb; }
     void SetBirthDeadCB(PAPI::OnBirthParticleCB bc, PAPI::OnDeadParticleCB dc, void* owner, u32 p);
 
-    virtual u32 ParticlesCount();
+    [[nodiscard]] virtual u32 ParticlesCount();
 };
+
 void OnEffectParticleBirth(void* owner, u32 param, PAPI::Particle& m, u32 idx);
 void OnEffectParticleDead(void* owner, u32 param, PAPI::Particle& m, u32 idx);
 

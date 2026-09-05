@@ -80,6 +80,8 @@ set(REFACTORED_EXECUTION__AND__3D_SHADERS_BLENDER ../xrRenderCommon/blenders/Ble
                                                   ../xrRenderCommon/blenders/Blender_Recorder.h
                                                   ../xrRenderCommon/tss.h
                                                   ../xrRenderCommon/tss_def.h
+                                                  ../xrRenderCommon/Blender_rain.h
+                                                  ../xrRenderCommon/Blender_rain.cpp
                                                   ../xrRenderCommon/blenders/Blender.cpp
                                                   ../xrRenderCommon/blenders/Blender_Palette.cpp
                                                   ../xrRenderCommon/blenders/Blender_Recorder.cpp

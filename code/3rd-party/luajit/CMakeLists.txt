@@ -17,7 +17,8 @@ ExternalProject_Add(
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ${OUT_DIR}/makeluajit.bat
-    INSTALL_COMMAND COMMAND ${CMAKE_COMMAND} -E copy ${SRC_DIR}/lua51.dll ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lua51.dll
+    INSTALL_COMMAND COMMAND ${CMAKE_COMMAND} -E copy ${SRC_DIR}/lua51.dll ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Debug/lua51.dll
+                    COMMAND ${CMAKE_COMMAND} -E copy ${SRC_DIR}/lua51.dll ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lua51.dll
                     COMMAND ${CMAKE_COMMAND} -E copy ${SRC_DIR}/lua51.lib ${OUT_DIR}/lua51.lib
                     COMMAND ${CMAKE_COMMAND} -E remove -f ${SRC_DIR}/lua51.dll
                     COMMAND ${CMAKE_COMMAND} -E remove -f ${SRC_DIR}/lua51.lib

@@ -23,14 +23,15 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
     bLocked = TRUE;
     float new_tm = Timer.GetElapsed_sec();
     fTimer_Delta = new_tm - fTimer_Value;
-    //.	float dt					= float(Timer_Delta)/1000.f;
     float dt_sec = fTimer_Delta;
     fTimer_Value = new_tm;
 
     s_emitters_u++;
 
+    // === ЗАТРИМКА ЗВУКУ: Перевірка та відтворення відкладених звуків ===
+    update_delayed_sounds();
+
     // Firstly update emitters, which are now being rendered
-    // Msg	("! update: r-emitters");
     for (it = 0; it < s_targets.size(); it++) {
         CSoundRender_Target* T = s_targets[it];
         CSoundRender_Emitter* E = T->get_emitter();
@@ -48,7 +49,6 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
     }
 
     // Update emmitters
-    // Msg	("! update: emitters");
     for (it = 0; it < s_emitters.size(); it++) {
         CSoundRender_Emitter* pEmitter = s_emitters[it];
         if (pEmitter->marker != s_emitters_u) {
@@ -64,16 +64,15 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
     }
 
     // Get currently rendering emitters
-    // Msg	("! update: targets");
     s_targets_defer.clear();
     s_targets_pu++;
-    // u32 PU				= s_targets_pu%s_targets.size();
+    
     for (it = 0; it < s_targets.size(); it++) {
         CSoundRender_Target* T = s_targets[it];
         if (T->get_emitter()) {
             // Has emmitter, maybe just not started rendering
             if (T->get_Rendering()) {
-                /*if	(PU == it)*/ T->fill_parameters();
+                T->fill_parameters();
                 T->update();
             } else
                 s_targets_defer.push_back(T);
@@ -82,15 +81,14 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
 
     // Commit parameters from pending targets
     if (!s_targets_defer.empty()) {
-        // Msg	("! update: start render - commit");
         s_targets_defer.erase(std::unique(s_targets_defer.begin(), s_targets_defer.end()),
                               s_targets_defer.end());
         for (it = 0; it < s_targets_defer.size(); it++)
             s_targets_defer[it]->fill_parameters();
     }
 
-    // update EAX
-    if (psSoundFlags.test(ss_EAX) && bEAX) {
+    // === EFX РЕФАКТОРИНГ: Застосування реверберації Зони ===
+    if (psSoundFlags.test(ss_EFX) && bEFX) {
         if (bListenerMoved) {
             bListenerMoved = FALSE;
             e_target = *get_environment(P);
@@ -98,8 +96,8 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
 
         e_current.lerp(e_current, e_target, dt_sec);
 
-        i_eax_listener_set(&e_current);
-        i_eax_commit_setting();
+        // Викликаємо наш новий метод замість i_eax_listener_set та commit
+        update_environment(&e_current);
     }
 
     // update listener
@@ -107,7 +105,6 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
 
     // Start rendering of pending targets
     if (!s_targets_defer.empty()) {
-        // Msg	("! update: start render");
         for (it = 0; it < s_targets_defer.size(); it++)
             s_targets_defer[it]->render();
     }

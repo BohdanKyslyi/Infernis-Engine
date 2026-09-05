@@ -1,7 +1,4 @@
 // DetailManager.h: interface for the CDetailManager class.
-//
-//////////////////////////////////////////////////////////////////////
-
 #ifndef DetailManagerH
 #define DetailManagerH
 #pragma once
@@ -9,10 +6,11 @@
 #include "xrCore/xrpool.h"
 #include "detailformat.h"
 #include "detailmodel.h"
+#include <atomic>
+#include <mutex>
 
 #ifdef _EDITOR
-//.	#include	"ESceneClassList.h"
-const int dm_max_decompress = 14;
+constexpr int dm_max_decompress = 14;
 class CCustomObject;
 typedef u32 ObjClassID;
 
@@ -20,27 +18,27 @@ typedef xr_list<CCustomObject*> ObjectList;
 typedef ObjectList::iterator ObjectIt;
 typedef xr_map<ObjClassID, ObjectList> ObjectMap;
 typedef ObjectMap::iterator ObjectPairIt;
-
 #else
-const int dm_max_decompress = 7;
+constexpr int dm_max_decompress = 7;
 #endif
-const int dm_size = 24;                                   //!
-const int dm_cache1_count = 4;                            //
-const int dm_cache1_line = dm_size * 2 / dm_cache1_count; //! dm_size*2 must be div dm_cache1_count
-const int dm_max_objects = 64;
-const int dm_obj_in_slot = 4;
-const int dm_cache_line = dm_size + 1 + dm_size;
-const int dm_cache_size = dm_cache_line * dm_cache_line;
-const float dm_fade = float(2 * dm_size) - .5f;
-const float dm_slot_size = DETAIL_SLOT_SIZE;
+
+constexpr int dm_size = 24;                                   
+constexpr int dm_cache1_count = 4;                            
+constexpr int dm_cache1_line = dm_size * 2 / dm_cache1_count; 
+constexpr int dm_max_objects = 64;
+constexpr int dm_obj_in_slot = 4;
+constexpr int dm_cache_line = dm_size + 1 + dm_size;
+constexpr int dm_cache_size = dm_cache_line * dm_cache_line;
+constexpr float dm_fade = static_cast<float>(2 * dm_size) - 0.5f;
+constexpr float dm_slot_size = DETAIL_SLOT_SIZE;
 
 class ECORE_API CDetailManager {
 public:
-    struct SlotItem { // один кустик
+    struct SlotItem { 
         float scale;
         float scale_calculated;
         Fmatrix mRotY;
-        u32 vis_ID; // индекс в visibility списке он же тип [не качается, качается1, качается2]
+        u32 vis_ID; 
         float c_hemi;
         float c_sun;
 #if RENDER == R_R1
@@ -48,26 +46,29 @@ public:
 #endif
     };
     using SlotItemVec = xr_vector<SlotItem*>;
-    struct SlotPart {           //
-        u32 id;                 // ID модельки
-        SlotItemVec items;      // список кустиков
-        SlotItemVec r_items[3]; // список кустиков for render
+    
+    struct SlotPart {           
+        u32 id;                 
+        SlotItemVec items;      
+        SlotItemVec r_items[3]; 
     };
+    
     enum SlotType {
-        stReady = 0, // Ready to use
-        stPending,   // Pending for decompression
+        stReady = 0, 
+        stPending,   
 
         stFORCEDWORD = 0xffffffff
     };
-    struct Slot { // распакованый слот размером DETAIL_SLOT_SIZE
+    
+    struct Slot { 
         struct {
             u32 empty : 1;
             u32 type : 1;
             u32 frame : 30;
         };
-        int sx, sz;                 // координаты слота X x Y
-        vis_data vis;               //
-        SlotPart G[dm_obj_in_slot]; //
+        int sx, sz;                 
+        vis_data vis;               
+        SlotPart G[dm_obj_in_slot]; 
 
         Slot() {
             frame = 0;
@@ -77,6 +78,7 @@ public:
             vis.clear();
         }
     };
+    
     struct CacheSlot1 {
         u32 empty;
         vis_data vis;
@@ -96,7 +98,6 @@ public:
     int dither[16][16];
 
 public:
-    // swing values
     struct SSwingValue {
         float rot1;
         float rot2;
@@ -115,24 +116,24 @@ public:
 public:
     IReader* dtFS;
     DetailHeader dtH;
-    DetailSlot* dtSlots; // note: pointer into VFS
+    DetailSlot* dtSlots; 
     DetailSlot DS_empty;
 
 public:
     DetailVec objects;
-    vis_list m_visibles[3]; // 0=still, 1=Wave1, 2=Wave2
+    vis_list m_visibles[3]; 
 
 #ifndef _EDITOR
     xrXRC xrc;
 #endif
     CacheSlot1 cache_level1[dm_cache1_line][dm_cache1_line];
-    Slot* cache[dm_cache_line][dm_cache_line]; // grid-cache itself
-    svector<Slot*, dm_cache_size> cache_task;  // non-unpacked slots
-    Slot cache_pool[dm_cache_size];            // just memory for slots
+    Slot* cache[dm_cache_line][dm_cache_line]; 
+    svector<Slot*, dm_cache_size> cache_task;  
+    Slot cache_pool[dm_cache_size];            
     int cache_cx;
     int cache_cz;
 
-    PSS poolSI; // pool из которого выделяются SlotItem
+    PSS poolSI; 
 
     void UpdateVisibleM();
     void UpdateVisibleS();
@@ -142,15 +143,13 @@ public:
     virtual ObjectList* GetSnapList() = 0;
 #endif
 
-    IC bool UseVS() { return HW.Caps.geometry_major >= 1; }
+    [[nodiscard]] IC bool UseVS() const { return HW.Caps.geometry_major >= 1; }
 
-    // Software processor
     ref_geom soft_Geom;
     void soft_Load();
     void soft_Unload();
     void soft_Render();
 
-    // Hardware processor
     ref_geom hw_Geom;
     u32 hw_BatchSize;
     ID3DVertexBuffer* hw_VB;
@@ -162,20 +161,19 @@ public:
     ref_constant hwc_s_consts;
     ref_constant hwc_s_xform;
     ref_constant hwc_s_array;
+    
     void hw_Load();
     void hw_Load_Geom();
     void hw_Load_Shaders();
     void hw_Unload();
     void hw_Render();
 #if defined(USE_DX10) || defined(USE_DX11)
-    void hw_Render_dump(const Fvector4& consts, const Fvector4& wave, const Fvector4& wind,
-                        u32 var_id, u32 lod_id);
-#else //	USE_DX10
+    void hw_Render_dump(const Fvector4& consts, const Fvector4& wave, const Fvector4& wind, u32 var_id, u32 lod_id);
+#else 
     void hw_Render_dump(ref_constant array, u32 var_id, u32 lod_id, u32 c_base);
-#endif //	USE_DX10
+#endif 
 
 public:
-    // get unpacked slot
     DetailSlot& QueryDB(int sx, int sz);
 
     void cache_Initialize();
@@ -184,10 +182,9 @@ public:
     Slot* cache_Query(int sx, int sz);
     void cache_Decompress(Slot* D);
     BOOL cache_Validate();
-    // cache grid to world
+    
     int cg2w_X(int x) { return cache_cx - dm_size + x; }
     int cg2w_Z(int z) { return cache_cz - dm_size + (dm_cache_line - 1 - z); }
-    // world to cache grid
     int w2cg_X(int x) { return x - cache_cx + dm_size; }
     int w2cg_Z(int z) { return cache_cz - dm_size + (dm_cache_line - 1 - z); }
 
@@ -195,16 +192,15 @@ public:
     void Unload();
     void Render();
 
-    /// MT stuff
+    // MT stuff
     std::recursive_mutex MT;
-    volatile u32 m_frame_calc;
-    volatile u32 m_frame_rendered;
+    std::atomic<u32> m_frame_calc{0};
+    std::atomic<u32> m_frame_rendered{0};
 
     void __stdcall MT_CALC();
     ICF void MT_SYNC() {
-        if (m_frame_calc == RDEVICE.dwFrame)
+        if (m_frame_calc.load(std::memory_order_acquire) == RDEVICE.dwFrame)
             return;
-
         MT_CALC();
     }
 

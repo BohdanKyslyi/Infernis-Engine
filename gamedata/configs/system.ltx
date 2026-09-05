@@ -111,9 +111,9 @@ take_dist   	= 2
 max_weight    	= 50
 max_ruck    	= 56
 max_belt    	= 5 ;16
-slots_count   	= 13 ; count +1 (zero)
+slots_count   	= 14 ; highest slot id (slot 0 is reserved)
 
-slot_persistent_1   = false   ;knife
+slot_persistent_1   = true   ;knife
 slot_active_1       = true
 
 slot_persistent_2   = false  ;pistol
@@ -125,7 +125,7 @@ slot_active_3       = true
 slot_persistent_4   = true   ;grenades
 slot_active_4       = true
 
-slot_persistent_5   = false   ;binocular
+slot_persistent_5   = true   ;binocular
 slot_active_5       = true
 
 slot_persistent_6   = true   ;bolt
@@ -149,8 +149,11 @@ slot_active_11      = true
 slot_persistent_12  = false ;helmet
 slot_active_12      = false
 
-slot_persistent_13  = false ;backpack
-slot_active_13      = false
+slot_persistent_13  = false ;optional third pistol slot
+slot_active_13      = true
+
+slot_persistent_14  = false ;backpack
+slot_active_14      = false
 
 
 [lights_hanging_lamp]

@@ -43,6 +43,7 @@ private:
         flVerticalPlacement = (1 << 3),
         flAlwaysShowScroll = (1 << 4),
         flVirtualCells = (1 << 5),
+        flSingleSlot = (1 << 6),
     };
     Flags8 m_flags;
     Ivector2 m_orig_cell_capacity;
@@ -122,6 +123,9 @@ public:
     void SetAlwaysShowScroll(bool b);
     bool GetVirtualCells();
     void SetVirtualCells(bool b);
+    void SetSingleSlot(bool b);
+    bool IsSingleSlot() const;
+    Ivector2 GetItemGridSize(CUICellItem* itm) const;
 
     bool GetConditionProgBarVisibility() { return m_bConditionProgBarVisible; };
     void SetConditionProgBarVisibility(bool b) { m_bConditionProgBarVisible = b; };

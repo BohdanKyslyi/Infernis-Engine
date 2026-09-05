@@ -1,108 +1,125 @@
-#ifndef _PLANE2
-#define _PLANE2
+#pragma once
+#ifndef _PLANE2_H
+#define _PLANE2_H
+
+#include <cmath>
 
 template <class T>
 class _plane2 {
 public:
-    typedef T TYPE;
-    typedef _plane2<T> Self;
-    typedef Self& SelfRef;
-    typedef const Self& SelfCRef;
+    using TYPE = T;
+    using Self = _plane2<T>;
+    using SelfRef = Self&;
+    using SelfCRef = const Self&;
 
-public:
-    _vector2<T> n;
-    T d;
+    _vector2<T> n{};
+    T d{0};
 
-public:
-    IC SelfRef set(Self& P) {
+    inline SelfRef set(SelfCRef P) noexcept {
         n.set(P.n);
         d = P.d;
         return *this;
     }
-    IC BOOL similar(Self& P, T eps_n = EPS, T eps_d = EPS) {
-        return (n.similar(P.n, eps_n) && (_abs(d - P.d) < eps_d));
+
+    [[nodiscard]] inline BOOL similar(SelfCRef P, T eps_n = EPS, T eps_d = EPS) const noexcept {
+        return (n.similar(P.n, eps_n) && (std::abs(d - P.d) < eps_d));
     }
-    IC SelfRef build(const _vector2<T>& _p, const _vector2<T>& _n) {
+
+    inline SelfRef build(const _vector2<T>& _p, const _vector2<T>& _n) noexcept {
         d = -n.normalize(_n).dotproduct(_p);
         return *this;
     }
-    IC SelfRef project(_vector2<T>& pdest, _vector2<T>& psrc) {
+
+    inline SelfRef project(_vector2<T>& pdest, const _vector2<T>& psrc) const noexcept {
         pdest.mad(psrc, n, -classify(psrc));
-        return *this;
+        return const_cast<SelfRef>(*this);
     }
-    IC T classify(const _vector2<T>& v) const { return n.dotproduct(v) + d; }
-    IC SelfRef normalize() {
-        T denom = 1.f / n.magnitude();
+
+    [[nodiscard]] inline T classify(const _vector2<T>& v) const noexcept { 
+        return n.dotproduct(v) + d; 
+    }
+
+    inline SelfRef normalize() noexcept {
+        T denom = 1.0f / n.magnitude();
         n.mul(denom);
         d *= denom;
         return *this;
     }
-    IC T distance(const _vector2<T>& v) { return _abs(classify(v)); }
-    IC BOOL intersectRayDist(const _vector2<T>& P, const _vector2<T>& D, T& dist) {
-        T numer = classify(P);
-        T denom = n.dotproduct(D);
 
-        if (_abs(denom) < EPS_S) // normal is orthogonal to vector3, cant intersect
-            return FALSE;
-
-        dist = -(numer / denom);
-        return ((dist > 0.f) || fis_zero(dist));
+    [[nodiscard]] inline T distance(const _vector2<T>& v) const noexcept { 
+        return std::abs(classify(v)); 
     }
-    IC BOOL intersectRayPoint(const _vector2<T>& P, const _vector2<T>& D, _vector2<T>& dest) {
+
+    [[nodiscard]] inline BOOL intersectRayDist(const _vector2<T>& P, const _vector2<T>& D, T& dist) const noexcept {
         T numer = classify(P);
         T denom = n.dotproduct(D);
 
-        if (_abs(denom) < EPS_S)
-            return FALSE; // normal is orthogonal to vector3, cant intersect
-        else {
-            float dist = -(numer / denom);
-            dest.mad(P, D, dist);
-            return ((dist > 0.f) || fis_zero(dist));
+        if (std::abs(denom) < EPS_S) {
+            return FALSE; // Normal is orthogonal to vector, can't intersect
+        } else {
+            dist = -(numer / denom);
+            return ((dist > 0.0f) || fis_zero(dist));
         }
     }
-    IC BOOL intersect(const _vector2<T>& u, const _vector2<T>& v, // segment
-                      _vector2<T>& isect)                         // intersection point
-    {
+
+    [[nodiscard]] inline BOOL intersectRayPoint(const _vector2<T>& P, const _vector2<T>& D, _vector2<T>& dest) const noexcept {
+        T numer = classify(P);
+        T denom = n.dotproduct(D);
+
+        if (std::abs(denom) < EPS_S) {
+            return FALSE; // Normal is orthogonal to vector, can't intersect
+        } else {
+            T dist = -(numer / denom);
+            dest.mad(P, D, dist);
+            return ((dist > 0.0f) || fis_zero(dist));
+        }
+    }
+
+    [[nodiscard]] inline BOOL intersect(const _vector2<T>& u, const _vector2<T>& v, _vector2<T>& isect) const noexcept {
         T denom, dist;
         _vector2<T> t;
 
         t.sub(v, u);
         denom = n.dotproduct(t);
-        if (_abs(denom) < EPS)
-            return false; // they are parallel
+        
+        if (std::abs(denom) < EPS) {
+            return FALSE; // They are parallel
+        }
 
         dist = -(n.dotproduct(u) + d) / denom;
-        if (dist < -EPS || dist > 1 + EPS)
-            return false;
+        if (dist < -EPS || dist > 1.0f + EPS) {
+            return FALSE;
+        }
+        
         isect.mad(u, t, dist);
-        return true;
+        return TRUE;
     }
 
-    IC BOOL intersect_2(const _vector2<T>& u, const _vector2<T>& v, // segment
-                        _vector2<T>& isect)                         // intersection point
-    {
+    [[nodiscard]] inline BOOL intersect_2(const _vector2<T>& u, const _vector2<T>& v, _vector2<T>& isect) const noexcept {
         T dist1, dist2;
         _vector2<T> t;
 
         dist1 = n.dotproduct(u) + d;
         dist2 = n.dotproduct(v) + d;
 
-        if (dist1 * dist2 < 0.0f)
-            return false;
+        if (dist1 * dist2 < 0.0f) {
+            return FALSE;
+        }
 
         t.sub(v, u);
-        isect.mad(u, t, dist1 / _abs(dist1 - dist2));
-
-        return true;
+        isect.mad(u, t, dist1 / std::abs(dist1 - dist2));
+        return TRUE;
     }
 };
 
-typedef _plane2<float> Fplane2;
-typedef _plane2<double> Dplane2;
+using Fplane2 = _plane2<float>;
+using Dplane2 = _plane2<double>;
 
-template <class T>
-BOOL _valid(const _plane2<T>& s) {
-    return _valid(s.n) && _valid(s.d);
-}
+namespace xr {
+    template <class T>
+    [[nodiscard]] inline bool valid(const _plane2<T>& p) noexcept {
+        return valid(p.n) && valid(p.d);
+    }
+} // namespace xr
 
-#endif
+#endif // _PLANE2_H

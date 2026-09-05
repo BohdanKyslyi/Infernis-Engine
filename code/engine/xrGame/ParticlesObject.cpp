@@ -204,13 +204,10 @@ float CParticlesObject::shedule_Scale() {
 void CParticlesObject::renderable_Render() {
     VERIFY(renderable.visual);
     u32 dt = Device.dwTimeGlobal - dwLastTime;
-    if (dt) {
-        IParticleCustom* V = smart_cast<IParticleCustom*>(renderable.visual);
-        VERIFY(V);
-        V->OnFrame(dt);
-        dwLastTime = Device.dwTimeGlobal;
-    }
-
+    IParticleCustom* V = smart_cast<IParticleCustom*>(renderable.visual);
+    VERIFY(V);
+    V->OnFrame(dt);
+    dwLastTime = Device.dwTimeGlobal;
     ::Render->set_Transform(&renderable.xform);
     ::Render->add_Visual(renderable.visual);
 }
@@ -226,8 +223,6 @@ void CParticlesObject::SetAutoRemove(bool auto_remove) {
     m_bAutoRemove = auto_remove;
 }
 
-//играются ли партиклы, отличается от PSI_Alive, тем что после
-//остановки Stop партиклы могут еще доигрывать анимацию IsPlaying = true
 bool CParticlesObject::IsPlaying() {
     IParticleCustom* V = smart_cast<IParticleCustom*>(renderable.visual);
     VERIFY(V);

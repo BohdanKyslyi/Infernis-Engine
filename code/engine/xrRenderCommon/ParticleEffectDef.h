@@ -1,6 +1,6 @@
-//---------------------------------------------------------------------------
 #ifndef ParticleEffectDefH
 #define ParticleEffectDefH
+#pragma once
 
 #include "Shader.h"
 
@@ -11,6 +11,7 @@ struct PAHeader;
 struct ParticleAction;
 using PAVec = xr_vector<ParticleAction*>;
 } // namespace PAPI
+
 struct EParticleAction;
 
 namespace PS {
@@ -21,22 +22,24 @@ typedef BOOL (*CollisionCallback)(CParticleEffect* E, PAPI::Particle& P, const F
 typedef void (*DestroyCallback)(CParticleEffect* E, PAPI::Particle& P);
 
 class PFunction;
+
 struct SFrame {
-    Fvector2 m_fTexSize;
-    Fvector2 reserved;
-    int m_iFrameDimX;
-    int m_iFrameCount;
-    float m_fSpeed;
+    Fvector2 m_fTexSize = {32.0f / 256.0f, 64.0f / 128.0f};
+    Fvector2 reserved = {0.0f, 0.0f};
+    int m_iFrameDimX = 8;
+    int m_iFrameCount = 16;
+    float m_fSpeed = 24.0f;
 
     void InitDefault() {
-        m_fTexSize.set(32.f / 256.f, 64.f / 128.f);
+        m_fTexSize.set(32.0f / 256.0f, 64.0f / 128.0f);
         m_iFrameDimX = 8;
         m_iFrameCount = 16;
-        m_fSpeed = 24.f;
+        m_fSpeed = 24.0f;
     }
-    IC void CalculateTC(int frame, Fvector2& lt, Fvector2& rb) {
-        lt.x = (frame % m_iFrameDimX) * m_fTexSize.x;
-        lt.y = (frame / m_iFrameDimX) * m_fTexSize.y;
+    
+    IC void CalculateTC(int frame, Fvector2& lt, Fvector2& rb) const {
+        lt.x = static_cast<float>(frame % m_iFrameDimX) * m_fTexSize.x;
+        lt.y = static_cast<float>(frame / m_iFrameDimX) * m_fTexSize.y;
         rb.x = lt.x + m_fTexSize.x;
         rb.y = lt.y + m_fTexSize.y;
     }
@@ -46,15 +49,11 @@ class ECORE_API CPEDef {
 public:
     enum {
         dfSprite = (1 << 0),
-        //			dfObject		= (1<<1),
-
         dfFramed = (1 << 10),
         dfAnimated = (1 << 11),
         dfRandomFrame = (1 << 12),
         dfRandomPlayback = (1 << 13),
-
         dfTimeLimit = (1 << 14),
-
         dfAlignToPath = (1 << 15),
         dfCollision = (1 << 16),
         dfCollisionDel = (1 << 17),
@@ -65,39 +64,43 @@ public:
         dfCulling = (1 << 22),
         dfCullCCW = (1 << 23),
     };
+    
     shared_str m_Name;
     Flags32 m_Flags;
+    
     // texture
     shared_str m_ShaderName;
     shared_str m_TextureName;
     ref_shader m_CachedShader;
     SFrame m_Frame;
+    
     // compiled actions
     CMemoryWriter m_Actions;
-    // def
-    float m_fTimeLimit;          // time limit
-    int m_MaxParticles;          // max particle count
-    Fvector m_VelocityScale;     // velocity scale
-    Fvector m_APDefaultRotation; // align to path
-                                 // collision
-    float m_fCollideOneMinusFriction;
-    float m_fCollideResilience;
-    float m_fCollideSqrCutoff;
+    
+    float m_fTimeLimit = 0.0f;           
+    int m_MaxParticles = 0;              
+    Fvector m_VelocityScale = {0.0f, 0.0f, 0.0f};     
+    Fvector m_APDefaultRotation = {-PI_DIV_2, 0.0f, 0.0f}; 
+    
+    // collision
+    float m_fCollideOneMinusFriction = 1.0f;
+    float m_fCollideResilience = 0.0f;
+    float m_fCollideSqrCutoff = 0.0f;
 
 public:
     BOOL SaveActionList(IWriter& F);
     BOOL LoadActionList(IReader& F);
+    
     // execute
     void ExecuteAnimate(PAPI::Particle* particles, u32 p_cnt, float dt);
-    void ExecuteCollision(PAPI::Particle* particles, u32 p_cnt, float dt, CParticleEffect* owner,
-                          CollisionCallback cb);
+    void ExecuteCollision(PAPI::Particle* particles, u32 p_cnt, float dt, CParticleEffect* owner, CollisionCallback cb);
 
 public:
     CPEDef();
     ~CPEDef();
 
     void SetName(LPCSTR name);
-    IC LPCSTR Name() const { return *m_Name; }
+    [[nodiscard]] IC LPCSTR Name() const { return *m_Name; }
     void CreateShader();
     void DestroyShader();
 
@@ -108,7 +111,6 @@ public:
     BOOL Load2(CInifile& ini);
 
 #ifdef _EDITOR
-    // change Copy&Equal if variables changed
 public:
     DEFINE_VECTOR(EParticleAction*, EPAVec, EPAVecIt);
     EPAVec m_EActionList;
@@ -140,6 +142,7 @@ public:
 #endif
 };
 }; // namespace PS
+
 #define PED_VERSION 0x0001
 #define PED_CHUNK_VERSION 0x0001
 #define PED_CHUNK_NAME 0x0002

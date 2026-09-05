@@ -8,13 +8,15 @@
 class CSoundRender_TargetA : public CSoundRender_Target {
     typedef CSoundRender_Target inherited;
 
-    // OpenAL
     ALuint pSource;
     ALuint pBuffers[sdef_target_count];
     float cache_gain;
     float cache_pitch;
 
     ALuint buf_block;
+
+    // Low-Pass фільтр
+    ALuint filter_lowpass;
 
 private:
     void fill_block(ALuint BufferID);

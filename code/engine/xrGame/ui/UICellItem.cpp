@@ -185,40 +185,32 @@ void CUICellItem::UpdateConditionProgressBar() {
         CWeapon* pWeapon = smart_cast<CWeapon*>(itm);
         CCustomOutfit* pOutfit = smart_cast<CCustomOutfit*>(itm);
         CHelmet* pHelmet = smart_cast<CHelmet*>(itm);
-		CBackpack* pBackpack = smart_cast<CBackpack*>(itm);
+        CBackpack* pBackpack = smart_cast<CBackpack*>(itm);
         CEatableItem* pEatable = smart_cast<CEatableItem*>(itm);
-
         const bool show_eatable_portions = pEatable && pEatable->TotalPortions() > 1;
-        
-        if (pWeapon || pOutfit || pHelmet || pBackpack || show_eatable_portions)
-		{
-			Ivector2 itm_grid_size = GetGridSize();
-			if(m_pParentList->GetVerticalPlacement())
-				std::swap(itm_grid_size.x, itm_grid_size.y);
 
-			Ivector2 cell_size = m_pParentList->CellSize();
-			Ivector2 cell_space = m_pParentList->CellsSpacing();
-			float x = 1.f;
-			float y = itm_grid_size.y * (cell_size.y + cell_space.y) - m_pConditionState->GetHeight() - 2.f;
+        if (pWeapon || pOutfit || pHelmet || pBackpack || show_eatable_portions) {
+            Ivector2 itm_grid_size = GetGridSize();
+            if (m_pParentList->GetVerticalPlacement())
+                std::swap(itm_grid_size.x, itm_grid_size.y);
 
-			m_pConditionState->SetWndPos(Fvector2().set(x,y));
+            Ivector2 cell_size = m_pParentList->CellSize();
+            Ivector2 cell_space = m_pParentList->CellsSpacing();
+            float x = 1.f;
+            float y = itm_grid_size.y * (cell_size.y + cell_space.y) -
+                      m_pConditionState->GetHeight() - 2.f;
+
+            m_pConditionState->SetWndPos(Fvector2().set(x, y));
             float progress = itm->GetCondition();
-            
-            //
-            // For multi-use consumables the same bar
-            // represents remaining portions instead of condition.
-            //
-            if (show_eatable_portions) {
-                progress =
-                    float(pEatable->PortionsNum()) / float(pEatable->TotalPortions());
-            }
-            
+            if (show_eatable_portions)
+                progress = float(pEatable->PortionsNum()) / float(pEatable->TotalPortions());
+
             m_pConditionState->SetProgressPos(iCeil(progress * 13.0f) / 13.0f);
-			m_pConditionState->Show(true);
-			return;
-		}
-	}
-	m_pConditionState->Show(false);
+            m_pConditionState->Show(true);
+            return;
+        }
+    }
+    m_pConditionState->Show(false);
 }
 
 bool CUICellItem::EqualTo(CUICellItem* itm) {

@@ -253,7 +253,7 @@ void CSE_ALifeObject::spawn_supplies(LPCSTR ini_string) {
             for (u32 i = 0; i < j; ++i) {
                 if (randF(1.f) < p) {
                     CSE_Abstract* E = alife().spawn_item(N, o_Position, m_tNodeID, m_tGraphID, ID);
-                    //Ð¿Ð¾Ð´ÑÐ¾ÐµÐ´Ð¸Ð½Ð¸Ñ‚ÑŒ Ð°Ð´Ð´Ð¾Ð½Ñ‹ Ðº Ð¾Ñ€ÑƒÐ¶Ð¸ÑŽ, ÐµÑÐ»Ð¸ Ð²ÐºÐ»ÑŽÑ‡ÐµÐ½Ñ‹ ÑÐ¾Ð¾Ñ‚Ð²ÐµÑ‚ÑÑ‚Ð²ÑƒÑŽÑ‰Ð¸Ðµ Ñ„Ð»Ð°Ð¶ÐºÐ¸
+                    //ïîäñîåäèíèòü àääîíû ê îðóæèþ, åñëè âêëþ÷åíû ñîîòâåòñòâóþùèå ôëàæêè
                     CSE_ALifeItemWeapon* W = smart_cast<CSE_ALifeItemWeapon*>(E);
                     if (W) {
                         if (W->m_scope_status == ALife::eAddonAttachable)

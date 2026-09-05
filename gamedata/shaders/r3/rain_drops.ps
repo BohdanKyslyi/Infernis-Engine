@@ -1,0 +1,100 @@
+#include "common.h"
+
+struct f_rain {
+    float4 hpos : SV_Position; 
+    float4 c    : COLOR0;
+    float2 tc   : TEXCOORD0;
+    float3 Pw   : TEXCOORD1;
+};
+
+uniform float4 dyn_light_pos_0; uniform float4 dyn_light_dir_0; uniform float4 dyn_light_color_0;
+uniform float4 dyn_light_pos_1; uniform float4 dyn_light_dir_1; uniform float4 dyn_light_color_1;
+uniform float4 dyn_light_pos_2; uniform float4 dyn_light_dir_2; uniform float4 dyn_light_color_2;
+uniform float4 dyn_light_pos_3; uniform float4 dyn_light_dir_3; uniform float4 dyn_light_color_3;
+
+float3 calc_dyn_light(float3 Pw, float3 view_dir, float3 drop_normal, float fresnel, float4 l_pos, float4 l_dir_vec, float4 l_col) {
+    float3 light_res = float3(0.0f, 0.0f, 0.0f);
+    
+    if (l_pos.w > 0.0f) {
+        float3 l_dir = l_pos.xyz - Pw;
+        float dist = length(l_dir);
+        
+        float atten = saturate(1.0f - dist * l_pos.w);
+        atten = atten * atten; 
+        
+        l_dir /= (dist + 0.0001f); 
+        
+        float spot_atten = 1.0f;
+        if (l_dir_vec.w > 0.5f) {
+            float spot_dot = dot(normalize(l_dir_vec.xyz), -l_dir);
+            spot_atten = saturate((spot_dot - l_col.w) / (1.0f - l_col.w + 0.0001f));
+        }
+        
+        // Внутрішнє світіння (Diffuse)
+        float diffuse = saturate(dot(drop_normal, l_dir) * 0.5f + 0.5f); 
+        float3 glow = l_col.rgb * diffuse * 2.0f;
+        
+        // Блік (Specular)
+        float3 half_vector = normalize(l_dir + view_dir);
+        float NdotH = saturate(dot(drop_normal, half_vector));
+        float specular = pow(NdotH, 32.0f); 
+        
+        float3 edge_color = l_col.rgb * fresnel;
+        
+        light_res = atten * spot_atten * (glow + specular * 5.0f * l_col.rgb + edge_color);
+    }
+    return light_res;
+}
+
+float4 main(f_rain I) : SV_Target {
+    float4 tex = s_base.Sample(smp_base, I.tc); 
+    float4 result;
+
+    // --- 1. ОБ'ЄМ КРАПЛІ ---
+    float nx = (I.tc.x - 0.5f) * 2.0f;
+    if (abs(nx) > 0.95f) discard; 
+    float nz = sqrt(saturate(1.0f - nx * nx));
+    
+    float3 view_dir = normalize(eye_position - I.Pw);
+    
+    float3 up = float3(0.0f, 1.0f, 0.0f);
+    float3 right = cross(up, view_dir);
+    if (dot(right, right) < 0.001f) {
+        right = float3(1.0f, 0.0f, 0.0f);
+    } else {
+        right = normalize(right);
+    }
+    float3 drop_normal = normalize(right * nx + view_dir * nz);
+
+    // --- 2. ФРЕНЕЛЬ ---
+    float fresnel = saturate(1.0f - dot(view_dir, drop_normal));
+    fresnel = pow(fresnel, 4.0f); 
+
+    // --- 3. ГЛОБАЛЬНЕ СВІТЛО (Сонце/Місяць) ---
+    float sun_diffuse = saturate(dot(drop_normal, L_sun_dir_w) * 0.5f + 0.5f);
+    float3 sun_half = normalize(L_sun_dir_w + view_dir);
+    float sun_specular = pow(saturate(dot(drop_normal, sun_half)), 16.0f);
+    float forward_scatter = pow(saturate(dot(view_dir, -L_sun_dir_w)), 8.0f);
+    
+    float3 ambient_edge = L_ambient.rgb * (1.0f + fresnel);
+    float3 total_sun = L_sun_color.rgb * (sun_diffuse + sun_specular * 2.0f + forward_scatter * 2.0f) + ambient_edge; 
+    
+    // --- 4. ДИНАМІЧНЕ СВІТЛО ---
+    float3 dyn_lighting = float3(0.0f, 0.0f, 0.0f);
+    dyn_lighting += calc_dyn_light(I.Pw, view_dir, drop_normal, fresnel, dyn_light_pos_0, dyn_light_dir_0, dyn_light_color_0);
+    dyn_lighting += calc_dyn_light(I.Pw, view_dir, drop_normal, fresnel, dyn_light_pos_1, dyn_light_dir_1, dyn_light_color_1);
+    dyn_lighting += calc_dyn_light(I.Pw, view_dir, drop_normal, fresnel, dyn_light_pos_2, dyn_light_dir_2, dyn_light_color_2);
+    dyn_lighting += calc_dyn_light(I.Pw, view_dir, drop_normal, fresnel, dyn_light_pos_3, dyn_light_dir_3, dyn_light_color_3);
+    
+    float3 total_light = total_sun + dyn_lighting;
+    
+    result.rgb = (I.c.rgb * tex.rgb * 0.45f) + (total_light * tex.rgb);
+
+    float base_alpha = tex.a * I.c.a;
+    
+    float luminance = dot(total_light, float3(0.333f, 0.333f, 0.333f));
+    
+    result.a = saturate(base_alpha + luminance * pow(tex.a, 4.0f) * 2.0f);
+
+    return result;
+}

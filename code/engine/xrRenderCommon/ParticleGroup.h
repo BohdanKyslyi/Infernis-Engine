@@ -1,6 +1,7 @@
 //---------------------------------------------------------------------------
 #ifndef ParticleGroupH
 #define ParticleGroupH
+#pragma once
 
 #include "xrRenderCommon/dxParticleCustom.h"
 
@@ -11,7 +12,8 @@ class ECORE_API CPGDef {
 public:
     shared_str m_Name;
     Flags32 m_Flags;
-    float m_fTimeLimit;
+    float m_fTimeLimit = 0.0f;
+
     struct SEffect {
         enum {
             flDefferedStop = (1 << 0),
@@ -26,12 +28,11 @@ public:
         shared_str m_OnPlayChildName;
         shared_str m_OnBirthChildName;
         shared_str m_OnDeadChildName;
-        float m_Time0;
-        float m_Time1;
+        float m_Time0 = 0.0f;
+        float m_Time1 = 0.0f;
+
         SEffect() {
-            m_Flags.zero(); /*set(flEnabled)*/
-            m_Time0 = 0;
-            m_Time1 = 0;
+            m_Flags.zero(); 
         }
 #ifdef _EDITOR
         BOOL Equal(const SEffect&);
@@ -39,8 +40,8 @@ public:
     };
     using EffectVec = xr_vector<SEffect*>;
     EffectVec m_Effects;
+
 #ifdef _EDITOR
-    // change Equal if variables changed
     void __stdcall OnEffectsEditClick(ButtonValue* sender, bool& bDataModified, bool& bSafe);
     void __stdcall OnEffectTypeChange(PropValue* sender);
     void __stdcall OnEffectEditClick(ButtonValue* sender, bool& bDataModified, bool& bSafe);
@@ -50,6 +51,7 @@ public:
     BOOL Equal(const CPGDef* pe);
     bool Validate(bool bMsg);
 #endif
+
 public:
     CPGDef();
     ~CPGDef();
@@ -67,14 +69,14 @@ public:
 };
 
 class ECORE_API CParticleGroup : public dxParticleCustom {
-    const CPGDef* m_Def;
-    float m_CurrentTime;
+    const CPGDef* m_Def = nullptr;
+    float m_CurrentTime = 0.0f;
     Fvector m_InitialPosition;
 
 public:
     using VisualVec = xr_vector<dxRender_Visual*>;
     struct SItem {
-        dxRender_Visual* _effect;
+        dxRender_Visual* _effect = nullptr;
         VisualVec _children_related;
         VisualVec _children_free;
 
@@ -88,7 +90,7 @@ public:
                 visuals.push_back(_effect);
             visuals.insert(visuals.end(), _children_related.begin(), _children_related.end());
             visuals.insert(visuals.end(), _children_free.begin(), _children_free.end());
-            return visuals.size();
+            return static_cast<u32>(visuals.size());
         }
 
         void OnDeviceCreate();
@@ -101,8 +103,8 @@ public:
         void UpdateParent(const Fmatrix& m, const Fvector& velocity, BOOL bXFORM);
         void OnFrame(u32 u_dt, const CPGDef::SEffect& def, Fbox& box, bool& bPlaying);
 
-        u32 ParticlesCount();
-        BOOL IsPlaying() const;
+        [[nodiscard]] u32 ParticlesCount();
+        [[nodiscard]] BOOL IsPlaying() const;
         void Play();
         void Stop(BOOL def_stop);
     };
@@ -118,40 +120,41 @@ public:
 
 public:
     CParticleGroup();
-    virtual ~CParticleGroup();
-    virtual void OnFrame(u32 dt);
+    virtual ~CParticleGroup() override; 
 
-    virtual void Copy(dxRender_Visual* pFrom) {
+    virtual void OnFrame(u32 dt) override;
+
+    virtual void Copy(dxRender_Visual* pFrom) override {
         FATAL("Can't duplicate particle system - NOT IMPLEMENTED");
     }
 
-    virtual void OnDeviceCreate();
-    virtual void OnDeviceDestroy();
+    virtual void OnDeviceCreate() override;
+    virtual void OnDeviceDestroy() override;
 
-    virtual void UpdateParent(const Fmatrix& m, const Fvector& velocity, BOOL bXFORM);
+    virtual void UpdateParent(const Fmatrix& m, const Fvector& velocity, BOOL bXFORM) override;
 
     BOOL Compile(CPGDef* def);
 
-    const CPGDef* GetDefinition() { return m_Def; }
+    [[nodiscard]] const CPGDef* GetDefinition() const { return m_Def; } 
 
-    virtual void Play();
-    virtual void Stop(BOOL bDefferedStop = TRUE);
-    virtual BOOL IsPlaying() { return m_RT_Flags.is(flRT_Playing); }
+    virtual void Play() override;
+    virtual void Stop(BOOL bDefferedStop = TRUE) override;
+    [[nodiscard]] virtual BOOL IsPlaying() override { return m_RT_Flags.is(flRT_Playing); }
 
     virtual void SetHudMode(BOOL b);
-    virtual BOOL GetHudMode();
+    [[nodiscard]] virtual BOOL GetHudMode();
 
-    virtual float GetTimeLimit() {
+    [[nodiscard]] virtual float GetTimeLimit() {
         VERIFY(m_Def);
         return m_Def->m_fTimeLimit;
     }
 
-    virtual const shared_str Name() {
+    [[nodiscard]] virtual const shared_str Name() {
         VERIFY(m_Def);
         return m_Def->m_Name;
     }
 
-    virtual u32 ParticlesCount();
+    [[nodiscard]] virtual u32 ParticlesCount();
 };
 
 } // namespace PS

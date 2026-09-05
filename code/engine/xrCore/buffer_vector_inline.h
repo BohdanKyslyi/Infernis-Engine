@@ -45,7 +45,11 @@ inline buffer_vector_specialized::~buffer_vector() { clear(); }
 TEMPLATE_SPECIALIZATION
 inline typename buffer_vector_specialized::self_type& buffer_vector_specialized::
 operator=(self_type const& other) {
+    if (this == &other)
+        return *this;
+
     assign(other.begin(), other.end());
+    return *this;
 }
 
 TEMPLATE_SPECIALIZATION

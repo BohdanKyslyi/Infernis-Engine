@@ -1,7 +1,6 @@
 // xrCore.cpp : Defines the entry point for the DLL application.
 //
 #include "stdafx.h"
-
 #include <mmsystem.h>
 #include <objbase.h>
 #include "xrCore.h"
@@ -19,15 +18,22 @@ extern void Detect();
 }
 
 static u32 init_counter = 0;
+static bool timerResolutionEnabled = false;
+static bool comInitialized = false;
+static DWORD coreInitializationThread = 0;
 
 void xrCore::_initialize(const char* _ApplicationName, LogCallback cb, bool init_fs,
                          const char* fs_fname) {
     xr_strcpy(ApplicationName, _ApplicationName);
     if (0 == init_counter) {
-        // Init COM so we can use CoCreateInstance
-        //		HRESULT co_res =
-        if (!strstr(GetCommandLine(), "-editor"))
-            CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        coreInitializationThread = GetCurrentThreadId();
+
+        if (!strstr(GetCommandLine(), "-editor")) {
+            const HRESULT result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+            comInitialized = SUCCEEDED(result);
+        }
+
+        timerResolutionEnabled = timeBeginPeriod(1) == TIMERR_NOERROR;
 
         xr_strcpy(Params, sizeof(Params), GetCommandLine());
         _strlwr_s(Params, sizeof(Params));
@@ -55,6 +61,9 @@ void xrCore::_initialize(const char* _ApplicationName, LogCallback cb, bool init
 
         InitLog();
         _initialize_cpu();
+		
+        Jobs::Initialize();
+        Msg("* JobSystem initialized: %u worker threads", Jobs::WorkerCount());
 
         //		Debug._initialize	();
 
@@ -93,12 +102,30 @@ void xrCore::_initialize(const char* _ApplicationName, LogCallback cb, bool init
 }
 
 void xrCore::_destroy() {
+    R_ASSERT(init_counter > 0);
+    if (init_counter == 0)
+        return;
+
     --init_counter;
     if (0 == init_counter) {
+        Jobs::Shutdown();
         FS._destroy();
         xr_delete(xr_FS);
 
         Memory._destroy();
+
+        if (timerResolutionEnabled) {
+            timeEndPeriod(1);
+            timerResolutionEnabled = false;
+        }
+
+        if (comInitialized) {
+            if (GetCurrentThreadId() == coreInitializationThread)
+                CoUninitialize();
+            comInitialized = false;
+        }
+
+        coreInitializationThread = 0;
     }
 }
 
@@ -106,6 +133,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD ul_reason_for_call, LPVOID lpvRese
 {
     switch (ul_reason_for_call) {
     case DLL_PROCESS_ATTACH: {
+        DisableThreadLibraryCalls(hinstDLL);
         _clear87();
 #ifdef _M_IX86
         _control87(_PC_53, MCW_PC);
@@ -117,9 +145,6 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD ul_reason_for_call, LPVOID lpvRese
     //.		LogFile.reserve		(256);
     break;
     case DLL_THREAD_ATTACH:
-        if (!strstr(GetCommandLine(), "-editor"))
-            CoInitializeEx(NULL, COINIT_MULTITHREADED);
-        timeBeginPeriod(1);
         break;
     case DLL_THREAD_DETACH:
         break;

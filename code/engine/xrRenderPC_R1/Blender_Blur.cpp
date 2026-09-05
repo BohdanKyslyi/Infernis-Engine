@@ -3,17 +3,17 @@
 
 #include "Blender_Blur.h"
 
-//////////////////////////////////////////////////////////////////////
-// Construction/Destruction
-//////////////////////////////////////////////////////////////////////
+CBlender_Blur::CBlender_Blur() { 
+    description.CLS = B_BLUR; 
+}
 
-CBlender_Blur::CBlender_Blur() { description.CLS = B_BLUR; }
+void CBlender_Blur::Save(IWriter& fs) { 
+    IBlender::Save(fs); 
+}
 
-CBlender_Blur::~CBlender_Blur() {}
-
-void CBlender_Blur::Save(IWriter& fs) { IBlender::Save(fs); }
-
-void CBlender_Blur::Load(IReader& fs, u16 version) { IBlender::Load(fs, version); }
+void CBlender_Blur::Load(IReader& fs, u16 version) { 
+    IBlender::Load(fs, version); 
+}
 
 void CBlender_Blur::Compile(CBlender_Compile& C) {
     IBlender::Compile(C);
@@ -41,7 +41,6 @@ void CBlender_Blur::Compile(CBlender_Compile& C) {
         C.Stage_Constant("$null");
         C.StageEnd();
 
-        //
         C.R().SetRS(D3DRS_TEXTUREFACTOR, color_rgba(127, 127, 127, 127));
     }
     C.PassEnd();

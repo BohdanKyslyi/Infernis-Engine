@@ -1,7 +1,3 @@
-// DummyObject.h: interface for the CHangingLamp class.
-//
-//////////////////////////////////////////////////////////////////////
-
 #ifndef HangingLampH
 #define HangingLampH
 #pragma once
@@ -10,64 +6,80 @@
 #include "physicsshellholder.h"
 #include "PHSkeleton.h"
 #include "script_export_space.h"
-// refs
+
+// Попередні оголошення (Forward declarations)
 class CLAItem;
 class CPhysicsElement;
 class CSE_ALifeObjectHangingLamp;
-class CPHElement;
-class CHangingLamp : public CPhysicsShellHolder, public CPHSkeleton { //need m_pPhysicShell
-    typedef CPhysicsShellHolder inherited;
+
+class CHangingLamp : public CPhysicsShellHolder, public CPHSkeleton {
+    using inherited = CPhysicsShellHolder;
 
 private:
-    u16 light_bone;
-    u16 ambient_bone;
+    // Параметри освітлення
+    u16 light_bone{ BI_NONE };
+    u16 ambient_bone{ BI_NONE };
 
-    ref_light light_render;
-    ref_light light_ambient;
-    CLAItem* lanim;
-    float ambient_power;
-    BOOL m_bState;
+    ref_light light_render{};
+    ref_light light_ambient{};
+    ref_glow glow_render{};
+    
+    CLAItem* lanim{ nullptr };
+    float ambient_power{ 0.f };
+    float fBrightness{ 1.f };
+    
+    // Стан об'єкта
+    float fHealth{ 100.f };
+    BOOL m_bState{ TRUE };
 
-    ref_glow glow_render;
-
-    float fHealth;
-    float fBrightness;
     void CreateBody(CSE_ALifeObjectHangingLamp* lamp);
-    void Init();
-    void RespawnInit();
-    bool Alive() { return fHealth > 0.f; }
+    
+    [[nodiscard]] inline bool Alive() const { return fHealth > 0.f; }
 
 public:
     CHangingLamp();
-    virtual ~CHangingLamp();
+    ~CHangingLamp() override;
+
+    // Керування станом
     void TurnOn();
     void TurnOff();
-    virtual void Load(LPCSTR section);
-    virtual BOOL net_Spawn(CSE_Abstract* DC);
-    virtual void net_Destroy();
-    virtual void shedule_Update(u32 dt); // Called by sheduler
-    virtual void UpdateCL();             // Called each frame, so no need for dt
+    void RespawnInit();
 
-    virtual void SpawnInitPhysics(CSE_Abstract* D);
-    virtual CPhysicsShellHolder* PPhysicsShellHolder() { return PhysicsShellHolder(); };
-    virtual void CopySpawnInit();
-    virtual void net_Save(NET_Packet& P);
-    virtual BOOL net_SaveRelevant();
-    virtual void save(NET_Packet& output_packet);
-    virtual void load(IReader& input_packet);
+    // Життєвий цикл об'єкта
+    void Load(LPCSTR section) override;
+    BOOL net_Spawn(CSE_Abstract* DC) override;
+    void net_Destroy() override;
+    void shedule_Update(u32 dt) override;
+    void UpdateCL() override;
 
-    virtual BOOL renderable_ShadowGenerate() { return TRUE; }
-    virtual BOOL renderable_ShadowReceive() { return TRUE; }
+    // Фізика
+    void SpawnInitPhysics(CSE_Abstract* D) override;
+    void CopySpawnInit() override;
+    CPhysicsShellHolder* PPhysicsShellHolder() override { return PhysicsShellHolder(); }
 
-    virtual void Hit(SHit* pHDS);
-    virtual void net_Export(NET_Packet& P);
-    virtual void net_Import(NET_Packet& P);
-    virtual BOOL UsedAI_Locations();
+    // Збереження та завантаження
+    void net_Save(NET_Packet& P) override;
+    BOOL net_SaveRelevant() override;
+    void save(NET_Packet& output_packet) override;
+    void load(IReader& input_packet) override;
 
-    virtual void Center(Fvector& C) const;
-    virtual float Radius() const;
+    // Рендеринг
+    BOOL renderable_ShadowGenerate() override { return TRUE; }
+    BOOL renderable_ShadowReceive() override { return TRUE; }
+
+    // Взаємодія
+    void Hit(SHit* pHDS) override;
+    void net_Export(NET_Packet& P) override;
+    void net_Import(NET_Packet& P) override;
+    BOOL UsedAI_Locations() override;
+
+    // Просторові характеристики
+    void Center(Fvector& C) const override;
+    [[nodiscard]] float Radius() const override;
+
     DECLARE_SCRIPT_REGISTER_FUNCTION
 };
+
 add_to_type_list(CHangingLamp)
 #undef script_type_list
 #define script_type_list save_type_list(CHangingLamp)

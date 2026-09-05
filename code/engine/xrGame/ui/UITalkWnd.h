@@ -7,6 +7,7 @@
 //#include "UIListWnd.h"
 #include "UIFrameWindow.h"
 #include "UICharacterInfo.h"
+
 #include "../PhraseDialogDefs.h"
 
 class CActor;

@@ -120,6 +120,8 @@ set(REFACTORED_EXECUTION__AND__3D_SHADERS_BLENDER ../xrRenderCommon/blenders/Ble
                                                   ../xrRenderCommon/blenders/Blender_Recorder.h
                                                   ../xrRenderCommon/tss.h
                                                   ../xrRenderCommon/tss_def.h
+												  ../xrRenderCommon/Blender_rain.h
+                                                  ../xrRenderCommon/Blender_rain.cpp
                                                   ../xrRenderCommon/blenders/Blender.cpp
                                                   ../xrRenderCommon/blenders/Blender_Palette.cpp
                                                   ../xrRenderCommon/blenders/Blender_Recorder.cpp
@@ -350,8 +352,7 @@ set(CORE ../xrRenderCommon/PSLibrary.h
          ../xrRenderCommon/r__occlusion.cpp
          ../xrRenderCommon/r__pixel_calculator.cpp
          ../xrRenderCommon/r__screenshot.cpp
-         ../xrRenderCommon/tga.cpp
-         ../xrRenderCommon/rendertarget_raindrops.cpp)
+         ../xrRenderCommon/tga.cpp)
 
 set(REFACTORED_EXECUTION__AND__3D_SHADERS_RESOURCES ComputeShader.h
                                                     CSCompiler.h
@@ -416,6 +417,7 @@ set(SHADING_TEMPLATES blender_bloom_build.h
                       dx11HDAOCSBlender.h
                       dx11MinMaxSMBlender.h
                       ../xrRenderCommon/uber_deffer.h
+                      ../xrRenderCommon/rendertarget_raindrops.cpp
                       blender_bloom_build.cpp
                       ../xrRenderCommon/Blender_BmmD.cpp
                       blender_combine.cpp

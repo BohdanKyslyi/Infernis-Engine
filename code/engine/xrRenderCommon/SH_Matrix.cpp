@@ -11,10 +11,12 @@ void CMatrix::Calculate() {
     case modeProgrammable:
     case modeDetail:
         return;
+        
     case modeTCM: {
         Fmatrix T;
-        float sU = 1, sV = 1, t = RDEVICE.fTimeGlobal;
-        tc_trans(xform, .5f, .5f);
+        float sU = 1.0f, sV = 1.0f, t = RDEVICE.fTimeGlobal;
+        tc_trans(xform, 0.5f, 0.5f);
+        
         if (tcm & tcmRotate) {
             T.rotateZ(rotate.Calculate(t) * t);
             xform.mulA_43(T);
@@ -22,7 +24,7 @@ void CMatrix::Calculate() {
         if (tcm & tcmScale) {
             sU = scaleU.Calculate(t);
             sV = scaleV.Calculate(t);
-            T.scale(sU, sV, 1);
+            T.scale(sU, sV, 1.0f);
             xform.mulA_43(T);
         }
         if (tcm & tcmScroll) {
@@ -33,42 +35,32 @@ void CMatrix::Calculate() {
             tc_trans(T, u, v);
             xform.mulA_43(T);
         }
+        
         tc_trans(T, -0.5f, -0.5f);
         xform.mulB_43(T);
-    }
         return;
+    }
+    
     case modeS_refl: {
-        float Ux = .5f * RDEVICE.mView._11, Uy = .5f * RDEVICE.mView._21,
-              Uz = .5f * RDEVICE.mView._31, Uw = .5f;
-        float Vx = -.5f * RDEVICE.mView._12, Vy = -.5f * RDEVICE.mView._22,
-              Vz = -.5f * RDEVICE.mView._32, Vw = .5f;
+        const float Ux = 0.5f * RDEVICE.mView._11, Uy = 0.5f * RDEVICE.mView._21, Uz = 0.5f * RDEVICE.mView._31, Uw = 0.5f;
+        const float Vx = -0.5f * RDEVICE.mView._12, Vy = -0.5f * RDEVICE.mView._22, Vz = -0.5f * RDEVICE.mView._32, Vw = 0.5f;
 
-        xform._11 = Ux;
-        xform._12 = Vx;
-        xform._13 = 0;
-        xform._14 = 0;
-        xform._21 = Uy;
-        xform._22 = Vy;
-        xform._23 = 0;
-        xform._24 = 0;
-        xform._31 = Uz;
-        xform._32 = Vz;
-        xform._33 = 0;
-        xform._34 = 0;
-        xform._41 = Uw;
-        xform._42 = Vw;
-        xform._43 = 0;
-        xform._44 = 0;
-    }
+        xform._11 = Ux;   xform._12 = Vx;   xform._13 = 0.0f; xform._14 = 0.0f;
+        xform._21 = Uy;   xform._22 = Vy;   xform._23 = 0.0f; xform._24 = 0.0f;
+        xform._31 = Uz;   xform._32 = Vz;   xform._33 = 0.0f; xform._34 = 0.0f;
+        xform._41 = Uw;   xform._42 = Vw;   xform._43 = 0.0f; xform._44 = 0.0f;
         return;
+    }
+    
     case modeC_refl: {
         Fmatrix M = RDEVICE.mView;
-        M._41 = 0.f;
-        M._42 = 0.f;
-        M._43 = 0.f;
+        M._41 = 0.0f;
+        M._42 = 0.0f;
+        M._43 = 0.0f;
         xform.invert(M);
-    }
         return;
+    }
+    
     default:
         return;
     }

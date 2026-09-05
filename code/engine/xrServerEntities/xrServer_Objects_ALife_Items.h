@@ -309,9 +309,9 @@ SERVER_ENTITY_DECLARE_END
 add_to_type_list(CSE_ALifeItemHelmet)
 #define script_type_list save_type_list(CSE_ALifeItemHelmet)
 
-	SERVER_ENTITY_DECLARE_BEGIN(CSE_ALifeItemBackpack, CSE_ALifeItem)
-		CSE_ALifeItemBackpack(LPCSTR caSection);
-virtual	~CSE_ALifeItemBackpack();
+    SERVER_ENTITY_DECLARE_BEGIN(CSE_ALifeItemBackpack, CSE_ALifeItem)
+        CSE_ALifeItemBackpack(LPCSTR caSection);
+virtual ~CSE_ALifeItemBackpack();
 virtual BOOL Net_Relevant();
 SERVER_ENTITY_DECLARE_END
 add_to_type_list(CSE_ALifeItemBackpack)

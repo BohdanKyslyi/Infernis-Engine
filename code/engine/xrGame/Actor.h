@@ -59,7 +59,6 @@ class CActorMemory;
 class CActorStatisticMgr;
 
 class CLocationManager;
-
 class CItemUseController;
 
 class CActor : public CEntityAlive,
@@ -69,65 +68,59 @@ class CActor : public CEntityAlive,
                public CPhraseDialogManager,
                public CStepManager,
                public Feel::Sound
-			   
 #ifdef DEBUG
-    ,
-               public pureRender
+               , public pureRender
 #endif
 {
     friend class CActorCondition;
 
 private:
-    typedef CEntityAlive inherited;
+    using inherited = CEntityAlive;
 
 public:
     CActor();
-    virtual ~CActor();
+    virtual ~CActor() override;
+
+    [[nodiscard]] CItemUseController* GetItemUseController() const { return m_item_use; }
 
 public:
-    CItemUseController* ItemUseController() { return m_item_use; }
+    [[nodiscard]] virtual BOOL AlwaysTheCrow() override { return TRUE; }
+
+    [[nodiscard]] virtual CAttachmentOwner* cast_attachment_owner() override { return this; }
+    [[nodiscard]] virtual CInventoryOwner* cast_inventory_owner() override { return this; }
+    [[nodiscard]] virtual CActor* cast_actor() override { return this; }
+    [[nodiscard]] virtual CGameObject* cast_game_object() override { return this; }
+    [[nodiscard]] virtual IInputReceiver* cast_input_receiver() override { return this; }
+    
+    [[nodiscard]] virtual CCharacterPhysicsSupport* character_physics_support() override { return m_pPhysics_support; }
+    [[nodiscard]] virtual const CCharacterPhysicsSupport* character_physics_support() const override { return m_pPhysics_support; }
+    [[nodiscard]] virtual CPHDestroyable* ph_destroyable() override;
+    
+    [[nodiscard]] CHolderCustom* Holder() const { return m_holder; }
 
 public:
-    virtual BOOL AlwaysTheCrow() { return TRUE; }
-
-    virtual CAttachmentOwner* cast_attachment_owner() { return this; }
-    virtual CInventoryOwner* cast_inventory_owner() { return this; }
-    virtual CActor* cast_actor() { return this; }
-    virtual CGameObject* cast_game_object() { return this; }
-    virtual IInputReceiver* cast_input_receiver() { return this; }
-    virtual CCharacterPhysicsSupport* character_physics_support() { return m_pPhysics_support; }
-    virtual CCharacterPhysicsSupport* character_physics_support() const {
-        return m_pPhysics_support;
-    }
-    virtual CPHDestroyable* ph_destroyable();
-    CHolderCustom* Holder() { return m_holder; }
-
-public:
-    virtual void Load(LPCSTR section);
-
-    virtual void shedule_Update(u32 T);
-    virtual void UpdateCL();
-
-    virtual void OnEvent(NET_Packet& P, u16 type);
+    virtual void Load(LPCSTR section) override;
+    virtual void shedule_Update(u32 T) override;
+    virtual void UpdateCL() override;
+    virtual void OnEvent(NET_Packet& P, u16 type) override;
 
     // Render
-    virtual void renderable_Render();
-    virtual BOOL renderable_ShadowGenerate();
-    virtual void feel_sound_new(CObject* who, int type, CSound_UserDataPtr user_data,
-                                const Fvector& Position, float power);
-    virtual Feel::Sound* dcast_FeelSound() { return this; }
-    float m_snd_noise;
+    virtual void renderable_Render() override;
+    [[nodiscard]] virtual BOOL renderable_ShadowGenerate() override;
+    virtual void feel_sound_new(CObject* who, int type, CSound_UserDataPtr user_data, const Fvector& Position, float power) override;
+    [[nodiscard]] virtual Feel::Sound* dcast_FeelSound() override { return this; }
+    
+    float m_snd_noise = 0.0f;
 #ifdef DEBUG
-    virtual void OnRender();
-
+    virtual void OnRender() override;
 #endif
 
 public:
-    virtual bool OnReceiveInfo(shared_str info_id) const;
-    virtual void OnDisableInfo(shared_str info_id) const;
+    [[nodiscard]] virtual bool OnReceiveInfo(shared_str info_id) const override;
+    virtual void OnDisableInfo(shared_str info_id) const override;
 
-    virtual void NewPdaContact(CInventoryOwner*);
-    virtual void LostPdaContact(CInventoryOwner*);
+    virtual void NewPdaContact(CInventoryOwner*) override;
+    virtual void LostPdaContact(CInventoryOwner*) override;
 
 #ifdef DEBUG
     void DumpTasks();
@@ -143,161 +136,168 @@ public:
 
 public:
     void AddGameNews_deffered(GAME_NEWS_DATA& news_data, u32 delay);
-    virtual void AddGameNews(GAME_NEWS_DATA& news_data);
+    virtual void AddGameNews(GAME_NEWS_DATA& news_data, bool bShowInHud = true);
 
 protected:
-    CActorStatisticMgr* m_statistic_manager;
+    CActorStatisticMgr* m_statistic_manager = nullptr;
 
 public:
     virtual void StartTalk(CInventoryOwner* talk_partner);
     void RunTalkDialog(CInventoryOwner* talk_partner, bool disable_break);
     CActorStatisticMgr& StatisticMgr() { return *m_statistic_manager; }
-    CGameNewsRegistryWrapper* game_news_registry;
-    CCharacterPhysicsSupport* m_pPhysics_support;
+    
+    CGameNewsRegistryWrapper* game_news_registry = nullptr;
+    CCharacterPhysicsSupport* m_pPhysics_support = nullptr;
 
-    virtual LPCSTR Name() const { return CInventoryOwner::Name(); }
+    [[nodiscard]] virtual LPCSTR Name() const override { return CInventoryOwner::Name(); }
 
 public:
     // PhraseDialogManager
-    virtual void ReceivePhrase(DIALOG_SHARED_PTR& phrase_dialog);
-    virtual void UpdateAvailableDialogs(CPhraseDialogManager* partner);
+    virtual void ReceivePhrase(DIALOG_SHARED_PTR& phrase_dialog) override;
+    virtual void UpdateAvailableDialogs(CPhraseDialogManager* partner) override;
     virtual void TryToTalk();
     bool OnDialogSoundHandlerStart(CInventoryOwner* inv_owner, LPCSTR phrase);
     bool OnDialogSoundHandlerStop(CInventoryOwner* inv_owner);
 
-    virtual void reinit();
-    virtual void reload(LPCSTR section);
-    virtual bool use_bolts() const;
+    virtual void reinit() override;
+    virtual void reload(LPCSTR section) override;
+    [[nodiscard]] virtual bool use_bolts() const override;
 
-    virtual void OnItemTake(CInventoryItem* inventory_item);
-
-    virtual void OnItemRuck(CInventoryItem* inventory_item, const SInvItemPlace& previous_place);
-    virtual void OnItemBelt(CInventoryItem* inventory_item, const SInvItemPlace& previous_place);
-
-    virtual void OnItemDrop(CInventoryItem* inventory_item, bool just_before_destroy);
-    virtual void OnItemDropUpdate();
-
+    virtual void OnItemTake(CInventoryItem* inventory_item) override;
+    virtual void OnItemRuck(CInventoryItem* inventory_item, const SInvItemPlace& previous_place) override;
+    virtual void OnItemBelt(CInventoryItem* inventory_item, const SInvItemPlace& previous_place) override;
+    virtual void OnItemDrop(CInventoryItem* inventory_item, bool just_before_destroy) override;
+    virtual void OnItemDropUpdate() override;
     virtual void OnPlayHeadShotParticle(NET_Packet P);
 
-    virtual void Die(CObject* who);
-    virtual void Hit(SHit* pHDS);
-    virtual void PHHit(SHit& H);
-    virtual void HitSignal(float P, Fvector& vLocalDir, CObject* who, s16 element);
+    virtual void Die(CObject* who) override;
+    virtual void Hit(SHit* pHDS) override;
+    virtual void PHHit(SHit& H) override;
+    virtual void HitSignal(float P, Fvector& vLocalDir, CObject* who, s16 element) override;
+    
     void HitSector(CObject* who, CObject* weapon);
-    void HitMark(float P, Fvector dir, CObject* who, s16 element, Fvector position_in_bone_space,
-                 float impulse, ALife::EHitType hit_type);
-
+    void HitMark(float P, Fvector dir, CObject* who, s16 element, Fvector position_in_bone_space, float impulse, ALife::EHitType hit_type);
     void Feel_Grenade_Update(float rad);
 
-    virtual float GetMass();
-    virtual float Radius() const;
+    [[nodiscard]] virtual float GetMass() override;
+    [[nodiscard]] virtual float Radius() const override;
     virtual void g_PerformDrop();
 
-    virtual bool use_default_throw_force();
-    virtual float missile_throw_force();
+    [[nodiscard]] virtual bool use_default_throw_force() override;
+    [[nodiscard]] virtual float missile_throw_force() override;
+    [[nodiscard]] virtual bool unlimited_ammo() override;
 
-    virtual bool unlimited_ammo();
-
-    virtual bool NeedToDestroyObject() const;
-    virtual ALife::_TIME_ID TimePassedAfterDeath() const;
+    [[nodiscard]] virtual bool NeedToDestroyObject() const override;
+    [[nodiscard]] virtual ALife::_TIME_ID TimePassedAfterDeath() const;
 
 public:
-    //свойства артефактов
     virtual void UpdateArtefactsOnBeltAndOutfit();
     float HitArtefactsOnBelt(float hit_power, ALife::EHitType hit_type);
     float GetProtection_ArtefactsOnBelt(ALife::EHitType hit_type);
 
 protected:
-    //звук тяжелого дыхания
     ref_sound m_HeavyBreathSnd;
     ref_sound m_BloodSnd;
     ref_sound m_DangerSnd;
 
 protected:
-    // Death
-    float m_hit_slowmo;
-    float m_hit_probability;
-    s8 m_block_sprint_counter;
+    float m_hit_slowmo = 0.0f;
+    float m_hit_probability = 1.0f;
+    s8 m_block_sprint_counter = 0;
 
-    // media
-    SndShockEffector* m_sndShockEffector;
+    SndShockEffector* m_sndShockEffector = nullptr;
     xr_vector<ref_sound> sndHit[ALife::eHitTypeMax];
     ref_sound sndDie[SND_DIE_COUNT];
 
-    float m_fLandingTime;
-    float m_fJumpTime;
-    float m_fFallTime;
-    float m_fCamHeightFactor;
+    float m_fLandingTime = 0.0f;
+    float m_fJumpTime = 0.0f;
+    float m_fFallTime = 0.0f;
+    float m_fCamHeightFactor = 0.87f;
 
-    // Dropping
-    BOOL b_DropActivated;
-    float f_DropPower;
+    BOOL b_DropActivated = FALSE;
+    float f_DropPower = 0.0f;
 
-    // random seed для Zoom mode
-    s32 m_ZoomRndSeed;
-    // random seed для Weapon Effector Shot
-    s32 m_ShotRndSeed;
+    s32 m_ZoomRndSeed = 0;
+    s32 m_ShotRndSeed = 0;
 
-    bool m_bOutBorder;
-    //сохраняет счетчик объектов в feel_touch, для которых необходимо обновлять размер колижена с
-    //актером
-    u32 m_feel_touch_characters;
+    bool m_bOutBorder = false;
+    u32 m_feel_touch_characters = 0;
 
 private:
     void SwitchOutBorder(bool new_border_state);
 
 public:
-    bool m_bAllowDeathRemove;
+    bool m_bAllowDeathRemove = false;
+	void SetReverseGravity(bool state);
+    bool m_bReverseGravity = false;
+    float m_fReverseGravityProgress = 0.0f; 
+	
+    struct SOrbitObject {
+        u16 id;                 
+        float target_radius;    
+        float base_speed;      
+        float phase;            
+        Fvector spin_axis;      
+        float height_offset;    
+		Fvector start_pos;      
+        float time_captured;    
+    };
+
+    xr_vector<SOrbitObject> m_OrbitObjects;
+    u8 m_AnomalyState = 0; 
+    Fvector m_AnomalyCenter;
+	
+	float m_ActorCaptureTime = 0.0f;
+    float m_AnomalyRadius = 15.0f;
+
+    void StartOrbitAnomaly(Fvector center, float radius);
+    void SetOrbitAttack();
+    void StopOrbitAnomaly();
+    void UpdateOrbitAnomaly(); 
 
     void SetZoomRndSeed(s32 Seed = 0);
-    s32 GetZoomRndSeed() { return m_ZoomRndSeed; };
+    [[nodiscard]] s32 GetZoomRndSeed() const { return m_ZoomRndSeed; }
     void SetShotRndSeed(s32 Seed = 0);
-    s32 GetShotRndSeed() { return m_ShotRndSeed; };
+    [[nodiscard]] s32 GetShotRndSeed() const { return m_ShotRndSeed; }
 
 public:
     void detach_Vehicle();
     void steer_Vehicle(float angle);
     void attach_Vehicle(CHolderCustom* vehicle);
 
-    virtual bool can_attach(const CInventoryItem* inventory_item) const;
+    [[nodiscard]] virtual bool can_attach(const CInventoryItem* inventory_item) const override;
 
 protected:
-	CItemUseController* m_item_use;
-    CHolderCustom* m_holder;
-    u16 m_holderID;
+    CItemUseController* m_item_use = nullptr;
+    CHolderCustom* m_holder = nullptr;
+    u16 m_holderID = u16(-1);
     bool use_Holder(CHolderCustom* holder);
-
     bool use_Vehicle(CHolderCustom* object);
     bool use_MountedWeapon(CHolderCustom* object);
     void ActorUse();
 
 protected:
-    BOOL m_bAnimTorsoPlayed;
+    BOOL m_bAnimTorsoPlayed = FALSE;
     static void AnimTorsoPlayCallBack(CBlend* B);
 
-    // Rotation
     SRotation r_torso;
-    float r_torso_tgt_roll;
-    //положение торса без воздействия эффекта отдачи оружия
+    float r_torso_tgt_roll = 0.0f;
     SRotation unaffected_r_torso;
 
-    //ориентация модели
-    float r_model_yaw_dest;
-    float r_model_yaw;       // orientation of model
-    float r_model_yaw_delta; // effect on multiple "strafe"+"something"
+    float r_model_yaw_dest = 0.0f;
+    float r_model_yaw = 0.0f;       
+    float r_model_yaw_delta = 0.0f; 
 
 public:
-    SActorMotions* m_anims;
-    //.	SActorVehicleAnims*		m_vehicle_anims;
+    SActorMotions* m_anims = nullptr;
 
-    CBlend* m_current_legs_blend;
-    CBlend* m_current_torso_blend;
-    CBlend* m_current_jump_blend;
+    CBlend* m_current_legs_blend = nullptr;
+    CBlend* m_current_torso_blend = nullptr;
+    CBlend* m_current_jump_blend = nullptr;
     MotionID m_current_legs;
     MotionID m_current_torso;
     MotionID m_current_head;
 
-    // callback на анимации модели актера
     void SetCallbacks();
     void ResetCallbacks();
     static void Spin0Callback(CBoneInstance*);
@@ -306,27 +306,26 @@ public:
     static void HeadCallback(CBoneInstance*);
     static void VehicleHeadCallback(CBoneInstance*);
 
-    virtual const SRotation Orientation() const { return r_torso; };
-    SRotation& Orientation() { return r_torso; };
+    [[nodiscard]] virtual const SRotation Orientation() const override { return r_torso; }
+    SRotation& Orientation() { return r_torso; }
 
     void g_SetAnimation(u32 mstate_rl);
     void g_SetSprintAnimation(u32 mstate_rl, MotionID& head, MotionID& torso, MotionID& legs);
 
 public:
-    virtual void OnHUDDraw(CCustomHUD* hud);
-    BOOL HUDview() const;
+    virtual void OnHUDDraw(CCustomHUD* hud) override;
+    [[nodiscard]] BOOL HUDview() const;
 
-    // visiblity
-    virtual float ffGetFov() const { return 90.f; }
-    virtual float ffGetRange() const { return 500.f; }
+    [[nodiscard]] virtual float ffGetFov() const override { return 90.f; }
+    [[nodiscard]] virtual float ffGetRange() const override { return 500.f; }
 
 public:
     CActorCameraManager& Cameras() {
         VERIFY(m_pActorEffector);
         return *m_pActorEffector;
     }
-    IC CCameraBase* cam_Active() { return cameras[cam_active]; }
-    IC CCameraBase* cam_FirstEye() { return cameras[eacFirstEye]; }
+    [[nodiscard]] IC CCameraBase* cam_Active() const { return cameras[cam_active]; }
+    [[nodiscard]] IC CCameraBase* cam_FirstEye() const { return cameras[eacFirstEye]; }
 
 protected:
     virtual void cam_Set(EActorCameras style);
@@ -335,40 +334,38 @@ protected:
     void camUpdateLadder(float dt);
     void cam_SetLadder();
     void cam_UnsetLadder();
-    float currentFOV();
 
-    // Cameras
-    CCameraBase* cameras[eacMaxCam];
-    EActorCameras cam_active;
-    float fPrevCamPos;
-    float current_ik_cam_shift;
-    Fvector vPrevCamDir;
-    float fCurAVelocity;
-    CEffectorBobbing* pCamBobbing;
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ CONST
+    [[nodiscard]] float currentFOV();
 
-    //менеджер эффекторов, есть у каждого актрера
-    CActorCameraManager* m_pActorEffector;
+    CCameraBase* cameras[eacMaxCam] = {nullptr};
+    EActorCameras cam_active = eacFirstEye;
+    float fPrevCamPos = 0.0f;
+    float current_ik_cam_shift = 0.0f;
+    Fvector vPrevCamDir = {0.f, 0.f, 1.f};
+    float fCurAVelocity = 0.0f;
+    CEffectorBobbing* pCamBobbing = nullptr;
+
+    CActorCameraManager* m_pActorEffector = nullptr;
     static float f_Ladder_cam_limit;
 
 public:
-    virtual void feel_touch_new(CObject* O);
-    virtual void feel_touch_delete(CObject* O);
-    virtual BOOL feel_touch_contact(CObject* O);
-    virtual BOOL feel_touch_on_contact(CObject* O);
+    virtual void feel_touch_new(CObject* O) override;
+    virtual void feel_touch_delete(CObject* O) override;
+    virtual BOOL feel_touch_contact(CObject* O) override;
+    virtual BOOL feel_touch_on_contact(CObject* O) override;
 
-    CGameObject* ObjectWeLookingAt() { return m_pObjectWeLookingAt; }
-    CInventoryOwner* PersonWeLookingAt() { return m_pPersonWeLookingAt; }
-    LPCSTR GetDefaultActionForObject() { return *m_sDefaultObjAction; }
+    [[nodiscard]] CGameObject* ObjectWeLookingAt() const { return m_pObjectWeLookingAt; }
+    [[nodiscard]] CInventoryOwner* PersonWeLookingAt() const { return m_pPersonWeLookingAt; }
+    [[nodiscard]] LPCSTR GetDefaultActionForObject() const { return *m_sDefaultObjAction; }
 
 protected:
-    CUsableScriptObject* m_pUsableObject;
-    // Person we're looking at
-    CInventoryOwner* m_pPersonWeLookingAt;
-    CHolderCustom* m_pVehicleWeLookingAt;
-    CGameObject* m_pObjectWeLookingAt;
-    CInventoryBox* m_pInvBoxWeLookingAt;
+    CUsableScriptObject* m_pUsableObject = nullptr;
+    CInventoryOwner* m_pPersonWeLookingAt = nullptr;
+    CHolderCustom* m_pVehicleWeLookingAt = nullptr;
+    CGameObject* m_pObjectWeLookingAt = nullptr;
+    CInventoryBox* m_pInvBoxWeLookingAt = nullptr;
 
-    // Tip for action for object we're looking at
     shared_str m_sDefaultObjAction;
     shared_str m_sCharacterUseAction;
     shared_str m_sDeadCharacterUseAction;
@@ -378,22 +375,15 @@ protected:
     shared_str m_sInventoryItemUseAction;
     shared_str m_sInventoryBoxUseAction;
 
-    //	shared_str				m_quick_use_slots[4];
-    //режим подбирания предметов
-    bool m_bPickupMode;
-    //расстояние (в метрах) на котором актер чувствует гранату (любую)
-    float m_fFeelGrenadeRadius;
-    float m_fFeelGrenadeTime; //время гранаты (сек) после которого актер чувствует гранату
-    //расстояние подсветки предметов
-    float m_fPickupInfoRadius;
+    bool m_bPickupMode = false;
+    float m_fFeelGrenadeRadius = 10.0f;
+    float m_fFeelGrenadeTime = 1.0f; 
+    float m_fPickupInfoRadius = 0.0f;
 
     void PickupModeUpdate();
     void PickupInfoDraw(CObject* object);
     void PickupModeUpdate_COD();
 
-    //////////////////////////////////////////////////////////////////////////
-    // Motions (передвижения актрера)
-    //////////////////////////////////////////////////////////////////////////
 public:
     void g_cl_CheckControls(u32 mstate_wf, Fvector& vControlAccel, float& Jump, float dt);
     void g_cl_ValidateMState(float dt, u32 mstate_wf);
@@ -401,96 +391,85 @@ public:
     void g_sv_Orientate(u32 mstate_rl, float dt);
     void g_Orientate(u32 mstate_rl, float dt);
     bool g_LadderOrient();
-    //	void					UpdateMotionIcon		(u32 mstate_rl);
 
-    bool CanAccelerate();
-    bool CanJump();
-    bool CanMove();
-    float CameraHeight();
-    bool CanSprint();
-    bool CanRun();
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ CONST
+    [[nodiscard]] bool CanAccelerate();
+    [[nodiscard]] bool CanJump();
+    [[nodiscard]] bool CanMove();
+    [[nodiscard]] float CameraHeight();
+    [[nodiscard]] bool CanSprint();
+    [[nodiscard]] bool CanRun();
+    [[nodiscard]] bool is_jump();
+
     void StopAnyMove();
 
-    bool AnyAction() { return (mstate_real & mcAnyAction) != 0; };
-    bool AnyMove() { return (mstate_real & mcAnyMove) != 0; };
-
-    bool is_jump();
-    u32 MovingState() const { return mstate_real; }
+    [[nodiscard]] inline bool AnyAction() const { return (mstate_real & mcAnyAction) != 0; }
+    [[nodiscard]] inline bool AnyMove() const { return (mstate_real & mcAnyMove) != 0; }
+    [[nodiscard]] inline u32 MovingState() const { return mstate_real; }
 
 protected:
-    u32 mstate_wishful;
-    u32 mstate_old;
-    u32 mstate_real;
+    u32 mstate_wishful = 0;
+    u32 mstate_old = 0;
+    u32 mstate_real = 0;
 
-    BOOL m_bJumpKeyPressed;
+    BOOL m_bJumpKeyPressed = FALSE;
 
-    float m_fWalkAccel;
-    float m_fJumpSpeed;
-    float m_fRunFactor;
-    float m_fRunBackFactor;
-    float m_fWalkBackFactor;
-    float m_fCrouchFactor;
-    float m_fClimbFactor;
-    float m_fSprintFactor;
+    float m_fWalkAccel = 0.0f;
+    float m_fJumpSpeed = 0.0f;
+    float m_fRunFactor = 2.0f;
+    float m_fRunBackFactor = 0.0f;
+    float m_fWalkBackFactor = 0.0f;
+    float m_fCrouchFactor = 0.2f;
+    float m_fClimbFactor = 1.0f;
+    float m_fSprintFactor = 4.0f;
 
-    float m_fWalk_StrafeFactor;
-    float m_fRun_StrafeFactor;
+    float m_fWalk_StrafeFactor = 1.0f;
+    float m_fRun_StrafeFactor = 1.0f;
 
 public:
-    Fvector GetMovementSpeed() { return NET_SavedAccel; };
-    //////////////////////////////////////////////////////////////////////////
-    // User input/output
-    //////////////////////////////////////////////////////////////////////////
+    [[nodiscard]] Fvector GetMovementSpeed() const { return NET_SavedAccel; }
+
 public:
-    virtual void IR_OnMouseMove(int x, int y);
-    virtual void IR_OnKeyboardPress(int dik);
-    virtual void IR_OnKeyboardRelease(int dik);
-    virtual void IR_OnKeyboardHold(int dik);
-    virtual void IR_OnMouseWheel(int direction);
-    virtual float GetLookFactor();
+    virtual void IR_OnMouseMove(int x, int y) override;
+    virtual void IR_OnKeyboardPress(int dik) override;
+    virtual void IR_OnKeyboardRelease(int dik) override;
+    virtual void IR_OnKeyboardHold(int dik) override;
+    virtual void IR_OnMouseWheel(int direction) override;
+    [[nodiscard]] virtual float GetLookFactor();
 
 public:
     virtual void g_WeaponBones(int& L, int& R1, int& R2);
     virtual void g_fireParams(const CHudItem* pHudItem, Fvector& P, Fvector& D);
-    virtual bool g_stateFire() { return !((mstate_wishful & mcLookout) && !IsGameTypeSingle()); }
-
-    virtual BOOL g_State(SEntityState& state) const;
-    virtual float GetWeaponAccuracy() const;
-    float GetFireDispertion() const { return m_fdisp_controller.GetCurrentDispertion(); }
-    bool IsZoomAimingMode() const { return m_bZoomAimingMode; }
-    virtual float MaxCarryWeight() const;
-    float MaxWalkWeight() const;
-    float get_additional_weight() const;
+    [[nodiscard]] virtual bool g_stateFire() override { return !((mstate_wishful & mcLookout) && !IsGameTypeSingle()); }
+    [[nodiscard]] virtual BOOL g_State(SEntityState& state) const override;
+    [[nodiscard]] virtual float GetWeaponAccuracy() const override;
+    
+    [[nodiscard]] float GetFireDispertion() const { return m_fdisp_controller.GetCurrentDispertion(); }
+    [[nodiscard]] bool IsZoomAimingMode() const { return m_bZoomAimingMode; }
+    
+    [[nodiscard]] virtual float MaxCarryWeight() const override;
+    [[nodiscard]] float MaxWalkWeight() const;
+    [[nodiscard]] float get_additional_weight() const;
 
 protected:
     CFireDispertionController m_fdisp_controller;
-    //если актер целится в прицел
     void SetZoomAimingMode(bool val) { m_bZoomAimingMode = val; }
-    bool m_bZoomAimingMode;
+    bool m_bZoomAimingMode = false;
 
-    //настройки аккуратности стрельбы
-    //базовая дисперсия (когда игрок стоит на месте)
-    float m_fDispBase;
-    float m_fDispAim;
-    //коэффициенты на сколько процентов увеличится базовая дисперсия
-    //учитывает скорость актера
-    float m_fDispVelFactor;
-    //если актер бежит
-    float m_fDispAccelFactor;
-    //если актер сидит
-    float m_fDispCrouchFactor;
-    // crouch+no acceleration
-    float m_fDispCrouchNoAccelFactor;
+    float m_fDispBase = 0.0f;
+    float m_fDispAim = 0.0f;
+    float m_fDispVelFactor = 0.0f;
+    float m_fDispAccelFactor = 0.0f;
+    float m_fDispCrouchFactor = 0.0f;
+    float m_fDispCrouchNoAccelFactor = 0.0f;
 
 protected:
-    //косточки используемые при стрельбе
     int m_r_hand;
     int m_l_finger1;
     int m_r_finger2;
     int m_head;
     int m_eye_left;
     int m_eye_right;
-
     int m_l_clavicle;
     int m_r_clavicle;
     int m_spine2;
@@ -498,57 +477,45 @@ protected:
     int m_spine;
     int m_neck;
 
-    //////////////////////////////////////////////////////////////////////////
-    // Network
-    //////////////////////////////////////////////////////////////////////////
+protected:
     void ConvState(u32 mstate_rl, string128* buf);
 
 public:
-    virtual BOOL net_Spawn(CSE_Abstract* DC);
-    virtual void net_Export(NET_Packet& P); // export to server
-    virtual void net_Import(NET_Packet& P); // import from server
-    virtual void net_Destroy();
-    virtual BOOL
-    net_Relevant(); //	{ return getSVU() | getLocal(); };		// relevant for export to
-                    //server
-    virtual void net_Relcase(CObject* O); //
+    virtual BOOL net_Spawn(CSE_Abstract* DC) override;
+    virtual void net_Export(NET_Packet& P) override; 
+    virtual void net_Import(NET_Packet& P) override; 
+    virtual void net_Destroy() override;
+    [[nodiscard]] virtual BOOL net_Relevant() override; 
+    virtual void net_Relcase(CObject* O) override; 
     virtual void xr_stdcall on_requested_spawn(CObject* object);
-    // object serialization
-    virtual void save(NET_Packet& output_packet);
-    virtual void load(IReader& input_packet);
-    virtual void net_Save(NET_Packet& P);
-    virtual BOOL net_SaveRelevant();
+    
+    virtual void save(NET_Packet& output_packet) override;
+    virtual void load(IReader& input_packet) override;
+    virtual void net_Save(NET_Packet& P) override;
+    [[nodiscard]] virtual BOOL net_SaveRelevant() override;
 
 protected:
     xr_deque<net_update> NET;
     Fvector NET_SavedAccel;
     net_update NET_Last;
-    BOOL NET_WasInterpolating; // previous update was by interpolation or by extrapolation
-    u32 NET_Time;              // server time of last update
+    BOOL NET_WasInterpolating = FALSE; 
+    u32 NET_Time = 0;             
 
-    //---------------------------------------------
     void net_Import_Base(NET_Packet& P);
     void net_Import_Physic(NET_Packet& P);
     void net_Import_Base_proceed();
     void net_Import_Physic_proceed();
-    //---------------------------------------------
 
-    ////////////////////////////////////////////////////////////////////////////
-    virtual bool can_validate_position_on_spawn() { return false; }
-    ///////////////////////////////////////////////////////
-    // апдайт с данными физики
+    [[nodiscard]] virtual bool can_validate_position_on_spawn() override { return false; }
+    
     xr_deque<net_update_A> NET_A;
 
-    //---------------------------------------------
-    //	bool					m_bHasUpdate;
-    /// spline coeff /////////////////////
-    float SCoeff[3][4];          //коэффициэнты для сплайна Бизье
-    float HCoeff[3][4];          //коэффициэнты для сплайна Эрмита
-    Fvector IPosS, IPosH, IPosL; //положение актера после интерполяции Бизье, Эрмита, линейной
+    float SCoeff[3][4];          
+    float HCoeff[3][4];          
+    Fvector IPosS, IPosH, IPosL; 
 
 #ifdef DEBUG
     using VIS_POSITION = xr_deque<Fvector>;
-
     VIS_POSITION LastPosS;
     VIS_POSITION LastPosH;
     VIS_POSITION LastPosL;
@@ -562,82 +529,66 @@ protected:
     InterpData IRec;
     InterpData IEnd;
 
-    bool m_bInInterpolation;
-    bool m_bInterpolate;
-    u32 m_dwIStartTime;
-    u32 m_dwIEndTime;
-    u32 m_dwILastUpdateTime;
+    bool m_bInInterpolation = false;
+    bool m_bInterpolate = false;
+    u32 m_dwIStartTime = 0;
+    u32 m_dwIEndTime = 0;
+    u32 m_dwILastUpdateTime = 0;
 
-    //---------------------------------------------
     using PH_STATES = xr_deque<SPHNetState>;
     PH_STATES m_States;
-    u16 m_u16NumBones;
+    u16 m_u16NumBones = 0;
+    
     void net_ExportDeadBody(NET_Packet& P);
-    //---------------------------------------------
     void CalculateInterpolationParams();
-    //---------------------------------------------
     virtual void make_Interpolation();
+    
 #ifdef DEBUG
-    //---------------------------------------------
     virtual void OnRender_Network();
-//---------------------------------------------
 #endif
 
-    // Igor	ref_geom 				hFriendlyIndicator;
-    //////////////////////////////////////////////////////////////////////////
-    // Actor physics
-    //////////////////////////////////////////////////////////////////////////
 public:
     void g_Physics(Fvector& accel, float jump, float dt);
-    virtual void ForceTransform(const Fmatrix& m);
+    virtual void ForceTransform(const Fmatrix& m) override;
     void SetPhPosition(const Fmatrix& pos);
-    virtual void PH_B_CrPr(); // actions & operations before physic correction-prediction steps
-    virtual void PH_I_CrPr(); // actions & operations after correction before prediction steps
-    virtual void PH_A_CrPr(); // actions & operations after phisic correction-prediction steps
-                              //	virtual void			UpdatePosStack	( u32 Time0, u32 Time1 );
+    virtual void PH_B_CrPr() override; 
+    virtual void PH_I_CrPr() override; 
+    virtual void PH_A_CrPr() override; 
     virtual void MoveActor(Fvector NewPos, Fvector NewDir);
 
     virtual void SpawnAmmoForWeapon(CInventoryItem* pIItem);
     virtual void RemoveAmmoForWeapon(CInventoryItem* pIItem);
-    virtual void spawn_supplies();
-    virtual bool human_being() const { return (true); }
+    virtual void spawn_supplies() override;
+    [[nodiscard]] virtual bool human_being() const override { return true; }
 
-    virtual shared_str GetDefaultVisualOutfit() const { return m_DefaultVisualOutfit; };
-    virtual void SetDefaultVisualOutfit(shared_str DefaultOutfit) {
-        m_DefaultVisualOutfit = DefaultOutfit;
-    };
-    virtual void UpdateAnimation() { g_SetAnimation(mstate_real); };
+    [[nodiscard]] virtual shared_str GetDefaultVisualOutfit() const { return m_DefaultVisualOutfit; }
+    virtual void SetDefaultVisualOutfit(shared_str DefaultOutfit) { m_DefaultVisualOutfit = DefaultOutfit; }
+    virtual void UpdateAnimation() { g_SetAnimation(mstate_real); }
 
     virtual void ChangeVisual(shared_str NewVisual);
-    virtual void OnChangeVisual();
+    virtual void OnChangeVisual() override;
 
     virtual void RenderIndicator(Fvector dpos, float r1, float r2, const ui_shader& IndShader);
     virtual void RenderText(LPCSTR Text, Fvector dpos, float* pdup, u32 color);
 
-    //////////////////////////////////////////////////////////////////////////
-    // Controlled Routines
-    //////////////////////////////////////////////////////////////////////////
-
     void set_input_external_handler(CActorInputHandler* handler);
-    bool input_external_handler_installed() const { return (m_input_external_handler != 0); }
+    [[nodiscard]] bool input_external_handler_installed() const { return (m_input_external_handler != nullptr); }
 
     IC void lock_accel_for(u32 time) { m_time_lock_accel = Device.dwTimeGlobal + time; }
 
 private:
-    CActorInputHandler* m_input_external_handler;
-    u32 m_time_lock_accel;
+    CActorInputHandler* m_input_external_handler = nullptr;
+    u32 m_time_lock_accel = 0;
 
-    /////////////////////////////////////////
-    // DEBUG INFO
 protected:
-    CStatGraph* pStatGraph;
+    CStatGraph* pStatGraph = nullptr;
 
     shared_str m_DefaultVisualOutfit;
-
-    LPCSTR invincibility_fire_shield_3rd;
-    LPCSTR invincibility_fire_shield_1st;
+    LPCSTR invincibility_fire_shield_3rd = nullptr;
+    LPCSTR invincibility_fire_shield_1st = nullptr;
     shared_str m_sHeadShotParticle;
-    u32 last_hit_frame;
+    u32 last_hit_frame = 0;
+    
 #ifdef DEBUG
     friend class CLevelGraph;
 #endif
@@ -650,84 +601,83 @@ protected:
 public:
     void SetWeaponHideState(u16 State, bool bSet);
 
-private: // IPhysicsShellHolder
-    virtual void HideAllWeapons(bool v) { SetWeaponHideState(INV_STATE_BLOCK_ALL, v); }
+private: 
+    virtual void HideAllWeapons(bool v) override { SetWeaponHideState(INV_STATE_BLOCK_ALL, v); }
 
 public:
     void SetCantRunState(bool bSet);
 
 private:
-    CActorCondition* m_entity_condition;
+    CActorCondition* m_entity_condition = nullptr;
 
 protected:
-    virtual CEntityConditionSimple* create_entity_condition(CEntityConditionSimple* ec);
+    virtual CEntityConditionSimple* create_entity_condition(CEntityConditionSimple* ec) override;
 
 public:
-    IC CActorCondition& conditions() const;
-    virtual DLL_Pure* _construct();
-    virtual bool natural_weapon() const { return false; }
-    virtual bool natural_detector() const { return false; }
-    virtual bool use_center_to_aim() const;
+    [[nodiscard]] IC CActorCondition& conditions() const;
+    [[nodiscard]] virtual DLL_Pure* _construct() override;
+    [[nodiscard]] virtual bool natural_weapon() const override { return false; }
+    [[nodiscard]] virtual bool natural_detector() const override { return false; }
+    [[nodiscard]] virtual bool use_center_to_aim() const override;
 
 protected:
-    u16 m_iLastHitterID;
-    u16 m_iLastHittingWeaponID;
-    s16 m_s16LastHittedElement;
+    u16 m_iLastHitterID = u16(-1);
+    u16 m_iLastHittingWeaponID = u16(-1);
+    s16 m_s16LastHittedElement = 0;
     Fvector m_vLastHitDir;
     Fvector m_vLastHitPos;
-    float m_fLastHealth;
-    bool m_bWasHitted;
-    bool m_bWasBackStabbed;
+    float m_fLastHealth = 0.0f;
+    bool m_bWasHitted = false;
+    bool m_bWasBackStabbed = false;
 
     virtual bool Check_for_BackStab_Bone(u16 element);
 
 public:
-    virtual void SetHitInfo(CObject* who, CObject* weapon, s16 element, Fvector Pos, Fvector Dir);
+    virtual void SetHitInfo(CObject* who, CObject* weapon, s16 element, Fvector Pos, Fvector Dir) override;
 
-    virtual void OnHitHealthLoss(float NewHealth);
-    virtual void OnCriticalHitHealthLoss();
-    virtual void OnCriticalWoundHealthLoss();
-    virtual void OnCriticalRadiationHealthLoss();
+    virtual void OnHitHealthLoss(float NewHealth) override;
+    virtual void OnCriticalHitHealthLoss() override;
+    virtual void OnCriticalWoundHealthLoss() override;
+    virtual void OnCriticalRadiationHealthLoss() override;
 
-    virtual bool InventoryAllowSprint();
+    [[nodiscard]] virtual bool InventoryAllowSprint();
     virtual void OnNextWeaponSlot();
     virtual void OnPrevWeaponSlot();
     void SwitchNightVision();
     void SwitchTorch();
+    
 #ifdef DEBUG
     void NoClipFly(int cmd);
-#endif // DEBUG
+#endif 
 
 public:
-    virtual void on_weapon_shot_start(CWeapon* weapon);
-    virtual void on_weapon_shot_update();
-    virtual void on_weapon_shot_stop();
-    virtual void on_weapon_shot_remove(CWeapon* weapon);
-    virtual void on_weapon_hide(CWeapon* weapon);
+    virtual void on_weapon_shot_start(CWeapon* weapon) override;
+    virtual void on_weapon_shot_update() override;
+    virtual void on_weapon_shot_stop() override;
+    virtual void on_weapon_shot_remove(CWeapon* weapon) override;
+    virtual void on_weapon_hide(CWeapon* weapon) override;
     Fvector weapon_recoil_delta_angle();
     Fvector weapon_recoil_last_delta();
 
 protected:
     virtual void update_camera(CCameraShotEffector* effector);
-    // step manager
-    virtual bool is_on_ground();
+    [[nodiscard]] virtual bool is_on_ground() override;
 
 private:
-    CActorMemory* m_memory;
+    CActorMemory* m_memory = nullptr;
 
 public:
-    IC CActorMemory& memory() const {
+    [[nodiscard]] IC CActorMemory& memory() const {
         VERIFY(m_memory);
         return (*m_memory);
-    };
+    }
 
     void OnDifficultyChanged();
 
-    IC float HitProbability() { return m_hit_probability; }
-    virtual CVisualMemoryManager* visual_memory() const;
-
-    virtual BOOL BonePassBullet(int boneID);
-    virtual void On_B_NotCurrentEntity();
+    [[nodiscard]] IC float HitProbability() const { return m_hit_probability; }
+    [[nodiscard]] virtual CVisualMemoryManager* visual_memory() const override;
+    virtual BOOL BonePassBullet(int boneID) override;
+    virtual void On_B_NotCurrentEntity() override;
 
 private:
     collide::rq_results RQR;
@@ -735,10 +685,10 @@ private:
     xr_vector<ISpatial*> ISpatialResult;
 
 private:
-    CLocationManager* m_location_manager;
+    CLocationManager* m_location_manager = nullptr;
 
 public:
-    IC const CLocationManager& locations() const {
+    [[nodiscard]] IC const CLocationManager& locations() const {
         VERIFY(m_location_manager);
         return (*m_location_manager);
     }
@@ -747,28 +697,27 @@ private:
     ALife::_OBJECT_ID m_holder_id;
 
 public:
-    virtual bool register_schedule() const { return false; }
-    virtual bool is_ai_obstacle() const;
+    [[nodiscard]] virtual bool register_schedule() const override { return false; }
+    [[nodiscard]] virtual bool is_ai_obstacle() const override;
 
     float GetRestoreSpeed(ALife::EConditionRestoreType const& type);
 
 public:
-    virtual void On_SetEntity();
-    virtual void On_LostEntity(){};
+    virtual void On_SetEntity() override;
+    virtual void On_LostEntity() override {};
 
-    void DisableHitMarks(bool disable) { m_disabled_hitmarks = disable; };
-    bool DisableHitMarks() { return m_disabled_hitmarks; };
+    void DisableHitMarks(bool disable) { m_disabled_hitmarks = disable; }
+    [[nodiscard]] bool DisableHitMarks() const { return m_disabled_hitmarks; }
 
     void set_inventory_disabled(bool is_disabled) { m_inventory_disabled = is_disabled; }
-    bool inventory_disabled() const { return m_inventory_disabled; }
+    [[nodiscard]] bool inventory_disabled() const { return m_inventory_disabled; }
 
 private:
     void set_state_box(u32 mstate);
 
 private:
-    bool m_disabled_hitmarks;
-    bool m_inventory_disabled;
-    // static CPhysicsShell		*actor_camera_shell;
+    bool m_disabled_hitmarks = false;
+    bool m_inventory_disabled = false;
 
     DECLARE_SCRIPT_REGISTER_FUNCTION
 };
@@ -776,13 +725,13 @@ add_to_type_list(CActor)
 #undef script_type_list
 #define script_type_list save_type_list(CActor)
 
-    extern bool isActorAccelerated(u32 mstate, bool ZoomMode);
+extern bool isActorAccelerated(u32 mstate, bool ZoomMode);
 
-IC CActorCondition& CActor::conditions() const {
+[[nodiscard]] IC CActorCondition& CActor::conditions() const {
     VERIFY(m_entity_condition);
     return (*m_entity_condition);
 }
 
 extern CActor* g_actor;
-CActor* Actor();
+[[nodiscard]] CActor* Actor();
 extern const float s_fFallTime;

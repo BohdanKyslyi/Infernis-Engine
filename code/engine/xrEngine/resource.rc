@@ -12,6 +12,9 @@
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
+/////////////////////////////////////////////////////////////////////////////
+// Russian resources
+
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_RUS)
 #ifdef _WIN32
 LANGUAGE LANG_RUSSIAN, SUBLANG_DEFAULT
@@ -40,8 +43,8 @@ IDB_BITMAP1             BITMAP                  "splash_ie.bmp"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,7,0
- PRODUCTVERSION 1,7,0
+ FILEVERSION 0,2,6
+ PRODUCTVERSION 0,2,6
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -57,13 +60,13 @@ BEGIN
         BLOCK "000004b0"
         BEGIN
             VALUE "CompanyName", "GSC Game World"
-            VALUE "FileDescription", "Infernis Engine x64"
-            VALUE "FileVersion", "0.2.5"
+            VALUE "FileDescription", "X-Ray 1.6 Engine"
+            VALUE "FileVersion", "0.2.6"
             VALUE "InternalName", "xrEngine"
             VALUE "LegalCopyright", "Copyright © 2009 GSC Game World"
             VALUE "OriginalFilename", "xrEngine.exe"
-            VALUE "ProductName", "Infernis Engine x64"
-            VALUE "ProductVersion", "0.2.5"
+            VALUE "ProductName", "Infernis Engine"
+            VALUE "ProductVersion", "0.2.6"
         END
     END
     BLOCK "VarFileInfo"
@@ -72,7 +75,9 @@ BEGIN
     END
 END
 
-#endif
+#endif    // Russian resources
+/////////////////////////////////////////////////////////////////////////////
+
 
 /////////////////////////////////////////////////////////////////////////////
 // Ukrainian resources

@@ -32,7 +32,26 @@ else()
     message(FATAL_ERROR "Only MSVC compiler is supported")
 endif()
 
-set(CMAKE_CONFIGURATION_TYPES "Debug;RelWithDebInfo" CACHE STRING "" FORCE)
+# -----------------------------------------
+# Add custom Release configurations with AVX
+# -----------------------------------------
+set(CMAKE_CONFIGURATION_TYPES "Debug;RelWithDebInfo;Release;ReleaseAVX;ReleaseAVX2" CACHE STRING "" FORCE)
+
+# Base flags for Release-like configs
+set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASEAVX "/O2 /DNDEBUG /arch:AVX")
+set(CMAKE_CXX_FLAGS_RELEASEAVX2 "/O2 /DNDEBUG /arch:AVX2")
+
+# Linker flags for Release-like configs
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "/LTCG /OPT:REF /INCREMENTAL:NO")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASEAVX "/LTCG /OPT:REF /INCREMENTAL:NO")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASEAVX2 "/LTCG /OPT:REF /INCREMENTAL:NO")
+
+# Apply flags dynamically depending on config
+string(TOUPPER "${CMAKE_BUILD_TYPE}" UPPER_BUILD_TYPE)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${UPPER_BUILD_TYPE}}")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${CMAKE_EXE_LINKER_FLAGS_${UPPER_BUILD_TYPE}}")
+
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 string(REGEX REPLACE "/EH[a-z]+" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
@@ -109,7 +128,6 @@ add_subdirectory(code/3rd-party/libvorbisfile)
 add_subdirectory(code/3rd-party/ati)
 add_subdirectory(code/3rd-party/nvapi)
 add_subdirectory(code/3rd-party/DPlay)
-add_subdirectory(code/3rd-party/eax)
 add_subdirectory(code/3rd-party/cs)
 add_subdirectory(code/3rd-party/fmtlib EXCLUDE_FROM_ALL)
 add_subdirectory(code/3rd-party/boost)
@@ -125,7 +143,6 @@ set_target_properties(zlib PROPERTIES FOLDER 3rd-party)
 set_target_properties(minizip PROPERTIES FOLDER 3rd-party)
 set_target_properties(dxerr2015 PROPERTIES FOLDER 3rd-party)
 set_target_properties(ode PROPERTIES FOLDER 3rd-party)
-set_target_properties(openal32 PROPERTIES FOLDER 3rd-party)
 set_target_properties(luajit-build PROPERTIES FOLDER 3rd-party)
 set_target_properties(luabind PROPERTIES FOLDER 3rd-party)
 set_target_properties(libogg PROPERTIES FOLDER 3rd-party)
@@ -135,7 +152,6 @@ set_target_properties(libvorbisfile PROPERTIES FOLDER 3rd-party)
 set_target_properties(ati-src PROPERTIES FOLDER 3rd-party)
 set_target_properties(nvapi-src PROPERTIES FOLDER 3rd-party)
 set_target_properties(DPlay-src PROPERTIES FOLDER 3rd-party)
-set_target_properties(eax-src PROPERTIES FOLDER 3rd-party)
 set_target_properties(cs-src PROPERTIES FOLDER 3rd-party)
 
 #engine

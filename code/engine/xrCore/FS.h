@@ -101,7 +101,9 @@ public:
         std::array<char, bufSize> buf;
         const auto written = std::snprintf(buf.data(), bufSize, format, args...);
         if (written > 0) {
-            w(buf.data(), static_cast<size_t>(written));
+            const size_t available = bufSize - 1;
+            const size_t count = static_cast<size_t>(written);
+            w(buf.data(), count < bufSize ? count : available);
         }
     }
 

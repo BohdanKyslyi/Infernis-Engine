@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="windows-1251" ?>
+<w>
+    <main x="0" y="600" width="1024" height="150">
+        
+        <speaker_name x="0" y="0" width="1024" height="20">
+            <text font="letterica18" r="238" g="153" b="26" align="c" vert_align="c"/>
+        </speaker_name>
+        
+        <divider x="262" y="25" width="500" height="2" stretch="1">
+            <texture>ui_inGame2_hint_wnd_bar</texture>
+        </divider>
+
+        <message_text x="112" y="35" width="800" height="100" complex_mode="1">
+            <text font="letterica16" r="200" g="200" b="200" align="c" vert_align="t"/>
+        </message_text>
+        
+    </main>
+</w>

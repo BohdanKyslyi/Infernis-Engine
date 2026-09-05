@@ -1,7 +1,7 @@
 #ifndef _TextureDescrManager_included_
 #define _TextureDescrManager_included_
-
 #pragma once
+
 #include "ETextureParams.h"
 
 class cl_dt_scaler;
@@ -9,22 +9,23 @@ class cl_dt_scaler;
 class CTextureDescrMngr {
     struct texture_assoc {
         shared_str detail_name;
-        // R_constant_setup*	cs;
-        u8 usage;
-        texture_assoc() : /*cs(NULL),*/ usage(0) {}
-        ~texture_assoc() { /*xr_delete(cs);*/
-        }
+        u8 usage{ 0 };
     };
+
     struct texture_spec {
         shared_str m_bump_name;
-        float m_material;
-        bool m_use_steep_parallax;
-        bool m_use_pbr;
+        float m_material{ 1.0f };
+        bool m_use_steep_parallax{ false };
+        bool m_use_pbr{ false };
     };
+
+    // МАКСИМАЛЬНА ОПТИМІЗАЦІЯ: Inline-зберігання даних замість вказівників.
+    // Це економить тисячі викликів xr_new / xr_delete при завантаженні рівнів!
     struct texture_desc {
-        texture_assoc* m_assoc;
-        texture_spec* m_spec;
-        texture_desc() : m_assoc(NULL), m_spec(NULL) {}
+        texture_assoc assoc;
+        texture_spec spec;
+        bool bHasAssoc{ false };
+        bool bHasSpec{ false };
     };
 
     using map_TD = xr_map<shared_str, texture_desc>;
@@ -36,16 +37,20 @@ class CTextureDescrMngr {
     void LoadTHM(LPCSTR initial);
 
 public:
+    CTextureDescrMngr() = default;
     ~CTextureDescrMngr();
+    
     void Load();
     void UnLoad();
 
 public:
-    shared_str GetBumpName(const shared_str& tex_name) const;
-    float GetMaterial(const shared_str& tex_name) const;
+    [[nodiscard]] shared_str GetBumpName(const shared_str& tex_name) const;
+    [[nodiscard]] float GetMaterial(const shared_str& tex_name) const;
+    [[nodiscard]] BOOL UseSteepParallax(const shared_str& tex_name) const;
+    [[nodiscard]] BOOL UsePBRTextures(const shared_str& tex_name) const;
+    
     void GetTextureUsage(const shared_str& tex_name, BOOL& bDiffuse, BOOL& bBump) const;
     BOOL GetDetailTexture(const shared_str& tex_name, LPCSTR& res, R_constant_setup*& CS) const;
-    BOOL UseSteepParallax(const shared_str& tex_name) const;
-    BOOL UsePBRTextures(const shared_str& tex_name) const;
 };
-#endif
+
+#endif // _TextureDescrManager_included_
