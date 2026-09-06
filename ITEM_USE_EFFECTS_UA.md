@@ -68,7 +68,7 @@ use_particles_stop_time   = 4300
 Матриця партикла оновлюється щокадрово з item-анімації. І циклічний, і звичайний
 ефект належать контролеру та видаляються разом із тимчасовим HUD-предметом.
 
-## Persistent HUD: основа для PDA та рюкзака
+## Persistent HUD lifecycle
 
 Окрім одноразового consumable-режиму, контролер має окремий persistent lifecycle:
 
@@ -119,10 +119,11 @@ snd_show1 = interface\pda_draw_2,  0.8, 0.0
 snd_hide  = interface\pda_holster, 0.8, 0.0
 ```
 
-Підготовлений C++ API:
+Внутрішній C++ API:
 
 ```cpp
 controller->StartHudAnimation(hud_section);
+controller->IsHudAnimationActive();
 controller->IsHudAnimationIdle();
 controller->RequestHudAnimationHide();
 ```
@@ -130,5 +131,42 @@ controller->RequestHudAnimationHide();
 Consumable-шлях `Start(CInventoryItem*)` не переходить у persistent lifecycle:
 для старої їжі `anm_show` і надалі є повною одноразовою анімацією використання,
 `snd_using_anim` лишається її окремим звуком, а відсутність `anm_idle`,
-`anm_hide`, `snd_show` та `snd_hide` нічого не змінює. Підключення цього API до
-функцій відкриття/закриття PDA та рюкзака виконується окремо.
+`anm_hide`, `snd_show` та `snd_hide` нічого не змінює.
+
+## Підключення PDA
+
+Імерсивна анімація PDA вмикається через HUD-секцію в `engine_external.ltx`:
+
+```ini
+[items_animations]
+enable_consumables_animations = true
+enable_pda_animations         = true
+pda_hud                       = anm_pda_hud
+```
+
+- `enable_pda_animations` необов'язковий і типово вважається `true`;
+- `pda_hud` — секція persistent HUD із `item_visual`, `anm_show` та
+  необов'язковими `anm_idle`, `anm_hide`, `snd_show`, `snd_hide`;
+- якщо `pda_hud` не задано, дорівнює `none`, його секції не існує або анімацію
+  неможливо запустити, рушій безпечно відкриває PDA старим миттєвим способом.
+
+Послідовність відкриття:
+
+```text
+PDA hotkey -> weapon/detector hide -> anm_show + snd_show
+           -> logical idle -> original 2D PDA interface
+```
+
+Послідовність закриття:
+
+```text
+PDA hotkey / close button / script -> close 2D interface
+                                   -> anm_hide + snd_hide
+                                   -> detach HUD -> restore weapon
+```
+
+Контролер відстежує фактичний стан `CUIPdaWnd`, тому hide-послідовність працює
+не лише для стандартного хоткея, але й для кнопки закриття, скриптового
+`HidePdaMenu()` та загального закриття діалогів. У разі смерті актора, зміни
+рівня або скасування контролера pending-відкриття очищається, а 2D PDA не
+залишається завислим на екрані.

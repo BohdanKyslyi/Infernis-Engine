@@ -18,6 +18,7 @@ public:
     // outside the controller.
     bool StartHudAnimation(const shared_str& hud_section);
     void RequestHudAnimationHide();
+    bool IsHudAnimationActive() const;
     bool IsHudAnimationIdle() const;
 
     void Update(float dt);

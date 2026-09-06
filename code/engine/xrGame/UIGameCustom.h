@@ -86,6 +86,15 @@ protected:
 
     bool m_bShowGameIndicators;
 
+    // The original 2D PDA remains untouched. These flags only bridge it to
+    // the controller-owned show/idle/hide HUD sequence.
+    bool m_pda_hud_animation_active;
+    bool m_pda_hud_pending_open;
+
+    bool StartPdaHudAnimation();
+    void RequestPdaHudAnimationHide();
+    void UpdatePdaHudAnimation();
+
 public:
     CUIMainIngameWnd* UIMainIngameWnd;
     CUIMessagesWindow* m_pMessagesWnd;

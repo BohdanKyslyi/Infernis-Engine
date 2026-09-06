@@ -14,6 +14,7 @@
 #include "ui/UIHudStatesWnd.h"
 #include "actor.h"
 #include "inventory.h"
+#include "ItemUseController.h"
 #include "game_cl_base.h"
 
 #include "../xrEngine/x_ray.h"
@@ -33,6 +34,9 @@ struct predicate_find_stat {
 CUIGameCustom::CUIGameCustom()
     : m_msgs_xml(NULL), m_ActorMenu(NULL), m_PdaMenu(NULL), m_window(NULL), UIMainIngameWnd(NULL),
       m_pMessagesWnd(NULL) {
+    m_pda_hud_animation_active = false;
+    m_pda_hud_pending_open = false;
+
     ShowGameIndicators(true);
     ShowCrosshair(true);
 }
@@ -68,6 +72,8 @@ void CUIGameCustom::OnFrame() {
         UIMainIngameWnd->Update();
 
     m_pMessagesWnd->Update();
+
+    UpdatePdaHudAnimation();
 }
 
 void CUIGameCustom::Render() {
@@ -184,6 +190,33 @@ void CUIGameCustom::ShowMessagesWindow() {
 
 bool CUIGameCustom::ShowPdaMenu() {
     HideActorMenu();
+
+    if (m_PdaMenu->IsShown() || m_pda_hud_pending_open)
+        return true;
+
+    CActor* actor = smart_cast<CActor*>(Level().CurrentViewEntity());
+    CItemUseController* controller = actor ? actor->GetItemUseController() : NULL;
+
+    // Do not let a scripted PDA request bypass an active consumable or another
+    // controller-owned HUD sequence. The regular hotkey is already protected
+    // by inventory_disabled(), but this also covers direct engine/script calls.
+    if (controller && controller->IsActive()) {
+        if (m_pda_hud_animation_active && controller->IsHudAnimationActive())
+            return true;
+
+        return false;
+    }
+
+    if (m_pda_hud_animation_active) {
+        m_pda_hud_animation_active = false;
+        m_pda_hud_pending_open = false;
+    }
+
+    if (StartPdaHudAnimation())
+        return true;
+
+    // Backward-compatible fallback: without a configured/valid HUD section,
+    // the original 2D PDA opens immediately.
     m_PdaMenu->ShowDialog(true);
     return true;
 }
@@ -192,11 +225,122 @@ void CUIGameCustom::HidePdaMenu() {
     if (m_PdaMenu->IsShown()) {
         m_PdaMenu->HideDialog();
     }
+
+    RequestPdaHudAnimationHide();
+}
+
+bool CUIGameCustom::StartPdaHudAnimation() {
+    if (!IsGameTypeSingle() || !pSettings->section_exist("items_animations"))
+        return false;
+
+    if (pSettings->line_exist("items_animations", "enable_pda_animations") &&
+        !pSettings->r_bool("items_animations", "enable_pda_animations")) {
+        return false;
+    }
+
+    if (!pSettings->line_exist("items_animations", "pda_hud"))
+        return false;
+
+    LPCSTR hud_section = pSettings->r_string("items_animations", "pda_hud");
+
+    if (!hud_section || !hud_section[0] || !xr_strcmp(hud_section, "none"))
+        return false;
+
+    if (!pSettings->section_exist(hud_section)) {
+        Msg("! PDA animation: HUD section [%s] does not exist; using original 2D PDA",
+            hud_section);
+        return false;
+    }
+
+    CActor* actor = smart_cast<CActor*>(Level().CurrentViewEntity());
+
+    if (!actor || !actor->g_Alive())
+        return false;
+
+    CItemUseController* controller = actor->GetItemUseController();
+
+    if (!controller || !controller->StartHudAnimation(hud_section))
+        return false;
+
+    m_pda_hud_animation_active = true;
+    m_pda_hud_pending_open = true;
+
+    Msg("* PDA animation: waiting for show [%s]", hud_section);
+
+    return true;
+}
+
+void CUIGameCustom::RequestPdaHudAnimationHide() {
+    if (!m_pda_hud_animation_active)
+        return;
+
+    m_pda_hud_pending_open = false;
+
+    CActor* actor = g_pGameLevel ? smart_cast<CActor*>(Level().CurrentViewEntity()) : NULL;
+    CItemUseController* controller = actor ? actor->GetItemUseController() : NULL;
+
+    if (controller && controller->IsHudAnimationActive()) {
+        controller->RequestHudAnimationHide();
+        Msg("* PDA animation: hide requested");
+        return;
+    }
+
+    m_pda_hud_animation_active = false;
+}
+
+void CUIGameCustom::UpdatePdaHudAnimation() {
+    if (!m_pda_hud_animation_active || !m_PdaMenu)
+        return;
+
+    CActor* actor = g_pGameLevel ? smart_cast<CActor*>(Level().CurrentViewEntity()) : NULL;
+    CItemUseController* controller = actor ? actor->GetItemUseController() : NULL;
+
+    // Death, level teardown or an explicit controller cancellation must never
+    // leave the PDA dialog open or a pending request alive.
+    if (!controller || !controller->IsHudAnimationActive()) {
+        const bool can_open_fallback =
+            m_pda_hud_pending_open && actor && actor->g_Alive();
+
+        if (m_PdaMenu->IsShown())
+            m_PdaMenu->HideDialog();
+
+        m_pda_hud_animation_active = false;
+        m_pda_hud_pending_open = false;
+
+        // StartHudAnimation() returns before the weapon finishes hiding. If a
+        // later attach/motion step fails, preserve vanilla usability instead
+        // of silently swallowing the PDA request.
+        if (can_open_fallback) {
+            m_PdaMenu->ShowDialog(true);
+            Msg("! PDA animation: sequence failed; original 2D PDA opened");
+        }
+
+        return;
+    }
+
+    if (m_pda_hud_pending_open) {
+        if (controller->IsHudAnimationIdle()) {
+            m_pda_hud_pending_open = false;
+            m_PdaMenu->ShowDialog(true);
+            Msg("* PDA animation: show completed, 2D PDA opened");
+        }
+
+        return;
+    }
+
+    // CUIPdaWnd can be closed by its hotkey, close button, scripts or generic
+    // dialog handling. Observing IsShown() keeps every close path synchronized
+    // without coupling the PDA window itself to the animation controller.
+    if (!m_PdaMenu->IsShown() && controller->IsHudAnimationIdle())
+        RequestPdaHudAnimationHide();
 }
 
 void CUIGameCustom::SetClGame(game_cl_GameState* g) { g->SetGameUI(this); }
 
 void CUIGameCustom::UnLoad() {
+    m_pda_hud_animation_active = false;
+    m_pda_hud_pending_open = false;
+
     xr_delete(m_msgs_xml);
     xr_delete(m_ActorMenu);
     xr_delete(m_PdaMenu);

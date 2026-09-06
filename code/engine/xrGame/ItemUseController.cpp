@@ -299,9 +299,12 @@ void CItemUseController::RequestHudAnimationHide() {
         BeginHudAnimationHide();
 }
 
+bool CItemUseController::IsHudAnimationActive() const {
+    return m_active && m_controller_mode == eControllerModeHudAnimation;
+}
+
 bool CItemUseController::IsHudAnimationIdle() const {
-    return m_active && m_controller_mode == eControllerModeHudAnimation &&
-           m_hud_animation_phase == eHudAnimationIdle;
+    return IsHudAnimationActive() && m_hud_animation_phase == eHudAnimationIdle;
 }
 
 void CItemUseController::LockActor()
