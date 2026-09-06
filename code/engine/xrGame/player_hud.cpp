@@ -654,6 +654,12 @@ u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixI
         return 0;
     }
 
+    if (!has_controller_motion(motion_name)) {
+        Msg("! ItemUse: controller HUD [%s] has no motion alias [%s]",
+            m_controller_item->m_sect_name.c_str(), motion_name.c_str());
+        return 0;
+    }
+
     const CMotionDef* md = NULL;
     u8 rnd = 0;
 
@@ -674,6 +680,22 @@ u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixI
     }
 
     return duration;
+}
+
+bool player_hud::has_controller_motion(const shared_str& motion_name) {
+    if (!m_controller_item || !motion_name.size())
+        return false;
+
+    string256 resolved_motion_name;
+    const bool is_16x9 = UI().is_widescreen();
+
+    xr_sprintf(resolved_motion_name, "%s%s", motion_name.c_str(),
+               ((m_controller_item->m_attach_place_idx == 1) && is_16x9) ? "_16x9" : "");
+
+    player_hud_motion* motion =
+        m_controller_item->m_hand_motions.find_motion(resolved_motion_name);
+
+    return motion && motion->m_animations.size();
 }
 
 bool player_hud::controller_item_transform(Fmatrix& result, LPCSTR bone_name,

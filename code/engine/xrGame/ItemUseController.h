@@ -13,6 +13,13 @@ public:
 
     bool Start(CInventoryItem* item);
 
+    // Persistent controller-owned HUD lifecycle used by interfaces such as
+    // PDA and backpack. Connecting those interfaces is intentionally kept
+    // outside the controller.
+    bool StartHudAnimation(const shared_str& hud_section);
+    void RequestHudAnimationHide();
+    bool IsHudAnimationIdle() const;
+
     void Update(float dt);
     void Cancel();
     void Finish();
@@ -21,10 +28,28 @@ public:
     bool IsWeaponLocked() const { return m_active; }
 
 private:
+    enum EControllerMode {
+        eControllerModeNone,
+        eControllerModeConsumable,
+        eControllerModeHudAnimation,
+    };
+
+    enum EHudAnimationPhase {
+        eHudAnimationNone,
+        eHudAnimationShow,
+        eHudAnimationIdle,
+        eHudAnimationHide,
+    };
+
     void Reset();
 
     bool CanStartAnimation();
     void BeginAnimation();
+
+    bool PlayHudAnimationMotion(LPCSTR motion_name, EHudAnimationPhase phase, BOOL mix_in);
+    void BeginHudAnimationIdle();
+    void BeginHudAnimationHide();
+    void UpdateHudAnimation();
 
     void LockActor();
     void UnlockActor();
@@ -61,6 +86,10 @@ private:
 
     bool m_active;
     bool m_effect_applied;
+
+    EControllerMode m_controller_mode;
+    EHudAnimationPhase m_hud_animation_phase;
+    bool m_hud_animation_hide_requested;
 
     //
     // Item use state.

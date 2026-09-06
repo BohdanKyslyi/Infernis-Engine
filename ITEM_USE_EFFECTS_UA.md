@@ -67,3 +67,45 @@ use_particles_stop_time   = 4300
 
 Матриця партикла оновлюється щокадрово з item-анімації. І циклічний, і звичайний
 ефект належать контролеру та видаляються разом із тимчасовим HUD-предметом.
+
+## Persistent HUD: основа для PDA та рюкзака
+
+Окрім одноразового consumable-режиму, контролер має окремий persistent lifecycle:
+
+```text
+anm_show -> anm_idle -> anm_hide
+```
+
+HUD-секція задає motion aliases звичайним способом:
+
+```ini
+[anm_pda_hud]:base_consumable_hud
+item_visual      = dynamics\devices\dev_pda\dev_pda_hud.ogf
+attach_place_idx = 0
+
+anm_show = pda_draw
+anm_idle = pda_idle
+anm_hide = pda_holster
+```
+
+- `anm_show` запускається один раз після штатного ховання зброї;
+- після завершення `anm_show` контролер переходить в `anm_idle`;
+- `anm_idle` є необов'язковим: без нього HUD лишається у логічному idle-стані
+  на поточному циклі;
+- `anm_hide` також необов'язковий: без нього HUD від'єднується одразу після
+  запиту на закриття;
+- запит на закриття під час `anm_show` запам'ятовується, а `anm_hide`
+  запускається після повного завершення show-анімації.
+
+Підготовлений C++ API:
+
+```cpp
+controller->StartHudAnimation(hud_section);
+controller->IsHudAnimationIdle();
+controller->RequestHudAnimationHide();
+```
+
+Consumable-шлях `Start(CInventoryItem*)` не переходить у persistent lifecycle:
+для старої їжі `anm_show` і надалі є повною одноразовою анімацією використання,
+а відсутність `anm_idle` та `anm_hide` нічого не змінює. Підключення цього API до
+функцій відкриття/закриття PDA та рюкзака виконується окремо.

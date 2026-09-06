@@ -111,6 +111,7 @@ public:
     void render_item_ui();
     bool render_item_ui_query();
     u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed);
+    bool has_controller_motion(const shared_str& motion_name);
     u32 play_controller_motion(const shared_str& motion_name, BOOL bMixIn = TRUE,
                                shared_str* played_motion_name = NULL);
     bool controller_item_transform(Fmatrix& result, LPCSTR bone_name, const Fvector& offset,

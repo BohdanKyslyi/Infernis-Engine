@@ -48,6 +48,9 @@ CItemUseController::CItemUseController(CActor* actor)
       m_animation_duration(0),
       m_active(false),
       m_effect_applied(false),
+      m_controller_mode(eControllerModeNone),
+      m_hud_animation_phase(eHudAnimationNone),
+      m_hud_animation_hide_requested(false),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
       m_prev_inventory_disabled(false),
@@ -213,6 +216,9 @@ bool CItemUseController::Start(CInventoryItem* item) {
     //
     m_active = true;
     m_effect_applied = false;
+    m_controller_mode = eControllerModeConsumable;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
     m_waiting_for_weapon_hide = true;
 
     m_start_time = 0;
@@ -228,6 +234,74 @@ bool CItemUseController::Start(CInventoryItem* item) {
     Msg("* ItemUse waiting for weapon hide: [%s]", m_item_section.c_str());
 
     return true;
+}
+
+bool CItemUseController::StartHudAnimation(const shared_str& hud_section) {
+    if (m_active || !m_actor || !g_player_hud || !hud_section.size())
+        return false;
+
+    if (!pSettings->section_exist(hud_section.c_str())) {
+        Msg("! ItemUse: HUD animation section [%s] does not exist", hud_section.c_str());
+        return false;
+    }
+
+    // anm_show remains the entry motion for both old consumables and persistent
+    // HUD sequences. Only anm_idle and anm_hide are optional additions.
+    if (!pSettings->line_exist(hud_section.c_str(), "anm_show")) {
+        Msg("! ItemUse: HUD animation section [%s] has no [anm_show]", hud_section.c_str());
+        return false;
+    }
+
+    m_item = NULL;
+    m_item_section = NULL;
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+
+    m_start_time = 0;
+    m_action_time = 0;
+    m_animation_duration = 0;
+
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModeHudAnimation;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_waiting_for_weapon_hide = true;
+
+    LockActor();
+
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+
+    Msg("* ItemUse HUD animation waiting for weapon hide: [%s]", m_hud_section.c_str());
+
+    return true;
+}
+
+void CItemUseController::RequestHudAnimationHide() {
+    if (!m_active || m_controller_mode != eControllerModeHudAnimation)
+        return;
+
+    m_hud_animation_hide_requested = true;
+
+    // Nothing has reached the screen yet, so there is no hide animation to
+    // play. This also releases all locks immediately.
+    if (m_waiting_for_weapon_hide) {
+        Cancel();
+        return;
+    }
+
+    // A close request during show is queued, so show is never cut in half.
+    if (m_hud_animation_phase == eHudAnimationIdle)
+        BeginHudAnimationHide();
+}
+
+bool CItemUseController::IsHudAnimationIdle() const {
+    return m_active && m_controller_mode == eControllerModeHudAnimation &&
+           m_hud_animation_phase == eHudAnimationIdle;
 }
 
 void CItemUseController::LockActor()
@@ -338,6 +412,20 @@ void CItemUseController::BeginAnimation()
         return;
     }
 
+    m_waiting_for_weapon_hide = false;
+
+    if (m_controller_mode == eControllerModeHudAnimation) {
+        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE)) {
+            Msg("! ItemUse: failed to play HUD show animation [%s]", m_hud_section.c_str());
+            Cancel();
+            return;
+        }
+
+        Msg("* ItemUse HUD animation started: [%s], show duration [%u]",
+            m_hud_section.c_str(), m_animation_duration);
+        return;
+    }
+
     LoadAnimSound();
 
     //
@@ -369,8 +457,6 @@ void CItemUseController::BeginAnimation()
     PlayAnimSound();
 
     m_start_time = Device.dwTimeGlobal;
-    m_waiting_for_weapon_hide = false;
-
     StartCameraEffector(played_motion_name);
 
     if (m_use_particles_stop_time == u32(-1) ||
@@ -390,6 +476,87 @@ void CItemUseController::BeginAnimation()
         m_item_section.c_str(), m_hud_section.c_str(), m_animation_duration, m_action_time,
         m_anim_sound_loaded ? "yes" : "no", m_camera_effector_started ? "yes" : "no",
         m_use_particles_name.size() ? "configured" : "no");
+}
+
+bool CItemUseController::PlayHudAnimationMotion(LPCSTR motion_name,
+                                                EHudAnimationPhase phase,
+                                                BOOL mix_in) {
+    if (!g_player_hud || !motion_name || !motion_name[0])
+        return false;
+
+    if (!g_player_hud->has_controller_motion(motion_name))
+        return false;
+
+    m_animation_duration = g_player_hud->play_controller_motion(motion_name, mix_in);
+
+    if (!m_animation_duration)
+        return false;
+
+    m_start_time = Device.dwTimeGlobal;
+    m_hud_animation_phase = phase;
+
+    return true;
+}
+
+void CItemUseController::BeginHudAnimationIdle() {
+    if (!m_active || m_controller_mode != eControllerModeHudAnimation)
+        return;
+
+    if (m_hud_animation_hide_requested) {
+        BeginHudAnimationHide();
+        return;
+    }
+
+    // anm_idle is optional. Without it, the show cycle remains on the model
+    // while the controller still exposes the logical idle/ready state.
+    if (!PlayHudAnimationMotion("anm_idle", eHudAnimationIdle, TRUE)) {
+        m_start_time = Device.dwTimeGlobal;
+        m_animation_duration = 0;
+        m_hud_animation_phase = eHudAnimationIdle;
+    }
+
+    Msg("* ItemUse HUD animation idle: [%s], motion [%s]", m_hud_section.c_str(),
+        g_player_hud->has_controller_motion("anm_idle") ? "anm_idle" : "show fallback");
+}
+
+void CItemUseController::BeginHudAnimationHide() {
+    if (!m_active || m_controller_mode != eControllerModeHudAnimation)
+        return;
+
+    // anm_hide is optional. If it is absent, closing remains instant and the
+    // caller does not need a special fallback path.
+    if (!PlayHudAnimationMotion("anm_hide", eHudAnimationHide, TRUE)) {
+        Finish();
+        return;
+    }
+
+    Msg("* ItemUse HUD animation hide: [%s], duration [%u]", m_hud_section.c_str(),
+        m_animation_duration);
+}
+
+void CItemUseController::UpdateHudAnimation() {
+    if (m_hud_animation_phase == eHudAnimationShow) {
+        const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+
+        if (elapsed >= m_animation_duration)
+            BeginHudAnimationIdle();
+
+        return;
+    }
+
+    if (m_hud_animation_phase == eHudAnimationIdle) {
+        if (m_hud_animation_hide_requested)
+            BeginHudAnimationHide();
+
+        return;
+    }
+
+    if (m_hud_animation_phase == eHudAnimationHide) {
+        const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+
+        if (elapsed >= m_animation_duration)
+            Finish();
+    }
 }
 
 void CItemUseController::Update(float dt)
@@ -424,6 +591,11 @@ void CItemUseController::Update(float dt)
         if (CanStartAnimation())
             BeginAnimation();
 
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeHudAnimation) {
+        UpdateHudAnimation();
         return;
     }
 
@@ -506,7 +678,10 @@ void CItemUseController::Cancel() {
 
     UnlockActor();
 
-    Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
+    if (m_controller_mode == eControllerModeHudAnimation)
+        Msg("* ItemUse HUD animation cancelled: [%s]", m_hud_section.c_str());
+    else
+        Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
     Reset();
 }
@@ -532,7 +707,10 @@ void CItemUseController::Finish() {
 
     UnlockActor();
 
-    Msg("* ItemUse finished: [%s]", m_item_section.c_str());
+    if (m_controller_mode == eControllerModeHudAnimation)
+        Msg("* ItemUse HUD animation finished: [%s]", m_hud_section.c_str());
+    else
+        Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
     Reset();
 }
@@ -552,6 +730,10 @@ void CItemUseController::Reset()
 
     m_active = false;
     m_effect_applied = false;
+
+    m_controller_mode = eControllerModeNone;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
 
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;
