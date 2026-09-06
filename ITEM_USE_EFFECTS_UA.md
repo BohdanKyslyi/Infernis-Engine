@@ -123,6 +123,7 @@ snd_hide  = interface\pda_holster, 0.8, 0.0
 
 ```cpp
 controller->StartHudAnimation(hud_section);
+controller->StartHudAnimation(hud_section, true); // allow inventory item use in idle
 controller->IsHudAnimationActive();
 controller->IsHudAnimationIdle();
 controller->RequestHudAnimationHide();
@@ -212,21 +213,35 @@ anm_hide = backpack_scientific_holster
 тими самими правилами persistent lifecycle. `anm_show` потрібен лише для
 секцій, які справді вмикають анімоване відкриття через `hud`.
 
-За потреби всю інтеграцію рюкзаків можна вимкнути глобально:
+### Глобальний рюкзак без окремого слота
+
+`engine_external.ltx` може задавати одну базову HUD-секцію для всіх гравців,
+незалежно від того, чи ввімкнена система `BACKPACK_SLOT`:
 
 ```ini
 [items_animations]
-enable_backpack_animations = false
+enable_backpack_animations = true
+backpack_hud                = anm_backpack_default_hud
 ```
 
-Параметр необов'язковий і типово вважається `true`. Без екіпірованого рюкзака,
-з вимкненим `BACKPACK_SLOT`, без ключа `hud`, з `hud = none` або з помилковою
-HUD-секцією інвентар відкривається старим миттєвим способом.
+- `enable_backpack_animations` вмикає або вимикає і глобальну модель, і
+  персональні HUD-секції предметів; без параметра зберігається значення `true`;
+- `backpack_hud` — необов'язковий глобальний fallback; штатно в конфігу стоїть
+  `none`, доки для нього не додано готову модель та motions;
+- HUD екіпірованого рюкзака має пріоритет над `backpack_hud`;
+- якщо в екіпірованого рюкзака явно задано `hud = none`, анімація вимикається
+  саме для нього без переходу на глобальний fallback.
+
+Отже, для спрощеного варіанта достатньо не вмикати слот рюкзаків, створити одну
+HUD-секцію на зразок `anm_backpack_default_hud` і вказати її в `backpack_hud`.
+Без персональної або глобальної HUD-секції, з вимкненим прапорцем чи з
+помилковою секцією інвентар відкривається старим миттєвим способом.
 
 Послідовність відкриття:
 
 ```text
 Inventory hotkey -> equipped BACKPACK_SLOT item -> its hud section
+                 -> otherwise global backpack_hud
                  -> weapon/detector hide -> anm_show + snd_show
                  -> logical idle -> original 2D inventory interface
 ```
@@ -245,3 +260,16 @@ Inventory hotkey / close button / script -> close 2D interface
 `CUIActorMenu` відстежується щокадрово, тож hide-анімація охоплює стандартний
 хоткей, кнопку закриття, скриптовий `HideActorMenu()` і загальне закриття
 діалогів.
+
+### Використання їжі у відкритому інвентарі
+
+У backpack idle контролер продовжує приховувати зброю та блокувати сходи, але
+повертає інвентарю можливість надсилати item-use запити:
+
+- предмет без валідної consumable-анімації застосовується одразу, а інвентар і
+  рюкзак лишаються відкритими;
+- анімований предмет ставиться в чергу, інвентар закривається, повністю
+  програється `anm_hide` рюкзака, після чого автоматично стартує звичайна
+  consumable-послідовність цього предмета;
+- повторні запити під час show/hide або вже запущеної consumable-анімації
+  блокуються, як і раніше.

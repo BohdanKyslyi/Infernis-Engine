@@ -984,11 +984,18 @@ bool CInventory::Eat(PIItem pIItem) {
     if (actor && actor->m_inventory == this && actor->GetItemUseController()) {
         CItemUseController* controller = actor->GetItemUseController();
 
-        if (controller->IsActive())
-            return false;
+        if (controller->IsActive()) {
+            // An inventory-owned backpack idle allows normal item use. An
+            // animated consumable is queued after anm_hide; a regular one
+            // falls through to the original immediate ApplyEat() path.
+            if (!controller->CanUseConsumables())
+                return false;
 
-        if (controller->Start(pIItem))
+            if (controller->TryQueueConsumable(pIItem))
+                return true;
+        } else if (controller->Start(pIItem)) {
             return true;
+        }
     }
 
     bool became_empty = false;

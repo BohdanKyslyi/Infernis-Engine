@@ -194,8 +194,8 @@ bool CUIGameCustom::ShowActorMenu() {
     if (StartInventoryHudAnimation())
         return true;
 
-    // Backward-compatible fallback for a missing backpack, a backpack without
-    // a HUD section, a disabled slot or a failed animation start.
+    // Backward-compatible fallback when neither a backpack-specific nor a
+    // global HUD can start.
     return OpenActorInventory();
 }
 
@@ -221,11 +221,11 @@ bool CUIGameCustom::OpenActorInventory() {
 }
 
 bool CUIGameCustom::StartInventoryHudAnimation() {
-    if (!IsGameTypeSingle() || !NoirInventorySlots::BackpackEnabled())
+    if (!IsGameTypeSingle())
         return false;
 
-    // This global switch is optional. Per-backpack `hud` remains the actual
-    // opt-in, so no config migration is required for existing installations.
+    // The switch gates both the global fallback and per-backpack overrides.
+    // Missing settings preserve the previous opt-in behavior.
     if (pSettings->section_exist("items_animations") &&
         pSettings->line_exist("items_animations", "enable_backpack_animations") &&
         !pSettings->r_bool("items_animations", "enable_backpack_animations")) {
@@ -237,13 +237,28 @@ bool CUIGameCustom::StartInventoryHudAnimation() {
     if (!actor || !actor->g_Alive())
         return false;
 
-    CBackpack* backpack =
-        smart_cast<CBackpack*>(actor->inventory().ItemFromSlot(BACKPACK_SLOT));
+    shared_str hud_section = NULL;
 
-    if (!backpack)
-        return false;
+    if (NoirInventorySlots::BackpackEnabled()) {
+        CBackpack* backpack =
+            smart_cast<CBackpack*>(actor->inventory().ItemFromSlot(BACKPACK_SLOT));
 
-    const shared_str& hud_section = backpack->HudSection();
+        if (backpack && backpack->HudSection().size()) {
+            // An explicit `none` is a per-item opt-out and must not fall back
+            // to the global model.
+            if (!xr_strcmp(backpack->HudSection().c_str(), "none"))
+                return false;
+
+            hud_section = backpack->HudSection();
+        }
+    }
+
+    // A single global animation also works when the optional backpack slot is
+    // disabled or no physical backpack is equipped/configured.
+    if (!hud_section.size() && pSettings->section_exist("items_animations") &&
+        pSettings->line_exist("items_animations", "backpack_hud")) {
+        hud_section = pSettings->r_string("items_animations", "backpack_hud");
+    }
 
     if (!hud_section.size() || !xr_strcmp(hud_section.c_str(), "none"))
         return false;
@@ -256,7 +271,7 @@ bool CUIGameCustom::StartInventoryHudAnimation() {
 
     CItemUseController* controller = actor->GetItemUseController();
 
-    if (!controller || !controller->StartHudAnimation(hud_section))
+    if (!controller || !controller->StartHudAnimation(hud_section, true))
         return false;
 
     m_inventory_hud_animation_active = true;

@@ -51,6 +51,8 @@ CItemUseController::CItemUseController(CActor* actor)
       m_controller_mode(eControllerModeNone),
       m_hud_animation_phase(eHudAnimationNone),
       m_hud_animation_hide_requested(false),
+      m_hud_animation_allow_inventory(false),
+      m_queued_consumable_id(u16(-1)),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
       m_prev_inventory_disabled(false),
@@ -73,59 +75,32 @@ CItemUseController::~CItemUseController()
 }
 
 bool CItemUseController::Start(CInventoryItem* item) {
-    if (!item)
+    if (!item || m_active)
         return false;
 
-    if (m_active)
-        return false;
+    shared_str item_section;
+    shared_str use_section;
+    shared_str state_section;
+    shared_str hud_section;
 
-    //
-    // Global engine_external switch.
-    //
-    // Returning false tells CInventory::Eat()
-    // to use the normal immediate ApplyEat() path.
-    //
-    if (!ConsumableAnimationsEnabled())
+    // Returning false tells CInventory::Eat() to use the normal immediate
+    // ApplyEat() path, preserving non-animated consumables.
+    if (!ResolveConsumableAnimation(item, item_section, use_section, state_section,
+                                    hud_section)) {
         return false;
+    }
 
     m_item = item;
-    m_item_section = item->object().cNameSect();
-    m_state_section = NULL;
+    m_item_section = item_section;
+    m_use_section = use_section;
+    m_state_section = state_section;
+    m_hud_section = hud_section;
 
     m_trash_section = NULL;
     m_trash_count = 0;
     m_trash_spawned = false;
 
-    //
-    // 1. Сам предмет повинен посилатися на use-section.
-    //
-    if (!pSettings->line_exist(m_item_section, "hud")) {
-        Reset();
-        return false;
-    }
-
-    m_use_section = pSettings->r_string(m_item_section, "hud");
-
-    if (!pSettings->section_exist(m_use_section)) {
-        Reset();
-        return false;
-    }
-
-    //
-    // 2. Перевіряємо, що це саме animated consumable.
-    //
-    if (!pSettings->line_exist(m_use_section, "timing")) {
-        Reset();
-        return false;
-    }
-
-    m_hud_section = NULL;
-
-    //
-    // First try portion-specific HUD.
-    //
-    CEatableItem* eatable =
-        smart_cast<CEatableItem*>(item);
+    CEatableItem* eatable = smart_cast<CEatableItem*>(item);
 
     //
     // Cache physical waste for THIS exact portion/state.
@@ -134,63 +109,6 @@ bool CItemUseController::Start(CInventoryItem* item) {
         m_trash_section = eatable->TrashObject();
 
         m_trash_count = eatable->TrashCount();
-    }
-
-    if (eatable)
-    {
-        const shared_str& state =
-            eatable->PortionStateSection();
-
-        m_state_section = state;
-
-        if (state.size() &&
-            pSettings->line_exist(
-                state.c_str(),
-                "hud"))
-        {
-            m_hud_section =
-                pSettings->r_string(
-                    state.c_str(),
-                    "hud"
-                );
-        }
-    }
-
-    //
-    // Backward-compatible fallback:
-    //
-    // old animated consumables can still use
-    // [use_section] hud = ...
-    //
-    if (!m_hud_section.size() &&
-        pSettings->line_exist(
-            m_use_section,
-            "hud"))
-    {
-        m_hud_section =
-            pSettings->r_string(
-                m_use_section,
-                "hud"
-            );
-    }
-
-    if (!m_hud_section.size())
-    {
-        Reset();
-        return false;
-    }
-
-    if (!pSettings->section_exist(m_hud_section)) {
-        Reset();
-        return false;
-    }
-
-    //
-    // 3. HUD-секція повинна мати анімацію використання.
-    //
-    if (!pSettings->line_exist(m_hud_section, "anm_show")) {
-        Reset();
-        return false;
     }
 
     LoadUseParticles();
@@ -236,7 +154,50 @@ bool CItemUseController::Start(CInventoryItem* item) {
     return true;
 }
 
-bool CItemUseController::StartHudAnimation(const shared_str& hud_section) {
+bool CItemUseController::ResolveConsumableAnimation(CInventoryItem* item,
+                                                    shared_str& item_section,
+                                                    shared_str& use_section,
+                                                    shared_str& state_section,
+                                                    shared_str& hud_section) const {
+    if (!item || !ConsumableAnimationsEnabled())
+        return false;
+
+    item_section = item->object().cNameSect();
+    use_section = NULL;
+    state_section = NULL;
+    hud_section = NULL;
+
+    // 1. The physical item points to its use-section.
+    if (!pSettings->line_exist(item_section, "hud"))
+        return false;
+
+    use_section = pSettings->r_string(item_section, "hud");
+
+    if (!pSettings->section_exist(use_section) ||
+        !pSettings->line_exist(use_section, "timing")) {
+        return false;
+    }
+
+    // 2. A portion-specific HUD has priority over the legacy use-section HUD.
+    CEatableItem* eatable = smart_cast<CEatableItem*>(item);
+
+    if (eatable) {
+        state_section = eatable->PortionStateSection();
+
+        if (state_section.size() && pSettings->line_exist(state_section.c_str(), "hud"))
+            hud_section = pSettings->r_string(state_section.c_str(), "hud");
+    }
+
+    if (!hud_section.size() && pSettings->line_exist(use_section, "hud"))
+        hud_section = pSettings->r_string(use_section, "hud");
+
+    // 3. The resolved HUD section must provide the consumable entry motion.
+    return hud_section.size() && pSettings->section_exist(hud_section) &&
+           pSettings->line_exist(hud_section, "anm_show");
+}
+
+bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
+                                           bool allow_inventory) {
     if (m_active || !m_actor || !g_player_hud || !hud_section.size())
         return false;
 
@@ -267,6 +228,8 @@ bool CItemUseController::StartHudAnimation(const shared_str& hud_section) {
     m_controller_mode = eControllerModeHudAnimation;
     m_hud_animation_phase = eHudAnimationNone;
     m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = allow_inventory;
+    m_queued_consumable_id = u16(-1);
     m_waiting_for_weapon_hide = true;
 
     LockActor();
@@ -305,6 +268,40 @@ bool CItemUseController::IsHudAnimationActive() const {
 
 bool CItemUseController::IsHudAnimationIdle() const {
     return IsHudAnimationActive() && m_hud_animation_phase == eHudAnimationIdle;
+}
+
+bool CItemUseController::CanUseConsumables() const {
+    return IsHudAnimationIdle() && m_hud_animation_allow_inventory &&
+           m_queued_consumable_id == u16(-1);
+}
+
+bool CItemUseController::TryQueueConsumable(CInventoryItem* item) {
+    if (!item || !CanUseConsumables())
+        return false;
+
+    shared_str item_section;
+    shared_str use_section;
+    shared_str state_section;
+    shared_str hud_section;
+
+    // Non-animated consumables are intentionally not queued: CInventory::Eat()
+    // will apply them immediately while the backpack remains in idle.
+    if (!ResolveConsumableAnimation(item, item_section, use_section, state_section,
+                                    hud_section)) {
+        return false;
+    }
+
+    m_queued_consumable_id = item->object().ID();
+
+    Msg("* ItemUse queued after HUD hide: [%s]", item_section.c_str());
+
+    // Closing the actor menu also requests the backpack hide lifecycle. Keep a
+    // direct request as a fallback for controller use outside CUIGameCustom.
+    if (CurrentGameUI())
+        CurrentGameUI()->HideActorMenu();
+
+    RequestHudAnimationHide();
+    return true;
 }
 
 void CItemUseController::LockActor()
@@ -521,6 +518,11 @@ void CItemUseController::BeginHudAnimationIdle() {
         m_hud_animation_phase = eHudAnimationIdle;
     }
 
+    // Backpack inventory keeps the weapon/ladders locked, but the menu itself
+    // must be able to send item-use requests throughout the idle phase.
+    if (m_hud_animation_allow_inventory && m_actor && m_actor_locked)
+        m_actor->set_inventory_disabled(m_prev_inventory_disabled);
+
     Msg("* ItemUse HUD animation idle: [%s], motion [%s]", m_hud_section.c_str(),
         g_player_hud->has_controller_motion("anm_idle") ? "anm_idle" : "show fallback");
 }
@@ -528,6 +530,9 @@ void CItemUseController::BeginHudAnimationIdle() {
 void CItemUseController::BeginHudAnimationHide() {
     if (!m_active || m_controller_mode != eControllerModeHudAnimation)
         return;
+
+    if (m_hud_animation_allow_inventory && m_actor && m_actor_locked)
+        m_actor->set_inventory_disabled(true);
 
     // anm_hide is optional. If it is absent, closing remains instant and the
     // caller does not need a special fallback path.
@@ -699,6 +704,11 @@ void CItemUseController::Finish() {
     if (!m_active)
         return;
 
+    const bool start_queued_consumable =
+        m_controller_mode == eControllerModeHudAnimation &&
+        m_queued_consumable_id != u16(-1);
+    const u16 queued_consumable_id = m_queued_consumable_id;
+
     //
     // Normal physical trash moment:
     // real end of consumable animation.
@@ -722,6 +732,30 @@ void CItemUseController::Finish() {
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
     Reset();
+
+    if (!start_queued_consumable || !m_actor || !m_actor->g_Alive())
+        return;
+
+    CInventoryItem* queued_item =
+        m_actor->inventory().get_object_by_id(queued_consumable_id);
+
+    if (!queued_item) {
+        Msg("! ItemUse: queued item [%u] is no longer in actor inventory",
+            u32(queued_consumable_id));
+        return;
+    }
+
+    if (Start(queued_item)) {
+        Msg("* ItemUse: backpack hide completed, queued animation started");
+        return;
+    }
+
+    // The config or HUD can disappear between queueing and the end of hide.
+    // Preserve usability by falling back to the regular immediate effect.
+    bool became_empty = false;
+
+    if (!m_actor->inventory().ApplyEat(queued_item, became_empty))
+        Msg("! ItemUse: failed to apply queued item [%u]", u32(queued_consumable_id));
 }
 
 void CItemUseController::Reset()
@@ -743,6 +777,8 @@ void CItemUseController::Reset()
     m_controller_mode = eControllerModeNone;
     m_hud_animation_phase = eHudAnimationNone;
     m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_queued_consumable_id = u16(-1);
 
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;

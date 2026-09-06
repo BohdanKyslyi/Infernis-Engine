@@ -16,10 +16,12 @@ public:
     // Persistent controller-owned HUD lifecycle used by interfaces such as
     // PDA and backpack. Connecting those interfaces is intentionally kept
     // outside the controller.
-    bool StartHudAnimation(const shared_str& hud_section);
+    bool StartHudAnimation(const shared_str& hud_section, bool allow_inventory = false);
     void RequestHudAnimationHide();
     bool IsHudAnimationActive() const;
     bool IsHudAnimationIdle() const;
+    bool CanUseConsumables() const;
+    bool TryQueueConsumable(CInventoryItem* item);
 
     void Update(float dt);
     void Cancel();
@@ -43,6 +45,10 @@ private:
     };
 
     void Reset();
+
+    bool ResolveConsumableAnimation(CInventoryItem* item, shared_str& item_section,
+                                    shared_str& use_section, shared_str& state_section,
+                                    shared_str& hud_section) const;
 
     bool CanStartAnimation();
     void BeginAnimation();
@@ -92,6 +98,8 @@ private:
     EControllerMode m_controller_mode;
     EHudAnimationPhase m_hud_animation_phase;
     bool m_hud_animation_hide_requested;
+    bool m_hud_animation_allow_inventory;
+    u16 m_queued_consumable_id;
 
     //
     // Item use state.
