@@ -644,7 +644,11 @@ u32 player_hud::anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotio
     return motion_length(M, md, speed);
 }
 
-u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixIn) {
+u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixIn,
+                                       shared_str* played_motion_name) {
+    if (played_motion_name)
+        *played_motion_name = NULL;
+
     if (!m_controller_item) {
         Msg("! ItemUse: no controller HUD item attached");
         return 0;
@@ -653,7 +657,62 @@ u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixI
     const CMotionDef* md = NULL;
     u8 rnd = 0;
 
-    return m_controller_item->anim_play(motion_name, bMixIn, md, rnd);
+    const u32 duration = m_controller_item->anim_play(motion_name, bMixIn, md, rnd);
+
+    if (played_motion_name) {
+        string256 resolved_motion_name;
+        const bool is_16x9 = UI().is_widescreen();
+
+        xr_sprintf(resolved_motion_name, "%s%s", motion_name.c_str(),
+                   ((m_controller_item->m_attach_place_idx == 1) && is_16x9) ? "_16x9" : "");
+
+        player_hud_motion* motion =
+            m_controller_item->m_hand_motions.find_motion(resolved_motion_name);
+
+        if (motion && rnd < motion->m_animations.size())
+            *played_motion_name = motion->m_animations[rnd].name;
+    }
+
+    return duration;
+}
+
+bool player_hud::controller_item_transform(Fmatrix& result, LPCSTR bone_name,
+                                           const Fvector& offset,
+                                           const Fvector& orientation) {
+    if (!m_controller_item)
+        return false;
+
+    // Keep the temporary item and its bones current even though ItemUseController
+    // is updated before player_hud::update() in the actor frame.
+    m_controller_item->update(true);
+
+    Fmatrix base_transform;
+    base_transform.set(m_controller_item->m_item_transform);
+
+    if (bone_name && bone_name[0]) {
+        const u16 bone_id = m_controller_item->m_model->LL_BoneID(bone_name);
+
+        if (bone_id == BI_NONE)
+            return false;
+
+        base_transform.mul_43(m_controller_item->m_item_transform,
+                              m_controller_item->m_model->LL_GetTransform(bone_id));
+    }
+
+    // Position is expressed in the selected bone's local coordinates.
+    Fvector position;
+    base_transform.transform_tiny(position, offset);
+
+    Fvector rotation_angles = orientation;
+    rotation_angles.mul(PI / 180.f);
+
+    Fmatrix rotation;
+    rotation.setHPB(rotation_angles.x, rotation_angles.y, rotation_angles.z);
+
+    result.mul_43(base_transform, rotation);
+    result.c.set(position);
+
+    return true;
 }
 
 void player_hud::update_additional(Fmatrix& trans) {

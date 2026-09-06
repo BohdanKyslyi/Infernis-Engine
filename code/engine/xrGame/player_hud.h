@@ -111,7 +111,10 @@ public:
     void render_item_ui();
     bool render_item_ui_query();
     u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed);
-    u32 play_controller_motion(const shared_str& motion_name, BOOL bMixIn = TRUE);
+    u32 play_controller_motion(const shared_str& motion_name, BOOL bMixIn = TRUE,
+                               shared_str* played_motion_name = NULL);
+    bool controller_item_transform(Fmatrix& result, LPCSTR bone_name, const Fvector& offset,
+                                   const Fvector& orientation);
     const shared_str& section_name() const { return m_sect_name; }
 
     attachable_hud_item* create_hud_item(const shared_str& sect);

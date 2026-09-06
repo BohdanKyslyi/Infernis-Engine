@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Module 		: ItemUseController.cpp
 //	Created 	: 23.08.2026
-//  Modified 	: 25.08.2026
+//  Modified 	: 06.09.2026
 //	Author		: Bohdan «Infernis» Kyslyi
 //	Description : Item use controller
 ////////////////////////////////////////////////////////////////////////////
@@ -16,6 +16,8 @@
 
 #include "CustomDetector.h"
 #include "UIGameCustom.h"
+#include "ActorEffector.h"
+#include "ParticlesObject.h"
 
 #include "../xrPhysics/ElevatorState.h"
 #include "eatable_item.h"
@@ -52,7 +54,14 @@ CItemUseController::CItemUseController(CActor* actor)
 
       m_trash_count(0), m_trash_spawned(false),
 
-      m_anim_sound_loaded(false) {
+      m_anim_sound_loaded(false),
+      m_camera_effector_started(false),
+      m_use_particles_start_time(0),
+      m_use_particles_stop_time(u32(-1)),
+      m_use_particles(NULL),
+      m_use_particles_started(false) {
+    m_use_particles_offset.set(0.f, 0.f, 0.f);
+    m_use_particles_orientation.set(0.f, 0.f, 0.f);
 }
 
 CItemUseController::~CItemUseController()
@@ -78,6 +87,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
 
     m_item = item;
     m_item_section = item->object().cNameSect();
+    m_state_section = NULL;
 
     m_trash_section = NULL;
     m_trash_count = 0;
@@ -128,6 +138,8 @@ bool CItemUseController::Start(CInventoryItem* item) {
         const shared_str& state =
             eatable->PortionStateSection();
 
+        m_state_section = state;
+
         if (state.size() &&
             pSettings->line_exist(
                 state.c_str(),
@@ -177,6 +189,8 @@ bool CItemUseController::Start(CInventoryItem* item) {
         Reset();
         return false;
     }
+
+    LoadUseParticles();
 
     if (eatable) {
         Msg("* ItemUse portion: [%d/%d], use index [%d], state [%s]", eatable->PortionsNum(),
@@ -330,7 +344,9 @@ void CItemUseController::BeginAnimation()
     // FALSE — наш уже перевірений фікс
     // "руки прилітають з іншого виміру".
     //
-    m_animation_duration = g_player_hud->play_controller_motion("anm_show", FALSE);
+    shared_str played_motion_name;
+    m_animation_duration =
+        g_player_hud->play_controller_motion("anm_show", FALSE, &played_motion_name);
 
     if (m_animation_duration == 0) {
         Msg("! ItemUse: failed to play animation [%s]", m_hud_section.c_str());
@@ -355,9 +371,25 @@ void CItemUseController::BeginAnimation()
     m_start_time = Device.dwTimeGlobal;
     m_waiting_for_weapon_hide = false;
 
-    Msg("* ItemUse started: [%s], HUD [%s], duration [%u], effect [%u], sound [%s]",
+    StartCameraEffector(played_motion_name);
+
+    if (m_use_particles_stop_time == u32(-1) ||
+        m_use_particles_stop_time > m_animation_duration) {
+        m_use_particles_stop_time = m_animation_duration;
+    }
+
+    if (m_use_particles_name.size() &&
+        m_use_particles_start_time >= m_use_particles_stop_time) {
+        Msg("! ItemUse: invalid particle interval [%u, %u] for [%s]",
+            m_use_particles_start_time, m_use_particles_stop_time,
+            m_item_section.c_str());
+    }
+
+    Msg("* ItemUse started: [%s], HUD [%s], duration [%u], effect [%u], sound [%s], "
+        "camera [%s], particles [%s]",
         m_item_section.c_str(), m_hud_section.c_str(), m_animation_duration, m_action_time,
-        m_anim_sound_loaded ? "yes" : "no");
+        m_anim_sound_loaded ? "yes" : "no", m_camera_effector_started ? "yes" : "no",
+        m_use_particles_name.size() ? "configured" : "no");
 }
 
 void CItemUseController::Update(float dt)
@@ -400,6 +432,18 @@ void CItemUseController::Update(float dt)
     // consumable animation уже йде.
     //
     const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+
+    if (m_use_particles_name.size() && !m_use_particles_started &&
+        elapsed >= m_use_particles_start_time && elapsed < m_use_particles_stop_time) {
+        StartUseParticles();
+    }
+
+    if (m_use_particles) {
+        if (elapsed >= m_use_particles_stop_time)
+            StopUseParticles();
+        else
+            UpdateUseParticles();
+    }
 
     //
     // Реальний effect moment.
@@ -454,6 +498,8 @@ void CItemUseController::Cancel() {
     }
 
     DestroyAnimSound();
+    StopCameraEffector();
+    StopUseParticles();
 
     if (g_player_hud)
         g_player_hud->detach_controller_item();
@@ -478,6 +524,8 @@ void CItemUseController::Finish() {
     }
 
     DestroyAnimSound();
+    StopCameraEffector();
+    StopUseParticles();
 
     if (g_player_hud)
         g_player_hud->detach_controller_item();
@@ -495,6 +543,7 @@ void CItemUseController::Reset()
 
     m_item_section = NULL;
     m_use_section = NULL;
+    m_state_section = NULL;
     m_hud_section = NULL;
 
     m_start_time = 0;
@@ -511,6 +560,17 @@ void CItemUseController::Reset()
     m_trash_section = NULL;
     m_trash_count = 0;
     m_trash_spawned = false;
+
+    m_camera_effector_started = false;
+
+    m_use_particles_name = NULL;
+    m_use_particles_bone = NULL;
+    m_use_particles_offset.set(0.f, 0.f, 0.f);
+    m_use_particles_orientation.set(0.f, 0.f, 0.f);
+    m_use_particles_start_time = 0;
+    m_use_particles_stop_time = u32(-1);
+    m_use_particles = NULL;
+    m_use_particles_started = false;
 }
 
 void CItemUseController::LoadAnimSound() {
@@ -552,6 +612,235 @@ void CItemUseController::DestroyAnimSound() {
     HUD_SOUND_ITEM::DestroySound(m_anim_sound);
 
     m_anim_sound_loaded = false;
+}
+
+shared_str CItemUseController::FindConfigSection(LPCSTR line) const {
+    if (!line || !line[0])
+        return NULL;
+
+    // The most animation-specific section wins. This also lets portion states
+    // override a common use section without duplicating the controller setup.
+    const shared_str* sections[] = {
+        &m_hud_section,
+        &m_state_section,
+        &m_use_section,
+        &m_item_section,
+    };
+
+    for (u32 i = 0; i < sizeof(sections) / sizeof(sections[0]); ++i) {
+        const shared_str& section = *sections[i];
+
+        if (section.size() && pSettings->section_exist(section.c_str()) &&
+            pSettings->line_exist(section.c_str(), line)) {
+            return section;
+        }
+    }
+
+    return NULL;
+}
+
+void CItemUseController::StartCameraEffector(const shared_str& played_motion_name) {
+    StopCameraEffector();
+
+    if (!m_actor)
+        return;
+
+    string_path effector_name;
+    effector_name[0] = 0;
+
+    const shared_str config_section = FindConfigSection("cam_eff_name");
+    const bool explicitly_configured = config_section.size() != 0;
+
+    if (explicitly_configured) {
+        LPCSTR configured_name = pSettings->r_string(config_section.c_str(), "cam_eff_name");
+
+        // Explicit "none" also disables the automatic motion-name fallback.
+        if (!configured_name || !configured_name[0] || !xr_strcmp(configured_name, "none"))
+            return;
+
+        xr_strcpy(effector_name, configured_name);
+    } else if (played_motion_name.size()) {
+        // Controller HUD items have no CHudItem parent, so the legacy camera
+        // lookup in attachable_hud_item::anim_play() cannot run for them.
+        // Keep a convenient convention for consumables:
+        // $game_anims$\camera_effects\<played HUD motion>.anm
+        strconcat(sizeof(effector_name), effector_name, "camera_effects\\",
+                  played_motion_name.c_str(), ".anm");
+    } else {
+        return;
+    }
+
+    if (!strext(effector_name))
+        xr_strcat(effector_name, ".anm");
+
+    string_path full_path;
+    bool effector_exists = !!FS.exist(full_path, "$game_anims$", effector_name);
+
+    // A randomized HUD motion can be named motion1..motion8. If there is no
+    // matching camera file, also try the base motion from the anm_show alias.
+    if (!effector_exists && !explicitly_configured && m_hud_section.size() &&
+        pSettings->line_exist(m_hud_section.c_str(), "anm_show")) {
+        string256 base_motion_name;
+        _GetItem(pSettings->r_string(m_hud_section.c_str(), "anm_show"), 0,
+                 base_motion_name);
+
+        if (base_motion_name[0]) {
+            strconcat(sizeof(effector_name), effector_name, "camera_effects\\",
+                      base_motion_name, ".anm");
+            effector_exists = !!FS.exist(full_path, "$game_anims$", effector_name);
+        }
+    }
+
+    if (!effector_exists) {
+        if (explicitly_configured) {
+            Msg("! ItemUse: camera effector [%s] from [%s] was not found", effector_name,
+                config_section.c_str());
+        }
+        return;
+    }
+
+    bool cyclic = false;
+    bool hud_affect = false;
+
+    if (explicitly_configured) {
+        if (pSettings->line_exist(config_section.c_str(), "cam_eff_cyclic"))
+            cyclic = !!pSettings->r_bool(config_section.c_str(), "cam_eff_cyclic");
+
+        if (pSettings->line_exist(config_section.c_str(), "cam_eff_hud_affect"))
+            hud_affect = !!pSettings->r_bool(config_section.c_str(), "cam_eff_hud_affect");
+    }
+
+    CAnimatorCamEffector* effector = xr_new<CAnimatorCamEffector>();
+    effector->SetType(eCEItemUse);
+    effector->SetCyclic(cyclic);
+    effector->SetHudAffect(hud_affect);
+    effector->Start(effector_name);
+
+    m_actor->Cameras().AddCamEffector(effector);
+    m_camera_effector_started = true;
+
+    Msg("* ItemUse camera effector started: [%s], cyclic [%s], HUD affect [%s]",
+        effector_name, cyclic ? "yes" : "no", hud_affect ? "yes" : "no");
+}
+
+void CItemUseController::StopCameraEffector() {
+    if (!m_camera_effector_started)
+        return;
+
+    if (m_actor)
+        m_actor->Cameras().RemoveCamEffector(eCEItemUse);
+
+    m_camera_effector_started = false;
+}
+
+void CItemUseController::LoadUseParticles() {
+    StopUseParticles();
+
+    m_use_particles_name = NULL;
+    m_use_particles_bone = NULL;
+    m_use_particles_offset.set(0.f, 0.f, 0.f);
+    m_use_particles_orientation.set(0.f, 0.f, 0.f);
+    m_use_particles_start_time = 0;
+    m_use_particles_stop_time = u32(-1);
+    m_use_particles_started = false;
+
+    const shared_str config_section = FindConfigSection("use_particles");
+
+    if (!config_section.size())
+        return;
+
+    LPCSTR particles_name = pSettings->r_string(config_section.c_str(), "use_particles");
+
+    if (!particles_name || !particles_name[0] || !xr_strcmp(particles_name, "none"))
+        return;
+
+    m_use_particles_name = particles_name;
+
+    if (pSettings->line_exist(config_section.c_str(), "use_particles_bone"))
+        m_use_particles_bone =
+            pSettings->r_string(config_section.c_str(), "use_particles_bone");
+
+    if (pSettings->line_exist(config_section.c_str(), "use_particles_offset"))
+        m_use_particles_offset =
+            pSettings->r_fvector3(config_section.c_str(), "use_particles_offset");
+
+    if (pSettings->line_exist(config_section.c_str(), "use_particles_orientation"))
+        m_use_particles_orientation =
+            pSettings->r_fvector3(config_section.c_str(), "use_particles_orientation");
+
+    if (pSettings->line_exist(config_section.c_str(), "use_particles_start_time"))
+        m_use_particles_start_time =
+            pSettings->r_u32(config_section.c_str(), "use_particles_start_time");
+
+    if (pSettings->line_exist(config_section.c_str(), "use_particles_stop_time"))
+        m_use_particles_stop_time =
+            pSettings->r_u32(config_section.c_str(), "use_particles_stop_time");
+
+    Msg("* ItemUse particles configured: [%s], bone [%s], start [%u]",
+        m_use_particles_name.c_str(),
+        m_use_particles_bone.size() ? m_use_particles_bone.c_str() : "item root",
+        m_use_particles_start_time);
+}
+
+void CItemUseController::StartUseParticles() {
+    if (m_use_particles_started || !m_use_particles_name.size())
+        return;
+
+    m_use_particles_started = true;
+
+    if (!g_player_hud)
+        return;
+
+    Fmatrix transform;
+    if (!g_player_hud->controller_item_transform(
+            transform, m_use_particles_bone.size() ? m_use_particles_bone.c_str() : NULL,
+            m_use_particles_offset, m_use_particles_orientation)) {
+        Msg("! ItemUse: particle bone [%s] was not found in HUD [%s]",
+            m_use_particles_bone.size() ? m_use_particles_bone.c_str() : "item root",
+            m_hud_section.c_str());
+        return;
+    }
+
+    // FALSE is required for looped effects: the controller owns and destroys
+    // the particle together with the item-use animation.
+    m_use_particles = CParticlesObject::Create(m_use_particles_name.c_str(), FALSE);
+    m_use_particles->UpdateParent(transform, zero_vel);
+    m_use_particles->Play(true);
+
+    Msg("* ItemUse particles started: [%s]", m_use_particles_name.c_str());
+}
+
+void CItemUseController::UpdateUseParticles() {
+    if (!m_use_particles)
+        return;
+
+    if (!m_use_particles->IsPlaying()) {
+        StopUseParticles();
+        return;
+    }
+
+    if (!g_player_hud) {
+        StopUseParticles();
+        return;
+    }
+
+    Fmatrix transform;
+    if (!g_player_hud->controller_item_transform(
+            transform, m_use_particles_bone.size() ? m_use_particles_bone.c_str() : NULL,
+            m_use_particles_offset, m_use_particles_orientation)) {
+        StopUseParticles();
+        return;
+    }
+
+    m_use_particles->UpdateParent(transform, zero_vel);
+}
+
+void CItemUseController::StopUseParticles() {
+    if (!m_use_particles)
+        return;
+
+    m_use_particles->Stop(FALSE);
+    CParticlesObject::Destroy(m_use_particles);
 }
 
 void CItemUseController::SpawnTrash() {

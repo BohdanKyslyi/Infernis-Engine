@@ -4,6 +4,7 @@
 
 class CActor;
 class CInventoryItem;
+class CParticlesObject;
 
 class CItemUseController {
 public:
@@ -33,6 +34,16 @@ private:
     void StopAnimSound();
     void DestroyAnimSound();
 
+    shared_str FindConfigSection(LPCSTR line) const;
+
+    void StartCameraEffector(const shared_str& played_motion_name);
+    void StopCameraEffector();
+
+    void LoadUseParticles();
+    void StartUseParticles();
+    void UpdateUseParticles();
+    void StopUseParticles();
+
     void SpawnTrash();
 
 private:
@@ -41,6 +52,7 @@ private:
 
     shared_str m_item_section;
     shared_str m_use_section;
+    shared_str m_state_section;
     shared_str m_hud_section;
 
     u32 m_start_time;
@@ -74,4 +86,18 @@ private:
 
     HUD_SOUND_ITEM m_anim_sound;
     bool m_anim_sound_loaded;
+
+    // Optional camera animation played together with the consumable HUD motion.
+    bool m_camera_effector_started;
+
+    // Optional HUD particle attached to the temporary item (for example,
+    // cigarette smoke). Times are relative to the consumable animation start.
+    shared_str m_use_particles_name;
+    shared_str m_use_particles_bone;
+    Fvector m_use_particles_offset;
+    Fvector m_use_particles_orientation;
+    u32 m_use_particles_start_time;
+    u32 m_use_particles_stop_time;
+    CParticlesObject* m_use_particles;
+    bool m_use_particles_started;
 };
