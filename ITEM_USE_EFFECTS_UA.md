@@ -170,3 +170,78 @@ PDA hotkey / close button / script -> close 2D interface
 `HidePdaMenu()` та загального закриття діалогів. У разі смерті актора, зміни
 рівня або скасування контролера pending-відкриття очищається, а 2D PDA не
 залишається завислим на екрані.
+
+## Підключення рюкзаків та інвентарю
+
+Анімація інвентарю є опційною властивістю екіпірованого рюкзака. Фізична
+секція рюкзака вказує свою HUD-секцію ключем `hud`:
+
+```ini
+[backpack_stalker]:backpack
+hud = anm_backpack_stalker_hud
+
+[backpack_scientific]:backpack
+hud = anm_backpack_scientific_hud
+```
+
+Завдяки цьому різні рюкзаки можуть використовувати цілком незалежні моделі,
+motions та звуки:
+
+```ini
+[anm_backpack_stalker_hud]:base_consumable_hud
+item_visual      = dynamics\backpacks\backpack_stalker_hud.ogf
+attach_place_idx = 0
+
+anm_show = backpack_stalker_draw
+anm_idle = backpack_stalker_idle
+anm_hide = backpack_stalker_holster
+
+snd_show = interface\backpack_stalker_draw
+snd_hide = interface\backpack_stalker_holster
+
+[anm_backpack_scientific_hud]:base_consumable_hud
+item_visual      = dynamics\backpacks\backpack_scientific_hud.ogf
+attach_place_idx = 0
+
+anm_show = backpack_scientific_draw
+anm_idle = backpack_scientific_idle
+anm_hide = backpack_scientific_holster
+```
+
+`anm_idle`, `anm_hide`, `snd_show` та `snd_hide` лишаються необов'язковими за
+тими самими правилами persistent lifecycle. `anm_show` потрібен лише для
+секцій, які справді вмикають анімоване відкриття через `hud`.
+
+За потреби всю інтеграцію рюкзаків можна вимкнути глобально:
+
+```ini
+[items_animations]
+enable_backpack_animations = false
+```
+
+Параметр необов'язковий і типово вважається `true`. Без екіпірованого рюкзака,
+з вимкненим `BACKPACK_SLOT`, без ключа `hud`, з `hud = none` або з помилковою
+HUD-секцією інвентар відкривається старим миттєвим способом.
+
+Послідовність відкриття:
+
+```text
+Inventory hotkey -> equipped BACKPACK_SLOT item -> its hud section
+                 -> weapon/detector hide -> anm_show + snd_show
+                 -> logical idle -> original 2D inventory interface
+```
+
+Послідовність закриття:
+
+```text
+Inventory hotkey / close button / script -> close 2D interface
+                                         -> anm_hide + snd_hide
+                                         -> detach HUD -> restore weapon
+```
+
+Рушій запам'ятовує HUD-секцію рюкзака на старті послідовності. Тому навіть якщо
+гравець переставить або зніме рюкзак уже у відкритому інвентарі, закриття
+коректно завершить lifecycle тієї моделі, яку було показано. Фактичний стан
+`CUIActorMenu` відстежується щокадрово, тож hide-анімація охоплює стандартний
+хоткей, кнопку закриття, скриптовий `HideActorMenu()` і загальне закриття
+діалогів.

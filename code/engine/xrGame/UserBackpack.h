@@ -12,6 +12,7 @@ public:
 	virtual					~CBackpack					();
 
 	virtual void			Load					(LPCSTR section);
+	const shared_str&		HudSection				() const { return m_hud_section; }
 	
 	virtual void			Hit						(float P, ALife::EHitType hit_type);
 
@@ -45,6 +46,7 @@ public:
 	void					ReloadBonesProtection	();
 	void					AddBonesProtection		(LPCSTR bones_section);
 protected:
+	shared_str				m_hud_section;
 	HitImmunity::HitTypeSVec	m_HitTypeProtection;
 	SBoneProtections*		m_boneProtection;	
 

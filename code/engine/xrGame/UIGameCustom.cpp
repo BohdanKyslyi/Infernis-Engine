@@ -15,6 +15,8 @@
 #include "actor.h"
 #include "inventory.h"
 #include "ItemUseController.h"
+#include "NoirInventorySlots.h"
+#include "UserBackpack.h"
 #include "game_cl_base.h"
 
 #include "../xrEngine/x_ray.h"
@@ -36,6 +38,8 @@ CUIGameCustom::CUIGameCustom()
       m_pMessagesWnd(NULL) {
     m_pda_hud_animation_active = false;
     m_pda_hud_pending_open = false;
+    m_inventory_hud_animation_active = false;
+    m_inventory_hud_pending_open = false;
 
     ShowGameIndicators(true);
     ShowCrosshair(true);
@@ -74,6 +78,7 @@ void CUIGameCustom::OnFrame() {
     m_pMessagesWnd->Update();
 
     UpdatePdaHudAnimation();
+    UpdateInventoryHudAnimation();
 }
 
 void CUIGameCustom::Render() {
@@ -160,22 +165,172 @@ extern CUISequencer* g_tutorial2;
 
 bool CUIGameCustom::ShowActorMenu() {
     if (m_ActorMenu->IsShown()) {
-        m_ActorMenu->HideDialog();
-    } else {
-        HidePdaMenu();
-        CInventoryOwner* pIOActor = smart_cast<CInventoryOwner*>(Level().CurrentViewEntity());
-        VERIFY(pIOActor);
-        m_ActorMenu->SetActor(pIOActor);
-        m_ActorMenu->SetMenuMode(mmInventory);
-        m_ActorMenu->ShowDialog(true);
+        HideActorMenu();
+        return true;
     }
-    return true;
+
+    HidePdaMenu();
+
+    if (m_inventory_hud_pending_open)
+        return true;
+
+    CActor* actor = smart_cast<CActor*>(Level().CurrentViewEntity());
+    CItemUseController* controller = actor ? actor->GetItemUseController() : NULL;
+
+    // A direct engine/script request must not steal the controller from a
+    // consumable, PDA or an inventory sequence that is already closing.
+    if (controller && controller->IsActive()) {
+        if (m_inventory_hud_animation_active && controller->IsHudAnimationActive())
+            return true;
+
+        return false;
+    }
+
+    if (m_inventory_hud_animation_active) {
+        m_inventory_hud_animation_active = false;
+        m_inventory_hud_pending_open = false;
+    }
+
+    if (StartInventoryHudAnimation())
+        return true;
+
+    // Backward-compatible fallback for a missing backpack, a backpack without
+    // a HUD section, a disabled slot or a failed animation start.
+    return OpenActorInventory();
 }
 
 void CUIGameCustom::HideActorMenu() {
     if (m_ActorMenu->IsShown()) {
         m_ActorMenu->HideDialog();
     }
+
+    RequestInventoryHudAnimationHide();
+}
+
+bool CUIGameCustom::OpenActorInventory() {
+    CInventoryOwner* actor_owner =
+        g_pGameLevel ? smart_cast<CInventoryOwner*>(Level().CurrentViewEntity()) : NULL;
+
+    if (!actor_owner || !m_ActorMenu)
+        return false;
+
+    m_ActorMenu->SetActor(actor_owner);
+    m_ActorMenu->SetMenuMode(mmInventory);
+    m_ActorMenu->ShowDialog(true);
+    return true;
+}
+
+bool CUIGameCustom::StartInventoryHudAnimation() {
+    if (!IsGameTypeSingle() || !NoirInventorySlots::BackpackEnabled())
+        return false;
+
+    // This global switch is optional. Per-backpack `hud` remains the actual
+    // opt-in, so no config migration is required for existing installations.
+    if (pSettings->section_exist("items_animations") &&
+        pSettings->line_exist("items_animations", "enable_backpack_animations") &&
+        !pSettings->r_bool("items_animations", "enable_backpack_animations")) {
+        return false;
+    }
+
+    CActor* actor = smart_cast<CActor*>(Level().CurrentViewEntity());
+
+    if (!actor || !actor->g_Alive())
+        return false;
+
+    CBackpack* backpack =
+        smart_cast<CBackpack*>(actor->inventory().ItemFromSlot(BACKPACK_SLOT));
+
+    if (!backpack)
+        return false;
+
+    const shared_str& hud_section = backpack->HudSection();
+
+    if (!hud_section.size() || !xr_strcmp(hud_section.c_str(), "none"))
+        return false;
+
+    if (!pSettings->section_exist(hud_section.c_str())) {
+        Msg("! Backpack animation: HUD section [%s] does not exist; opening inventory immediately",
+            hud_section.c_str());
+        return false;
+    }
+
+    CItemUseController* controller = actor->GetItemUseController();
+
+    if (!controller || !controller->StartHudAnimation(hud_section))
+        return false;
+
+    m_inventory_hud_animation_active = true;
+    m_inventory_hud_pending_open = true;
+
+    Msg("* Backpack animation: waiting for show [%s]", hud_section.c_str());
+    return true;
+}
+
+void CUIGameCustom::RequestInventoryHudAnimationHide() {
+    if (!m_inventory_hud_animation_active)
+        return;
+
+    m_inventory_hud_pending_open = false;
+
+    CActor* actor = g_pGameLevel ? smart_cast<CActor*>(Level().CurrentViewEntity()) : NULL;
+    CItemUseController* controller = actor ? actor->GetItemUseController() : NULL;
+
+    if (controller && controller->IsHudAnimationActive()) {
+        controller->RequestHudAnimationHide();
+        Msg("* Backpack animation: hide requested");
+
+        // Waiting-for-weapon-hide and a missing anm_hide both finish
+        // synchronously. Clear ownership before another UI starts its own
+        // controller sequence in the same input event.
+        if (!controller->IsHudAnimationActive())
+            m_inventory_hud_animation_active = false;
+
+        return;
+    }
+
+    m_inventory_hud_animation_active = false;
+}
+
+void CUIGameCustom::UpdateInventoryHudAnimation() {
+    if (!m_inventory_hud_animation_active || !m_ActorMenu)
+        return;
+
+    CActor* actor = g_pGameLevel ? smart_cast<CActor*>(Level().CurrentViewEntity()) : NULL;
+    CItemUseController* controller = actor ? actor->GetItemUseController() : NULL;
+
+    if (!controller || !controller->IsHudAnimationActive()) {
+        const bool can_open_fallback =
+            m_inventory_hud_pending_open && actor && actor->g_Alive();
+
+        if (m_ActorMenu->IsShown())
+            m_ActorMenu->HideDialog();
+
+        m_inventory_hud_animation_active = false;
+        m_inventory_hud_pending_open = false;
+
+        // A later attach/motion failure must not make the inventory unusable.
+        if (can_open_fallback) {
+            OpenActorInventory();
+            Msg("! Backpack animation: sequence failed; inventory opened immediately");
+        }
+
+        return;
+    }
+
+    if (m_inventory_hud_pending_open) {
+        if (controller->IsHudAnimationIdle()) {
+            m_inventory_hud_pending_open = false;
+            OpenActorInventory();
+            Msg("* Backpack animation: show completed, inventory opened");
+        }
+
+        return;
+    }
+
+    // The actor menu can close through its hotkey, close button, scripts or
+    // generic dialog handling; observing it keeps all paths synchronized.
+    if (!m_ActorMenu->IsShown() && controller->IsHudAnimationIdle())
+        RequestInventoryHudAnimationHide();
 }
 
 void CUIGameCustom::HideMessagesWindow() {
@@ -282,6 +437,10 @@ void CUIGameCustom::RequestPdaHudAnimationHide() {
     if (controller && controller->IsHudAnimationActive()) {
         controller->RequestHudAnimationHide();
         Msg("* PDA animation: hide requested");
+
+        if (!controller->IsHudAnimationActive())
+            m_pda_hud_animation_active = false;
+
         return;
     }
 
@@ -340,6 +499,8 @@ void CUIGameCustom::SetClGame(game_cl_GameState* g) { g->SetGameUI(this); }
 void CUIGameCustom::UnLoad() {
     m_pda_hud_animation_active = false;
     m_pda_hud_pending_open = false;
+    m_inventory_hud_animation_active = false;
+    m_inventory_hud_pending_open = false;
 
     xr_delete(m_msgs_xml);
     xr_delete(m_ActorMenu);
