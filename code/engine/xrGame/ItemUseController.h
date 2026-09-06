@@ -55,6 +55,7 @@ private:
     void UnlockActor();
 
     void LoadAnimSound();
+    void PlayHudAnimationSound(LPCSTR sound_line);
     void PlayAnimSound();
     void StopAnimSound();
     void DestroyAnimSound();

@@ -421,8 +421,11 @@ void CItemUseController::BeginAnimation()
             return;
         }
 
-        Msg("* ItemUse HUD animation started: [%s], show duration [%u]",
-            m_hud_section.c_str(), m_animation_duration);
+        PlayHudAnimationSound("snd_show");
+
+        Msg("* ItemUse HUD animation started: [%s], show duration [%u], sound [%s]",
+            m_hud_section.c_str(), m_animation_duration,
+            m_anim_sound_loaded ? "yes" : "no");
         return;
     }
 
@@ -530,8 +533,11 @@ void CItemUseController::BeginHudAnimationHide() {
         return;
     }
 
-    Msg("* ItemUse HUD animation hide: [%s], duration [%u]", m_hud_section.c_str(),
-        m_animation_duration);
+    PlayHudAnimationSound("snd_hide");
+
+    Msg("* ItemUse HUD animation hide: [%s], duration [%u], sound [%s]",
+        m_hud_section.c_str(), m_animation_duration,
+        m_anim_sound_loaded ? "yes" : "no");
 }
 
 void CItemUseController::UpdateHudAnimation() {
@@ -764,6 +770,21 @@ void CItemUseController::LoadAnimSound() {
     HUD_SOUND_ITEM::LoadSound(m_use_section.c_str(), "snd_using_anim", m_anim_sound, sg_SourceType);
 
     m_anim_sound_loaded = true;
+}
+
+void CItemUseController::PlayHudAnimationSound(LPCSTR sound_line) {
+    DestroyAnimSound();
+
+    if (!sound_line || !sound_line[0] || !m_hud_section.size())
+        return;
+
+    if (!pSettings->line_exist(m_hud_section.c_str(), sound_line))
+        return;
+
+    HUD_SOUND_ITEM::LoadSound(m_hud_section.c_str(), sound_line, m_anim_sound, sg_SourceType);
+    m_anim_sound_loaded = true;
+
+    PlayAnimSound();
 }
 
 void CItemUseController::PlayAnimSound() {

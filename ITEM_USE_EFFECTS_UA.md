@@ -86,6 +86,9 @@ attach_place_idx = 0
 anm_show = pda_draw
 anm_idle = pda_idle
 anm_hide = pda_holster
+
+snd_show = interface\pda_draw
+snd_hide = interface\pda_holster
 ```
 
 - `anm_show` запускається один раз після штатного ховання зброї;
@@ -97,6 +100,25 @@ anm_hide = pda_holster
 - запит на закриття під час `anm_show` запам'ятовується, а `anm_hide`
   запускається після повного завершення show-анімації.
 
+Звуки persistent lifecycle також необов'язкові:
+
+- `snd_show` запускається синхронно з `anm_show`;
+- `snd_hide` запускається синхронно з `anm_hide`;
+- якщо відповідного motion alias немає і фаза пропускається, її звук також не
+  відтворюється;
+- обидва звуки є HUD-звуками: 2D, нециклічними та автоматично зупиняються під
+  час завершення або скасування lifecycle;
+- підтримуються стандартні варіанти `snd_show1`, `snd_show2`, `snd_hide1`,
+  `snd_hide2` тощо, а також параметри гучності й затримки після імені звуку.
+
+Наприклад:
+
+```ini
+snd_show  = interface\pda_draw,    0.8, 0.0
+snd_show1 = interface\pda_draw_2,  0.8, 0.0
+snd_hide  = interface\pda_holster, 0.8, 0.0
+```
+
 Підготовлений C++ API:
 
 ```cpp
@@ -107,5 +129,6 @@ controller->RequestHudAnimationHide();
 
 Consumable-шлях `Start(CInventoryItem*)` не переходить у persistent lifecycle:
 для старої їжі `anm_show` і надалі є повною одноразовою анімацією використання,
-а відсутність `anm_idle` та `anm_hide` нічого не змінює. Підключення цього API до
+`snd_using_anim` лишається її окремим звуком, а відсутність `anm_idle`,
+`anm_hide`, `snd_show` та `snd_hide` нічого не змінює. Підключення цього API до
 функцій відкриття/закриття PDA та рюкзака виконується окремо.
