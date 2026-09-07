@@ -71,6 +71,22 @@ static bool ItemUseBlocksAction(int cmd) {
     }
 }
 
+static bool ItemUseBlocksMovement(int cmd) {
+    switch (cmd) {
+    case kFWD:
+    case kBACK:
+    case kL_STRAFE:
+    case kR_STRAFE:
+    case kJUMP:
+    case kCROUCH:
+    case kACCEL:
+    case kSPRINT_TOGGLE:
+        return true;
+    default:
+        return false;
+    }
+}
+
 void CActor::IR_OnKeyboardPress(int cmd) {
     if (hud_adj_mode && pInput->iGetAsyncKeyState(DIK_LSHIFT))
         return;
@@ -82,6 +98,11 @@ void CActor::IR_OnKeyboardPress(int cmd) {
         return;
     if (m_input_external_handler && !m_input_external_handler->authorized(cmd))
         return;
+
+    if (m_item_use && m_item_use->IsMovementLocked() && ItemUseBlocksMovement(cmd)) {
+        StopAnyMove();
+        return;
+    }
 
     if (m_item_use && m_item_use->IsWeaponLocked() && ItemUseBlocksAction(cmd))
         return;
@@ -281,6 +302,11 @@ void CActor::IR_OnKeyboardHold(int cmd) {
         return;
     if (IsTalking())
         return;
+
+    if (m_item_use && m_item_use->IsMovementLocked() && ItemUseBlocksMovement(cmd)) {
+        StopAnyMove();
+        return;
+    }
 
     if (m_holder) {
         m_holder->OnKeyboardHold(cmd);

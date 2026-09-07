@@ -86,6 +86,25 @@ protected:
 
     bool m_bShowGameIndicators;
 
+    // The original 2D PDA remains untouched. These flags only bridge it to
+    // the controller-owned show/idle/hide HUD sequence.
+    bool m_pda_hud_animation_active;
+    bool m_pda_hud_pending_open;
+
+    bool StartPdaHudAnimation();
+    void RequestPdaHudAnimationHide();
+    void UpdatePdaHudAnimation();
+
+    // Inventory animations use the HUD section of the backpack that is
+    // equipped when the inventory-opening request starts.
+    bool m_inventory_hud_animation_active;
+    bool m_inventory_hud_pending_open;
+
+    bool OpenActorInventory();
+    bool StartInventoryHudAnimation();
+    void RequestInventoryHudAnimationHide();
+    void UpdateInventoryHudAnimation();
+
 public:
     CUIMainIngameWnd* UIMainIngameWnd;
     CUIMessagesWindow* m_pMessagesWnd;

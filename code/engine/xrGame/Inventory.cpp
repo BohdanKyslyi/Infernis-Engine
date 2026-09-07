@@ -32,6 +32,137 @@ u16 INV_STATE_BLOCK_ALL = 0xffff;
 u16 INV_STATE_INV_WND = INV_STATE_BLOCK_ALL;
 u16 INV_STATE_BUY_MENU = INV_STATE_BLOCK_ALL;
 
+static bool DressingAnimationsEnabled() {
+    static bool initialized = false;
+    static bool enabled = false;
+
+    if (!initialized) {
+        initialized = true;
+
+        if (pSettings->section_exist("items_animations") &&
+            pSettings->line_exist("items_animations", "enable_dressing_animations")) {
+            enabled = !!pSettings->r_bool("items_animations", "enable_dressing_animations");
+        }
+
+        Msg("* Equipment dressing animations: [%s]", enabled ? "enabled" : "disabled");
+    }
+
+    return enabled;
+}
+
+static LPCSTR DressingHudSettingForSlot(u16 slot_id) {
+    switch (slot_id) {
+    case OUTFIT_SLOT:
+        return "outfit_dressing_hud";
+    case HELMET_SLOT:
+        return "helmet_dressing_hud";
+    case BACKPACK_SLOT:
+        return "backpack_dressing_hud";
+    default:
+        return NULL;
+    }
+}
+
+static LPCSTR DressingItemTypeForSlot(u16 slot_id) {
+    switch (slot_id) {
+    case OUTFIT_SLOT:
+        return "outfit";
+    case HELMET_SLOT:
+        return "helmet";
+    case BACKPACK_SLOT:
+        return "backpack";
+    default:
+        return "equipment";
+    }
+}
+
+static void TryStartDressingAnimation(CInventoryOwner* owner, u16 slot_id,
+                                      PIItem item, const SInvItemPlace& previous_place) {
+    LPCSTR hud_setting = DressingHudSettingForSlot(slot_id);
+
+    if (!hud_setting || !item || !DressingAnimationsEnabled() ||
+        previous_place.type == eItemPlaceSlot || !IsGameTypeSingle()) {
+        return;
+    }
+
+    CActor* actor = smart_cast<CActor*>(owner);
+    CUIGameCustom* ui = CurrentGameUI();
+
+    // CInventory::Slot() is also used while loading saves and by scripts.
+    // Dressing is a visual response only to a manual move from the actor's
+    // currently open inventory, never to inventory state restoration.
+    if (!actor || !actor->g_Alive() || Level().CurrentViewEntity() != actor || !ui ||
+        !ui->ActorMenu().IsShown() || ui->ActorMenu().GetMenuMode() != mmInventory) {
+        return;
+    }
+
+    const shared_str item_section = item->object().cNameSect();
+    const LPCSTR item_type = DressingItemTypeForSlot(slot_id);
+    shared_str hud_section = NULL;
+
+    // An individual item can override its type's global HUD. Explicit `none`
+    // disables dressing for this exact item without affecting the other gear.
+    if (pSettings->line_exist(item_section.c_str(), "dressing_hud")) {
+        hud_section = pSettings->r_string(item_section.c_str(), "dressing_hud");
+    } else if (pSettings->section_exist("items_animations") &&
+               pSettings->line_exist("items_animations", hud_setting)) {
+        hud_section = pSettings->r_string("items_animations", hud_setting);
+    }
+
+    if (!hud_section.size() || !xr_strcmp(hud_section.c_str(), "none")) {
+        Msg("* Equipment dressing animation skipped for %s [%s]: HUD is not configured",
+            item_type, item_section.c_str());
+        return;
+    }
+
+    if (!pSettings->section_exist(hud_section.c_str())) {
+        Msg("! Equipment dressing animation skipped for %s [%s]: HUD section [%s] does not "
+            "exist",
+            item_type, item_section.c_str(), hud_section.c_str());
+        return;
+    }
+
+    if (!pSettings->line_exist(hud_section.c_str(), "anm_show")) {
+        Msg("! Equipment dressing animation skipped for %s [%s]: HUD section [%s] has no "
+            "[anm_show]",
+            item_type, item_section.c_str(), hud_section.c_str());
+        return;
+    }
+
+    // Outfit hands intentionally remain on their previous HUD until backpack
+    // hide is complete. Its motion is validated after the new outfit HUD is
+    // loaded at that transition; other equipment can be validated immediately.
+    if (slot_id != OUTFIT_SLOT &&
+        (!g_player_hud || !g_player_hud->can_attach_controller_item(hud_section))) {
+        Msg("! Equipment dressing animation skipped for %s [%s]: HUD [%s] has an invalid "
+            "item visual or unavailable motion; check HUD fields, [hands_animations_path] "
+            "and OMF files",
+            item_type, item_section.c_str(), hud_section.c_str());
+        return;
+    }
+
+    CItemUseController* controller = actor->GetItemUseController();
+
+    if (!controller) {
+        Msg("! Equipment dressing animation skipped for %s [%s]: controller is unavailable",
+            item_type, item_section.c_str());
+        return;
+    }
+
+    // CInventory::Slot() is called before CUIActorMenu::ToSlot() finishes
+    // moving its CUICellItem between drag-drop containers. Defer every UI
+    // mutation until the next controller update to avoid stale cell pointers.
+    // If a backpack owns the controller, the deferred request will then be
+    // queued behind its normal hide lifecycle.
+    if (controller->QueueHudAnimationOnce(hud_section, slot_id == OUTFIT_SLOT)) {
+        Msg("* Equipment dressing animation scheduled for %s [%s], HUD [%s]", item_type,
+            item_section.c_str(), hud_section.c_str());
+    } else {
+        Msg("! Equipment dressing animation skipped for %s [%s]: controller is busy",
+            item_type, item_section.c_str());
+    }
+}
+
 CInventorySlot::CInventorySlot() {
     m_pIItem = NULL;
     m_bAct = true;
@@ -373,6 +504,9 @@ bool CInventory::Slot(u16 slot_id, PIItem pIItem, bool bNotActivate, bool strict
     m_pOwner->OnItemSlot(pIItem, pIItem->m_ItemCurrPlace);
     pIItem->m_ItemCurrPlace.type = eItemPlaceSlot;
     pIItem->m_ItemCurrPlace.slot_id = slot_id;
+
+    TryStartDressingAnimation(m_pOwner, slot_id, pIItem, p);
+
     pIItem->OnMoveToSlot(p);
 
     pIItem->object().processing_activate();
@@ -984,11 +1118,18 @@ bool CInventory::Eat(PIItem pIItem) {
     if (actor && actor->m_inventory == this && actor->GetItemUseController()) {
         CItemUseController* controller = actor->GetItemUseController();
 
-        if (controller->IsActive())
-            return false;
+        if (controller->IsActive()) {
+            // An inventory-owned backpack idle allows normal item use. An
+            // animated consumable is queued after anm_hide; a regular one
+            // falls through to the original immediate ApplyEat() path.
+            if (!controller->CanUseConsumables())
+                return false;
 
-        if (controller->Start(pIItem))
+            if (controller->TryQueueConsumable(pIItem))
+                return true;
+        } else if (controller->Start(pIItem)) {
             return true;
+        }
     }
 
     bool became_empty = false;

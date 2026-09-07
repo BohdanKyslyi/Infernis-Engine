@@ -25,6 +25,7 @@ CBackpack::~CBackpack()
 void CBackpack::Load(LPCSTR section) 
 {
 	inherited::Load(section);
+	m_hud_section = READ_IF_EXISTS(pSettings, r_string, section, "hud", "");
 
 	m_HitTypeProtection[ALife::eHitTypeBurn]		= pSettings->r_float(section,"burn_protection");
 	m_HitTypeProtection[ALife::eHitTypeStrike]		= pSettings->r_float(section,"strike_protection");
