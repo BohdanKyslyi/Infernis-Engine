@@ -25,8 +25,11 @@ public:
     bool IsHudAnimationIdle() const;
     bool CanUseConsumables() const;
     bool TryQueueConsumable(CInventoryItem* item);
-    bool QueueHudAnimationOnce(const shared_str& hud_section);
+    bool QueueHudAnimationOnce(const shared_str& hud_section,
+                               bool refresh_outfit_hud = false);
     bool TryQueueHudAnimationOnce(const shared_str& hud_section);
+    bool DeferOutfitHudRefresh();
+    bool IsOutfitHudRefreshPending() const { return m_outfit_hud_refresh_pending; }
 
     void Update(float dt);
     void Cancel();
@@ -34,6 +37,7 @@ public:
 
     bool IsActive() const { return m_active; }
     bool IsWeaponLocked() const { return m_active; }
+    bool IsMovementLocked() const { return m_active && m_block_movement; }
 
 private:
     enum EControllerMode {
@@ -51,6 +55,7 @@ private:
     };
 
     void Reset();
+    void ApplyPendingOutfitHudRefresh();
 
     bool StartHudAnimationInternal(const shared_str& hud_section,
                                    bool allow_inventory, bool one_shot);
@@ -112,6 +117,8 @@ private:
     u16 m_queued_consumable_id;
     shared_str m_deferred_hud_animation_section;
     shared_str m_queued_hud_animation_section;
+    bool m_outfit_hud_refresh_pending;
+    bool m_block_movement;
 
     //
     // Item use state.

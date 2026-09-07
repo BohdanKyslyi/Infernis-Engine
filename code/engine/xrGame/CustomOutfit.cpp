@@ -13,6 +13,7 @@
 #include "ActorHelmet.h"
 #include "UserBackpack.h"
 #include "NoirInventorySlots.h"
+#include "ItemUseController.h"
 
 CCustomOutfit::CCustomOutfit() {
     m_flags.set(FUsingCondition, TRUE);
@@ -192,7 +193,11 @@ void CCustomOutfit::OnMoveToSlot(const SInvItemPlace& prev) {
     if (m_pInventory) {
         CActor* pActor = smart_cast<CActor*>(H_Parent());
         if (pActor) {
-            ApplySkinModel(pActor, true, false);
+            CItemUseController* controller = pActor->GetItemUseController();
+            const bool defer_hud_refresh =
+                controller && controller->IsOutfitHudRefreshPending();
+
+            ApplySkinModel(pActor, true, false, defer_hud_refresh);
             if (prev.type == eItemPlaceSlot && !bIsHelmetAvaliable) {
                 CTorch* pTorch = smart_cast<CTorch*>(pActor->inventory().ItemFromSlot(TORCH_SLOT));
                 if (pTorch && pTorch->GetNightVisionStatus())
@@ -217,7 +222,8 @@ void CCustomOutfit::OnMoveToSlot(const SInvItemPlace& prev) {
     }
 }
 
-void CCustomOutfit::ApplySkinModel(CActor* pActor, bool bDress, bool bHUDOnly) {
+void CCustomOutfit::ApplySkinModel(CActor* pActor, bool bDress, bool bHUDOnly,
+                                   bool defer_hud_refresh) {
     if (bDress) {
         if (!bHUDOnly && m_ActorVisual.size()) {
             shared_str NewVisual = NULL;
@@ -239,7 +245,7 @@ void CCustomOutfit::ApplySkinModel(CActor* pActor, bool bDress, bool bHUDOnly) {
             pActor->ChangeVisual(NewVisual);
         }
 
-        if (pActor == Level().CurrentViewEntity())
+        if (!defer_hud_refresh && pActor == Level().CurrentViewEntity())
             g_player_hud->load(pSettings->r_string(cNameSect(), "player_hud_section"));
     } else {
         if (!bHUDOnly && m_ActorVisual.size()) {
@@ -249,7 +255,7 @@ void CCustomOutfit::ApplySkinModel(CActor* pActor, bool bDress, bool bHUDOnly) {
             };
         }
 
-        if (pActor == Level().CurrentViewEntity())
+        if (!defer_hud_refresh && pActor == Level().CurrentViewEntity())
             g_player_hud->load_default();
     }
 }
@@ -258,7 +264,11 @@ void CCustomOutfit::OnMoveToRuck(const SInvItemPlace& prev) {
     if (m_pInventory && prev.type == eItemPlaceSlot) {
         CActor* pActor = smart_cast<CActor*>(H_Parent());
         if (pActor) {
-            ApplySkinModel(pActor, false, false);
+            CItemUseController* controller = pActor->GetItemUseController();
+            const bool defer_hud_refresh =
+                controller && controller->DeferOutfitHudRefresh();
+
+            ApplySkinModel(pActor, false, false, defer_hud_refresh);
             CTorch* pTorch = smart_cast<CTorch*>(pActor->inventory().ItemFromSlot(TORCH_SLOT));
             if (pTorch && !bIsHelmetAvaliable)
                 pTorch->SwitchNightVision(false);

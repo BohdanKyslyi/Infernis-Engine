@@ -15,7 +15,9 @@
 #include "inventory.h"
 
 #include "CustomDetector.h"
+#include "CustomOutfit.h"
 #include "UIGameCustom.h"
+#include "ui/UIActorMenu.h"
 #include "ActorEffector.h"
 #include "ParticlesObject.h"
 
@@ -55,6 +57,8 @@ CItemUseController::CItemUseController(CActor* actor)
       m_queued_consumable_id(u16(-1)),
       m_deferred_hud_animation_section(NULL),
       m_queued_hud_animation_section(NULL),
+      m_outfit_hud_refresh_pending(false),
+      m_block_movement(false),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
       m_prev_inventory_disabled(false),
@@ -336,7 +340,8 @@ bool CItemUseController::TryQueueConsumable(CInventoryItem* item) {
     return true;
 }
 
-bool CItemUseController::QueueHudAnimationOnce(const shared_str& hud_section) {
+bool CItemUseController::QueueHudAnimationOnce(const shared_str& hud_section,
+                                               bool refresh_outfit_hud) {
     if (!hud_section.size() || m_deferred_hud_animation_section.size())
         return false;
 
@@ -348,7 +353,44 @@ bool CItemUseController::QueueHudAnimationOnce(const shared_str& hud_section) {
         return false;
 
     m_deferred_hud_animation_section = hud_section;
+
+    if (refresh_outfit_hud)
+        m_outfit_hud_refresh_pending = true;
+
     return true;
+}
+
+bool CItemUseController::DeferOutfitHudRefresh() {
+    if (!m_actor || Level().CurrentViewEntity() != m_actor || !CurrentGameUI() ||
+        !CurrentGameUI()->ActorMenu().IsShown() ||
+        CurrentGameUI()->ActorMenu().GetMenuMode() != mmInventory ||
+        !pSettings->section_exist("items_animations") ||
+        !pSettings->line_exist("items_animations", "enable_dressing_animations") ||
+        !pSettings->r_bool("items_animations", "enable_dressing_animations")) {
+        return false;
+    }
+
+    m_outfit_hud_refresh_pending = true;
+    return true;
+}
+
+void CItemUseController::ApplyPendingOutfitHudRefresh() {
+    if (!m_outfit_hud_refresh_pending)
+        return;
+
+    m_outfit_hud_refresh_pending = false;
+
+    if (!m_actor || Level().CurrentViewEntity() != m_actor || !g_player_hud)
+        return;
+
+    CCustomOutfit* outfit = m_actor->GetOutfit();
+
+    if (outfit)
+        outfit->ApplySkinModel(m_actor, true, true);
+    else
+        g_player_hud->load_default();
+
+    Msg("* ItemUse: actor outfit HUD refreshed at animation transition");
 }
 
 bool CItemUseController::TryQueueHudAnimationOnce(const shared_str& hud_section) {
@@ -367,7 +409,11 @@ bool CItemUseController::TryQueueHudAnimationOnce(const shared_str& hud_section)
         return false;
     }
 
-    if (!g_player_hud || !g_player_hud->can_attach_controller_item(hud_section)) {
+    // An outfit dressing request is still using the old hands during backpack
+    // hide. Validate its motion only after the pending outfit HUD is applied.
+    if (!g_player_hud ||
+        (!m_outfit_hud_refresh_pending &&
+         !g_player_hud->can_attach_controller_item(hud_section))) {
         Msg("! ItemUse: queued HUD animation section [%s] has an invalid item visual or "
             "unavailable motion",
             hud_section.c_str());
@@ -375,6 +421,17 @@ bool CItemUseController::TryQueueHudAnimationOnce(const shared_str& hud_section)
     }
 
     m_queued_hud_animation_section = hud_section;
+
+    // A queued dressing HUD owns the whole transition, including the preceding
+    // backpack hide. Preserve an existing persistent lock or enable the target
+    // HUD's stronger movement policy immediately.
+    if (pSettings->line_exist(hud_section.c_str(), "block_movement") &&
+        pSettings->r_bool(hud_section.c_str(), "block_movement")) {
+        m_block_movement = true;
+
+        if (m_actor)
+            m_actor->StopAnyMove();
+    }
 
     Msg("* ItemUse one-shot HUD queued after persistent HUD hide: [%s]",
         hud_section.c_str());
@@ -390,6 +447,14 @@ void CItemUseController::LockActor()
 {
     if (!m_actor || m_actor_locked)
         return;
+
+    m_block_movement =
+        m_hud_section.size() && pSettings->section_exist(m_hud_section.c_str()) &&
+        pSettings->line_exist(m_hud_section.c_str(), "block_movement") &&
+        !!pSettings->r_bool(m_hud_section.c_str(), "block_movement");
+
+    if (m_block_movement)
+        m_actor->StopAnyMove();
 
     m_prev_inventory_disabled =
         m_actor->inventory_disabled();
@@ -683,11 +748,24 @@ void CItemUseController::Update(float dt)
                 Msg("! ItemUse: deferred one-shot HUD [%s] could not be queued",
                     deferred_hud_animation_section.c_str());
             }
-        } else if (!StartHudAnimationOnce(deferred_hud_animation_section)) {
-            Msg("! ItemUse: deferred one-shot HUD [%s] failed to start",
-                deferred_hud_animation_section.c_str());
+        } else {
+            // Outfit placement has already updated the real equipment slot and
+            // third-person model. Swap only the first-person hands at the exact
+            // transition between a previous HUD hide and dressing anm_show.
+            ApplyPendingOutfitHudRefresh();
+
+            if (!StartHudAnimationOnce(deferred_hud_animation_section)) {
+                Msg("! ItemUse: deferred one-shot HUD [%s] failed to start",
+                    deferred_hud_animation_section.c_str());
+            }
         }
     }
+
+    // Removing an outfit without replacing it has no dressing animation, but
+    // its delayed default-hands refresh still needs to happen after the UI
+    // operation has completed.
+    if (!m_active && m_outfit_hud_refresh_pending)
+        ApplyPendingOutfitHudRefresh();
 
     if (!m_active)
         return;
@@ -788,6 +866,8 @@ void CItemUseController::Cancel() {
     if (!m_active)
         return;
 
+    const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
+
     //
     // If effect has already happened,
     // physical waste must not magically disappear.
@@ -813,6 +893,11 @@ void CItemUseController::Cancel() {
         Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
     Reset();
+
+    if (refresh_outfit_hud) {
+        m_outfit_hud_refresh_pending = true;
+        ApplyPendingOutfitHudRefresh();
+    }
 }
 
 void CItemUseController::Finish() {
@@ -827,6 +912,7 @@ void CItemUseController::Finish() {
         m_controller_mode == eControllerModeHudAnimation &&
         m_queued_hud_animation_section.size();
     const shared_str queued_hud_animation_section = m_queued_hud_animation_section;
+    const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
 
     //
     // Normal physical trash moment:
@@ -853,6 +939,11 @@ void CItemUseController::Finish() {
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
     Reset();
+
+    if (refresh_outfit_hud) {
+        m_outfit_hud_refresh_pending = true;
+        ApplyPendingOutfitHudRefresh();
+    }
 
     if (start_queued_hud_animation && m_actor && m_actor->g_Alive()) {
         if (StartHudAnimationOnce(queued_hud_animation_section)) {
@@ -913,6 +1004,8 @@ void CItemUseController::Reset()
     m_queued_consumable_id = u16(-1);
     m_deferred_hud_animation_section = NULL;
     m_queued_hud_animation_section = NULL;
+    m_outfit_hud_refresh_pending = false;
+    m_block_movement = false;
 
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;

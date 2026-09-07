@@ -296,6 +296,7 @@ item_visual      = dynamics\equipments\outfit_dressing_hud.ogf
 attach_place_idx = 0
 anm_show         = outfit_dressing
 snd_show         = interface\outfit_dressing
+block_movement   = true
 ```
 
 `anm_idle`, `anm_hide` і `snd_hide` для dressing lifecycle не читаються: після
@@ -330,3 +331,16 @@ Move to slot -> item is equipped -> inventory closes
 dressing `anm_show`. Якщо прапорець вимкнений, HUD не заданий, його секції або
 `anm_show` не існує чи motion не завантажився з OMF, предмет однаково лишається
 в екіпірованому слоті, а причина fallback записується в лог.
+
+### Блокування руху
+
+Необов'язковий параметр `block_movement` читається з будь-якої controller HUD-
+секції та типово дорівнює `false`. Зі значенням `true` на весь lifecycle
+блокуються ходьба, біг, стрибок і присідання, але огляд камерою лишається
+доступним. Наприклад, для перевдягання броні його можна ввімкнути, а для шолома
+не вказувати або явно задати `block_movement = false`.
+
+Під час заміни броні її gameplay-властивості та third-person модель
+застосовуються одразу, але HUD рук попередньої броні зберігається до завершення
+`anm_hide` рюкзака. Перед самим dressing `anm_show` контролер синхронізує руки
+з уже екіпірованою новою бронею.

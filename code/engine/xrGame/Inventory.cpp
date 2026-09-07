@@ -129,7 +129,11 @@ static void TryStartDressingAnimation(CInventoryOwner* owner, u16 slot_id,
         return;
     }
 
-    if (!g_player_hud || !g_player_hud->can_attach_controller_item(hud_section)) {
+    // Outfit hands intentionally remain on their previous HUD until backpack
+    // hide is complete. Its motion is validated after the new outfit HUD is
+    // loaded at that transition; other equipment can be validated immediately.
+    if (slot_id != OUTFIT_SLOT &&
+        (!g_player_hud || !g_player_hud->can_attach_controller_item(hud_section))) {
         Msg("! Equipment dressing animation skipped for %s [%s]: HUD [%s] has an invalid "
             "item visual or unavailable motion; check HUD fields, [hands_animations_path] "
             "and OMF files",
@@ -150,7 +154,7 @@ static void TryStartDressingAnimation(CInventoryOwner* owner, u16 slot_id,
     // mutation until the next controller update to avoid stale cell pointers.
     // If a backpack owns the controller, the deferred request will then be
     // queued behind its normal hide lifecycle.
-    if (controller->QueueHudAnimationOnce(hud_section)) {
+    if (controller->QueueHudAnimationOnce(hud_section, slot_id == OUTFIT_SLOT)) {
         Msg("* Equipment dressing animation scheduled for %s [%s], HUD [%s]", item_type,
             item_section.c_str(), hud_section.c_str());
     } else {
@@ -500,11 +504,12 @@ bool CInventory::Slot(u16 slot_id, PIItem pIItem, bool bNotActivate, bool strict
     m_pOwner->OnItemSlot(pIItem, pIItem->m_ItemCurrPlace);
     pIItem->m_ItemCurrPlace.type = eItemPlaceSlot;
     pIItem->m_ItemCurrPlace.slot_id = slot_id;
+
+    TryStartDressingAnimation(m_pOwner, slot_id, pIItem, p);
+
     pIItem->OnMoveToSlot(p);
 
     pIItem->object().processing_activate();
-
-    TryStartDressingAnimation(m_pOwner, slot_id, pIItem, p);
 
     return true;
 }
