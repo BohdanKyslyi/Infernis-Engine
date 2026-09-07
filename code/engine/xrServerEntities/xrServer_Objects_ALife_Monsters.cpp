@@ -1035,6 +1035,7 @@ CSE_ALifeMonsterAbstract::CSE_ALifeMonsterAbstract(LPCSTR caSection)
     m_brain = 0;
     m_smart_terrain_id = 0xffff;
     m_task_reached = false;
+    m_mutant_loot_collected = false;
 
     m_rank = (pSettings->line_exist(caSection, "rank")) ? pSettings->r_s32(caSection, "rank") : 0;
 
@@ -1078,6 +1079,7 @@ void CSE_ALifeMonsterAbstract::STATE_Write(NET_Packet& tNetPacket) {
     tNetPacket.w_stringZ(m_in_space_restrictors);
     tNetPacket.w_u16(m_smart_terrain_id);
     tNetPacket.w(&m_task_reached, sizeof(m_task_reached));
+    tNetPacket.w_u8(m_mutant_loot_collected ? 1 : 0);
 }
 
 void CSE_ALifeMonsterAbstract::STATE_Read(NET_Packet& tNetPacket, u16 size) {
@@ -1094,6 +1096,8 @@ void CSE_ALifeMonsterAbstract::STATE_Read(NET_Packet& tNetPacket, u16 size) {
     if (m_wVersion > 113) {
         tNetPacket.r(&m_task_reached, sizeof(m_task_reached));
     }
+
+    m_mutant_loot_collected = m_wVersion > 128 ? !!tNetPacket.r_u8() : false;
 }
 
 void CSE_ALifeMonsterAbstract::UPDATE_Write(NET_Packet& tNetPacket) {

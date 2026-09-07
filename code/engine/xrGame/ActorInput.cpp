@@ -34,6 +34,7 @@
 #include "hudmanager.h"
 #include "Weapon.h"
 #include "ItemUseController.h"
+#include "CustomMonster.h"
 
 extern u32 hud_adj_mode;
 
@@ -457,6 +458,18 @@ void CActor::ActorUse() {
 
     if (character_physics_support()->movement()->PHCapture())
         character_physics_support()->movement()->PHReleaseObject();
+
+    // Configured mutant corpses use a native harvesting path. Handle it before
+    // script callbacks and before the generic dead-body inventory interaction.
+    if (IsGameTypeSingle() && m_pObjectWeLookingAt && m_item_use &&
+        !Level().IR_GetKeyState(DIK_LSHIFT)) {
+        CCustomMonster* monster = m_pObjectWeLookingAt->cast_custom_monster();
+
+        if (monster && monster->HasMutantLootRecipe()) {
+            m_item_use->StartMutantLoot(monster);
+            return;
+        }
+    }
 
     if (m_pUsableObject && NULL == m_pObjectWeLookingAt->cast_inventory_item()) {
         m_pUsableObject->use(this);

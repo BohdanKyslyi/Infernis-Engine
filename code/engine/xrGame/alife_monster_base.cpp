@@ -15,6 +15,17 @@
 void CSE_ALifeMonsterBase::on_spawn() {
     inherited1::on_spawn();
 
+    // A native harvesting recipe owns body-part generation. Do not also seed
+    // the legacy inventory item when old mod keys remain in the monster config.
+    if (pSettings->line_exist(s_name, "mutant_loot_section")) {
+        LPCSTR loot_section = pSettings->r_string(s_name, "mutant_loot_section");
+
+        if (loot_section && loot_section[0] && xr_strcmp(loot_section, "none") &&
+            pSettings->section_exist(loot_section)) {
+            return;
+        }
+    }
+
     if (!pSettings->line_exist(s_name, "Spawn_Inventory_Item_Section"))
         return;
 

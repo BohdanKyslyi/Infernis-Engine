@@ -42,11 +42,12 @@
 #include "ai/monsters/burer/burer.h"
 #include "GamePersistent.h"
 #include "actor.h"
-//#include "alife_simulator.h"
+#include "alife_simulator.h"
 #include "alife_object_registry.h"
 #include "client_spawn_manager.h"
 #include "moving_object.h"
 #include "level_path_manager.h"
+#include "ParticlesObject.h"
 
 // Lain: added
 #include "../xrEngine/IGame_Level.h"
@@ -61,6 +62,11 @@
 
 void SetActorVisibility(u16 who, float value);
 extern int g_AI_inactive_time;
+
+namespace {
+constexpr float MUTANT_LOOT_FINISH_DISTANCE = 2.5f;
+constexpr u32 MUTANT_LOOT_CORPSE_DELAY = 3000;
+} // namespace
 
 #ifndef MASTER_GOLD
 Flags32 psAI_Flags = { aiObstaclesAvoiding | aiUseSmartCovers };
@@ -98,6 +104,8 @@ CCustomMonster::CCustomMonster()
     m_already_dead = false;
     m_invulnerable = false;
     m_moving_object = 0;
+    m_mutant_loot_state = eMutantLootUnavailable;
+    m_mutant_loot_actor_id = u16(-1);
 }
 
 CCustomMonster::~CCustomMonster() {
@@ -120,6 +128,8 @@ CCustomMonster::~CCustomMonster() {
 
 void CCustomMonster::Load(LPCSTR section) {
     inherited::Load(section);
+
+    LoadMutantLoot(section);
 
     if (character_physics_support()) {
         material().Load(section);
@@ -186,6 +196,272 @@ void CCustomMonster::Load(LPCSTR section) {
     // Msg				("! cmonster size: %d",sizeof(*this));
 }
 
+void CCustomMonster::LoadMutantLoot(LPCSTR section) {
+    m_mutant_loot_items.clear();
+    m_mutant_loot_section = NULL;
+    m_mutant_loot_tip = NULL;
+    m_mutant_loot_particle = NULL;
+    m_mutant_loot_particle_bone = NULL;
+    m_mutant_loot_state = eMutantLootUnavailable;
+    m_mutant_loot_actor_id = u16(-1);
+
+    if (!pSettings->line_exist(section, "mutant_loot_section"))
+        return;
+
+    LPCSTR loot_section = pSettings->r_string(section, "mutant_loot_section");
+
+    if (!loot_section || !loot_section[0] || !xr_strcmp(loot_section, "none"))
+        return;
+
+    if (!pSettings->section_exist(loot_section)) {
+        Msg("! MutantLoot: recipe section [%s] for monster [%s] does not exist",
+            loot_section, section);
+        return;
+    }
+
+    m_mutant_loot_section = loot_section;
+
+    if (pSettings->line_exist(loot_section, "use_tip"))
+        m_mutant_loot_tip = pSettings->r_string(loot_section, "use_tip");
+    else if (pSettings->line_exist(section, "character_use"))
+        m_mutant_loot_tip = pSettings->r_string(section, "character_use");
+    else
+        m_mutant_loot_tip = "monstr_character_use";
+
+    if (pSettings->line_exist(loot_section, "particle")) {
+        LPCSTR particle = pSettings->r_string(loot_section, "particle");
+
+        if (particle && particle[0] && xr_strcmp(particle, "none"))
+            m_mutant_loot_particle = particle;
+    }
+
+    if (pSettings->line_exist(loot_section, "particle_bone"))
+        m_mutant_loot_particle_bone = pSettings->r_string(loot_section, "particle_bone");
+    else if (pSettings->line_exist(section, "bone_impuls_abscission"))
+        m_mutant_loot_particle_bone =
+            pSettings->r_string(section, "bone_impuls_abscission");
+
+    CInifile::Sect& recipe = pSettings->r_section(loot_section);
+
+    for (auto line = recipe.Data.cbegin(); line != recipe.Data.cend(); ++line) {
+        LPCSTR line_name = line->first.c_str();
+        const bool plain_item = !xr_strcmp(line_name, "item");
+        const bool indexed_item = !strncmp(line_name, "item_", 5) && line_name[5] >= '0' &&
+                                  line_name[5] <= '9';
+
+        if (!plain_item && !indexed_item)
+            continue;
+
+        LPCSTR value = line->second.c_str();
+
+        if (!value || !value[0] || _GetItemCount(value) != 3) {
+            Msg("! MutantLoot: invalid recipe [%s:%s]; expected section,count,probability",
+                loot_section, line_name);
+            continue;
+        }
+
+        string256 item_section;
+        string64 count_value;
+        string64 probability_value;
+
+        _GetItem(value, 0, item_section);
+        _GetItem(value, 1, count_value);
+        _GetItem(value, 2, probability_value);
+
+        if (!item_section[0] || !pSettings->section_exist(item_section)) {
+            Msg("! MutantLoot: unknown item section [%s] in [%s:%s]", item_section,
+                loot_section, line_name);
+            continue;
+        }
+
+        const int parsed_count = atoi(count_value);
+        const float parsed_probability = (float)atof(probability_value);
+
+        if (parsed_count <= 0) {
+            Msg("! MutantLoot: invalid item count [%s] in [%s:%s]", count_value,
+                loot_section, line_name);
+            continue;
+        }
+
+        if (parsed_probability < 0.f || parsed_probability > 1.f) {
+            Msg("! MutantLoot: probability [%s] in [%s:%s] must be in range [0, 1]",
+                probability_value, loot_section, line_name);
+            continue;
+        }
+
+        SMutantLootItem item;
+        item.section = item_section;
+        item.count = static_cast<u32>(parsed_count);
+        item.probability = parsed_probability;
+        m_mutant_loot_items.push_back(item);
+    }
+
+    if (m_mutant_loot_items.empty()) {
+        Msg("! MutantLoot: recipe [%s] for monster [%s] contains no valid items",
+            loot_section, section);
+        return;
+    }
+
+    m_mutant_loot_state = eMutantLootAvailable;
+
+    Msg("* MutantLoot: monster [%s] uses recipe [%s] with [%u] entries", section,
+        loot_section, (u32)m_mutant_loot_items.size());
+}
+
+bool CCustomMonster::CanMutantLoot(const CActor* actor) const {
+    if (!actor || !actor->g_Alive() || Level().CurrentViewEntity() != actor)
+        return false;
+
+    if (m_mutant_loot_state != eMutantLootAvailable || m_mutant_loot_items.empty() ||
+        g_Alive() || getDestroy()) {
+        return false;
+    }
+
+    const u32 death_time = GetLevelDeathTime();
+
+    if (!death_time || Device.dwTimeGlobal - death_time < MUTANT_LOOT_CORPSE_DELAY)
+        return false;
+
+    return Position().distance_to_sqr(actor->Position()) <=
+           MUTANT_LOOT_FINISH_DISTANCE * MUTANT_LOOT_FINISH_DISTANCE;
+}
+
+LPCSTR CCustomMonster::MutantLootTip() const {
+    return m_mutant_loot_tip.size() ? m_mutant_loot_tip.c_str() : NULL;
+}
+
+bool CCustomMonster::BeginMutantLoot(CActor* actor) {
+    if (!CanMutantLoot(actor))
+        return false;
+
+    m_mutant_loot_state = eMutantLootInProgress;
+    m_mutant_loot_actor_id = actor->ID();
+
+    Msg("* MutantLoot: corpse [%u][%s] reserved by actor", (u32)ID(), cNameSect().c_str());
+    return true;
+}
+
+bool CCustomMonster::CompleteMutantLoot(CActor* actor) {
+    if (!actor || !actor->g_Alive() || getDestroy() || g_Alive() ||
+        m_mutant_loot_state != eMutantLootInProgress ||
+        m_mutant_loot_actor_id != actor->ID()) {
+        return false;
+    }
+
+    if (Position().distance_to_sqr(actor->Position()) >
+        MUTANT_LOOT_FINISH_DISTANCE * MUTANT_LOOT_FINISH_DISTANCE) {
+        Msg("! MutantLoot: actor moved too far from corpse [%u][%s]", (u32)ID(),
+            cNameSect().c_str());
+        return false;
+    }
+
+    if (!OnServer()) {
+        Msg("! MutantLoot: corpse [%u][%s] cannot be processed outside the server",
+            (u32)ID(), cNameSect().c_str());
+        return false;
+    }
+
+    // Commit before spawning anything. Even an empty roll consumes the corpse,
+    // and a repeated Use cannot duplicate a partially spawned recipe.
+    m_mutant_loot_state = eMutantLootCollected;
+    m_mutant_loot_actor_id = u16(-1);
+
+    if (ai().get_alife()) {
+        CSE_Abstract* server_object = ai().alife().objects().object(ID(), true);
+        CSE_ALifeMonsterAbstract* server_monster =
+            smart_cast<CSE_ALifeMonsterAbstract*>(server_object);
+
+        if (server_monster)
+            server_monster->m_mutant_loot_collected = true;
+        else
+            Msg("! MutantLoot: server object for corpse [%u][%s] was not found",
+                (u32)ID(), cNameSect().c_str());
+    }
+
+    u32 spawned_count = 0;
+
+    for (const SMutantLootItem& item : m_mutant_loot_items) {
+        if (item.probability < 1.f && Random.randF() >= item.probability)
+            continue;
+
+        for (u32 count = 0; count < item.count; ++count) {
+            Level().spawn_item(item.section.c_str(), actor->Position(),
+                               actor->ai_location().level_vertex_id(), actor->ID(), false);
+            ++spawned_count;
+        }
+
+        Msg("* MutantLoot: spawned [%s] x[%u] from corpse [%u]", item.section.c_str(),
+            item.count, (u32)ID());
+    }
+
+    PlayMutantLootParticle();
+
+    Msg("* MutantLoot: corpse [%u][%s] collected, total items [%u]", (u32)ID(),
+        cNameSect().c_str(), spawned_count);
+    return true;
+}
+
+void CCustomMonster::CancelMutantLoot(CActor* actor) {
+    if (m_mutant_loot_state != eMutantLootInProgress)
+        return;
+
+    if (actor && m_mutant_loot_actor_id != actor->ID())
+        return;
+
+    m_mutant_loot_state = eMutantLootAvailable;
+    m_mutant_loot_actor_id = u16(-1);
+
+    Msg("* MutantLoot: corpse [%u][%s] reservation released", (u32)ID(),
+        cNameSect().c_str());
+}
+
+void CCustomMonster::PlayMutantLootParticle() {
+    if (!m_mutant_loot_particle.size())
+        return;
+
+    Fmatrix particle_transform;
+    particle_transform.set(XFORM());
+
+    IKinematics* kinematics = smart_cast<IKinematics*>(Visual());
+
+    if (kinematics) {
+        u16 bone_id = kinematics->LL_GetBoneRoot();
+
+        if (m_mutant_loot_particle_bone.size()) {
+            const u16 configured_bone =
+                kinematics->LL_BoneID(m_mutant_loot_particle_bone.c_str());
+
+            if (configured_bone != BI_NONE) {
+                bone_id = configured_bone;
+            } else {
+                Msg("! MutantLoot: particle bone [%s] was not found on corpse [%u][%s]; "
+                    "using root bone",
+                    m_mutant_loot_particle_bone.c_str(), (u32)ID(), cNameSect().c_str());
+            }
+        }
+
+        if (bone_id != BI_NONE)
+            particle_transform.mul_43(XFORM(), kinematics->LL_GetTransform(bone_id));
+    } else {
+        Msg("! MutantLoot: corpse [%u][%s] has no kinematics; particle uses object origin",
+            (u32)ID(), cNameSect().c_str());
+    }
+
+    CParticlesObject* particle =
+        CParticlesObject::Create(m_mutant_loot_particle.c_str(), TRUE);
+
+    if (!particle) {
+        Msg("! MutantLoot: failed to create particle [%s]", m_mutant_loot_particle.c_str());
+        return;
+    }
+
+    particle->UpdateParent(particle_transform, zero_vel);
+    GamePersistent().ps_needtoplay.push_back(particle);
+
+    Msg("* MutantLoot: particle [%s] started on bone [%s]", m_mutant_loot_particle.c_str(),
+        m_mutant_loot_particle_bone.size() ? m_mutant_loot_particle_bone.c_str() : "root");
+}
+
 void CCustomMonster::reinit() {
     CScriptEntity::reinit();
     CEntityAlive::reinit();
@@ -221,6 +497,10 @@ void CCustomMonster::reinit() {
     //////////////////////////////////////////////////////////////////////////
     m_update_rotation_on_frame = true;
     m_movement_enabled_before_animation_controller = true;
+
+    m_mutant_loot_state = m_mutant_loot_items.empty() ? eMutantLootUnavailable
+                                                       : eMutantLootAvailable;
+    m_mutant_loot_actor_id = u16(-1);
 }
 
 void CCustomMonster::reload(LPCSTR section) {
@@ -689,6 +969,12 @@ BOOL CCustomMonster::net_Spawn(CSE_Abstract* DC) {
 
     CSE_Abstract* e = (CSE_Abstract*)(DC);
     CSE_ALifeMonsterAbstract* E = smart_cast<CSE_ALifeMonsterAbstract*>(e);
+
+    if (!m_mutant_loot_items.empty()) {
+        m_mutant_loot_state = E->m_mutant_loot_collected ? eMutantLootCollected
+                                                         : eMutantLootAvailable;
+        m_mutant_loot_actor_id = u16(-1);
+    }
 
     eye_matrix.identity();
     movement().m_body.current.yaw = movement().m_body.target.yaw = -E->o_torso.yaw;

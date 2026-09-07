@@ -263,6 +263,7 @@ ALife::_OBJECT_ID m_smart_terrain_id;
 // bool if monster under smart terrain and currently executes task
 // if monster on the way then (m_smart_terrain_id != 0xffff) && (!m_task_reached)
 bool m_task_reached;
+bool m_mutant_loot_collected;
 //---------------------------------------------------------
 
 int m_rank;

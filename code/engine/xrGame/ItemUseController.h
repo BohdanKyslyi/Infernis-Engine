@@ -5,6 +5,7 @@
 class CActor;
 class CInventoryItem;
 class CParticlesObject;
+class CCustomMonster;
 
 class CItemUseController {
 public:
@@ -12,6 +13,9 @@ public:
     ~CItemUseController();
 
     bool Start(CInventoryItem* item);
+    // Starts native harvesting for a configured mutant corpse. If the global
+    // animation is disabled or invalid, the loot is collected immediately.
+    bool StartMutantLoot(CCustomMonster* monster);
 
     // Persistent controller-owned HUD lifecycle used by interfaces such as
     // PDA and backpack. Connecting those interfaces is intentionally kept
@@ -45,6 +49,7 @@ private:
         eControllerModeConsumable,
         eControllerModeHudAnimation,
         eControllerModeHudAnimationOneShot,
+        eControllerModeMutantLoot,
     };
 
     enum EHudAnimationPhase {
@@ -68,10 +73,17 @@ private:
     bool CanStartAnimation();
     void BeginAnimation();
 
-    bool PlayHudAnimationMotion(LPCSTR motion_name, EHudAnimationPhase phase, BOOL mix_in);
+    bool PlayHudAnimationMotion(LPCSTR motion_name, EHudAnimationPhase phase, BOOL mix_in,
+                                shared_str* played_motion_name = NULL);
     void BeginHudAnimationIdle();
     void BeginHudAnimationHide();
     void UpdateHudAnimation();
+    void UpdateMutantLootAnimation();
+
+    CCustomMonster* MutantLootTarget() const;
+    bool ApplyMutantLootEffect();
+    void ReleaseMutantLootReservation();
+    bool CompleteMutantLootImmediately(CCustomMonster* monster);
 
     void LockActor();
     void UnlockActor();
@@ -114,6 +126,7 @@ private:
     EHudAnimationPhase m_hud_animation_phase;
     bool m_hud_animation_hide_requested;
     bool m_hud_animation_allow_inventory;
+    u16 m_mutant_loot_target_id;
     u16 m_queued_consumable_id;
     shared_str m_deferred_hud_animation_section;
     shared_str m_queued_hud_animation_section;

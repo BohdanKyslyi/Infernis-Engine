@@ -1062,7 +1062,14 @@ void CActor::shedule_Update(u32 DT) {
             m_pInvBoxWeLookingAt = smart_cast<CInventoryBox*>(game_object);
 
             if (GameID() == eGameIDSingle) {
-                if (m_pUsableObject && m_pUsableObject->tip_text()) {
+                CCustomMonster* mutant = game_object->cast_custom_monster();
+
+                if (mutant && mutant->HasMutantLootRecipe()) {
+                    if (mutant->CanMutantLoot(this) && mutant->MutantLootTip())
+                        m_sDefaultObjAction = CStringTable().translate(mutant->MutantLootTip());
+                    else
+                        m_sDefaultObjAction = nullptr;
+                } else if (m_pUsableObject && m_pUsableObject->tip_text()) {
                     m_sDefaultObjAction = CStringTable().translate(m_pUsableObject->tip_text());
                 } else {
                     if (m_pPersonWeLookingAt && pEntityAlive && pEntityAlive->g_Alive() && m_pPersonWeLookingAt->IsTalkEnabled()) {
