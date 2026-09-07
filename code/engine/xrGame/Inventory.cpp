@@ -145,26 +145,17 @@ static void TryStartDressingAnimation(CInventoryOwner* owner, u16 slot_id,
         return;
     }
 
-    // An animated backpack may already own the controller while inventory is
-    // open. Queue dressing behind its hide lifecycle instead of interrupting it.
-    if (controller->IsActive()) {
-        if (controller->TryQueueHudAnimationOnce(hud_section)) {
-            Msg("* Equipment dressing animation queued for %s [%s], HUD [%s]", item_type,
-                item_section.c_str(), hud_section.c_str());
-        } else {
-            Msg("! Equipment dressing animation skipped for %s [%s]: controller is busy",
-                item_type, item_section.c_str());
-        }
-
-        return;
-    }
-
-    if (controller->StartHudAnimationOnce(hud_section)) {
-        Msg("* Equipment dressing animation started for %s [%s], HUD [%s]", item_type,
+    // CInventory::Slot() is called before CUIActorMenu::ToSlot() finishes
+    // moving its CUICellItem between drag-drop containers. Defer every UI
+    // mutation until the next controller update to avoid stale cell pointers.
+    // If a backpack owns the controller, the deferred request will then be
+    // queued behind its normal hide lifecycle.
+    if (controller->QueueHudAnimationOnce(hud_section)) {
+        Msg("* Equipment dressing animation scheduled for %s [%s], HUD [%s]", item_type,
             item_section.c_str(), hud_section.c_str());
     } else {
-        Msg("! Equipment dressing animation failed to start for %s [%s], HUD [%s]",
-            item_type, item_section.c_str(), hud_section.c_str());
+        Msg("! Equipment dressing animation skipped for %s [%s]: controller is busy",
+            item_type, item_section.c_str());
     }
 }
 

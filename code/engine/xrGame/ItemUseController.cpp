@@ -53,6 +53,7 @@ CItemUseController::CItemUseController(CActor* actor)
       m_hud_animation_hide_requested(false),
       m_hud_animation_allow_inventory(false),
       m_queued_consumable_id(u16(-1)),
+      m_deferred_hud_animation_section(NULL),
       m_queued_hud_animation_section(NULL),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
@@ -302,6 +303,7 @@ bool CItemUseController::CanUseConsumables() const {
 bool CItemUseController::CanQueueAfterHudHide() const {
     return IsHudAnimationIdle() && m_hud_animation_allow_inventory &&
            m_queued_consumable_id == u16(-1) &&
+           !m_deferred_hud_animation_section.size() &&
            !m_queued_hud_animation_section.size();
 }
 
@@ -331,6 +333,21 @@ bool CItemUseController::TryQueueConsumable(CInventoryItem* item) {
         CurrentGameUI()->HideActorMenu();
 
     RequestHudAnimationHide();
+    return true;
+}
+
+bool CItemUseController::QueueHudAnimationOnce(const shared_str& hud_section) {
+    if (!hud_section.size() || m_deferred_hud_animation_section.size())
+        return false;
+
+    // Slot placement can happen inside CUIActorMenu::ToSlot(), before its
+    // CUICellItem has been removed from the old drag-drop container. Starting
+    // immediately would hide/rebuild that UI and leave ToSlot() with a stale
+    // cell pointer. Keep the request until the controller's next frame update.
+    if (m_active && !CanQueueAfterHudHide())
+        return false;
+
+    m_deferred_hud_animation_section = hud_section;
     return true;
 }
 
@@ -652,6 +669,26 @@ void CItemUseController::Update(float dt)
 {
     (void)dt;
 
+    if (m_deferred_hud_animation_section.size()) {
+        const shared_str deferred_hud_animation_section =
+            m_deferred_hud_animation_section;
+        m_deferred_hud_animation_section = NULL;
+
+        if (!m_actor || !m_actor->g_Alive() || !g_player_hud) {
+            Msg("! ItemUse: deferred one-shot HUD [%s] discarded because actor/HUD is "
+                "unavailable",
+                deferred_hud_animation_section.c_str());
+        } else if (m_active) {
+            if (!TryQueueHudAnimationOnce(deferred_hud_animation_section)) {
+                Msg("! ItemUse: deferred one-shot HUD [%s] could not be queued",
+                    deferred_hud_animation_section.c_str());
+            }
+        } else if (!StartHudAnimationOnce(deferred_hud_animation_section)) {
+            Msg("! ItemUse: deferred one-shot HUD [%s] failed to start",
+                deferred_hud_animation_section.c_str());
+        }
+    }
+
     if (!m_active)
         return;
 
@@ -874,6 +911,7 @@ void CItemUseController::Reset()
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;
     m_queued_consumable_id = u16(-1);
+    m_deferred_hud_animation_section = NULL;
     m_queued_hud_animation_section = NULL;
 
     m_waiting_for_weapon_hide = false;

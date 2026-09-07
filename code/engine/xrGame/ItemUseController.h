@@ -25,6 +25,7 @@ public:
     bool IsHudAnimationIdle() const;
     bool CanUseConsumables() const;
     bool TryQueueConsumable(CInventoryItem* item);
+    bool QueueHudAnimationOnce(const shared_str& hud_section);
     bool TryQueueHudAnimationOnce(const shared_str& hud_section);
 
     void Update(float dt);
@@ -109,6 +110,7 @@ private:
     bool m_hud_animation_hide_requested;
     bool m_hud_animation_allow_inventory;
     u16 m_queued_consumable_id;
+    shared_str m_deferred_hud_animation_section;
     shared_str m_queued_hud_animation_section;
 
     //
