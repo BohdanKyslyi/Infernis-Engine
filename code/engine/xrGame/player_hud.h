@@ -111,6 +111,8 @@ public:
     void render_item_ui();
     bool render_item_ui_query();
     u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed);
+    bool can_attach_controller_item(const shared_str& hud_section);
+    bool has_hud_motion(const shared_str& hud_section, const shared_str& motion_name);
     bool has_controller_motion(const shared_str& motion_name);
     u32 play_controller_motion(const shared_str& motion_name, BOOL bMixIn = TRUE,
                                shared_str* played_motion_name = NULL);

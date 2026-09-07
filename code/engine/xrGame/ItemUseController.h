@@ -17,11 +17,15 @@ public:
     // PDA and backpack. Connecting those interfaces is intentionally kept
     // outside the controller.
     bool StartHudAnimation(const shared_str& hud_section, bool allow_inventory = false);
+    // One-shot controller-owned HUD animation used by equipment dressing.
+    // Only anm_show/snd_show are played; anm_idle and anm_hide are ignored.
+    bool StartHudAnimationOnce(const shared_str& hud_section);
     void RequestHudAnimationHide();
     bool IsHudAnimationActive() const;
     bool IsHudAnimationIdle() const;
     bool CanUseConsumables() const;
     bool TryQueueConsumable(CInventoryItem* item);
+    bool TryQueueHudAnimationOnce(const shared_str& hud_section);
 
     void Update(float dt);
     void Cancel();
@@ -35,6 +39,7 @@ private:
         eControllerModeNone,
         eControllerModeConsumable,
         eControllerModeHudAnimation,
+        eControllerModeHudAnimationOneShot,
     };
 
     enum EHudAnimationPhase {
@@ -45,6 +50,10 @@ private:
     };
 
     void Reset();
+
+    bool StartHudAnimationInternal(const shared_str& hud_section,
+                                   bool allow_inventory, bool one_shot);
+    bool CanQueueAfterHudHide() const;
 
     bool ResolveConsumableAnimation(CInventoryItem* item, shared_str& item_section,
                                     shared_str& use_section, shared_str& state_section,
@@ -100,6 +109,7 @@ private:
     bool m_hud_animation_hide_requested;
     bool m_hud_animation_allow_inventory;
     u16 m_queued_consumable_id;
+    shared_str m_queued_hud_animation_section;
 
     //
     // Item use state.

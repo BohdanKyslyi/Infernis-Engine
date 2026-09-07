@@ -53,6 +53,7 @@ CItemUseController::CItemUseController(CActor* actor)
       m_hud_animation_hide_requested(false),
       m_hud_animation_allow_inventory(false),
       m_queued_consumable_id(u16(-1)),
+      m_queued_hud_animation_section(NULL),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
       m_prev_inventory_disabled(false),
@@ -198,6 +199,16 @@ bool CItemUseController::ResolveConsumableAnimation(CInventoryItem* item,
 
 bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
                                            bool allow_inventory) {
+    return StartHudAnimationInternal(hud_section, allow_inventory, false);
+}
+
+bool CItemUseController::StartHudAnimationOnce(const shared_str& hud_section) {
+    return StartHudAnimationInternal(hud_section, false, true);
+}
+
+bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section,
+                                                   bool allow_inventory,
+                                                   bool one_shot) {
     if (m_active || !m_actor || !g_player_hud || !hud_section.size())
         return false;
 
@@ -206,10 +217,21 @@ bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
         return false;
     }
 
-    // anm_show remains the entry motion for both old consumables and persistent
-    // HUD sequences. Only anm_idle and anm_hide are optional additions.
+    // anm_show remains the entry motion for old consumables, persistent HUD
+    // sequences and one-shot dressing animations. Only persistent sequences
+    // can continue into optional anm_idle and anm_hide motions.
     if (!pSettings->line_exist(hud_section.c_str(), "anm_show")) {
         Msg("! ItemUse: HUD animation section [%s] has no [anm_show]", hud_section.c_str());
+        return false;
+    }
+
+    // Validate the resolved hand motion before hiding the inventory or weapon.
+    // player_hud's regular HUD loader asserts on a missing motion, while an
+    // optional controller animation must safely fall back to normal gameplay.
+    if (!g_player_hud->can_attach_controller_item(hud_section)) {
+        Msg("! ItemUse: HUD animation section [%s] has an invalid item visual or unavailable "
+            "motion; check HUD fields, [hands_animations_path] and OMF files",
+            hud_section.c_str());
         return false;
     }
 
@@ -225,11 +247,13 @@ bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
 
     m_active = true;
     m_effect_applied = false;
-    m_controller_mode = eControllerModeHudAnimation;
+    m_controller_mode = one_shot ? eControllerModeHudAnimationOneShot
+                                 : eControllerModeHudAnimation;
     m_hud_animation_phase = eHudAnimationNone;
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = allow_inventory;
     m_queued_consumable_id = u16(-1);
+    m_queued_hud_animation_section = NULL;
     m_waiting_for_weapon_hide = true;
 
     LockActor();
@@ -239,7 +263,8 @@ bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
         return false;
     }
 
-    Msg("* ItemUse HUD animation waiting for weapon hide: [%s]", m_hud_section.c_str());
+    Msg("* ItemUse %s HUD animation waiting for weapon hide: [%s]",
+        one_shot ? "one-shot" : "persistent", m_hud_section.c_str());
 
     return true;
 }
@@ -271,8 +296,13 @@ bool CItemUseController::IsHudAnimationIdle() const {
 }
 
 bool CItemUseController::CanUseConsumables() const {
+    return CanQueueAfterHudHide();
+}
+
+bool CItemUseController::CanQueueAfterHudHide() const {
     return IsHudAnimationIdle() && m_hud_animation_allow_inventory &&
-           m_queued_consumable_id == u16(-1);
+           m_queued_consumable_id == u16(-1) &&
+           !m_queued_hud_animation_section.size();
 }
 
 bool CItemUseController::TryQueueConsumable(CInventoryItem* item) {
@@ -297,6 +327,41 @@ bool CItemUseController::TryQueueConsumable(CInventoryItem* item) {
 
     // Closing the actor menu also requests the backpack hide lifecycle. Keep a
     // direct request as a fallback for controller use outside CUIGameCustom.
+    if (CurrentGameUI())
+        CurrentGameUI()->HideActorMenu();
+
+    RequestHudAnimationHide();
+    return true;
+}
+
+bool CItemUseController::TryQueueHudAnimationOnce(const shared_str& hud_section) {
+    if (!CanQueueAfterHudHide() || !hud_section.size())
+        return false;
+
+    if (!pSettings->section_exist(hud_section.c_str())) {
+        Msg("! ItemUse: queued HUD animation section [%s] does not exist",
+            hud_section.c_str());
+        return false;
+    }
+
+    if (!pSettings->line_exist(hud_section.c_str(), "anm_show")) {
+        Msg("! ItemUse: queued HUD animation section [%s] has no [anm_show]",
+            hud_section.c_str());
+        return false;
+    }
+
+    if (!g_player_hud || !g_player_hud->can_attach_controller_item(hud_section)) {
+        Msg("! ItemUse: queued HUD animation section [%s] has an invalid item visual or "
+            "unavailable motion",
+            hud_section.c_str());
+        return false;
+    }
+
+    m_queued_hud_animation_section = hud_section;
+
+    Msg("* ItemUse one-shot HUD queued after persistent HUD hide: [%s]",
+        hud_section.c_str());
+
     if (CurrentGameUI())
         CurrentGameUI()->HideActorMenu();
 
@@ -414,16 +479,22 @@ void CItemUseController::BeginAnimation()
 
     m_waiting_for_weapon_hide = false;
 
-    if (m_controller_mode == eControllerModeHudAnimation) {
+    if (m_controller_mode == eControllerModeHudAnimation ||
+        m_controller_mode == eControllerModeHudAnimationOneShot) {
         if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE)) {
-            Msg("! ItemUse: failed to play HUD show animation [%s]", m_hud_section.c_str());
+            Msg("! ItemUse: failed to play %s HUD show animation [%s]",
+                m_controller_mode == eControllerModeHudAnimationOneShot ? "one-shot"
+                                                                        : "persistent",
+                m_hud_section.c_str());
             Cancel();
             return;
         }
 
         PlayHudAnimationSound("snd_show");
 
-        Msg("* ItemUse HUD animation started: [%s], show duration [%u], sound [%s]",
+        Msg("* ItemUse %s HUD animation started: [%s], show duration [%u], sound [%s]",
+            m_controller_mode == eControllerModeHudAnimationOneShot ? "one-shot"
+                                                                    : "persistent",
             m_hud_section.c_str(), m_animation_duration,
             m_anim_sound_loaded ? "yes" : "no");
         return;
@@ -552,8 +623,12 @@ void CItemUseController::UpdateHudAnimation() {
     if (m_hud_animation_phase == eHudAnimationShow) {
         const u32 elapsed = Device.dwTimeGlobal - m_start_time;
 
-        if (elapsed >= m_animation_duration)
-            BeginHudAnimationIdle();
+        if (elapsed >= m_animation_duration) {
+            if (m_controller_mode == eControllerModeHudAnimationOneShot)
+                Finish();
+            else
+                BeginHudAnimationIdle();
+        }
 
         return;
     }
@@ -608,7 +683,8 @@ void CItemUseController::Update(float dt)
         return;
     }
 
-    if (m_controller_mode == eControllerModeHudAnimation) {
+    if (m_controller_mode == eControllerModeHudAnimation ||
+        m_controller_mode == eControllerModeHudAnimationOneShot) {
         UpdateHudAnimation();
         return;
     }
@@ -694,6 +770,8 @@ void CItemUseController::Cancel() {
 
     if (m_controller_mode == eControllerModeHudAnimation)
         Msg("* ItemUse HUD animation cancelled: [%s]", m_hud_section.c_str());
+    else if (m_controller_mode == eControllerModeHudAnimationOneShot)
+        Msg("* ItemUse one-shot HUD animation cancelled: [%s]", m_hud_section.c_str());
     else
         Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
@@ -708,6 +786,10 @@ void CItemUseController::Finish() {
         m_controller_mode == eControllerModeHudAnimation &&
         m_queued_consumable_id != u16(-1);
     const u16 queued_consumable_id = m_queued_consumable_id;
+    const bool start_queued_hud_animation =
+        m_controller_mode == eControllerModeHudAnimation &&
+        m_queued_hud_animation_section.size();
+    const shared_str queued_hud_animation_section = m_queued_hud_animation_section;
 
     //
     // Normal physical trash moment:
@@ -728,10 +810,23 @@ void CItemUseController::Finish() {
 
     if (m_controller_mode == eControllerModeHudAnimation)
         Msg("* ItemUse HUD animation finished: [%s]", m_hud_section.c_str());
+    else if (m_controller_mode == eControllerModeHudAnimationOneShot)
+        Msg("* ItemUse one-shot HUD animation finished: [%s]", m_hud_section.c_str());
     else
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
     Reset();
+
+    if (start_queued_hud_animation && m_actor && m_actor->g_Alive()) {
+        if (StartHudAnimationOnce(queued_hud_animation_section)) {
+            Msg("* ItemUse: persistent HUD hide completed, queued one-shot animation started");
+        } else {
+            Msg("! ItemUse: failed to start queued one-shot HUD animation [%s]",
+                queued_hud_animation_section.c_str());
+        }
+
+        return;
+    }
 
     if (!start_queued_consumable || !m_actor || !m_actor->g_Alive())
         return;
@@ -779,6 +874,7 @@ void CItemUseController::Reset()
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;
     m_queued_consumable_id = u16(-1);
+    m_queued_hud_animation_section = NULL;
 
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;

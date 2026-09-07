@@ -124,6 +124,7 @@ snd_hide  = interface\pda_holster, 0.8, 0.0
 ```cpp
 controller->StartHudAnimation(hud_section);
 controller->StartHudAnimation(hud_section, true); // allow inventory item use in idle
+controller->StartHudAnimationOnce(hud_section);   // anm_show + snd_show only
 controller->IsHudAnimationActive();
 controller->IsHudAnimationIdle();
 controller->RequestHudAnimationHide();
@@ -273,3 +274,57 @@ Inventory hotkey / close button / script -> close 2D interface
   consumable-послідовність цього предмета;
 - повторні запити під час show/hide або вже запущеної consumable-анімації
   блокуються, як і раніше.
+
+## Анімації вдягання екіпірування
+
+Одноразові анімації вдягання броні, шолома й рюкзака вмикаються глобально та
+мають окремі HUD-посилання для кожного типу слота:
+
+```ini
+[items_animations]
+enable_dressing_animations = true
+outfit_dressing_hud        = anm_outfit_dressing_hud
+helmet_dressing_hud        = anm_helmet_dressing_hud
+backpack_dressing_hud      = anm_backpack_dressing_hud
+```
+
+Типова HUD-секція використовує лише `anm_show` та необов'язковий `snd_show`:
+
+```ini
+[anm_outfit_dressing_hud]:base_consumable_hud
+item_visual      = dynamics\equipments\outfit_dressing_hud.ogf
+attach_place_idx = 0
+anm_show         = outfit_dressing
+snd_show         = interface\outfit_dressing
+```
+
+`anm_idle`, `anm_hide` і `snd_hide` для dressing lifecycle не читаються: після
+закінчення `anm_show` HUD від'єднується, а зброя повертається. Кожна фізична
+секція екіпірування може замінити глобальне посилання або вимкнути анімацію
+лише для себе:
+
+```ini
+[scientific_outfit]:outfit_base
+dressing_hud = anm_scientific_outfit_dressing_hud
+
+[light_helmet]:helmet_base
+dressing_hud = none
+```
+
+Анімація запускається лише після ручного перенесення предмета у відповідний
+слот у відкритому інвентарі актора. Відновлення слотів із сейва та скриптові
+операції не запускають dressing lifecycle.
+
+Послідовність для звичайного інвентарю:
+
+```text
+Move to slot -> item is equipped -> inventory closes
+             -> weapon/detector hide -> anm_show + snd_show
+             -> detach HUD -> restore weapon
+```
+
+Якщо інвентар уже відкритий з backpack HUD у фазі `idle`, нова анімація
+автоматично стає в чергу: спочатку програється `anm_hide` рюкзака, а потім
+dressing `anm_show`. Якщо прапорець вимкнений, HUD не заданий, його секції або
+`anm_show` не існує чи motion не завантажився з OMF, предмет однаково лишається
+в екіпірованому слоті, а причина fallback записується в лог.

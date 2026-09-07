@@ -682,6 +682,83 @@ u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixI
     return duration;
 }
 
+bool player_hud::has_hud_motion(const shared_str& hud_section,
+                                const shared_str& motion_name) {
+    if (!m_model || !hud_section.size() || !motion_name.size() ||
+        !pSettings->section_exist(hud_section.c_str()) ||
+        !pSettings->line_exist(hud_section.c_str(), motion_name.c_str())) {
+        return false;
+    }
+
+    LPCSTR motion_config = pSettings->r_string(hud_section.c_str(), motion_name.c_str());
+    const u32 item_count = _GetItemCount(motion_config);
+
+    if (item_count != 1 && item_count != 2)
+        return false;
+
+    string512 base_motion;
+    _GetItem(motion_config, 0, base_motion);
+
+    string512 candidate;
+
+    for (u32 index = 0; index <= 8; ++index) {
+        if (index == 0)
+            xr_strcpy(candidate, base_motion);
+        else
+            xr_sprintf(candidate, "%s%u", base_motion, index);
+
+        if (m_model->ID_Cycle_Safe(candidate).valid())
+            return true;
+    }
+
+    return false;
+}
+
+bool player_hud::can_attach_controller_item(const shared_str& hud_section) {
+    if (!m_model || !hud_section.size() ||
+        !pSettings->section_exist(hud_section.c_str()) ||
+        !pSettings->line_exist(hud_section.c_str(), "item_visual") ||
+        !pSettings->line_exist(hud_section.c_str(), "attach_place_idx") ||
+        pSettings->r_u16(hud_section.c_str(), "attach_place_idx") > 1) {
+        return false;
+    }
+
+    LPCSTR configured_visual = pSettings->r_string(hud_section.c_str(), "item_visual");
+
+    if (!configured_visual || !configured_visual[0])
+        return false;
+
+    string_path visual_name;
+
+    if (strext(configured_visual))
+        xr_strcpy(visual_name, configured_visual);
+    else
+        strconcat(sizeof(visual_name), visual_name, configured_visual, ".ogf");
+
+    string_path resolved_visual;
+    const bool visual_exists =
+        !!FS.exist(configured_visual) ||
+        !!FS.exist(resolved_visual, "$level$", visual_name) ||
+        !!FS.exist(resolved_visual, "$game_meshes$", visual_name);
+
+    if (!visual_exists)
+        return false;
+
+    // create_hud_item() loads every anm_* alias in the section. Verify all of
+    // them up front so optional controller HUDs never reach its legacy assert
+    // path when an external OMF is missing or incomplete.
+    CInifile::Sect& section = pSettings->r_section(hud_section.c_str());
+
+    for (auto line = section.Data.cbegin(); line != section.Data.cend(); ++line) {
+        if (strstr(line->first.c_str(), "anm_") == line->first.c_str() &&
+            !has_hud_motion(hud_section, line->first)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool player_hud::has_controller_motion(const shared_str& motion_name) {
     if (!m_controller_item || !motion_name.size())
         return false;
