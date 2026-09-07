@@ -63,6 +63,46 @@ static bool MutantLootAnimationsEnabled() {
     return enabled;
 }
 
+static bool MutantLootParticlesEnabled() {
+    static bool initialized = false;
+    static bool enabled = false;
+
+    if (!initialized) {
+        initialized = true;
+
+        if (pSettings->section_exist("items_animations") &&
+            pSettings->line_exist("items_animations", "enable_mutant_looting_particles")) {
+            enabled =
+                !!pSettings->r_bool("items_animations", "enable_mutant_looting_particles");
+        }
+
+        Msg("* Mutant loot particles: [%s]", enabled ? "enabled" : "disabled");
+    }
+
+    return enabled;
+}
+
+static u32 MutantLootParticleTiming() {
+    if (!pSettings->section_exist("items_animations") ||
+        !pSettings->line_exist("items_animations", "mutant_looting_particle_timing")) {
+        return 0;
+    }
+
+    return pSettings->r_u32("items_animations", "mutant_looting_particle_timing");
+}
+
+static bool HudBlocksMovement(const shared_str& hud_section) {
+    if (!hud_section.size() || !pSettings->section_exist(hud_section.c_str()))
+        return false;
+
+    if (pSettings->line_exist(hud_section.c_str(), "block_movement"))
+        return !!pSettings->r_bool(hud_section.c_str(), "block_movement");
+
+    // Compatibility alias used by some configs.
+    return pSettings->line_exist(hud_section.c_str(), "block_move") &&
+           !!pSettings->r_bool(hud_section.c_str(), "block_move");
+}
+
 CItemUseController::CItemUseController(CActor* actor)
     : m_actor(actor),
       m_item(NULL),
@@ -76,6 +116,9 @@ CItemUseController::CItemUseController(CActor* actor)
       m_hud_animation_hide_requested(false),
       m_hud_animation_allow_inventory(false),
       m_mutant_loot_target_id(u16(-1)),
+      m_mutant_loot_particle_time(0),
+      m_mutant_loot_particle_enabled(false),
+      m_mutant_loot_particle_started(false),
       m_queued_consumable_id(u16(-1)),
       m_deferred_hud_animation_section(NULL),
       m_queued_hud_animation_section(NULL),
@@ -250,6 +293,9 @@ bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;
     m_mutant_loot_target_id = monster->ID();
+    m_mutant_loot_particle_time = MutantLootParticleTiming();
+    m_mutant_loot_particle_enabled = MutantLootParticlesEnabled();
+    m_mutant_loot_particle_started = false;
     m_waiting_for_weapon_hide = true;
 
     LockActor();
@@ -530,8 +576,7 @@ bool CItemUseController::TryQueueHudAnimationOnce(const shared_str& hud_section)
     // A queued dressing HUD owns the whole transition, including the preceding
     // backpack hide. Preserve an existing persistent lock or enable the target
     // HUD's stronger movement policy immediately.
-    if (pSettings->line_exist(hud_section.c_str(), "block_movement") &&
-        pSettings->r_bool(hud_section.c_str(), "block_movement")) {
+    if (HudBlocksMovement(hud_section)) {
         m_block_movement = true;
 
         if (m_actor)
@@ -553,10 +598,7 @@ void CItemUseController::LockActor()
     if (!m_actor || m_actor_locked)
         return;
 
-    m_block_movement =
-        m_hud_section.size() && pSettings->section_exist(m_hud_section.c_str()) &&
-        pSettings->line_exist(m_hud_section.c_str(), "block_movement") &&
-        !!pSettings->r_bool(m_hud_section.c_str(), "block_movement");
+    m_block_movement = HudBlocksMovement(m_hud_section);
 
     if (m_block_movement)
         m_actor->StopAnyMove();
@@ -692,13 +734,17 @@ void CItemUseController::BeginAnimation()
         if (m_action_time == u32(-1) || m_action_time > m_animation_duration)
             m_action_time = m_animation_duration;
 
+        if (m_mutant_loot_particle_time > m_animation_duration)
+            m_mutant_loot_particle_time = m_animation_duration;
+
         PlayHudAnimationSound("snd_show");
         StartCameraEffector(played_motion_name);
 
         Msg("* MutantLoot: HUD animation started, corpse [%u], HUD [%s], duration [%u], "
-            "effect [%u], sound [%s], camera [%s]",
+            "effect [%u], particle [%s/%u], sound [%s], camera [%s]",
             (u32)m_mutant_loot_target_id, m_hud_section.c_str(), m_animation_duration,
-            m_action_time, m_anim_sound_loaded ? "yes" : "no",
+            m_action_time, m_mutant_loot_particle_enabled ? "yes" : "no",
+            m_mutant_loot_particle_time, m_anim_sound_loaded ? "yes" : "no",
             m_camera_effector_started ? "yes" : "no");
         return;
     }
@@ -900,6 +946,21 @@ bool CItemUseController::ApplyMutantLootEffect() {
     return true;
 }
 
+void CItemUseController::ApplyMutantLootParticle() {
+    if (!m_mutant_loot_particle_enabled || m_mutant_loot_particle_started)
+        return;
+
+    CCustomMonster* monster = MutantLootTarget();
+
+    if (monster)
+        monster->PlayMutantLootParticle();
+    else
+        Msg("! MutantLoot: target corpse [%u] disappeared before particle timing",
+            (u32)m_mutant_loot_target_id);
+
+    m_mutant_loot_particle_started = true;
+}
+
 void CItemUseController::ReleaseMutantLootReservation() {
     CCustomMonster* monster = MutantLootTarget();
 
@@ -930,6 +991,11 @@ void CItemUseController::UpdateMutantLootAnimation() {
         return;
 
     const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+
+    if (m_mutant_loot_particle_enabled && !m_mutant_loot_particle_started &&
+        elapsed >= m_mutant_loot_particle_time) {
+        ApplyMutantLootParticle();
+    }
 
     if (!m_effect_applied && elapsed >= m_action_time) {
         if (!ApplyMutantLootEffect()) {
@@ -1128,8 +1194,10 @@ void CItemUseController::Finish() {
     if (!m_active)
         return;
 
-    if (m_controller_mode == eControllerModeMutantLoot && !m_effect_applied) {
-        if (!ApplyMutantLootEffect()) {
+    if (m_controller_mode == eControllerModeMutantLoot) {
+        ApplyMutantLootParticle();
+
+        if (!m_effect_applied && !ApplyMutantLootEffect()) {
             Cancel();
             return;
         }
@@ -1236,6 +1304,9 @@ void CItemUseController::Reset()
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;
     m_mutant_loot_target_id = u16(-1);
+    m_mutant_loot_particle_time = 0;
+    m_mutant_loot_particle_enabled = false;
+    m_mutant_loot_particle_started = false;
     m_queued_consumable_id = u16(-1);
     m_deferred_hud_animation_section = NULL;
     m_queued_hud_animation_section = NULL;

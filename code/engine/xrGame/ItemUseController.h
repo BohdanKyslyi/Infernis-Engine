@@ -82,6 +82,7 @@ private:
 
     CCustomMonster* MutantLootTarget() const;
     bool ApplyMutantLootEffect();
+    void ApplyMutantLootParticle();
     void ReleaseMutantLootReservation();
     bool CompleteMutantLootImmediately(CCustomMonster* monster);
 
@@ -127,6 +128,9 @@ private:
     bool m_hud_animation_hide_requested;
     bool m_hud_animation_allow_inventory;
     u16 m_mutant_loot_target_id;
+    u32 m_mutant_loot_particle_time;
+    bool m_mutant_loot_particle_enabled;
+    bool m_mutant_loot_particle_started;
     u16 m_queued_consumable_id;
     shared_str m_deferred_hud_animation_section;
     shared_str m_queued_hud_animation_section;

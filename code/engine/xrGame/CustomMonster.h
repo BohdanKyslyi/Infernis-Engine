@@ -142,6 +142,7 @@ public:
     bool BeginMutantLoot(CActor* actor);
     bool CompleteMutantLoot(CActor* actor);
     void CancelMutantLoot(CActor* actor);
+    void PlayMutantLootParticle();
 
 public:
     virtual DLL_Pure* _construct();
@@ -288,7 +289,6 @@ private:
     u16 m_mutant_loot_actor_id;
 
     void LoadMutantLoot(LPCSTR section);
-    void PlayMutantLootParticle();
 
 public:
     IC const bool& already_dead() const { return (m_already_dead); };

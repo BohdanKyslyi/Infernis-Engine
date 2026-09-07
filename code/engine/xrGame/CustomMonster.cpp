@@ -394,8 +394,6 @@ bool CCustomMonster::CompleteMutantLoot(CActor* actor) {
             item.count, (u32)ID());
     }
 
-    PlayMutantLootParticle();
-
     Msg("* MutantLoot: corpse [%u][%s] collected, total items [%u]", (u32)ID(),
         cNameSect().c_str(), spawned_count);
     return true;
