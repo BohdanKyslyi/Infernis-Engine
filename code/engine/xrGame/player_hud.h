@@ -59,6 +59,9 @@ struct attachable_hud_item {
     shared_str m_sect_name;
     IKinematics* m_model;
     u16 m_attach_place_idx;
+    // Optional per-section override of the global hud_fov from user.ltx.
+    // Zero means that the global value must be used.
+    float m_hud_fov;
     hud_item_measures m_measures;
 
     // runtime positioning
@@ -69,7 +72,7 @@ struct attachable_hud_item {
 
     attachable_hud_item(player_hud* pparent)
         : m_parent(pparent), m_parent_hud_item(NULL), m_controller_owned(false),
-          m_upd_firedeps_frame(u32(-1)) {}
+          m_hud_fov(0.f), m_upd_firedeps_frame(u32(-1)) {}
     ~attachable_hud_item();
     void load(const shared_str& sect_name);
     void update(bool bForce);
@@ -127,10 +130,7 @@ public:
     attachable_hud_item* attached_item(u16 item_idx) { return m_attached_items[item_idx]; };
     void detach_item_idx(u16 idx);
     void detach_item(CHudItem* item);
-    void detach_all_items() {
-        m_attached_items[0] = NULL;
-        m_attached_items[1] = NULL;
-    };
+    void detach_all_items();
 
     void calc_transform(u16 attach_slot_idx, const Fmatrix& offset, Fmatrix& result);
     void tune(Ivector values);
@@ -141,6 +141,8 @@ public:
 
 private:
     attachable_hud_item* m_controller_item;
+
+    void UpdateHudFov();
 
     void update_inertion(Fmatrix& trans);
     void update_additional(Fmatrix& trans);
@@ -159,6 +161,10 @@ private:
     xr_vector<u16> m_ancors;
     attachable_hud_item* m_attached_items[2];
     xr_vector<attachable_hud_item*> m_pool;
+
+    float m_default_hud_fov;
+    float m_applied_hud_fov;
+    bool m_hud_fov_override_active;
 };
 
 extern player_hud* g_player_hud;

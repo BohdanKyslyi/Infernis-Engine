@@ -9,8 +9,14 @@
 #include "../xrEngine/IGame_Persistent.h"
 
 player_hud* g_player_hud = NULL;
+extern ENGINE_API float psHUD_FOV;
 Fvector _ancor_pos;
 Fvector _wpn_root_pos;
+
+namespace {
+constexpr float HUD_FOV_MIN = 0.1f;
+constexpr float HUD_FOV_MAX = 1.0f;
+} // namespace
 
 float CalcMotionSpeed(const shared_str& anim_name) {
 
@@ -293,6 +299,20 @@ attachable_hud_item::~attachable_hud_item() {
 void attachable_hud_item::load(const shared_str& sect_name) {
     m_sect_name = sect_name;
 
+    m_hud_fov = 0.f;
+
+    if (pSettings->line_exist(sect_name, "hud_fov")) {
+        const float configured_hud_fov = pSettings->r_float(sect_name, "hud_fov");
+
+        if (configured_hud_fov >= HUD_FOV_MIN && configured_hud_fov <= HUD_FOV_MAX) {
+            m_hud_fov = configured_hud_fov;
+        } else {
+            Msg("! HUD FOV: invalid value [%.3f] in section [%s]; expected [%.1f, %.1f], "
+                "using user.ltx value",
+                configured_hud_fov, sect_name.c_str(), HUD_FOV_MIN, HUD_FOV_MAX);
+        }
+    }
+
     // Visual
     const shared_str& visual_name = pSettings->r_string(sect_name, "item_visual");
     m_model = smart_cast<IKinematics*>(::Render->model_Create(visual_name.c_str()));
@@ -394,10 +414,18 @@ player_hud::player_hud() {
     m_attached_items[0] = NULL;
     m_attached_items[1] = NULL;
     m_controller_item = NULL;
+    m_default_hud_fov = 0.f;
+    m_applied_hud_fov = 0.f;
+    m_hud_fov_override_active = false;
     m_transform.identity();
 }
 
 player_hud::~player_hud() {
+    m_attached_items[0] = NULL;
+    m_attached_items[1] = NULL;
+    m_controller_item = NULL;
+    UpdateHudFov();
+
     IRenderVisual* v = m_model->dcast_RenderVisual();
     ::Render->model_Delete(v);
     m_model = NULL;
@@ -446,6 +474,8 @@ attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_se
 
     m_controller_item = pi;
 
+    UpdateHudFov();
+
     Msg("* ItemUse: attached HUD section [%s]", hud_section.c_str());
 
     return pi;
@@ -466,6 +496,8 @@ void player_hud::detach_controller_item() {
     Msg("* ItemUse: detached HUD section [%s]", m_controller_item->m_sect_name.c_str());
 
     m_controller_item = NULL;
+
+    UpdateHudFov();
 
     OnMovementChanged(mcAnyMove);
 }
@@ -909,6 +941,8 @@ void player_hud::attach_item(CHudItem* item) {
     }
     pi->m_parent_hud_item = item;
     pi->m_controller_owned = false;
+
+    UpdateHudFov();
 }
 
 void player_hud::detach_item_idx(u16 idx) {
@@ -951,6 +985,8 @@ void player_hud::detach_item_idx(u16 idx) {
     } else if (idx == 0 && attached_item(1)) {
         OnMovementChanged(mcAnyMove);
     }
+
+    UpdateHudFov();
 }
 
 void player_hud::detach_item(CHudItem* item) {
@@ -961,6 +997,56 @@ void player_hud::detach_item(CHudItem* item) {
     if (m_attached_items[item_idx] == item->HudItemData()) {
         detach_item_idx(item_idx);
     }
+}
+
+void player_hud::detach_all_items() {
+    m_attached_items[0] = NULL;
+    m_attached_items[1] = NULL;
+    UpdateHudFov();
+}
+
+void player_hud::UpdateHudFov() {
+    attachable_hud_item* source = NULL;
+
+    if (m_controller_item && m_controller_item->m_attach_place_idx < 2 &&
+        m_attached_items[m_controller_item->m_attach_place_idx] == m_controller_item) {
+        source = m_controller_item;
+    } else if (m_attached_items[0]) {
+        source = m_attached_items[0];
+    } else if (m_attached_items[1]) {
+        source = m_attached_items[1];
+    }
+
+    const float override_hud_fov = source ? source->m_hud_fov : 0.f;
+
+    // Preserve a console change made while an override is active. Normally
+    // psHUD_FOV equals m_applied_hud_fov until this method restores it.
+    if (m_hud_fov_override_active && !fsimilar(psHUD_FOV, m_applied_hud_fov))
+        m_default_hud_fov = psHUD_FOV;
+
+    if (override_hud_fov > 0.f) {
+        if (!m_hud_fov_override_active)
+            m_default_hud_fov = psHUD_FOV;
+
+        if (!m_hud_fov_override_active || !fsimilar(m_applied_hud_fov, override_hud_fov)) {
+            Msg("* HUD FOV: section [%s] overrides [%.3f] -> [%.3f]",
+                source->m_sect_name.c_str(), m_default_hud_fov, override_hud_fov);
+        }
+
+        psHUD_FOV = override_hud_fov;
+        m_applied_hud_fov = override_hud_fov;
+        m_hud_fov_override_active = true;
+        return;
+    }
+
+    if (!m_hud_fov_override_active)
+        return;
+
+    psHUD_FOV = m_default_hud_fov;
+    m_applied_hud_fov = 0.f;
+    m_hud_fov_override_active = false;
+
+    Msg("* HUD FOV: restored user.ltx value [%.3f]", psHUD_FOV);
 }
 
 void player_hud::calc_transform(u16 attach_slot_idx, const Fmatrix& offset, Fmatrix& result) {
