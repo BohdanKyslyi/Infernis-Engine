@@ -62,6 +62,8 @@ struct attachable_hud_item {
     // Optional per-section override of the global hud_fov from user.ltx.
     // Zero means that the global value must be used.
     float m_hud_fov;
+    // Absolute HUD projection FOV in degrees. Takes priority over m_hud_fov.
+    float m_hud_fov_degrees;
     hud_item_measures m_measures;
 
     // runtime positioning
@@ -72,7 +74,7 @@ struct attachable_hud_item {
 
     attachable_hud_item(player_hud* pparent)
         : m_parent(pparent), m_parent_hud_item(NULL), m_controller_owned(false),
-          m_hud_fov(0.f), m_upd_firedeps_frame(u32(-1)) {}
+          m_hud_fov(0.f), m_hud_fov_degrees(0.f), m_upd_firedeps_frame(u32(-1)) {}
     ~attachable_hud_item();
     void load(const shared_str& sect_name);
     void update(bool bForce);
@@ -165,6 +167,7 @@ private:
     float m_default_hud_fov;
     float m_applied_hud_fov;
     bool m_hud_fov_override_active;
+    attachable_hud_item* m_hud_fov_source;
 };
 
 extern player_hud* g_player_hud;

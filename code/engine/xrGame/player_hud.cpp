@@ -16,6 +16,8 @@ Fvector _wpn_root_pos;
 namespace {
 constexpr float HUD_FOV_MIN = 0.1f;
 constexpr float HUD_FOV_MAX = 1.0f;
+constexpr float HUD_FOV_DEGREES_MIN = 5.f;
+constexpr float HUD_FOV_DEGREES_MAX = 179.f;
 } // namespace
 
 float CalcMotionSpeed(const shared_str& anim_name) {
@@ -300,6 +302,7 @@ void attachable_hud_item::load(const shared_str& sect_name) {
     m_sect_name = sect_name;
 
     m_hud_fov = 0.f;
+    m_hud_fov_degrees = 0.f;
 
     if (pSettings->line_exist(sect_name, "hud_fov")) {
         const float configured_hud_fov = pSettings->r_float(sect_name, "hud_fov");
@@ -310,6 +313,21 @@ void attachable_hud_item::load(const shared_str& sect_name) {
             Msg("! HUD FOV: invalid value [%.3f] in section [%s]; expected [%.1f, %.1f], "
                 "using user.ltx value",
                 configured_hud_fov, sect_name.c_str(), HUD_FOV_MIN, HUD_FOV_MAX);
+        }
+    }
+
+    if (pSettings->line_exist(sect_name, "hud_fov_degrees")) {
+        const float configured_hud_fov_degrees =
+            pSettings->r_float(sect_name, "hud_fov_degrees");
+
+        if (configured_hud_fov_degrees >= HUD_FOV_DEGREES_MIN &&
+            configured_hud_fov_degrees <= HUD_FOV_DEGREES_MAX) {
+            m_hud_fov_degrees = configured_hud_fov_degrees;
+        } else {
+            Msg("! HUD FOV: invalid degree value [%.3f] in section [%s]; expected "
+                "[%.1f, %.1f], falling back to hud_fov/user.ltx",
+                configured_hud_fov_degrees, sect_name.c_str(), HUD_FOV_DEGREES_MIN,
+                HUD_FOV_DEGREES_MAX);
         }
     }
 
@@ -417,6 +435,7 @@ player_hud::player_hud() {
     m_default_hud_fov = 0.f;
     m_applied_hud_fov = 0.f;
     m_hud_fov_override_active = false;
+    m_hud_fov_source = NULL;
     m_transform.identity();
 }
 
@@ -634,6 +653,10 @@ const Fvector& player_hud::attach_pos() const {
 }
 
 void player_hud::update(const Fmatrix& cam_trans) {
+    // Absolute degree overrides must be converted against the current camera
+    // FOV every frame, because zoom and camera effectors may change Device.fFOV.
+    UpdateHudFov();
+
     Fmatrix trans = cam_trans;
     update_inertion(trans);
     update_additional(trans);
@@ -1017,7 +1040,11 @@ void player_hud::UpdateHudFov() {
         source = m_attached_items[1];
     }
 
-    const float override_hud_fov = source ? source->m_hud_fov : 0.f;
+    const bool uses_degrees = source && source->m_hud_fov_degrees > 0.f;
+    const float override_hud_fov =
+        uses_degrees
+            ? source->m_hud_fov_degrees / std::max(Device.fFOV, EPS_S)
+            : (source ? source->m_hud_fov : 0.f);
 
     // Preserve a console change made while an override is active. Normally
     // psHUD_FOV equals m_applied_hud_fov until this method restores it.
@@ -1028,14 +1055,21 @@ void player_hud::UpdateHudFov() {
         if (!m_hud_fov_override_active)
             m_default_hud_fov = psHUD_FOV;
 
-        if (!m_hud_fov_override_active || !fsimilar(m_applied_hud_fov, override_hud_fov)) {
-            Msg("* HUD FOV: section [%s] overrides [%.3f] -> [%.3f]",
-                source->m_sect_name.c_str(), m_default_hud_fov, override_hud_fov);
+        if (!m_hud_fov_override_active || m_hud_fov_source != source) {
+            if (uses_degrees) {
+                Msg("* HUD FOV: section [%s] uses absolute [%.2f deg], user value [%.3f]",
+                    source->m_sect_name.c_str(), source->m_hud_fov_degrees,
+                    m_default_hud_fov);
+            } else {
+                Msg("* HUD FOV: section [%s] overrides [%.3f] -> [%.3f]",
+                    source->m_sect_name.c_str(), m_default_hud_fov, override_hud_fov);
+            }
         }
 
         psHUD_FOV = override_hud_fov;
         m_applied_hud_fov = override_hud_fov;
         m_hud_fov_override_active = true;
+        m_hud_fov_source = source;
         return;
     }
 
@@ -1045,6 +1079,7 @@ void player_hud::UpdateHudFov() {
     psHUD_FOV = m_default_hud_fov;
     m_applied_hud_fov = 0.f;
     m_hud_fov_override_active = false;
+    m_hud_fov_source = NULL;
 
     Msg("* HUD FOV: restored user.ltx value [%.3f]", psHUD_FOV);
 }
