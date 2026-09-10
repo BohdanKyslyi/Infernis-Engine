@@ -10,6 +10,7 @@
 
 player_hud* g_player_hud = NULL;
 extern ENGINE_API float psHUD_FOV;
+extern ENGINE_API float IE_VIEWPORT_NEAR;
 Fvector _ancor_pos;
 Fvector _wpn_root_pos;
 
@@ -18,6 +19,8 @@ constexpr float HUD_FOV_MIN = 0.1f;
 constexpr float HUD_FOV_MAX = 1.0f;
 constexpr float HUD_FOV_DEGREES_MIN = 5.f;
 constexpr float HUD_FOV_DEGREES_MAX = 179.f;
+constexpr float HUD_VIEWPORT_NEAR_MIN = 0.001f;
+constexpr float HUD_VIEWPORT_NEAR_MAX = 1.f;
 } // namespace
 
 float CalcMotionSpeed(const shared_str& anim_name) {
@@ -303,6 +306,7 @@ void attachable_hud_item::load(const shared_str& sect_name) {
 
     m_hud_fov = 0.f;
     m_hud_fov_degrees = 0.f;
+    m_viewport_near = 0.f;
 
     if (pSettings->line_exist(sect_name, "hud_fov")) {
         const float configured_hud_fov = pSettings->r_float(sect_name, "hud_fov");
@@ -328,6 +332,21 @@ void attachable_hud_item::load(const shared_str& sect_name) {
                 "[%.1f, %.1f], falling back to hud_fov/user.ltx",
                 configured_hud_fov_degrees, sect_name.c_str(), HUD_FOV_DEGREES_MIN,
                 HUD_FOV_DEGREES_MAX);
+        }
+    }
+
+    if (pSettings->line_exist(sect_name, "viewport_near")) {
+        const float configured_viewport_near =
+            pSettings->r_float(sect_name, "viewport_near");
+
+        if (configured_viewport_near >= HUD_VIEWPORT_NEAR_MIN &&
+            configured_viewport_near <= HUD_VIEWPORT_NEAR_MAX) {
+            m_viewport_near = configured_viewport_near;
+        } else {
+            Msg("! HUD viewport near: invalid value [%.4f] in section [%s]; expected "
+                "[%.3f, %.1f], using engine_external.ltx value",
+                configured_viewport_near, sect_name.c_str(), HUD_VIEWPORT_NEAR_MIN,
+                HUD_VIEWPORT_NEAR_MAX);
         }
     }
 
@@ -436,6 +455,9 @@ player_hud::player_hud() {
     m_applied_hud_fov = 0.f;
     m_hud_fov_override_active = false;
     m_hud_fov_source = NULL;
+    m_default_viewport_near = 0.f;
+    m_viewport_near_override_active = false;
+    m_viewport_near_source = NULL;
     m_transform.identity();
 }
 
@@ -443,7 +465,7 @@ player_hud::~player_hud() {
     m_attached_items[0] = NULL;
     m_attached_items[1] = NULL;
     m_controller_item = NULL;
-    UpdateHudFov();
+    UpdateHudProjection();
 
     IRenderVisual* v = m_model->dcast_RenderVisual();
     ::Render->model_Delete(v);
@@ -493,7 +515,7 @@ attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_se
 
     m_controller_item = pi;
 
-    UpdateHudFov();
+    UpdateHudProjection();
 
     Msg("* ItemUse: attached HUD section [%s]", hud_section.c_str());
 
@@ -516,7 +538,7 @@ void player_hud::detach_controller_item() {
 
     m_controller_item = NULL;
 
-    UpdateHudFov();
+    UpdateHudProjection();
 
     OnMovementChanged(mcAnyMove);
 }
@@ -653,9 +675,10 @@ const Fvector& player_hud::attach_pos() const {
 }
 
 void player_hud::update(const Fmatrix& cam_trans) {
-    // Absolute degree overrides must be converted against the current camera
-    // FOV every frame, because zoom and camera effectors may change Device.fFOV.
-    UpdateHudFov();
+    // Keep per-section projection overrides synchronized with the active HUD.
+    // Absolute degree FOV must also be converted every frame because zoom and
+    // camera effectors may change Device.fFOV.
+    UpdateHudProjection();
 
     Fmatrix trans = cam_trans;
     update_inertion(trans);
@@ -965,7 +988,7 @@ void player_hud::attach_item(CHudItem* item) {
     pi->m_parent_hud_item = item;
     pi->m_controller_owned = false;
 
-    UpdateHudFov();
+    UpdateHudProjection();
 }
 
 void player_hud::detach_item_idx(u16 idx) {
@@ -1009,7 +1032,7 @@ void player_hud::detach_item_idx(u16 idx) {
         OnMovementChanged(mcAnyMove);
     }
 
-    UpdateHudFov();
+    UpdateHudProjection();
 }
 
 void player_hud::detach_item(CHudItem* item) {
@@ -1025,10 +1048,10 @@ void player_hud::detach_item(CHudItem* item) {
 void player_hud::detach_all_items() {
     m_attached_items[0] = NULL;
     m_attached_items[1] = NULL;
-    UpdateHudFov();
+    UpdateHudProjection();
 }
 
-void player_hud::UpdateHudFov() {
+void player_hud::UpdateHudProjection() {
     attachable_hud_item* source = NULL;
 
     if (m_controller_item && m_controller_item->m_attach_place_idx < 2 &&
@@ -1070,18 +1093,38 @@ void player_hud::UpdateHudFov() {
         m_applied_hud_fov = override_hud_fov;
         m_hud_fov_override_active = true;
         m_hud_fov_source = source;
-        return;
+    } else if (m_hud_fov_override_active) {
+        psHUD_FOV = m_default_hud_fov;
+        m_applied_hud_fov = 0.f;
+        m_hud_fov_override_active = false;
+        m_hud_fov_source = NULL;
+
+        Msg("* HUD FOV: restored user.ltx value [%.3f]", psHUD_FOV);
     }
 
-    if (!m_hud_fov_override_active)
-        return;
+    const float override_viewport_near = source ? source->m_viewport_near : 0.f;
 
-    psHUD_FOV = m_default_hud_fov;
-    m_applied_hud_fov = 0.f;
-    m_hud_fov_override_active = false;
-    m_hud_fov_source = NULL;
+    if (override_viewport_near > 0.f) {
+        if (!m_viewport_near_override_active)
+            m_default_viewport_near = IE_VIEWPORT_NEAR;
 
-    Msg("* HUD FOV: restored user.ltx value [%.3f]", psHUD_FOV);
+        if (!m_viewport_near_override_active || m_viewport_near_source != source) {
+            Msg("* HUD viewport near: section [%s] overrides [%.4f] -> [%.4f]",
+                source->m_sect_name.c_str(), m_default_viewport_near,
+                override_viewport_near);
+        }
+
+        IE_VIEWPORT_NEAR = override_viewport_near;
+        m_viewport_near_override_active = true;
+        m_viewport_near_source = source;
+    } else if (m_viewport_near_override_active) {
+        IE_VIEWPORT_NEAR = m_default_viewport_near;
+        m_viewport_near_override_active = false;
+        m_viewport_near_source = NULL;
+
+        Msg("* HUD viewport near: restored engine_external.ltx value [%.4f]",
+            IE_VIEWPORT_NEAR);
+    }
 }
 
 void player_hud::calc_transform(u16 attach_slot_idx, const Fmatrix& offset, Fmatrix& result) {

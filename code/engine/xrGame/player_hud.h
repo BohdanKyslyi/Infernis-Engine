@@ -64,6 +64,9 @@ struct attachable_hud_item {
     float m_hud_fov;
     // Absolute HUD projection FOV in degrees. Takes priority over m_hud_fov.
     float m_hud_fov_degrees;
+    // Optional per-section override of [hud_extensions] viewport_near.
+    // Zero means that the global engine_external.ltx value must be used.
+    float m_viewport_near;
     hud_item_measures m_measures;
 
     // runtime positioning
@@ -74,7 +77,8 @@ struct attachable_hud_item {
 
     attachable_hud_item(player_hud* pparent)
         : m_parent(pparent), m_parent_hud_item(NULL), m_controller_owned(false),
-          m_hud_fov(0.f), m_hud_fov_degrees(0.f), m_upd_firedeps_frame(u32(-1)) {}
+          m_hud_fov(0.f), m_hud_fov_degrees(0.f), m_viewport_near(0.f),
+          m_upd_firedeps_frame(u32(-1)) {}
     ~attachable_hud_item();
     void load(const shared_str& sect_name);
     void update(bool bForce);
@@ -144,7 +148,7 @@ public:
 private:
     attachable_hud_item* m_controller_item;
 
-    void UpdateHudFov();
+    void UpdateHudProjection();
 
     void update_inertion(Fmatrix& trans);
     void update_additional(Fmatrix& trans);
@@ -168,6 +172,10 @@ private:
     float m_applied_hud_fov;
     bool m_hud_fov_override_active;
     attachable_hud_item* m_hud_fov_source;
+
+    float m_default_viewport_near;
+    bool m_viewport_near_override_active;
+    attachable_hud_item* m_viewport_near_source;
 };
 
 extern player_hud* g_player_hud;
