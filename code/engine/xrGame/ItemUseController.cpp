@@ -1475,7 +1475,7 @@ shared_str CItemUseController::FindConfigSection(LPCSTR line) const {
 void CItemUseController::StartCameraEffector(const shared_str& played_motion_name) {
     StopCameraEffector();
 
-    if (!m_actor)
+    if (!m_actor || !m_actor->HasCameraManager())
         return;
 
     string_path effector_name;
@@ -1560,7 +1560,7 @@ void CItemUseController::StopCameraEffector() {
     if (!m_camera_effector_started)
         return;
 
-    if (m_actor)
+    if (m_actor && m_actor->HasCameraManager())
         m_actor->Cameras().RemoveCamEffector(eCEItemUse);
 
     m_camera_effector_started = false;

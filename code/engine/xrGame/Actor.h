@@ -324,6 +324,7 @@ public:
         VERIFY(m_pActorEffector);
         return *m_pActorEffector;
     }
+    [[nodiscard]] bool HasCameraManager() const { return m_pActorEffector != nullptr; }
     [[nodiscard]] IC CCameraBase* cam_Active() const { return cameras[cam_active]; }
     [[nodiscard]] IC CCameraBase* cam_FirstEye() const { return cameras[eacFirstEye]; }
 

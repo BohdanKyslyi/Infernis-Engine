@@ -161,6 +161,9 @@ CCameraManager::CCameraManager(bool bApplyOnUpdate) {
 CCameraManager::~CCameraManager() {
     for (auto it = m_EffectorsCam.begin(); it != m_EffectorsCam.end(); it++)
         xr_delete(*it);
+    for (auto it = m_EffectorsCam_added_deffered.begin();
+         it != m_EffectorsCam_added_deffered.end(); it++)
+        xr_delete(*it);
     for (auto it = m_EffectorsPP.begin(); it != m_EffectorsPP.end(); it++)
         xr_delete(*it);
 }
@@ -179,8 +182,14 @@ CEffectorCam* CCameraManager::AddCamEffector(CEffectorCam* ef) {
 }
 
 void CCameraManager::UpdateDeffered() {
-    auto it = m_EffectorsCam_added_deffered.begin();
-    auto it_e = m_EffectorsCam_added_deffered.end();
+    // Move pending effectors out first. RemoveCamEffector() also checks the
+    // pending queue, which is required when a controller is cancelled before
+    // the next camera update.
+    EffectorCamVec added_effectors;
+    added_effectors.swap(m_EffectorsCam_added_deffered);
+
+    auto it = added_effectors.begin();
+    auto it_e = added_effectors.end();
     for (; it != it_e; ++it) {
         RemoveCamEffector((*it)->eType);
 
@@ -189,8 +198,6 @@ void CCameraManager::UpdateDeffered() {
         else
             m_EffectorsCam.push_back(*it);
     }
-
-    m_EffectorsCam_added_deffered.clear();
 }
 
 void CCameraManager::RemoveCamEffector(ECamEffectorType type) {
@@ -200,6 +207,15 @@ void CCameraManager::RemoveCamEffector(ECamEffectorType type) {
             m_EffectorsCam.erase(it);
             return;
         }
+
+    for (auto it = m_EffectorsCam_added_deffered.begin();
+         it != m_EffectorsCam_added_deffered.end(); it++) {
+        if ((*it)->eType == type) {
+            OnEffectorReleased(*it);
+            m_EffectorsCam_added_deffered.erase(it);
+            return;
+        }
+    }
 }
 
 CEffectorPP* CCameraManager::GetPPEffector(EEffectorPPType type) {

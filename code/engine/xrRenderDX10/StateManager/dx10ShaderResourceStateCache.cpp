@@ -12,6 +12,7 @@ void dx10ShaderResourceStateCache::ResetDeviceState() {
 #ifdef USE_DX11
     std::memset(m_HSViews, 0, sizeof(m_HSViews));
     std::memset(m_DSViews, 0, sizeof(m_DSViews));
+    std::memset(m_CSViews, 0, sizeof(m_CSViews));
 #endif
 
     m_uiMinPSView = 0xFFFFFFFF;
@@ -29,6 +30,9 @@ void dx10ShaderResourceStateCache::ResetDeviceState() {
 
     m_uiMinDSView = 0xFFFFFFFF;
     m_uiMaxDSView = 0xFFFFFFFF;
+
+    m_uiMinCSView = 0xFFFFFFFF;
+    m_uiMaxCSView = 0xFFFFFFFF;
 #endif
 
     m_bUpdatePSViews = false;
@@ -37,6 +41,7 @@ void dx10ShaderResourceStateCache::ResetDeviceState() {
 #ifdef USE_DX11
     m_bUpdateDSViews = false;
     m_bUpdateHSViews = false;
+    m_bUpdateCSViews = false;
 #endif
 }
 
