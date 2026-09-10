@@ -346,3 +346,53 @@ dressing `anm_show`. Якщо прапорець вимкнений, HUD не з
 застосовуються одразу, але HUD рук попередньої броні зберігається до завершення
 `anm_hide` рюкзака. Перед самим dressing `anm_show` контролер синхронізує руки
 з уже екіпірованою новою бронею.
+
+## Сюжетні HUD-анімації з логіки
+
+Одноразовий Controller можна запускати як ефект `xr_effects` без предмета в
+інвентарі. Це дає сюжетним сценам той самий lifecycle, що й анімованому
+використанню предметів: штатне ховання зброї та детектора, тимчасові руки й
+`item_visual`, `anm_show`, `snd_show`, camera effector, локальний HUD FOV і
+необов'язкове блокування руху.
+
+```ini
+[sr_idle@0]
+on_info = {+zat_need_hud !is_hud_controller_active} %=activate_hud_controller(zat_wpn_ak74_cutscene_1)% sr_idle@1
+
+[sr_idle@1]
+```
+
+`is_hud_controller_active` повертає `true` для будь-якого активного режиму
+Controller: їжі, PDA/рюкзака, dressing, mutant looting або сюжетної анімації.
+Умова з `!` тому не дозволить сцені перервати вже запущене використання
+предмета. Сам ефект також безпечно відмовляється від запуску, якщо Controller
+зайнятий, актор мертвий, секції немає або її HUD/motion невалідний; причина
+записується в лог.
+
+Приклад сюжетної HUD-секції:
+
+```ini
+[zat_wpn_ak74_cutscene_1]:animated_item_hud
+item_visual      = dynamics\weapons\wpn_ak74\wpn_ak74_hud.ogf
+anm_show         = zat_ak74_cutscene_1
+snd_show         = characters_voice\scenario\zat_ak74_cutscene_1
+cam_eff_name     = camera_effects\zat_ak74_cutscene_1.anm
+block_movement   = true
+hud_fov_degrees  = 82
+function_on_stop = infernis_core.prepare_for_new_cutscene
+```
+
+`function_on_stop` є необов'язковим повним ім'ям Lua-функції без аргументів.
+Вона викликається рівно один раз лише після штатного завершення анімації — вже
+після від'єднання HUD, зупинки звуку/effector та розблокування актора. Тому
+callback може одразу запускати наступний Controller. Під час `Cancel()` callback
+не викликається: аварійне скасування не повинно помилково просувати сюжет.
+Відсутній параметр, порожнє значення, `none` або неіснуюча функція безпечні;
+для неіснуючої функції рушій лише залишає повідомлення в логові.
+
+Для прямого Lua-коду також доступні низькорівневі функції:
+
+```lua
+local started = level.activate_hud_controller("zat_wpn_ak74_cutscene_1")
+local busy = level.is_hud_controller_active()
+```

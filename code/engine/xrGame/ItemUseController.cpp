@@ -25,6 +25,9 @@
 
 #include "../xrPhysics/ElevatorState.h"
 #include "eatable_item.h"
+#include "ai_space.h"
+#include "script_engine.h"
+#include <luabind/functor.hpp>
 
 static bool ConsumableAnimationsEnabled() {
     static bool initialized = false;
@@ -166,6 +169,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
     m_use_section = use_section;
     m_state_section = state_section;
     m_hud_section = hud_section;
+    LoadStopFunction();
 
     m_trash_section = NULL;
     m_trash_count = 0;
@@ -276,6 +280,7 @@ bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
     m_use_section = NULL;
     m_state_section = NULL;
     m_hud_section = hud_section;
+    LoadStopFunction();
 
     m_start_time = 0;
     if (pSettings->line_exist(hud_section.c_str(), "action_timing"))
@@ -365,7 +370,7 @@ bool CItemUseController::StartHudAnimationOnce(const shared_str& hud_section) {
 bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section,
                                                    bool allow_inventory,
                                                    bool one_shot) {
-    if (m_active || !m_actor || !g_player_hud || !hud_section.size())
+    if (IsBusy() || !m_actor || !g_player_hud || !hud_section.size())
         return false;
 
     if (!pSettings->section_exist(hud_section.c_str())) {
@@ -396,6 +401,7 @@ bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section
     m_use_section = NULL;
     m_state_section = NULL;
     m_hud_section = hud_section;
+    LoadStopFunction();
 
     m_start_time = 0;
     m_action_time = 0;
@@ -751,7 +757,10 @@ void CItemUseController::BeginAnimation()
 
     if (m_controller_mode == eControllerModeHudAnimation ||
         m_controller_mode == eControllerModeHudAnimationOneShot) {
-        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE)) {
+        shared_str played_motion_name;
+
+        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
+                                    &played_motion_name)) {
             Msg("! ItemUse: failed to play %s HUD show animation [%s]",
                 m_controller_mode == eControllerModeHudAnimationOneShot ? "one-shot"
                                                                         : "persistent",
@@ -761,12 +770,15 @@ void CItemUseController::BeginAnimation()
         }
 
         PlayHudAnimationSound("snd_show");
+        StartCameraEffector(played_motion_name);
 
-        Msg("* ItemUse %s HUD animation started: [%s], show duration [%u], sound [%s]",
+        Msg("* ItemUse %s HUD animation started: [%s], show duration [%u], sound [%s], "
+            "camera [%s]",
             m_controller_mode == eControllerModeHudAnimationOneShot ? "one-shot"
                                                                     : "persistent",
             m_hud_section.c_str(), m_animation_duration,
-            m_anim_sound_loaded ? "yes" : "no");
+            m_anim_sound_loaded ? "yes" : "no",
+            m_camera_effector_started ? "yes" : "no");
         return;
     }
 
@@ -1212,6 +1224,7 @@ void CItemUseController::Finish() {
         m_queued_hud_animation_section.size();
     const shared_str queued_hud_animation_section = m_queued_hud_animation_section;
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
+    const shared_str function_on_stop = m_function_on_stop;
 
     //
     // Normal physical trash moment:
@@ -1246,6 +1259,10 @@ void CItemUseController::Finish() {
         m_outfit_hud_refresh_pending = true;
         ApplyPendingOutfitHudRefresh();
     }
+
+    // The controller is fully detached and unlocked before calling Lua. This
+    // lets a story callback safely start the next HUD sequence immediately.
+    CallStopFunction(function_on_stop);
 
     if (start_queued_hud_animation && m_actor && m_actor->g_Alive()) {
         if (StartHudAnimationOnce(queued_hud_animation_section)) {
@@ -1312,6 +1329,7 @@ void CItemUseController::Reset()
     m_queued_hud_animation_section = NULL;
     m_outfit_hud_refresh_pending = false;
     m_block_movement = false;
+    m_function_on_stop = NULL;
 
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;
@@ -1331,6 +1349,46 @@ void CItemUseController::Reset()
     m_use_particles_stop_time = u32(-1);
     m_use_particles = NULL;
     m_use_particles_started = false;
+}
+
+void CItemUseController::LoadStopFunction() {
+    m_function_on_stop = NULL;
+
+    if (!m_hud_section.size() || !pSettings->section_exist(m_hud_section.c_str()) ||
+        !pSettings->line_exist(m_hud_section.c_str(), "function_on_stop")) {
+        return;
+    }
+
+    LPCSTR function_name =
+        pSettings->r_string(m_hud_section.c_str(), "function_on_stop");
+
+    if (function_name && function_name[0] && xr_strcmp(function_name, "none"))
+        m_function_on_stop = function_name;
+}
+
+void CItemUseController::CallStopFunction(const shared_str& function_name) {
+    if (!function_name.size())
+        return;
+
+    luabind::functor<void> function;
+
+    if (!ai().script_engine().functor(function_name.c_str(), function) ||
+        !function.is_valid()) {
+        Msg("! ItemUse: function_on_stop [%s] was not found; callback skipped",
+            function_name.c_str());
+        return;
+    }
+
+    Msg("* ItemUse: calling function_on_stop [%s]", function_name.c_str());
+
+    try {
+        function();
+    } catch (...) {
+        // Script errors are reported by the script engine. Keep the completed
+        // controller lifecycle from turning a broken callback into a native
+        // crash.
+        Msg("! ItemUse: function_on_stop [%s] failed", function_name.c_str());
+    }
 }
 
 void CItemUseController::LoadAnimSound() {

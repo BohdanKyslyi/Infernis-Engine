@@ -40,6 +40,7 @@ public:
     void Finish();
 
     bool IsActive() const { return m_active; }
+    bool IsBusy() const { return m_active || m_deferred_hud_animation_section.size(); }
     bool IsWeaponLocked() const { return m_active; }
     bool IsMovementLocked() const { return m_active && m_block_movement; }
 
@@ -107,6 +108,9 @@ private:
 
     void SpawnTrash();
 
+    void LoadStopFunction();
+    void CallStopFunction(const shared_str& function_name);
+
 private:
     CActor* m_actor;
     CInventoryItem* m_item;
@@ -136,6 +140,7 @@ private:
     shared_str m_queued_hud_animation_section;
     bool m_outfit_hud_refresh_pending;
     bool m_block_movement;
+    shared_str m_function_on_stop;
 
     //
     // Item use state.
