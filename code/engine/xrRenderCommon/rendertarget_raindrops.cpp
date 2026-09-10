@@ -1,79 +1,57 @@
 #include "stdafx.h"
-	
+#include "xrEngine/Rain.h"
+
 void CRenderTarget::PhaseRainDrops()
 {
 
 	static float rain_drops_factor = 0.f;
-	static u32 steps_finished = 0;
 
-	// Щоб по команді r2_rain_drops_control off/on ефект перезапускався.
+	// Reset accumulated wetness whenever automatic control is toggled.
 	static bool saved_rain_drops_control = false;
-	bool current_rain_drops_control = !!ps_r2_rain_drops_flags.test(R2FLAG_RAIN_DROPS_CONTROL);
+	const bool current_rain_drops_control =
+		!!ps_r2_rain_drops_flags.test(R2FLAG_RAIN_DROPS_CONTROL);
 	if (saved_rain_drops_control != current_rain_drops_control) {
 		saved_rain_drops_control = current_rain_drops_control;
 
 		rain_drops_factor = 0.f;
-		steps_finished = 0;
 	}
 
 	if (!current_rain_drops_control)
 		return;
 
-	// Функція розраховує інтенсивність ефекта капель на худі. В шейдері нормально розрахувати ЗАНАДТО муторно, простіше порахувати тут і отримати в шейдері через c_timers.w
-	auto update_rain_drops_factor = [](bool act_on_rain)
-	{
-		float rain_factor = g_pGamePersistent->pEnvironment->CurrentEnv->rain_density;
-		if (!fis_zero(rain_factor))
-		{
-			// В даному варіанті налаштувань - при виході з укриття в шторм, каплі почнуть працювати на повну потужність за 20 секунд. При заході в укриття - ефект вимкнеться так само через 20 секунд.
-			constexpr u32 change_step = 200; //Інтервал в мілісекундах між ступенями зміни rain_drops_factor
-			constexpr u32 steps_count = 100; //Кількість ступенів. Чим меньше інтервал - тим більше ступенів має бути.
-			constexpr float step_rain_factor_change = 1.f / float(steps_count);
-
-			static bool saved_rain_flag = act_on_rain;
-			if (saved_rain_flag != act_on_rain) {
-				saved_rain_flag = act_on_rain;
-				steps_finished = 0;
-			}
-
-			if (steps_finished < (steps_count + 1)) { // + 1 обов'язково через нерівне ділення. Інакше ефект при максимальному штормі може не до кінця вимикатись при вході в укриття.
-				static u32 last_update = Device.dwTimeGlobal;
-				if (Device.dwTimeGlobal > (last_update + change_step)) {
-					last_update = Device.dwTimeGlobal;
-					steps_finished++;
-					if (act_on_rain) { //плавне підвищення інтенсивності капель.
-						rain_drops_factor += step_rain_factor_change;
-					}
-					else { //плане зниження інтенсивності капель.
-						rain_drops_factor -= step_rain_factor_change;
-					}
-				}
-			}
-			else if (act_on_rain) { //Якщо актор не знаходиться в укритті - синхронізуєм rain_drops_factor з інтенсивністю дожчу.
-				rain_drops_factor = std::max(rain_drops_factor, rain_factor);
-			}
-
-			//rain_drops_factor = std::clamp(rain_drops_factor, 0.f, rain_factor); //Зрівнюєм, щоб не було перевищення
-		}
-		else {
-			steps_finished = 0;
-			rain_drops_factor = 0.f;
-		}
-	};
-
-	static bool actor_in_hideout = true;
-	static u32 last_ray_pick_time = Device.dwTimeGlobal;
-	if (Device.dwTimeGlobal > (last_ray_pick_time + 1000)) { //Апдейт рейтрейса - раз в секунду. Частіше апдейтити немає сенсу.
-		last_ray_pick_time = Device.dwTimeGlobal;
-
-		collide::rq_result RQ;
-		actor_in_hideout = !!g_pGameLevel->ObjectSpace.RayPick(Device.vCameraPosition, Fvector().set(0, 1, 0), 50.f, collide::rqtBoth, RQ, g_pGameLevel->CurrentViewEntity());
+	if (!g_pGamePersistent || !g_pGameLevel) {
+		rain_drops_factor = 0.f;
+		return;
 	}
 
-	update_rain_drops_factor(!actor_in_hideout);
-
-	if (fis_zero(rain_drops_factor))
+	CEnvironment& environment = g_pGamePersistent->Environment();
+	if (!environment.CurrentEnv || !environment.eff_Rain) {
+		rain_drops_factor = 0.f;
 		return;
+	}
+
+	const float rain_density = std::clamp(environment.CurrentEnv->rain_density, 0.f, 1.f);
+	const float rain_exposure =
+		std::clamp(environment.eff_Rain->GetViewRainExposure(), 0.f, 1.f);
+	const float target_factor = rain_density * rain_exposure;
+
+	// A full-strength storm wets the view in 20 seconds and dries in 10.
+	// Device.fTimeDelta makes the transition independent of frame rate.
+	constexpr float wetting_time = 20.f;
+	constexpr float drying_time = 10.f;
+	const float transition_time =
+		target_factor > rain_drops_factor ? wetting_time : drying_time;
+	const float max_change = std::clamp(Device.fTimeDelta, 0.f, 0.25f) / transition_time;
+
+	if (rain_drops_factor < target_factor)
+		rain_drops_factor = std::min(rain_drops_factor + max_change, target_factor);
+	else
+		rain_drops_factor = std::max(rain_drops_factor - max_change, target_factor);
+
+	if (rain_drops_factor <= EPS_L) {
+		rain_drops_factor = 0.f;
+		return;
+	}
 
 	u32 Offset = 0;
 	Fvector2 p0, p1;

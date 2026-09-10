@@ -286,6 +286,10 @@ void CEffect_Rain::OnFrame() {
     float target_openness = 1.0f;
     Fvector target_dir = {0.f, 0.f, 0.f};
 
+    // The screen raindrops post-process uses the same solid-roof test as the
+    // rain audio system. Keep it closed until a valid view entity is present.
+    m_fViewRainExposure = 0.f;
+
     if (E) {
         Fvector start_pos = Device.vCameraPosition;
         float ray_range = 20.0f; 
@@ -302,8 +306,10 @@ void CEffect_Rain::OnFrame() {
         for (int i = 0; i < 9; ++i) {
             collide::rq_result RQ;
             bool bHitSolid = false;
+            const float current_ray_range = i == 0 ? 50.f : ray_range;
 
-            if (g_pGameLevel->ObjectSpace.RayPick(start_pos, dirs[i], ray_range, collide::rqtStatic, RQ, E)) {
+            if (g_pGameLevel->ObjectSpace.RayPick(start_pos, dirs[i], current_ray_range,
+                                                  collide::rqtStatic, RQ, E)) {
                 if (!RQ.O) { 
                     CDB::TRI* T = g_pGameLevel->ObjectSpace.GetStaticTris() + RQ.element;
                     SGameMtl* mtl = GMLib.GetMaterialByIdx(T->material);
@@ -312,10 +318,16 @@ void CEffect_Rain::OnFrame() {
                     if (mtl && !mtl->Flags.test(SGameMtl::flPassable) && 
                         !strstr(mtl->m_Name.c_str(), "bush") && !strstr(mtl->m_Name.c_str(), "leaves")) {
                         bHitSolid = true;
-                        if (i == 0) roof_material = T->material;
+                        if (i == 0) {
+                            roof_material = T->material;
+                            m_fViewRainExposure = 0.f;
+                        }
                     }
                 }
             }
+
+            if (i == 0 && !bHitSolid)
+                m_fViewRainExposure = 1.f;
             
             if (!bHitSolid) {
                 escaped_rays++;
