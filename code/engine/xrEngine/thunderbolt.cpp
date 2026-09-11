@@ -89,13 +89,10 @@ SThunderboltCollection::~SThunderboltCollection() {
 //----------------------------------------------------------------------------------------------
 
 CEffect_Thunderbolt::CEffect_Thunderbolt() {
-    string_path ext_path;
-    if (FS.exist(ext_path, "$game_config$", "noirEngineExtention.ltx")) {
-        CInifile ext_ini(ext_path);
-        if (ext_ini.section_exist("environment") && ext_ini.line_exist("environment", "enable_custom_lightning")) {
-            m_bEnableCustomLightning = ext_ini.r_bool("environment", "enable_custom_lightning");
-        }
-    }
+    if (pSettings && pSettings->section_exist("environment") &&
+        pSettings->line_exist("environment", "enable_custom_lightning"))
+        m_bEnableCustomLightning =
+            pSettings->r_bool("environment", "enable_custom_lightning");
 
     if (m_bEnableCustomLightning) {
         string_path wex_path;

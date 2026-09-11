@@ -98,17 +98,16 @@ CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
     LPCSTR snd_name_2d = "ambient\\rain";
     LPCSTR snd_name_portal = "ambient\\rain";
     
-    // === NOIR ENGINE MODULE INITIALIZATION ===
-    string_path ext_path;
-    if (FS.exist(ext_path, "$game_config$", "noirEngineExtention.ltx")) {
-        CInifile ext_ini(ext_path);
-        if (ext_ini.section_exist("environment")) {
-            if (ext_ini.line_exist("environment", "enable_rain_material_sounds"))
-                m_bEnableMaterialSounds = ext_ini.r_bool("environment", "enable_rain_material_sounds");
-            
-            if (ext_ini.line_exist("environment", "enable_dynamic_rain_wind"))
-                m_bEnableDynamicWind = ext_ini.r_bool("environment", "enable_dynamic_rain_wind");
-        }
+    // Read extension switches from the merged global settings. Their source
+    // file and include layout are intentionally irrelevant.
+    if (pSettings && pSettings->section_exist("environment")) {
+        if (pSettings->line_exist("environment", "enable_rain_material_sounds"))
+            m_bEnableMaterialSounds =
+                pSettings->r_bool("environment", "enable_rain_material_sounds");
+
+        if (pSettings->line_exist("environment", "enable_dynamic_rain_wind"))
+            m_bEnableDynamicWind =
+                pSettings->r_bool("environment", "enable_dynamic_rain_wind");
     }
 
     string_path wex_path;

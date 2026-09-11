@@ -15,40 +15,37 @@ struct SNoirInventorySlotSettings {
 SNoirInventorySlotSettings LoadNoirInventorySlotSettings() {
     SNoirInventorySlotSettings settings;
 
-    string_path path;
-    if (!FS.exist(path, "$game_config$", "noirEngineExtention.ltx"))
-        return settings;
-
-    CInifile extensions(path);
-    if (!extensions.section_exist("inventory") ||
-        !extensions.line_exist("inventory", "enable_modular_slots"))
-        return settings;
-
-    settings.enabled = extensions.r_bool("inventory", "enable_modular_slots");
-    if (!settings.enabled)
-        return settings;
-
-    if (!FS.exist(path, "$game_config$", "noirInventorySlots.ltx")) {
-        Msg("! [NoirInventorySlots] noirInventorySlots.ltx is missing; optional slots are disabled");
-        return settings;
-    }
-
-    CInifile slots(path);
-    if (!slots.section_exist("slots")) {
+    if (!pSettings || !pSettings->section_exist("slots")) {
         Msg("! [NoirInventorySlots] section [slots] is missing; optional slots are disabled");
         return settings;
     }
 
+    LPCSTR enable_section = NULL;
+    if (pSettings->line_exist("slots", "enable_modular_slots"))
+        enable_section = "slots";
+    else if (pSettings->section_exist("inventory") &&
+             pSettings->line_exist("inventory", "enable_modular_slots"))
+        enable_section = "inventory";
+
+    if (!enable_section)
+        return settings;
+
+    settings.enabled = pSettings->r_bool(enable_section, "enable_modular_slots");
+    if (!settings.enabled)
+        return settings;
+
     settings.knife =
-        slots.line_exist("slots", "knife_slot") && slots.r_bool("slots", "knife_slot");
-    settings.binocular = slots.line_exist("slots", "binocular_slot") &&
-        slots.r_bool("slots", "binocular_slot");
+        pSettings->line_exist("slots", "knife_slot") &&
+        pSettings->r_bool("slots", "knife_slot");
+    settings.binocular = pSettings->line_exist("slots", "binocular_slot") &&
+        pSettings->r_bool("slots", "binocular_slot");
     settings.torch =
-        slots.line_exist("slots", "torch_slot") && slots.r_bool("slots", "torch_slot");
-    settings.extra_pistol = slots.line_exist("slots", "pistol_slot") &&
-        slots.r_bool("slots", "pistol_slot");
-    settings.backpack = slots.line_exist("slots", "backpack_slot") &&
-        slots.r_bool("slots", "backpack_slot");
+        pSettings->line_exist("slots", "torch_slot") &&
+        pSettings->r_bool("slots", "torch_slot");
+    settings.extra_pistol = pSettings->line_exist("slots", "pistol_slot") &&
+        pSettings->r_bool("slots", "pistol_slot");
+    settings.backpack = pSettings->line_exist("slots", "backpack_slot") &&
+        pSettings->r_bool("slots", "backpack_slot");
 
     Msg("* [NoirInventorySlots] knife=%s, binocular=%s, torch=%s, pistol=%s, backpack=%s",
         settings.knife ? "on" : "off", settings.binocular ? "on" : "off",
