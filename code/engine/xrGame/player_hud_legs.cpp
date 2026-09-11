@@ -13,6 +13,8 @@ constexpr LPCSTR LEGS_ENABLED_LINE = "enable_actor_legs";
 constexpr LPCSTR LEGS_VISUAL_LINE = "legs_visual";
 constexpr LPCSTR LEGS_FORWARD_OFFSET_LINE = "legs_fwd_offset";
 constexpr LPCSTR LEGS_VERTICAL_OFFSET_LINE = "legs_y_offset";
+constexpr LPCSTR LEGS_ATTACH_TO_CAMERA_LINE = "legs_attach_to_camera";
+constexpr float DEFAULT_LEGS_FORWARD_OFFSET = -0.5f;
 
 bool ReadActorLegsEnabled() {
     return pSettings && pSettings->section_exist(HUD_EXTENSIONS_SECTION) &&
@@ -20,7 +22,7 @@ bool ReadActorLegsEnabled() {
            pSettings->r_bool(HUD_EXTENSIONS_SECTION, LEGS_ENABLED_LINE);
 }
 
-float ReadLegsOffset(const shared_str& player_hud_section, LPCSTR line) {
+float ReadLegsOffset(const shared_str& player_hud_section, LPCSTR line, float default_value) {
     if (pSettings->line_exist(player_hud_section.c_str(), line))
         return pSettings->r_float(player_hud_section.c_str(), line);
 
@@ -29,12 +31,25 @@ float ReadLegsOffset(const shared_str& player_hud_section, LPCSTR line) {
         return pSettings->r_float(HUD_EXTENSIONS_SECTION, line);
     }
 
-    return 0.f;
+    return default_value;
+}
+
+bool ReadLegsBool(const shared_str& player_hud_section, LPCSTR line, bool default_value) {
+    if (pSettings->line_exist(player_hud_section.c_str(), line))
+        return pSettings->r_bool(player_hud_section.c_str(), line);
+
+    if (pSettings->section_exist(HUD_EXTENSIONS_SECTION) &&
+        pSettings->line_exist(HUD_EXTENSIONS_SECTION, line)) {
+        return pSettings->r_bool(HUD_EXTENSIONS_SECTION, line);
+    }
+
+    return default_value;
 }
 } // namespace
 
 CActorLegsController::CActorLegsController()
-    : m_model(NULL), m_forward_offset(0.f), m_vertical_offset(0.f),
+    : m_model(NULL), m_forward_offset(DEFAULT_LEGS_FORWARD_OFFSET), m_vertical_offset(0.f),
+      m_attach_to_camera(true),
       m_reported_skeleton_mismatch(false) {
     m_transform.identity();
 }
@@ -86,8 +101,11 @@ void CActorLegsController::Load(const shared_str& player_hud_section) {
         return;
     }
 
-    m_forward_offset = ReadLegsOffset(player_hud_section, LEGS_FORWARD_OFFSET_LINE);
-    m_vertical_offset = ReadLegsOffset(player_hud_section, LEGS_VERTICAL_OFFSET_LINE);
+    m_forward_offset = ReadLegsOffset(player_hud_section, LEGS_FORWARD_OFFSET_LINE,
+                                      DEFAULT_LEGS_FORWARD_OFFSET);
+    m_vertical_offset = ReadLegsOffset(player_hud_section, LEGS_VERTICAL_OFFSET_LINE, 0.f);
+    m_attach_to_camera =
+        ReadLegsBool(player_hud_section, LEGS_ATTACH_TO_CAMERA_LINE, true);
 
     if (m_model && m_visual_name.equal(visual_name))
         return;
@@ -115,6 +133,16 @@ void CActorLegsController::Load(const shared_str& player_hud_section) {
     m_visual_name = visual_name;
     m_model->CalculateBones_Invalidate();
     m_model->CalculateBones(TRUE);
+
+    // A regular actor visual may be used as legs_visual too. Hide its head and
+    // arms so they do not overlap the first-person camera and HUD hands.
+    static LPCSTR upper_body_bones[] = {
+        "bip01_neck", "bip01_l_upperarm", "bip01_r_upperarm"};
+    for (u32 i = 0; i < sizeof(upper_body_bones) / sizeof(upper_body_bones[0]); ++i) {
+        const u16 bone_id = m_model->LL_BoneID(upper_body_bones[i]);
+        if (bone_id != BI_NONE)
+            m_model->LL_SetBoneVisible(bone_id, FALSE, TRUE);
+    }
 
     Msg("* Actor legs: loaded visual [%s] for HUD section [%s]", visual_name,
         player_hud_section.c_str());
@@ -185,6 +213,11 @@ void CActorLegsController::Render() {
         return;
 
     m_transform.set(actor->XFORM());
+    if (m_attach_to_camera) {
+        m_transform.c.x = Device.vCameraPosition.x;
+        m_transform.c.z = Device.vCameraPosition.z;
+    }
+
     if (!fis_zero(m_forward_offset)) {
         Fvector forward = m_transform.k;
         forward.y = 0.f;

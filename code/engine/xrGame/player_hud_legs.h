@@ -26,5 +26,6 @@ private:
     Fmatrix m_transform;
     float m_forward_offset;
     float m_vertical_offset;
+    bool m_attach_to_camera;
     bool m_reported_skeleton_mismatch;
 };
