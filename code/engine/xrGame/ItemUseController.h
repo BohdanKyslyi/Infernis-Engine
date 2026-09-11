@@ -90,6 +90,14 @@ private:
     void LockActor();
     void UnlockActor();
 
+    void LoadControllerEffects();
+    void ApplyUiVisibility();
+    void RestoreUiVisibility();
+
+    void StartPPEffect();
+    void UpdatePPEffect();
+    void StopPPEffect();
+
     void LoadAnimSound();
     void PlayHudAnimationSound(LPCSTR sound_line);
     void PlayAnimSound();
@@ -141,6 +149,20 @@ private:
     bool m_outfit_hud_refresh_pending;
     bool m_block_movement;
     shared_str m_function_on_stop;
+
+    // Optional controller-wide presentation settings. UI visibility is
+    // restored to the state that existed before this controller acquired it.
+    bool m_disable_ui;
+    bool m_ui_hidden;
+    bool m_prev_game_indicators_shown;
+    bool m_prev_crosshair_shown;
+
+    // Optional one-shot postprocess. Its timer is relative to the first HUD
+    // motion, not to the current show/idle/hide phase.
+    shared_str m_ppe_effect;
+    u32 m_ppe_effect_timer;
+    u32 m_controller_animation_start_time;
+    bool m_ppe_effect_started;
 
     //
     // Item use state.

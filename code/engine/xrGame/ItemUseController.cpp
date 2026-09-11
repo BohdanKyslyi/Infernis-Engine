@@ -21,6 +21,7 @@
 #include "UIGameCustom.h"
 #include "ui/UIActorMenu.h"
 #include "ActorEffector.h"
+#include "PostprocessAnimator.h"
 #include "ParticlesObject.h"
 
 #include "../xrPhysics/ElevatorState.h"
@@ -127,6 +128,13 @@ CItemUseController::CItemUseController(CActor* actor)
       m_queued_hud_animation_section(NULL),
       m_outfit_hud_refresh_pending(false),
       m_block_movement(false),
+      m_disable_ui(false),
+      m_ui_hidden(false),
+      m_prev_game_indicators_shown(false),
+      m_prev_crosshair_shown(false),
+      m_ppe_effect_timer(0),
+      m_controller_animation_start_time(0),
+      m_ppe_effect_started(false),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
       m_prev_inventory_disabled(false),
@@ -170,6 +178,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
     m_state_section = state_section;
     m_hud_section = hud_section;
     LoadStopFunction();
+    LoadControllerEffects();
 
     m_trash_section = NULL;
     m_trash_count = 0;
@@ -281,6 +290,7 @@ bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
     m_state_section = NULL;
     m_hud_section = hud_section;
     LoadStopFunction();
+    LoadControllerEffects();
 
     m_start_time = 0;
     if (pSettings->line_exist(hud_section.c_str(), "action_timing"))
@@ -402,6 +412,7 @@ bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section
     m_state_section = NULL;
     m_hud_section = hud_section;
     LoadStopFunction();
+    LoadControllerEffects();
 
     m_start_time = 0;
     m_action_time = 0;
@@ -615,6 +626,8 @@ void CItemUseController::LockActor()
     if (CurrentGameUI())
         CurrentGameUI()->HideActorMenu();
 
+    ApplyUiVisibility();
+
     m_actor->set_inventory_disabled(true);
 
     //
@@ -634,8 +647,10 @@ void CItemUseController::LockActor()
 
 void CItemUseController::UnlockActor()
 {
-    if (!m_actor_locked)
+    if (!m_actor_locked) {
+        RestoreUiVisibility();
         return;
+    }
 
     if (m_actor)
     {
@@ -653,6 +668,8 @@ void CItemUseController::UnlockActor()
     // Always release our ladder lock.
     //
     UnlockActorLadder();
+
+    RestoreUiVisibility();
 
     m_actor_locked = false;
     m_prev_inventory_disabled = false;
@@ -719,6 +736,7 @@ void CItemUseController::BeginAnimation()
     }
 
     m_waiting_for_weapon_hide = false;
+    m_controller_animation_start_time = Device.dwTimeGlobal;
 
     if (m_controller_mode == eControllerModeMutantLoot) {
         shared_str played_motion_name;
@@ -745,6 +763,7 @@ void CItemUseController::BeginAnimation()
 
         PlayHudAnimationSound("snd_show");
         StartCameraEffector(played_motion_name);
+        UpdatePPEffect();
 
         Msg("* MutantLoot: HUD animation started, corpse [%u], HUD [%s], duration [%u], "
             "effect [%u], particle [%s/%u], sound [%s], camera [%s]",
@@ -771,6 +790,7 @@ void CItemUseController::BeginAnimation()
 
         PlayHudAnimationSound("snd_show");
         StartCameraEffector(played_motion_name);
+        UpdatePPEffect();
 
         Msg("* ItemUse %s HUD animation started: [%s], show duration [%u], sound [%s], "
             "camera [%s]",
@@ -814,6 +834,7 @@ void CItemUseController::BeginAnimation()
 
     m_start_time = Device.dwTimeGlobal;
     StartCameraEffector(played_motion_name);
+    UpdatePPEffect();
 
     if (m_use_particles_stop_time == u32(-1) ||
         m_use_particles_stop_time > m_animation_duration) {
@@ -1089,6 +1110,8 @@ void CItemUseController::Update(float dt)
         return;
     }
 
+    UpdatePPEffect();
+
     if (m_controller_mode == eControllerModeHudAnimation ||
         m_controller_mode == eControllerModeHudAnimationOneShot) {
         UpdateHudAnimation();
@@ -1177,6 +1200,7 @@ void CItemUseController::Cancel() {
 
     DestroyAnimSound();
     StopCameraEffector();
+    StopPPEffect();
     StopUseParticles();
 
     if (g_player_hud)
@@ -1236,6 +1260,9 @@ void CItemUseController::Finish() {
 
     DestroyAnimSound();
     StopCameraEffector();
+    // A one-shot PPE deliberately outlives a normal controller finish. This
+    // keeps a fade transition active while function_on_stop opens the next UI.
+    // Cancel() still removes it immediately.
     StopUseParticles();
 
     if (g_player_hud)
@@ -1331,6 +1358,16 @@ void CItemUseController::Reset()
     m_block_movement = false;
     m_function_on_stop = NULL;
 
+    m_disable_ui = false;
+    m_ui_hidden = false;
+    m_prev_game_indicators_shown = false;
+    m_prev_crosshair_shown = false;
+
+    m_ppe_effect = NULL;
+    m_ppe_effect_timer = 0;
+    m_controller_animation_start_time = 0;
+    m_ppe_effect_started = false;
+
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;
     m_prev_inventory_disabled = false;
@@ -1349,6 +1386,128 @@ void CItemUseController::Reset()
     m_use_particles_stop_time = u32(-1);
     m_use_particles = NULL;
     m_use_particles_started = false;
+}
+
+void CItemUseController::LoadControllerEffects() {
+    m_disable_ui = false;
+    m_ui_hidden = false;
+    m_prev_game_indicators_shown = false;
+    m_prev_crosshair_shown = false;
+
+    const shared_str ui_section = FindConfigSection("disable_ui");
+
+    if (ui_section.size())
+        m_disable_ui = !!pSettings->r_bool(ui_section.c_str(), "disable_ui");
+
+    m_ppe_effect = NULL;
+    m_ppe_effect_timer = 0;
+    m_controller_animation_start_time = 0;
+    m_ppe_effect_started = false;
+
+    const shared_str effect_section = FindConfigSection("ppe_effect");
+
+    if (!effect_section.size())
+        return;
+
+    LPCSTR configured_effect =
+        pSettings->r_string(effect_section.c_str(), "ppe_effect");
+
+    if (!configured_effect || !configured_effect[0] || !xr_strcmp(configured_effect, "none"))
+        return;
+
+    string_path effect_name;
+    xr_strcpy(effect_name, configured_effect);
+
+    LPCSTR extension = strext(effect_name);
+
+    if (!extension)
+        xr_strcat(effect_name, POSTPROCESS_FILE_EXTENSION);
+    else if (xr_strcmp(extension, POSTPROCESS_FILE_EXTENSION)) {
+        Msg("! ItemUse: PPE [%s] from [%s] must use the [%s] extension", effect_name,
+            effect_section.c_str(), POSTPROCESS_FILE_EXTENSION);
+        return;
+    }
+
+    string_path full_path;
+    if (!FS.exist(full_path, "$level$", effect_name) &&
+        !FS.exist(full_path, "$game_anims$", effect_name)) {
+        Msg("! ItemUse: PPE [%s] from [%s] was not found", effect_name,
+            effect_section.c_str());
+        return;
+    }
+
+    m_ppe_effect = effect_name;
+
+    const shared_str timer_section = FindConfigSection("ppe_effect_timer");
+    if (timer_section.size())
+        m_ppe_effect_timer =
+            pSettings->r_u32(timer_section.c_str(), "ppe_effect_timer");
+
+    Msg("* ItemUse PPE configured: [%s], timer [%u]", m_ppe_effect.c_str(),
+        m_ppe_effect_timer);
+}
+
+void CItemUseController::ApplyUiVisibility() {
+    if (!m_disable_ui || m_ui_hidden || !CurrentGameUI())
+        return;
+
+    m_prev_game_indicators_shown = CurrentGameUI()->GameIndicatorsShown();
+    m_prev_crosshair_shown = CurrentGameUI()->CrosshairShown();
+    CurrentGameUI()->ShowGameIndicators(false);
+    CurrentGameUI()->ShowCrosshair(false);
+    m_ui_hidden = true;
+
+    Msg("* ItemUse UI disabled");
+}
+
+void CItemUseController::RestoreUiVisibility() {
+    if (!m_ui_hidden)
+        return;
+
+    if (CurrentGameUI()) {
+        CurrentGameUI()->ShowGameIndicators(m_prev_game_indicators_shown);
+        CurrentGameUI()->ShowCrosshair(m_prev_crosshair_shown);
+    }
+
+    m_ui_hidden = false;
+    m_prev_game_indicators_shown = false;
+    m_prev_crosshair_shown = false;
+
+    Msg("* ItemUse UI visibility restored");
+}
+
+void CItemUseController::StartPPEffect() {
+    if (m_ppe_effect_started || !m_ppe_effect.size() || !m_actor ||
+        !m_actor->HasCameraManager()) {
+        return;
+    }
+
+    CPostprocessAnimator* effect =
+        xr_new<CPostprocessAnimator>((int)effItemUse, false);
+    effect->Load(m_ppe_effect.c_str());
+    m_actor->Cameras().AddPPEffector(effect);
+    m_ppe_effect_started = true;
+
+    Msg("* ItemUse PPE started: [%s]", m_ppe_effect.c_str());
+}
+
+void CItemUseController::UpdatePPEffect() {
+    if (m_ppe_effect_started || !m_ppe_effect.size()) {
+        return;
+    }
+
+    if (Device.dwTimeGlobal - m_controller_animation_start_time >= m_ppe_effect_timer)
+        StartPPEffect();
+}
+
+void CItemUseController::StopPPEffect() {
+    if (!m_ppe_effect_started)
+        return;
+
+    if (m_actor && m_actor->HasCameraManager())
+        m_actor->Cameras().RemovePPEffector((EEffectorPPType)effItemUse);
+
+    m_ppe_effect_started = false;
 }
 
 void CItemUseController::LoadStopFunction() {
