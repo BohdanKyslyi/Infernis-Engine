@@ -133,7 +133,20 @@ void CParticlesObject::Stop(BOOL bDefferedStop) {
 }
 
 void CParticlesObject::shedule_Update(u32 _dt) {
+    // A particle definition reaches its time limit when emission stops, while
+    // already emitted particles can remain alive during the deferred tail.
+    // The legacy CPS auto-remove deleted the whole render object at that first
+    // moment. Temporarily defer it and wait for the visual to finish instead.
+    const bool wait_for_particle_tail =
+        m_bAutoRemove && m_iLifeTime <= static_cast<int>(_dt);
+
+    if (wait_for_particle_tail)
+        m_bAutoRemove = FALSE;
+
     inherited::shedule_Update(_dt);
+
+    if (wait_for_particle_tail)
+        m_bAutoRemove = TRUE;
 
     // Update
     if (m_bDead)
@@ -154,6 +167,12 @@ void CParticlesObject::shedule_Update(u32 _dt) {
         dwLastTime = Device.dwTimeGlobal;
     }
     UpdateSpatial();
+
+    IParticleCustom* V = smart_cast<IParticleCustom*>(renderable.visual);
+    VERIFY(V);
+
+    if (m_bAutoRemove && m_iLifeTime <= 0 && !V->IsPlaying())
+        PSI_destroy();
 }
 
 void CParticlesObject::PerformAllTheWork(u32 _dt) {

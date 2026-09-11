@@ -25,6 +25,7 @@ class CEnemyManager;
 class CDangerManager;
 class CMovementManager;
 class CSoundPlayer;
+class CActor;
 class CAI_Stalker;
 class CDangerObject;
 class moving_object;
@@ -132,6 +133,16 @@ public:
 public:
     virtual CEntityAlive* cast_entity_alive() { return this; }
     virtual CEntity* cast_entity() { return this; }
+
+    // Native mutant harvesting. A configured dead monster is consumed once;
+    // the controller reserves it while the optional HUD animation is playing.
+    bool HasMutantLootRecipe() const { return !m_mutant_loot_items.empty(); }
+    bool CanMutantLoot(const CActor* actor) const;
+    LPCSTR MutantLootTip() const;
+    bool BeginMutantLoot(CActor* actor);
+    bool CompleteMutantLoot(CActor* actor);
+    void CancelMutantLoot(CActor* actor);
+    void PlayMutantLootParticle();
 
 public:
     virtual DLL_Pure* _construct();
@@ -255,6 +266,29 @@ public:
 
 private:
     bool m_already_dead;
+
+    struct SMutantLootItem {
+        shared_str section;
+        u32 count;
+        float probability;
+    };
+
+    enum EMutantLootState {
+        eMutantLootUnavailable,
+        eMutantLootAvailable,
+        eMutantLootInProgress,
+        eMutantLootCollected,
+    };
+
+    xr_vector<SMutantLootItem> m_mutant_loot_items;
+    shared_str m_mutant_loot_section;
+    shared_str m_mutant_loot_tip;
+    shared_str m_mutant_loot_particle;
+    shared_str m_mutant_loot_particle_bone;
+    EMutantLootState m_mutant_loot_state;
+    u16 m_mutant_loot_actor_id;
+
+    void LoadMutantLoot(LPCSTR section);
 
 public:
     IC const bool& already_dead() const { return (m_already_dead); };

@@ -47,6 +47,7 @@
 #include "HudItem.h"
 #include "Weapon.h"
 #include "xr_level_controller.h"
+#include "ItemUseController.h"
 #include "ui\UICinematicBorders.h"
 #include "UIGameCustom.h"
 
@@ -56,6 +57,37 @@ LPCSTR command_line() { return (Core.Params); }
 bool IsDynamicMusic() { return !!psActorFlags.test(AF_DYNAMIC_MUSIC); }
 
 bool IsImportantSave() { return !!psActorFlags.test(AF_IMPORTANT_SAVE); }
+
+bool activate_hud_controller_script(LPCSTR hud_section) {
+    CActor* actor = Actor();
+
+    if (!actor || !actor->g_Alive() || !hud_section || !hud_section[0])
+        return false;
+
+    CItemUseController* controller = actor->GetItemUseController();
+
+    if (!controller)
+        return false;
+
+    if (controller->IsBusy()) {
+        Msg("! HUD controller script start [%s] rejected: controller is busy", hud_section);
+        return false;
+    }
+
+    if (!controller->StartHudAnimationOnce(hud_section)) {
+        Msg("! HUD controller script start [%s] failed", hud_section);
+        return false;
+    }
+
+    return true;
+}
+
+bool is_hud_controller_active_script() {
+    CActor* actor = Actor();
+    CItemUseController* controller = actor ? actor->GetItemUseController() : NULL;
+
+    return controller && controller->IsBusy();
+}
 
 #ifdef DEBUG
 void check_object(CScriptGameObject* object) {
@@ -1106,6 +1138,9 @@ void CLevel::script_register(lua_State* L) {
         def("hide_indicators", hide_indicators), def("hide_indicators_safe", hide_indicators_safe),
 
         def("show_indicators", show_indicators), def("show_weapon", show_weapon),
+
+        def("activate_hud_controller", &activate_hud_controller_script),
+        def("is_hud_controller_active", &is_hud_controller_active_script),
 		
 		// Cinematic Toolset Bindings
         def("set_dof_script", &set_dof_params_script),

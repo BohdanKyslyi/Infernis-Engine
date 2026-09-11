@@ -27,6 +27,7 @@
 #include "WeaponMagazined.h"
 #include "WeaponKnife.h"
 #include "CustomOutfit.h"
+#include "ItemUseController.h"
 
 #include "actor_anim_defs.h"
 
@@ -691,6 +692,13 @@ BOOL CActor::net_Spawn(CSE_Abstract* DC) {
 }
 
 void CActor::net_Destroy() {
+    // Controller cleanup must happen while the actor camera manager, HUD and
+    // level objects are still alive. The actor camera manager is deleted later
+    // in this method, so postponing Cancel() until CActor's destructor makes
+    // StopCameraEffector() dereference an already-null manager.
+    if (m_item_use)
+        m_item_use->Cancel();
+
     inherited::net_Destroy();
 
     if (m_holder_id != ALife::_OBJECT_ID(-1))

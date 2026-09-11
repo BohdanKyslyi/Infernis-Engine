@@ -5,6 +5,7 @@
 class CActor;
 class CInventoryItem;
 class CParticlesObject;
+class CCustomMonster;
 
 class CItemUseController {
 public:
@@ -12,6 +13,9 @@ public:
     ~CItemUseController();
 
     bool Start(CInventoryItem* item);
+    // Starts native harvesting for a configured mutant corpse. If the global
+    // animation is disabled or invalid, the loot is collected immediately.
+    bool StartMutantLoot(CCustomMonster* monster);
 
     // Persistent controller-owned HUD lifecycle used by interfaces such as
     // PDA and backpack. Connecting those interfaces is intentionally kept
@@ -36,6 +40,7 @@ public:
     void Finish();
 
     bool IsActive() const { return m_active; }
+    bool IsBusy() const { return m_active || m_deferred_hud_animation_section.size(); }
     bool IsWeaponLocked() const { return m_active; }
     bool IsMovementLocked() const { return m_active && m_block_movement; }
 
@@ -45,6 +50,7 @@ private:
         eControllerModeConsumable,
         eControllerModeHudAnimation,
         eControllerModeHudAnimationOneShot,
+        eControllerModeMutantLoot,
     };
 
     enum EHudAnimationPhase {
@@ -68,13 +74,29 @@ private:
     bool CanStartAnimation();
     void BeginAnimation();
 
-    bool PlayHudAnimationMotion(LPCSTR motion_name, EHudAnimationPhase phase, BOOL mix_in);
+    bool PlayHudAnimationMotion(LPCSTR motion_name, EHudAnimationPhase phase, BOOL mix_in,
+                                shared_str* played_motion_name = NULL);
     void BeginHudAnimationIdle();
     void BeginHudAnimationHide();
     void UpdateHudAnimation();
+    void UpdateMutantLootAnimation();
+
+    CCustomMonster* MutantLootTarget() const;
+    bool ApplyMutantLootEffect();
+    void ApplyMutantLootParticle();
+    void ReleaseMutantLootReservation();
+    bool CompleteMutantLootImmediately(CCustomMonster* monster);
 
     void LockActor();
     void UnlockActor();
+
+    void LoadControllerEffects();
+    void ApplyUiVisibility();
+    void RestoreUiVisibility();
+
+    void StartPPEffect();
+    void UpdatePPEffect();
+    void StopPPEffect();
 
     void LoadAnimSound();
     void PlayHudAnimationSound(LPCSTR sound_line);
@@ -93,6 +115,9 @@ private:
     void StopUseParticles();
 
     void SpawnTrash();
+
+    void LoadStopFunction();
+    void CallStopFunction(const shared_str& function_name);
 
 private:
     CActor* m_actor;
@@ -114,11 +139,30 @@ private:
     EHudAnimationPhase m_hud_animation_phase;
     bool m_hud_animation_hide_requested;
     bool m_hud_animation_allow_inventory;
+    u16 m_mutant_loot_target_id;
+    u32 m_mutant_loot_particle_time;
+    bool m_mutant_loot_particle_enabled;
+    bool m_mutant_loot_particle_started;
     u16 m_queued_consumable_id;
     shared_str m_deferred_hud_animation_section;
     shared_str m_queued_hud_animation_section;
     bool m_outfit_hud_refresh_pending;
     bool m_block_movement;
+    shared_str m_function_on_stop;
+
+    // Optional controller-wide presentation settings. UI visibility is
+    // restored to the state that existed before this controller acquired it.
+    bool m_disable_ui;
+    bool m_ui_hidden;
+    bool m_prev_game_indicators_shown;
+    bool m_prev_crosshair_shown;
+
+    // Optional one-shot postprocess. Its timer is relative to the first HUD
+    // motion, not to the current show/idle/hide phase.
+    shared_str m_ppe_effect;
+    u32 m_ppe_effect_timer;
+    u32 m_controller_animation_start_time;
+    bool m_ppe_effect_started;
 
     //
     // Item use state.

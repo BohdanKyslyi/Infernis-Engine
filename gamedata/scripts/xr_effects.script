@@ -3764,3 +3764,26 @@ end
 function orbit_stop(actor, npc)
     if actor then actor:stop_orbit() end
 end
+
+-- Starts a one-shot ItemUseController HUD sequence from logic:
+-- %=activate_hud_controller(my_cutscene_hud)%
+function activate_hud_controller(actor, npc, p)
+    local hud_section = p and p[1]
+
+    if not hud_section or hud_section == "" then
+        abort("activate_hud_controller requires a HUD section name")
+        return
+    end
+
+    -- A failed start is intentionally non-fatal: the controller can already
+    -- be occupied by food, equipment, mutant looting or another cutscene.
+    level.activate_hud_controller(hud_section)
+end
+
+-- Logic condition. Use !is_hud_controller_active to wait for a free
+-- controller before starting the next sequence.
+function is_hud_controller_active(actor, npc, p)
+    return level.is_hud_controller_active()
+end
+
+xr_conditions.is_hud_controller_active = is_hud_controller_active

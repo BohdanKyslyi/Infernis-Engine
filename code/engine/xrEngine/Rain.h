@@ -62,6 +62,7 @@ private:
     float m_fWindMaxAngle{ 10.0f };
     float m_fWindSpeedMultiplier{ 0.0f };
     float m_fDripEndTime{ 0.0f };
+    float m_fViewRainExposure{ 0.0f };
 
 private:
     FactoryPtr<IRainRender> m_pRender;
@@ -100,6 +101,7 @@ public:
 
     void Render();
     void OnFrame();
+    float GetViewRainExposure() const { return m_fViewRainExposure; }
 };
 
 #endif // RainH

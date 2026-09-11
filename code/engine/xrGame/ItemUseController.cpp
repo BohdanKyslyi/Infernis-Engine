@@ -10,19 +10,25 @@
 #include "ItemUseController.h"
 
 #include "Actor.h"
+#include "CustomMonster.h"
 #include "HudItem.h"
 #include "player_hud.h"
 #include "inventory.h"
+#include "level.h"
 
 #include "CustomDetector.h"
 #include "CustomOutfit.h"
 #include "UIGameCustom.h"
 #include "ui/UIActorMenu.h"
 #include "ActorEffector.h"
+#include "PostprocessAnimator.h"
 #include "ParticlesObject.h"
 
 #include "../xrPhysics/ElevatorState.h"
 #include "eatable_item.h"
+#include "ai_space.h"
+#include "script_engine.h"
+#include <luabind/functor.hpp>
 
 static bool ConsumableAnimationsEnabled() {
     static bool initialized = false;
@@ -42,6 +48,65 @@ static bool ConsumableAnimationsEnabled() {
     return enabled;
 }
 
+static bool MutantLootAnimationsEnabled() {
+    static bool initialized = false;
+    static bool enabled = false;
+
+    if (!initialized) {
+        initialized = true;
+
+        if (pSettings->section_exist("items_animations") &&
+            pSettings->line_exist("items_animations", "enable_mutant_looting_animations")) {
+            enabled =
+                !!pSettings->r_bool("items_animations", "enable_mutant_looting_animations");
+        }
+
+        Msg("* Mutant loot animations: [%s]", enabled ? "enabled" : "disabled");
+    }
+
+    return enabled;
+}
+
+static bool MutantLootParticlesEnabled() {
+    static bool initialized = false;
+    static bool enabled = false;
+
+    if (!initialized) {
+        initialized = true;
+
+        if (pSettings->section_exist("items_animations") &&
+            pSettings->line_exist("items_animations", "enable_mutant_looting_particles")) {
+            enabled =
+                !!pSettings->r_bool("items_animations", "enable_mutant_looting_particles");
+        }
+
+        Msg("* Mutant loot particles: [%s]", enabled ? "enabled" : "disabled");
+    }
+
+    return enabled;
+}
+
+static u32 MutantLootParticleTiming() {
+    if (!pSettings->section_exist("items_animations") ||
+        !pSettings->line_exist("items_animations", "mutant_looting_particle_timing")) {
+        return 0;
+    }
+
+    return pSettings->r_u32("items_animations", "mutant_looting_particle_timing");
+}
+
+static bool HudBlocksMovement(const shared_str& hud_section) {
+    if (!hud_section.size() || !pSettings->section_exist(hud_section.c_str()))
+        return false;
+
+    if (pSettings->line_exist(hud_section.c_str(), "block_movement"))
+        return !!pSettings->r_bool(hud_section.c_str(), "block_movement");
+
+    // Compatibility alias used by some configs.
+    return pSettings->line_exist(hud_section.c_str(), "block_move") &&
+           !!pSettings->r_bool(hud_section.c_str(), "block_move");
+}
+
 CItemUseController::CItemUseController(CActor* actor)
     : m_actor(actor),
       m_item(NULL),
@@ -54,11 +119,22 @@ CItemUseController::CItemUseController(CActor* actor)
       m_hud_animation_phase(eHudAnimationNone),
       m_hud_animation_hide_requested(false),
       m_hud_animation_allow_inventory(false),
+      m_mutant_loot_target_id(u16(-1)),
+      m_mutant_loot_particle_time(0),
+      m_mutant_loot_particle_enabled(false),
+      m_mutant_loot_particle_started(false),
       m_queued_consumable_id(u16(-1)),
       m_deferred_hud_animation_section(NULL),
       m_queued_hud_animation_section(NULL),
       m_outfit_hud_refresh_pending(false),
       m_block_movement(false),
+      m_disable_ui(false),
+      m_ui_hidden(false),
+      m_prev_game_indicators_shown(false),
+      m_prev_crosshair_shown(false),
+      m_ppe_effect_timer(0),
+      m_controller_animation_start_time(0),
+      m_ppe_effect_started(false),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
       m_prev_inventory_disabled(false),
@@ -101,6 +177,8 @@ bool CItemUseController::Start(CInventoryItem* item) {
     m_use_section = use_section;
     m_state_section = state_section;
     m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
 
     m_trash_section = NULL;
     m_trash_count = 0;
@@ -160,6 +238,94 @@ bool CItemUseController::Start(CInventoryItem* item) {
     return true;
 }
 
+bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
+    if (!monster || !m_actor || !monster->CanMutantLoot(m_actor))
+        return false;
+
+    // A configured corpse must never fall through into Lua/corpse inventory
+    // handling while another controller transition is still settling.
+    if (m_active || m_deferred_hud_animation_section.size())
+        return true;
+
+    shared_str hud_section;
+    bool use_animation = MutantLootAnimationsEnabled();
+
+    if (use_animation) {
+        if (!pSettings->section_exist("items_animations") ||
+            !pSettings->line_exist("items_animations", "mutant_looting_hud")) {
+            Msg("! MutantLoot: [items_animations] has no [mutant_looting_hud]; using "
+                "immediate fallback");
+            use_animation = false;
+        } else {
+            LPCSTR configured_hud =
+                pSettings->r_string("items_animations", "mutant_looting_hud");
+
+            if (!configured_hud || !configured_hud[0] || !xr_strcmp(configured_hud, "none")) {
+                Msg("! MutantLoot: [mutant_looting_hud] is empty; using immediate fallback");
+                use_animation = false;
+            } else {
+                hud_section = configured_hud;
+            }
+        }
+    }
+
+    if (use_animation &&
+        (!pSettings->section_exist(hud_section.c_str()) ||
+         !pSettings->line_exist(hud_section.c_str(), "anm_show") || !g_player_hud ||
+         !g_player_hud->can_attach_controller_item(hud_section))) {
+        Msg("! MutantLoot: HUD [%s] is missing or invalid; using immediate fallback",
+            hud_section.c_str());
+        use_animation = false;
+    }
+
+    if (!use_animation)
+        return CompleteMutantLootImmediately(monster);
+
+    if (!monster->BeginMutantLoot(m_actor))
+        return false;
+
+    m_item = NULL;
+    m_item_section = monster->cNameSect();
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+
+    m_start_time = 0;
+    if (pSettings->line_exist(hud_section.c_str(), "action_timing"))
+        m_action_time = pSettings->r_u32(hud_section.c_str(), "action_timing");
+    else if (pSettings->line_exist(hud_section.c_str(), "timing"))
+        m_action_time = pSettings->r_u32(hud_section.c_str(), "timing");
+    else
+        m_action_time = u32(-1);
+    m_animation_duration = 0;
+
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModeMutantLoot;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_mutant_loot_target_id = monster->ID();
+    m_mutant_loot_particle_time = MutantLootParticleTiming();
+    m_mutant_loot_particle_enabled = MutantLootParticlesEnabled();
+    m_mutant_loot_particle_started = false;
+    m_waiting_for_weapon_hide = true;
+
+    LockActor();
+
+    if (!m_actor_locked) {
+        ReleaseMutantLootReservation();
+        Reset();
+        return CompleteMutantLootImmediately(monster);
+    }
+
+    Msg("* MutantLoot: HUD animation waiting for weapon hide, corpse [%u][%s], HUD [%s]",
+        (u32)monster->ID(), monster->cNameSect().c_str(), m_hud_section.c_str());
+    return true;
+}
+
 bool CItemUseController::ResolveConsumableAnimation(CInventoryItem* item,
                                                     shared_str& item_section,
                                                     shared_str& use_section,
@@ -214,7 +380,7 @@ bool CItemUseController::StartHudAnimationOnce(const shared_str& hud_section) {
 bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section,
                                                    bool allow_inventory,
                                                    bool one_shot) {
-    if (m_active || !m_actor || !g_player_hud || !hud_section.size())
+    if (IsBusy() || !m_actor || !g_player_hud || !hud_section.size())
         return false;
 
     if (!pSettings->section_exist(hud_section.c_str())) {
@@ -245,6 +411,8 @@ bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section
     m_use_section = NULL;
     m_state_section = NULL;
     m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
 
     m_start_time = 0;
     m_action_time = 0;
@@ -425,8 +593,7 @@ bool CItemUseController::TryQueueHudAnimationOnce(const shared_str& hud_section)
     // A queued dressing HUD owns the whole transition, including the preceding
     // backpack hide. Preserve an existing persistent lock or enable the target
     // HUD's stronger movement policy immediately.
-    if (pSettings->line_exist(hud_section.c_str(), "block_movement") &&
-        pSettings->r_bool(hud_section.c_str(), "block_movement")) {
+    if (HudBlocksMovement(hud_section)) {
         m_block_movement = true;
 
         if (m_actor)
@@ -448,10 +615,7 @@ void CItemUseController::LockActor()
     if (!m_actor || m_actor_locked)
         return;
 
-    m_block_movement =
-        m_hud_section.size() && pSettings->section_exist(m_hud_section.c_str()) &&
-        pSettings->line_exist(m_hud_section.c_str(), "block_movement") &&
-        !!pSettings->r_bool(m_hud_section.c_str(), "block_movement");
+    m_block_movement = HudBlocksMovement(m_hud_section);
 
     if (m_block_movement)
         m_actor->StopAnyMove();
@@ -461,6 +625,8 @@ void CItemUseController::LockActor()
 
     if (CurrentGameUI())
         CurrentGameUI()->HideActorMenu();
+
+    ApplyUiVisibility();
 
     m_actor->set_inventory_disabled(true);
 
@@ -481,8 +647,10 @@ void CItemUseController::LockActor()
 
 void CItemUseController::UnlockActor()
 {
-    if (!m_actor_locked)
+    if (!m_actor_locked) {
+        RestoreUiVisibility();
         return;
+    }
 
     if (m_actor)
     {
@@ -500,6 +668,8 @@ void CItemUseController::UnlockActor()
     // Always release our ladder lock.
     //
     UnlockActorLadder();
+
+    RestoreUiVisibility();
 
     m_actor_locked = false;
     m_prev_inventory_disabled = false;
@@ -555,15 +725,61 @@ void CItemUseController::BeginAnimation()
     if (!g_player_hud->attach_controller_item(m_hud_section)) {
         Msg("! ItemUse: failed to attach HUD [%s]", m_hud_section.c_str());
 
+        CCustomMonster* mutant =
+            m_controller_mode == eControllerModeMutantLoot ? MutantLootTarget() : NULL;
         Cancel();
+
+        if (mutant)
+            CompleteMutantLootImmediately(mutant);
+
         return;
     }
 
     m_waiting_for_weapon_hide = false;
+    m_controller_animation_start_time = Device.dwTimeGlobal;
+
+    if (m_controller_mode == eControllerModeMutantLoot) {
+        shared_str played_motion_name;
+
+        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
+                                    &played_motion_name)) {
+            Msg("! MutantLoot: failed to play HUD animation [%s]; using immediate fallback",
+                m_hud_section.c_str());
+
+            CCustomMonster* mutant = MutantLootTarget();
+            Cancel();
+
+            if (mutant)
+                CompleteMutantLootImmediately(mutant);
+
+            return;
+        }
+
+        if (m_action_time == u32(-1) || m_action_time > m_animation_duration)
+            m_action_time = m_animation_duration;
+
+        if (m_mutant_loot_particle_time > m_animation_duration)
+            m_mutant_loot_particle_time = m_animation_duration;
+
+        PlayHudAnimationSound("snd_show");
+        StartCameraEffector(played_motion_name);
+        UpdatePPEffect();
+
+        Msg("* MutantLoot: HUD animation started, corpse [%u], HUD [%s], duration [%u], "
+            "effect [%u], particle [%s/%u], sound [%s], camera [%s]",
+            (u32)m_mutant_loot_target_id, m_hud_section.c_str(), m_animation_duration,
+            m_action_time, m_mutant_loot_particle_enabled ? "yes" : "no",
+            m_mutant_loot_particle_time, m_anim_sound_loaded ? "yes" : "no",
+            m_camera_effector_started ? "yes" : "no");
+        return;
+    }
 
     if (m_controller_mode == eControllerModeHudAnimation ||
         m_controller_mode == eControllerModeHudAnimationOneShot) {
-        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE)) {
+        shared_str played_motion_name;
+
+        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
+                                    &played_motion_name)) {
             Msg("! ItemUse: failed to play %s HUD show animation [%s]",
                 m_controller_mode == eControllerModeHudAnimationOneShot ? "one-shot"
                                                                         : "persistent",
@@ -573,12 +789,16 @@ void CItemUseController::BeginAnimation()
         }
 
         PlayHudAnimationSound("snd_show");
+        StartCameraEffector(played_motion_name);
+        UpdatePPEffect();
 
-        Msg("* ItemUse %s HUD animation started: [%s], show duration [%u], sound [%s]",
+        Msg("* ItemUse %s HUD animation started: [%s], show duration [%u], sound [%s], "
+            "camera [%s]",
             m_controller_mode == eControllerModeHudAnimationOneShot ? "one-shot"
                                                                     : "persistent",
             m_hud_section.c_str(), m_animation_duration,
-            m_anim_sound_loaded ? "yes" : "no");
+            m_anim_sound_loaded ? "yes" : "no",
+            m_camera_effector_started ? "yes" : "no");
         return;
     }
 
@@ -614,6 +834,7 @@ void CItemUseController::BeginAnimation()
 
     m_start_time = Device.dwTimeGlobal;
     StartCameraEffector(played_motion_name);
+    UpdatePPEffect();
 
     if (m_use_particles_stop_time == u32(-1) ||
         m_use_particles_stop_time > m_animation_duration) {
@@ -636,14 +857,16 @@ void CItemUseController::BeginAnimation()
 
 bool CItemUseController::PlayHudAnimationMotion(LPCSTR motion_name,
                                                 EHudAnimationPhase phase,
-                                                BOOL mix_in) {
+                                                BOOL mix_in,
+                                                shared_str* played_motion_name) {
     if (!g_player_hud || !motion_name || !motion_name[0])
         return false;
 
     if (!g_player_hud->has_controller_motion(motion_name))
         return false;
 
-    m_animation_duration = g_player_hud->play_controller_motion(motion_name, mix_in);
+    m_animation_duration =
+        g_player_hud->play_controller_motion(motion_name, mix_in, played_motion_name);
 
     if (!m_animation_duration)
         return false;
@@ -730,6 +953,95 @@ void CItemUseController::UpdateHudAnimation() {
     }
 }
 
+CCustomMonster* CItemUseController::MutantLootTarget() const {
+    if (!g_pGameLevel || m_mutant_loot_target_id == u16(-1))
+        return NULL;
+
+    CObject* object = Level().Objects.net_Find(m_mutant_loot_target_id);
+    CGameObject* game_object = smart_cast<CGameObject*>(object);
+
+    return game_object ? game_object->cast_custom_monster() : NULL;
+}
+
+bool CItemUseController::ApplyMutantLootEffect() {
+    CCustomMonster* monster = MutantLootTarget();
+
+    if (!monster) {
+        Msg("! MutantLoot: target corpse [%u] disappeared before effect timing",
+            (u32)m_mutant_loot_target_id);
+        return false;
+    }
+
+    if (!monster->CompleteMutantLoot(m_actor))
+        return false;
+
+    m_effect_applied = true;
+    return true;
+}
+
+void CItemUseController::ApplyMutantLootParticle() {
+    if (!m_mutant_loot_particle_enabled || m_mutant_loot_particle_started)
+        return;
+
+    CCustomMonster* monster = MutantLootTarget();
+
+    if (monster)
+        monster->PlayMutantLootParticle();
+    else
+        Msg("! MutantLoot: target corpse [%u] disappeared before particle timing",
+            (u32)m_mutant_loot_target_id);
+
+    m_mutant_loot_particle_started = true;
+}
+
+void CItemUseController::ReleaseMutantLootReservation() {
+    CCustomMonster* monster = MutantLootTarget();
+
+    if (monster)
+        monster->CancelMutantLoot(m_actor);
+}
+
+bool CItemUseController::CompleteMutantLootImmediately(CCustomMonster* monster) {
+    if (!monster || !m_actor || !monster->BeginMutantLoot(m_actor))
+        return false;
+
+    if (!monster->CompleteMutantLoot(m_actor)) {
+        monster->CancelMutantLoot(m_actor);
+        Msg("! MutantLoot: immediate harvesting failed for corpse [%u][%s]",
+            (u32)monster->ID(), monster->cNameSect().c_str());
+    } else {
+        Msg("* MutantLoot: immediate fallback completed for corpse [%u][%s]",
+            (u32)monster->ID(), monster->cNameSect().c_str());
+    }
+
+    // The configured corpse interaction was handled even if a transient
+    // server-side condition prevented completion. Never fall through to Lua.
+    return true;
+}
+
+void CItemUseController::UpdateMutantLootAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+
+    if (m_mutant_loot_particle_enabled && !m_mutant_loot_particle_started &&
+        elapsed >= m_mutant_loot_particle_time) {
+        ApplyMutantLootParticle();
+    }
+
+    if (!m_effect_applied && elapsed >= m_action_time) {
+        if (!ApplyMutantLootEffect()) {
+            Msg("! MutantLoot: effect failed for corpse [%u]", (u32)m_mutant_loot_target_id);
+            Cancel();
+            return;
+        }
+    }
+
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
 void CItemUseController::Update(float dt)
 {
     (void)dt;
@@ -798,9 +1110,16 @@ void CItemUseController::Update(float dt)
         return;
     }
 
+    UpdatePPEffect();
+
     if (m_controller_mode == eControllerModeHudAnimation ||
         m_controller_mode == eControllerModeHudAnimationOneShot) {
         UpdateHudAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeMutantLoot) {
+        UpdateMutantLootAnimation();
         return;
     }
 
@@ -868,6 +1187,9 @@ void CItemUseController::Cancel() {
 
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
 
+    if (m_controller_mode == eControllerModeMutantLoot && !m_effect_applied)
+        ReleaseMutantLootReservation();
+
     //
     // If effect has already happened,
     // physical waste must not magically disappear.
@@ -878,6 +1200,7 @@ void CItemUseController::Cancel() {
 
     DestroyAnimSound();
     StopCameraEffector();
+    StopPPEffect();
     StopUseParticles();
 
     if (g_player_hud)
@@ -889,6 +1212,9 @@ void CItemUseController::Cancel() {
         Msg("* ItemUse HUD animation cancelled: [%s]", m_hud_section.c_str());
     else if (m_controller_mode == eControllerModeHudAnimationOneShot)
         Msg("* ItemUse one-shot HUD animation cancelled: [%s]", m_hud_section.c_str());
+    else if (m_controller_mode == eControllerModeMutantLoot)
+        Msg("* MutantLoot: HUD animation cancelled for corpse [%u]",
+            (u32)m_mutant_loot_target_id);
     else
         Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
@@ -904,6 +1230,15 @@ void CItemUseController::Finish() {
     if (!m_active)
         return;
 
+    if (m_controller_mode == eControllerModeMutantLoot) {
+        ApplyMutantLootParticle();
+
+        if (!m_effect_applied && !ApplyMutantLootEffect()) {
+            Cancel();
+            return;
+        }
+    }
+
     const bool start_queued_consumable =
         m_controller_mode == eControllerModeHudAnimation &&
         m_queued_consumable_id != u16(-1);
@@ -913,6 +1248,7 @@ void CItemUseController::Finish() {
         m_queued_hud_animation_section.size();
     const shared_str queued_hud_animation_section = m_queued_hud_animation_section;
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
+    const shared_str function_on_stop = m_function_on_stop;
 
     //
     // Normal physical trash moment:
@@ -924,6 +1260,9 @@ void CItemUseController::Finish() {
 
     DestroyAnimSound();
     StopCameraEffector();
+    // A one-shot PPE deliberately outlives a normal controller finish. This
+    // keeps a fade transition active while function_on_stop opens the next UI.
+    // Cancel() still removes it immediately.
     StopUseParticles();
 
     if (g_player_hud)
@@ -935,6 +1274,9 @@ void CItemUseController::Finish() {
         Msg("* ItemUse HUD animation finished: [%s]", m_hud_section.c_str());
     else if (m_controller_mode == eControllerModeHudAnimationOneShot)
         Msg("* ItemUse one-shot HUD animation finished: [%s]", m_hud_section.c_str());
+    else if (m_controller_mode == eControllerModeMutantLoot)
+        Msg("* MutantLoot: HUD animation finished for corpse [%u]",
+            (u32)m_mutant_loot_target_id);
     else
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
@@ -944,6 +1286,10 @@ void CItemUseController::Finish() {
         m_outfit_hud_refresh_pending = true;
         ApplyPendingOutfitHudRefresh();
     }
+
+    // The controller is fully detached and unlocked before calling Lua. This
+    // lets a story callback safely start the next HUD sequence immediately.
+    CallStopFunction(function_on_stop);
 
     if (start_queued_hud_animation && m_actor && m_actor->g_Alive()) {
         if (StartHudAnimationOnce(queued_hud_animation_section)) {
@@ -1001,11 +1347,26 @@ void CItemUseController::Reset()
     m_hud_animation_phase = eHudAnimationNone;
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;
+    m_mutant_loot_target_id = u16(-1);
+    m_mutant_loot_particle_time = 0;
+    m_mutant_loot_particle_enabled = false;
+    m_mutant_loot_particle_started = false;
     m_queued_consumable_id = u16(-1);
     m_deferred_hud_animation_section = NULL;
     m_queued_hud_animation_section = NULL;
     m_outfit_hud_refresh_pending = false;
     m_block_movement = false;
+    m_function_on_stop = NULL;
+
+    m_disable_ui = false;
+    m_ui_hidden = false;
+    m_prev_game_indicators_shown = false;
+    m_prev_crosshair_shown = false;
+
+    m_ppe_effect = NULL;
+    m_ppe_effect_timer = 0;
+    m_controller_animation_start_time = 0;
+    m_ppe_effect_started = false;
 
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;
@@ -1025,6 +1386,168 @@ void CItemUseController::Reset()
     m_use_particles_stop_time = u32(-1);
     m_use_particles = NULL;
     m_use_particles_started = false;
+}
+
+void CItemUseController::LoadControllerEffects() {
+    m_disable_ui = false;
+    m_ui_hidden = false;
+    m_prev_game_indicators_shown = false;
+    m_prev_crosshair_shown = false;
+
+    const shared_str ui_section = FindConfigSection("disable_ui");
+
+    if (ui_section.size())
+        m_disable_ui = !!pSettings->r_bool(ui_section.c_str(), "disable_ui");
+
+    m_ppe_effect = NULL;
+    m_ppe_effect_timer = 0;
+    m_controller_animation_start_time = 0;
+    m_ppe_effect_started = false;
+
+    const shared_str effect_section = FindConfigSection("ppe_effect");
+
+    if (!effect_section.size())
+        return;
+
+    LPCSTR configured_effect =
+        pSettings->r_string(effect_section.c_str(), "ppe_effect");
+
+    if (!configured_effect || !configured_effect[0] || !xr_strcmp(configured_effect, "none"))
+        return;
+
+    string_path effect_name;
+    xr_strcpy(effect_name, configured_effect);
+
+    LPCSTR extension = strext(effect_name);
+
+    if (!extension)
+        xr_strcat(effect_name, POSTPROCESS_FILE_EXTENSION);
+    else if (xr_strcmp(extension, POSTPROCESS_FILE_EXTENSION)) {
+        Msg("! ItemUse: PPE [%s] from [%s] must use the [%s] extension", effect_name,
+            effect_section.c_str(), POSTPROCESS_FILE_EXTENSION);
+        return;
+    }
+
+    string_path full_path;
+    if (!FS.exist(full_path, "$level$", effect_name) &&
+        !FS.exist(full_path, "$game_anims$", effect_name)) {
+        Msg("! ItemUse: PPE [%s] from [%s] was not found", effect_name,
+            effect_section.c_str());
+        return;
+    }
+
+    m_ppe_effect = effect_name;
+
+    const shared_str timer_section = FindConfigSection("ppe_effect_timer");
+    if (timer_section.size())
+        m_ppe_effect_timer =
+            pSettings->r_u32(timer_section.c_str(), "ppe_effect_timer");
+
+    Msg("* ItemUse PPE configured: [%s], timer [%u]", m_ppe_effect.c_str(),
+        m_ppe_effect_timer);
+}
+
+void CItemUseController::ApplyUiVisibility() {
+    if (!m_disable_ui || m_ui_hidden || !CurrentGameUI())
+        return;
+
+    m_prev_game_indicators_shown = CurrentGameUI()->GameIndicatorsShown();
+    m_prev_crosshair_shown = CurrentGameUI()->CrosshairShown();
+    CurrentGameUI()->ShowGameIndicators(false);
+    CurrentGameUI()->ShowCrosshair(false);
+    m_ui_hidden = true;
+
+    Msg("* ItemUse UI disabled");
+}
+
+void CItemUseController::RestoreUiVisibility() {
+    if (!m_ui_hidden)
+        return;
+
+    if (CurrentGameUI()) {
+        CurrentGameUI()->ShowGameIndicators(m_prev_game_indicators_shown);
+        CurrentGameUI()->ShowCrosshair(m_prev_crosshair_shown);
+    }
+
+    m_ui_hidden = false;
+    m_prev_game_indicators_shown = false;
+    m_prev_crosshair_shown = false;
+
+    Msg("* ItemUse UI visibility restored");
+}
+
+void CItemUseController::StartPPEffect() {
+    if (m_ppe_effect_started || !m_ppe_effect.size() || !m_actor ||
+        !m_actor->HasCameraManager()) {
+        return;
+    }
+
+    CPostprocessAnimator* effect =
+        xr_new<CPostprocessAnimator>((int)effItemUse, false);
+    effect->Load(m_ppe_effect.c_str());
+    m_actor->Cameras().AddPPEffector(effect);
+    m_ppe_effect_started = true;
+
+    Msg("* ItemUse PPE started: [%s]", m_ppe_effect.c_str());
+}
+
+void CItemUseController::UpdatePPEffect() {
+    if (m_ppe_effect_started || !m_ppe_effect.size()) {
+        return;
+    }
+
+    if (Device.dwTimeGlobal - m_controller_animation_start_time >= m_ppe_effect_timer)
+        StartPPEffect();
+}
+
+void CItemUseController::StopPPEffect() {
+    if (!m_ppe_effect_started)
+        return;
+
+    if (m_actor && m_actor->HasCameraManager())
+        m_actor->Cameras().RemovePPEffector((EEffectorPPType)effItemUse);
+
+    m_ppe_effect_started = false;
+}
+
+void CItemUseController::LoadStopFunction() {
+    m_function_on_stop = NULL;
+
+    if (!m_hud_section.size() || !pSettings->section_exist(m_hud_section.c_str()) ||
+        !pSettings->line_exist(m_hud_section.c_str(), "function_on_stop")) {
+        return;
+    }
+
+    LPCSTR function_name =
+        pSettings->r_string(m_hud_section.c_str(), "function_on_stop");
+
+    if (function_name && function_name[0] && xr_strcmp(function_name, "none"))
+        m_function_on_stop = function_name;
+}
+
+void CItemUseController::CallStopFunction(const shared_str& function_name) {
+    if (!function_name.size())
+        return;
+
+    luabind::functor<void> function;
+
+    if (!ai().script_engine().functor(function_name.c_str(), function) ||
+        !function.is_valid()) {
+        Msg("! ItemUse: function_on_stop [%s] was not found; callback skipped",
+            function_name.c_str());
+        return;
+    }
+
+    Msg("* ItemUse: calling function_on_stop [%s]", function_name.c_str());
+
+    try {
+        function();
+    } catch (...) {
+        // Script errors are reported by the script engine. Keep the completed
+        // controller lifecycle from turning a broken callback into a native
+        // crash.
+        Msg("! ItemUse: function_on_stop [%s] failed", function_name.c_str());
+    }
 }
 
 void CItemUseController::LoadAnimSound() {
@@ -1111,7 +1634,7 @@ shared_str CItemUseController::FindConfigSection(LPCSTR line) const {
 void CItemUseController::StartCameraEffector(const shared_str& played_motion_name) {
     StopCameraEffector();
 
-    if (!m_actor)
+    if (!m_actor || !m_actor->HasCameraManager())
         return;
 
     string_path effector_name;
@@ -1196,7 +1719,7 @@ void CItemUseController::StopCameraEffector() {
     if (!m_camera_effector_started)
         return;
 
-    if (m_actor)
+    if (m_actor && m_actor->HasCameraManager())
         m_actor->Cameras().RemoveCamEffector(eCEItemUse);
 
     m_camera_effector_started = false;

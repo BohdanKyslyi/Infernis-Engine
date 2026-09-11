@@ -34,6 +34,7 @@
 #include "hudmanager.h"
 #include "Weapon.h"
 #include "ItemUseController.h"
+#include "CustomMonster.h"
 
 extern u32 hud_adj_mode;
 
@@ -81,6 +82,12 @@ static bool ItemUseBlocksMovement(int cmd) {
     case kCROUCH:
     case kACCEL:
     case kSPRINT_TOGGLE:
+    case kUP:
+    case kDOWN:
+    case kLEFT:
+    case kRIGHT:
+    case kL_LOOKOUT:
+    case kR_LOOKOUT:
         return true;
     default:
         return false;
@@ -379,6 +386,9 @@ void CActor::IR_OnMouseMove(int dx, int dy) {
     if (Remote())
         return;
 
+    if (m_item_use && m_item_use->IsMovementLocked())
+        return;
+
     if (m_holder) {
         m_holder->OnMouseMove(dx, dy);
         return;
@@ -458,7 +468,27 @@ void CActor::ActorUse() {
     if (character_physics_support()->movement()->PHCapture())
         character_physics_support()->movement()->PHReleaseObject();
 
-    if (m_pUsableObject && NULL == m_pObjectWeLookingAt->cast_inventory_item()) {
+    CCustomMonster* native_mutant = NULL;
+
+    if (IsGameTypeSingle() && m_pObjectWeLookingAt) {
+        CCustomMonster* monster = m_pObjectWeLookingAt->cast_custom_monster();
+
+        if (monster && monster->HasMutantLootRecipe())
+            native_mutant = monster;
+    }
+
+    // Configured mutant corpses use a native harvesting path. Handle it before
+    // script callbacks and before the generic dead-body inventory interaction.
+    // Shift+Use skips harvesting but may still reach the physical drag path.
+    if (native_mutant && !Level().IR_GetKeyState(DIK_LSHIFT)) {
+        if (m_item_use)
+            m_item_use->StartMutantLoot(native_mutant);
+
+        return;
+    }
+
+    if (!native_mutant && m_pUsableObject &&
+        NULL == m_pObjectWeLookingAt->cast_inventory_item()) {
         m_pUsableObject->use(this);
     }
 
@@ -473,8 +503,8 @@ void CActor::ActorUse() {
         return;
     }
 
-    if (!m_pUsableObject || m_pUsableObject->nonscript_usable()) {
-        if (m_pPersonWeLookingAt) {
+    if (native_mutant || !m_pUsableObject || m_pUsableObject->nonscript_usable()) {
+        if (!native_mutant && m_pPersonWeLookingAt) {
             CEntityAlive* pEntityAliveWeLookingAt = smart_cast<CEntityAlive*>(m_pPersonWeLookingAt);
 
             VERIFY(pEntityAliveWeLookingAt);

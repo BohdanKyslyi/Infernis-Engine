@@ -70,6 +70,20 @@ description			= inv_backpack_stalker_desc ; Опис рюкзака
 inv_weight			= 1.0 ; Вага рюкзака
 cost				= 1000; Вартість (у гривнях)
 additional_inventory_weight 	= 10 ; Який буст переносимої ваги отримає гравець
+hud = backpack_stalker_hud
 
+[backpack_stalker_hud]:animated_item_hud
+item_visual      = dynamics\devices\dev_backpack\dev_backpack_hud.ogf
+hands_position				= 0,0.05,0
+hands_position_16x9			= 0,0.05,0
+hud_fov_degrees = 45.0
+viewport_near = 0.01
+
+anm_show					= backpack_open
+anm_idle                 	= backpack_idle
+anm_hide                 	= backpack_close
+
+snd_show = interface\backpack_open
+snd_hide = interface\backpack_close
 
 ;------------------------------------------------------------------------------------------

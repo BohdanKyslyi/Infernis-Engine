@@ -48,13 +48,14 @@ void CUITalkWnd::InitTalkWnd() {
 
     m_bShowPortraits = false;
 
-    string_path ext_path;
-    if (FS.exist(ext_path, "$game_config$", "noirEngineExtention.ltx")) {
-        CInifile ext_ini(ext_path);
-        if (ext_ini.section_exist("ui")) {
-            if (ext_ini.line_exist("ui", "show_dialog_portraits")) {
-                m_bShowPortraits = ext_ini.r_bool("ui", "show_dialog_portraits");
-            }
+    if (pSettings) {
+        if (pSettings->section_exist("ui_extensions") &&
+            pSettings->line_exist("ui_extensions", "show_dialog_portraits")) {
+            m_bShowPortraits =
+                pSettings->r_bool("ui_extensions", "show_dialog_portraits");
+        } else if (pSettings->section_exist("ui") &&
+                   pSettings->line_exist("ui", "show_dialog_portraits")) {
+            m_bShowPortraits = pSettings->r_bool("ui", "show_dialog_portraits");
         }
     }
 

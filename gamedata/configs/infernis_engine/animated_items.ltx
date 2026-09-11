@@ -1,0 +1,107 @@
+[consumable]:booster
+eat_portions_num = 1
+visual				= dynamics\fake_object.ogf
+
+[animated_item]:identity_immunities
+hud							= animated_item_hud
+
+sprint_allowed					= false
+
+;звуки
+snd_using   = $silent
+
+[animated_item_hud]:hud_base
+attach_place_idx				= 0
+item_visual				= dynamics\fake_object.ogf
+
+hands_position 				= 0,0,0
+hands_position_16x9			= 0,0,0
+hands_orientation			= 0,0,0
+hands_orientation_16x9		= 0,0,0
+
+item_position				= 0,0,0
+item_orientation			= 0,0,0
+
+aim_hud_offset_pos			= 0.0,0.0,0.0
+aim_hud_offset_rot			= 0.0,0.0,0.0
+
+aim_hud_offset_pos_16x9		= 0.0,0.0,0.0
+aim_hud_offset_rot_16x9		= 0.0,0.0,0.0
+
+viewport_near = 0.05
+
+[base_trash]
+GroupControlSection = spawn_group
+$spawn        = "physics\base_trash"
+$prefetch       = 8
+class       = O_PHYS_S
+
+; CPHSkeleton
+remove_time = 5
+
+; IMPORTANT:
+; create physics shell already active
+active = true
+
+; Infernis Engine lifetime
+timing_trash = 30000
+
+[device_pda_hud]:animated_item_hud
+item_visual      = dynamics\devices\dev_pda\dev_pda_hud.ogf
+
+hands_position 				= 0,-0.078,0.02
+hands_position_16x9			= 0,-0.078,0.02
+;hands_position 				= 0,-0.078,0.05
+;hands_position_16x9			= 0,-0.078,0.05
+
+hud_fov_degrees = 45.0
+disable_ui       = true
+ppe_effect       = ie\fade_pda.ppe
+ppe_effect_timer = 800
+
+anm_show = pda_draw
+anm_idle = pda_idle
+anm_hide = pda_holster
+
+snd_show = device\pda_draw
+snd_hide = device\pda_holster
+
+[outfit_animation_hud]:animated_item_hud
+hands_position				= 0, -0.02, 0.27
+hands_position_16x9			= 0, -0.02, 0.27
+block_movement = true
+
+anm_show = outfit_equip
+snd_show = interface\outfit_equip
+
+hud_fov_degrees = 27.5
+
+[helm_respirator_hud]:animated_item_hud
+item_visual             	= dynamics\outfit\helm_respirator_hud.ogf
+hands_position				= 0, 0, 0.23
+hands_position_16x9			= 0, 0, 0.23
+
+anm_show			        = respirator
+snd_show                   	= interface\respirator_equip
+
+hud_fov_degrees = 27.5
+viewport_near = 0.2
+ppe_effect       = ie\fade_helmet.ppe
+ppe_effect_timer = 1300
+
+[mutant_looting_hud]:animated_item_hud
+item_visual                 = dynamics\weapons\wpn_knife\wpn_knife_hud_ml.ogf
+hands_position				= 0, -0.13, 0
+hands_position_16x9			= 0, -0.13, 0
+hands_orientation			= 0,45,0
+hands_orientation_16x9		= 0,45,0
+block_movement = true
+disable_ui       = true
+
+anm_show							= mutant_looting, idle
+snd_show                  			= interface\mutant_looting
+
+cam_eff_name       = ie\mutant_looting.anm
+cam_eff_cyclic     = false
+cam_eff_hud_affect = false
+hud_fov_degrees = 51.5
