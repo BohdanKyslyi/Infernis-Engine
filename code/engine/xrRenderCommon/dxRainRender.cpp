@@ -3,7 +3,9 @@
 #include "xrEngine/Rain.h"
 #include "xrEngine/iGame_persistent.h"
 #include "xrEngine/Environment.h" 
-#include "Blender_rain.h" 
+#if (RENDER != R_R1)
+#include "Blender_rain.h"
+#endif
 #include <immintrin.h> 
 #include <algorithm>
 
@@ -22,7 +24,11 @@ dxRainRender::dxRainRender() {
     VERIFY3(F, "Can't open file.", "dm\\rain.dm");
     DM_Drop = ::RImplementation.model_CreateDM(F);
     
-    SH_Rain.create(xr_new<CBlender_rain_drops>(), "rain_drops", "fx\\fx_rain"); 
+    #if (RENDER == R_R1)
+    SH_Rain.create("effects\\rain", "fx\\fx_rain");
+    #else
+        SH_Rain.create(xr_new<CBlender_rain_drops>(), "rain_drops", "fx\\fx_rain");
+    #endif
     
     hGeom_Rain.create(FVF::F_LIT, RCache.Vertex.Buffer(), RCache.QuadIB);
     hGeom_Drops.create(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1, RCache.Vertex.Buffer(), RCache.Index.Buffer());
@@ -231,6 +237,7 @@ void dxRainRender::Render(CEffect_Rain& owner) {
         RCache.set_xform_world(Fidentity);
         RCache.set_Shader(SH_Rain);
 
+#if (RENDER != R_R1)
         if (g_pGamePersistent && g_pGamePersistent->Environment().CurrentEnv) {
             CEnvDescriptor* env = g_pGamePersistent->Environment().CurrentEnv;
             RCache.set_c("L_sun_dir_w", env->sun_dir.x, env->sun_dir.y, env->sun_dir.z, 0.f);
@@ -248,7 +255,6 @@ void dxRainRender::Render(CEffect_Rain& owner) {
             dyn_light_color[j].set(0.f, 0.f, 0.f, 0.f);
         }
 
-        #if (RENDER != R_R1)
         int light_count = 0;
         struct LightDist { light* l; float dist; };
         xr_vector<LightDist> nearest_lights;
@@ -281,7 +287,6 @@ void dxRainRender::Render(CEffect_Rain& owner) {
             dyn_light_color[light_count].set(l->color.r, l->color.g, l->color.b, std::cos(l->cone * 0.5f));
             light_count++;
         }
-        #endif
 
         RCache.set_c("dyn_light_pos_0", dyn_light_pos[0]);
         RCache.set_c("dyn_light_dir_0", dyn_light_dir[0]);
@@ -298,6 +303,7 @@ void dxRainRender::Render(CEffect_Rain& owner) {
         RCache.set_c("dyn_light_pos_3", dyn_light_pos[3]);
         RCache.set_c("dyn_light_dir_3", dyn_light_dir[3]);
         RCache.set_c("dyn_light_color_3", dyn_light_color[3]);
+#endif
 
         RCache.set_Geometry(hGeom_Rain);
         RCache.Render(D3DPT_TRIANGLELIST, vOffset, 0, vCount, 0, vCount / 2);
