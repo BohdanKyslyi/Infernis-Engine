@@ -81,7 +81,7 @@ void CActorLegsController::Load(const shared_str& player_hud_section) {
         visual_name = pSettings->r_string(HUD_EXTENSIONS_SECTION, LEGS_VISUAL_LINE);
     }
 
-    if (!visual_name || !visual_name[0] || !xr_stricmp(visual_name, "none")) {
+    if (!visual_name || !visual_name[0] || !stricmp(visual_name, "none")) {
         DestroyModel();
         return;
     }
