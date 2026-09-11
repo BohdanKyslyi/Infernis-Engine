@@ -6,6 +6,7 @@
 #include "actor_defs.h"
 
 class player_hud;
+class CActorLegsController;
 class CHudItem;
 class CMotionDef;
 
@@ -147,6 +148,7 @@ public:
 
 private:
     attachable_hud_item* m_controller_item;
+    CActorLegsController* m_legs_controller;
 
     void UpdateHudProjection();
 
