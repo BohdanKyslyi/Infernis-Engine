@@ -1,33 +1,36 @@
-<?xml version="1.0" encoding="windows-1251" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <string_table>
 	<string id="st_currency_name">
 		<text>UAH</text>
 	</string>
 	<string id="st_undress_backpack">
-		<text>зняти рюкзак</text>
+		<text>Р·РЅСЏС‚Рё СЂСЋРєР·Р°Рє</text>
 	</string>
 	<string id="st_dress_backpack">
-		<text>одягти рюкзак</text>
+		<text>РѕРґСЏРіС‚Рё СЂСЋРєР·Р°Рє</text>
 	</string>
 	<string id="st_move_to_bag">
-		<text>прибрати</text>
+		<text>РїСЂРёР±СЂР°С‚Рё</text>
 	</string>
 	<string id="car_character_use">
-		<text>Використати кулемет ($$ACTION_USE$$)</text>
+		<text>Р’РёРєРѕСЂРёСЃС‚Р°С‚Рё РєСѓР»РµРјРµС‚ ($$ACTION_USE$$)</text>
 	</string>
 	<string id="st_mystery_backpack">
-		<text>Рюкзак з речами</text>
+		<text>Р СЋРєР·Р°Рє Р· СЂРµС‡Р°РјРё</text>
 	</string>
 	<string id="st_mystery_backpack_descr">
-		<text>Втягнути з собою багато речей, не маючи переносного сховища навряд чи вийде. Для цього сталкерам потрібні рюкзаки. Цей рюкзак вже забитий барахлом нещасного сталкера, який не дожив до усвідомлення, що з Зони треба валити.</text>
+		<text>Р’С‚СЏРіРЅСѓС‚Рё Р· СЃРѕР±РѕСЋ Р±Р°РіР°С‚Рѕ СЂРµС‡РµР№, РЅРµ РјР°СЋС‡Рё РїРµСЂРµРЅРѕСЃРЅРѕРіРѕ СЃС…РѕРІРёС‰Р° РЅР°РІСЂСЏРґ С‡Рё РІРёР№РґРµ. Р”Р»СЏ С†СЊРѕРіРѕ СЃС‚Р°Р»РєРµСЂР°Рј РїРѕС‚СЂС–Р±РЅС– СЂСЋРєР·Р°РєРё. Р¦РµР№ СЂСЋРєР·Р°Рє РІР¶Рµ Р·Р°Р±РёС‚РёР№ Р±Р°СЂР°С…Р»РѕРј РЅРµС‰Р°СЃРЅРѕРіРѕ СЃС‚Р°Р»РєРµСЂР°, СЏРєРёР№ РЅРµ РґРѕР¶РёРІ РґРѕ СѓСЃРІС–РґРѕРјР»РµРЅРЅСЏ, С‰Рѕ Р· Р—РѕРЅРё С‚СЂРµР±Р° РІР°Р»РёС‚Рё.</text>
 	</string>
 	<string id="st_discord_main_menu">
-		<text>У головному меню</text>
+		<text>РЈ РіРѕР»РѕРІРЅРѕРјСѓ РјРµРЅСЋ</text>
 	</string>
 	<string id="st_discord_exploring_zone">
-		<text>Досліджує Зону</text>
+		<text>Р”РѕСЃР»С–РґР¶СѓС” Р—РѕРЅСѓ</text>
 	</string>
 	<string id="st_discord_on_mission">
-		<text>Виконує завдання</text>
+		<text>Р’РёРєРѕРЅСѓС” Р·Р°РІРґР°РЅРЅСЏ</text>
+	</string>
+	<string id="monster_character_use">
+		<text>Р—СЂС–Р·Р°С‚Рё С‚СЂРѕС„РµС— ($$ACTION_USE$$)</text>
 	</string>
 </string_table>

@@ -18,7 +18,7 @@ boost_time				= 5.0
 boost_health_restore	= 0.002
 eat_satiety				= 1
 
-use_sound			= $silent
+use_sound			= interface\inv_food
 
 eat_portions_num = 2 ; Кількість порцій предмету
 hud = conserva_hud_model ; Підключення системи hud і анімацій використання
@@ -38,18 +38,23 @@ trash_object = conserva_lid ; Наприкінці останнього вико
 [conserva_lid]:base_trash
 visual				= dynamics\devices\dev_conserv\dev_conserv.ogf
 
-[conserva_hud_model]:base_consumable
+[conserva_hud_model]:animated_item
 timing						= 4700
 main_sect					= conserva
 hud	                    	= anm_conserva_hud
 snd_using_anim	 			= interface\conserva
+cam_eff_name       = ifad\conserva.anm
+cam_eff_cyclic     = false
+cam_eff_hud_affect = false
 
-[anm_conserva_hud]:base_consumable_hud
+[anm_conserva_hud]:animated_item_hud
 item_visual	            	= dynamics\devices\dev_conserv\dev_conserv_hud.ogf
 anm_show					= conserva_use
 hands_position				= 0,-0.035,0.27
 hands_position_16x9			= 0,-0.035,0.27
 hands_orientation			= 0,13,0
 hands_orientation_16x9		= 0,13,0
+hud_fov_degrees = 27.5
+viewport_near = 0.2
 
 

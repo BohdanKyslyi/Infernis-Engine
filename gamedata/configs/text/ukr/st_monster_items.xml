@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="mutant_boar_leg">
+		<text>Копито кабана</text>
+	</string>
+	<string id="mutant_boar_leg_description">
+		<text>Копито кабана використовується вченими для виготовлення низки ліків, найпоширенішим з яких є протирадіаційна сироватка</text>
+	</string>
+</string_table>

@@ -1,22 +1,59 @@
+; ======================================================================
+; Infernis Engine & Noir Engine Global Extensions Configuration
+; ======================================================================
+
+; Extended weather and environmental effects
+[environment]
+enable_rain_material_sounds = false ; Enables dynamic rain-on-material impact sounds (true = on / false = off)
+enable_dynamic_rain_wind    = true ; Controls raindrop tilt and fall-speed response based on wind intensity defined in the weather system
+enable_custom_lightning = true ;Renders lightning strikes around the player based on distance tiers and probability weights
+
+;Extended UI parameters
 [ui_extensions]
 show_dialog_portraits = false ; true - показувати бокові панелі в діалогах, false - приховати
 
+; =======================================================
+; Noir Engine Modular Inventory Slots
+; Read only when [slots] enable_modular_slots = true
+; =======================================================
+
+[slots]
+enable_modular_slots = true ; true = read independent slot switches from noirInventorySlots.ltx
+binocular_slot	= false	; false = original persistent binocular behaviour
+torch_slot		= false	; false = original persistent flashlight behaviour
+knife_slot		= false	; false = original persistent knife behaviour
+pistol_slot		= false	; false = disable the optional third weapon slot
+backpack_slot	= true	; false = disable backpack slot
+
+;Infernis Engine extended HUD parameters
 [hud_extensions]
 viewport_near = 0.2f ; 0.05f - для юзу сучасних збройових паків, 0.2f - для ванільних
 hands_animations_path = hands_animations\*.omf
 
+; =======================================================
+; Infernis Engine Items Animations Controller parameters
+; Used for cutscenes and gameplay features
+; =======================================================
+
 [items_animations]
 enable_consumables_animations = true ; анімації використання предметів
-enable_backpack_animations = true
-backpack_hud = none
-enable_dressing_animations = false
-outfit_dressing_hud = none
-helmet_dressing_hud = none
-backpack_dressing_hud = none
-enable_mutant_looting_animations = false
-mutant_looting_hud = none
-enable_mutant_looting_particles = false
-mutant_looting_particle_timing = 0
+enable_backpack_animations = true ; анімації рюкзаків
+enable_pda_animations = true ; анімації ПДА
+enable_dressing_animations = true ; анімації вдягання броні / шоломів / рюкзаків
+enable_mutant_looting_animations = true ; анімації зрізання частин тіл мутантів
+enable_mutant_looting_particles = true
+mutant_looting_particle_timing = 1300
+backpack_hud				= backpack_stalker_hud
+pda_hud               		= device_pda_hud
+outfit_dressing_hud			= outfit_animation_hud
+helmet_dressing_hud			= helm_respirator_hud
+backpack_dressing_hud		= outfit_animation_hud
+mutant_looting_hud			= mutant_looting_hud
+
+; =======================================================
+; Discord Rich Presence
+; Use Discord Developers Portal for more information
+; =======================================================
 
 [discord_rpc]
 enable = true
@@ -34,6 +71,11 @@ large_image_text = Infernis Engine
 renderer_dx9_image = renderer_dx9
 renderer_dx10_image = renderer_dx10
 renderer_dx11_image = renderer_dx11
+
+; =======================================================
+; Infernis Engine extended Shader configuration
+; Parameters for PBR and other shader extensions
+; =======================================================
 
 [shader_extensions]
 enable_pbr_rendering = false ; увімкнення PBR-рендерингу
