@@ -1817,7 +1817,6 @@ function set_surge_mess_and_task(actor, npc, p)
 	end
 end
 
---[[
 function enable_level_changer(actor, npc, p)
 	if(p[1]~=nil) then
 		local obj = get_story_object(p[1])
@@ -1862,6 +1861,32 @@ function change_actor_community(actor, npc, p)
 	end
 end
 
+function change_actor_name(actor, npc, p)
+	if p and p[1] and p[1] ~= "" then
+		db.actor:set_character_name(p[1])
+	end
+end
+
+function change_actor_icon(actor, npc, p)
+	if p and p[1] and p[1] ~= "" then
+		db.actor:set_character_icon(p[1])
+	end
+end
+
+function change_actor_rank(actor, npc, p)
+	local value = p and tonumber(p[1])
+	if value ~= nil then
+		db.actor:set_character_rank(value)
+	end
+end
+
+function change_actor_reputation(actor, npc, p)
+	local value = p and tonumber(p[1])
+	if value ~= nil then
+		db.actor:set_character_reputation(value)
+	end
+end
+
 function set_faction_community_to_actor(actor, npc, p)
 -- run_string xr_effects.change_actor_community(nil,nil,{"actor_dolg"})
 	if(p[1]~=nil) and (p[2]~=nil) then
@@ -1898,7 +1923,6 @@ function relocate_actor_inventory_to_box(actor, npc, p)
 	inv_box_1 = get_story_object (p[1])
 	actor:inventory_for_each(transfer_object_item)
 end
-]]--
 
 function set_level_faction_community(actor, npc, p)
 	if(p[1]~=nil) and (p[2]~= nil) and (p[3]~= nil) then

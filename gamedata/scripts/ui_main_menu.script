@@ -31,8 +31,10 @@ function main_menu:InitControls()
 	self:Register					(self.message_box, "msg_box")
 
 	local _ver = xml:InitStatic		("static_version",self)
+	local _inf = xml:InitStatic		("static_authors",self)
 	local mm						= _G.main_menu.get_main_menu()
 	_ver:TextControl():SetText		("Infernis Engine ver. " .. mm:GetGSVer())
+	_inf:TextControl():SetText		("by Infernis & CUDA73")
 end
 
 function main_menu:Show(f)
