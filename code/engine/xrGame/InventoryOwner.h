@@ -97,6 +97,8 @@ public:
     //игровое имя
     virtual LPCSTR Name() const;
     LPCSTR IconName() const;
+    void SetCharacterName(LPCSTR name);
+    void SetCharacterIcon(LPCSTR icon);
     u32 get_money() const { return m_money; }
     void set_money(u32 amount, bool bSendEvent);
     bool is_alive();
@@ -186,6 +188,7 @@ public:
 protected:
     CCharacterInfo* m_pCharacterInfo;
     xr_string m_game_name;
+    shared_str m_character_icon_override;
 
 public:
     virtual void renderable_Render();

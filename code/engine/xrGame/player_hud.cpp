@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "player_hud.h"
+#include "player_hud_legs.h"
 #include "HudItem.h"
 #include "ui_base.h"
 #include "actor.h"
@@ -451,6 +452,7 @@ player_hud::player_hud() {
     m_attached_items[0] = NULL;
     m_attached_items[1] = NULL;
     m_controller_item = NULL;
+    m_legs_controller = xr_new<CActorLegsController>();
     m_default_hud_fov = 0.f;
     m_applied_hud_fov = 0.f;
     m_hud_fov_override_active = false;
@@ -466,6 +468,8 @@ player_hud::~player_hud() {
     m_attached_items[1] = NULL;
     m_controller_item = NULL;
     UpdateHudProjection();
+
+    xr_delete(m_legs_controller);
 
     IRenderVisual* v = m_model->dcast_RenderVisual();
     ::Render->model_Delete(v);
@@ -591,6 +595,8 @@ void player_hud::load(const shared_str& player_hud_sect) {
     }
     m_model->dcast_PKinematics()->CalculateBones_Invalidate();
     m_model->dcast_PKinematics()->CalculateBones(TRUE);
+
+    m_legs_controller->Load(player_hud_sect);
 }
 
 bool player_hud::render_item_ui_query() {
@@ -613,23 +619,21 @@ void player_hud::render_item_ui() {
 }
 
 void player_hud::render_hud() {
-    if (!m_attached_items[0] && !m_attached_items[1])
-        return;
-
     bool b_r0 = m_attached_items[0] && m_attached_items[0]->need_renderable();
     bool b_r1 = m_attached_items[1] && m_attached_items[1]->need_renderable();
 
-    if (!b_r0 && !b_r1)
-        return;
-
-    ::Render->set_Transform(&m_transform);
-    ::Render->add_Visual(m_model->dcast_RenderVisual());
+    if (b_r0 || b_r1) {
+        ::Render->set_Transform(&m_transform);
+        ::Render->add_Visual(m_model->dcast_RenderVisual());
+    }
 
     if (b_r0)
         m_attached_items[0]->render();
 
     if (b_r1)
         m_attached_items[1]->render();
+
+    m_legs_controller->Render();
 }
 
 #include "../xrEngine/motion.h"

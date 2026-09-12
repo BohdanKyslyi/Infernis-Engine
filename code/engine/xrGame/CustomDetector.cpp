@@ -10,6 +10,15 @@
 #include "ui/UIWindow.h"
 #include "player_hud.h"
 #include "weapon.h"
+#include "ItemUseController.h"
+
+namespace {
+bool DetectorHudIsLocked(CObject* parent) {
+    CActor* actor = smart_cast<CActor*>(parent);
+    return actor && actor->GetItemUseController() &&
+           actor->GetItemUseController()->IsBusy();
+}
+} // namespace
 
 ITEM_INFO::ITEM_INFO() {
     pParticle = NULL;
@@ -78,11 +87,22 @@ void CCustomDetector::HideDetector(bool bFastMode) {
 }
 
 void CCustomDetector::ShowDetector(bool bFastMode) {
+    if (GetState() == eHidden && DetectorHudIsLocked(H_Parent())) {
+        m_bNeedActivation = true;
+        return;
+    }
     if (GetState() == eHidden)
         ToggleDetector(bFastMode);
 }
 
 void CCustomDetector::ToggleDetector(bool bFastMode) {
+    // The detector owns HUD slot 1 and bypasses inventory weapon activation.
+    // Keep the request pending until the controller releases both hands,
+    // including the backpack hide animation and any queued item animation.
+    if (GetState() == eHidden && DetectorHudIsLocked(H_Parent())) {
+        m_bNeedActivation = !m_bNeedActivation;
+        return;
+    }
     m_bNeedActivation = false;
     m_bFastAnimMode = bFastMode;
 
@@ -199,6 +219,10 @@ void CCustomDetector::UpfateWork() {
 }
 
 void CCustomDetector::UpdateVisibility() {
+    // Do not let automatic reactivation steal the controller's left hand.
+    if (DetectorHudIsLocked(H_Parent()))
+        return;
+
     // check visibility
     attachable_hud_item* i0 = g_player_hud->attached_item(0);
     if (i0 && HudItemData()) {
@@ -217,6 +241,12 @@ void CCustomDetector::UpdateVisibility() {
             }
         }
     } else if (m_bNeedActivation) {
+        CActor* actor = smart_cast<CActor*>(H_Parent());
+        if (!actor || !actor->g_Alive() || !m_pInventory ||
+            m_pInventory->ItemFromSlot(DETECTOR_SLOT) != this) {
+            m_bNeedActivation = false;
+            return;
+        }
         attachable_hud_item* i0 = g_player_hud->attached_item(0);
         bool bClimb = ((Actor()->MovingState() & mcClimb) != 0);
         if (!bClimb) {
@@ -244,12 +274,14 @@ void CCustomDetector::UpdateCL() {
 void CCustomDetector::OnH_A_Chield() { inherited::OnH_A_Chield(); }
 
 void CCustomDetector::OnH_B_Independent(bool just_before_destroy) {
+    m_bNeedActivation = false;
     inherited::OnH_B_Independent(just_before_destroy);
 
     m_artefacts.clear();
 }
 
 void CCustomDetector::OnMoveToRuck(const SInvItemPlace& prev) {
+    m_bNeedActivation = false;
     inherited::OnMoveToRuck(prev);
     if (prev.type == eItemPlaceSlot) {
         SwitchState(eHidden);

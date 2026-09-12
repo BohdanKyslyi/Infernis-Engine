@@ -27,6 +27,10 @@
 #include "CustomOutfit.h"
 #include "Bolt.h"
 
+namespace {
+constexpr LPCSTR character_icon_save_marker = "\x1e" "actor_icon=";
+}
+
 CInventoryOwner::CInventoryOwner() {
     m_pTrade = NULL;
     m_trade_parameters = 0;
@@ -45,6 +49,7 @@ CInventoryOwner::CInventoryOwner() {
     m_deadbody_can_take = true;
     m_deadbody_closed = false;
     m_play_show_hide_reload_sounds = true;
+    m_character_icon_override = NULL;
 }
 
 DLL_Pure* CInventoryOwner::_construct() {
@@ -163,7 +168,12 @@ void CInventoryOwner::save(NET_Packet& output_packet) {
         output_packet.w_u8((u8)inventory().GetActiveSlot());
 
     CharacterInfo().save(output_packet);
-    save_data(m_game_name, output_packet);
+    xr_string serialized_name = m_game_name;
+    if (m_character_icon_override.size()) {
+        serialized_name += character_icon_save_marker;
+        serialized_name += m_character_icon_override.c_str();
+    }
+    save_data(serialized_name, output_packet);
     save_data(m_money, output_packet);
 }
 void CInventoryOwner::load(IReader& input_packet) {
@@ -176,7 +186,18 @@ void CInventoryOwner::load(IReader& input_packet) {
     m_tmp_active_slot_num = active_slot;
 
     CharacterInfo().load(input_packet);
-    load_data(m_game_name, input_packet);
+    xr_string serialized_name;
+    load_data(serialized_name, input_packet);
+
+    const xr_string::size_type marker_pos = serialized_name.rfind(character_icon_save_marker);
+    if (marker_pos != xr_string::npos) {
+        m_game_name.assign(serialized_name, 0, marker_pos);
+        m_character_icon_override =
+            serialized_name.c_str() + marker_pos + xr_strlen(character_icon_save_marker);
+    } else {
+        m_game_name = serialized_name;
+        m_character_icon_override = NULL;
+    }
     load_data(m_money, input_packet);
 }
 
@@ -338,7 +359,33 @@ LPCSTR CInventoryOwner::Name() const {
     return m_game_name.c_str();
 }
 
-LPCSTR CInventoryOwner::IconName() const { return CharacterInfo().IconName().c_str(); }
+LPCSTR CInventoryOwner::IconName() const {
+    return m_character_icon_override.size() ? m_character_icon_override.c_str()
+                                            : CharacterInfo().IconName().c_str();
+}
+
+void CInventoryOwner::SetCharacterName(LPCSTR name) {
+    if (!name)
+        return;
+
+    m_game_name = name;
+
+    if (!IsGameTypeSingle())
+        return;
+
+    const CEntityAlive* entity = smart_cast<const CEntityAlive*>(this);
+    if (!entity)
+        return;
+
+    CSE_ALifeTraderAbstract* trader =
+        smart_cast<CSE_ALifeTraderAbstract*>(ai().alife().objects().object(entity->ID(), false));
+    if (trader)
+        trader->m_character_name = name;
+}
+
+void CInventoryOwner::SetCharacterIcon(LPCSTR icon) {
+    m_character_icon_override = icon && icon[0] ? icon : NULL;
+}
 
 void CInventoryOwner::NewPdaContact(CInventoryOwner* pInvOwner) {}
 void CInventoryOwner::LostPdaContact(CInventoryOwner* pInvOwner) {}

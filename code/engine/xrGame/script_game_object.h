@@ -398,8 +398,11 @@ public:
     int CharacterRank();
     int CharacterReputation();
 
+    void SetCharacterName(LPCSTR);
+    void SetCharacterIcon(LPCSTR);
     void SetCharacterRank(int);
     void ChangeCharacterRank(int);
+    void SetCharacterReputation(int);
     void ChangeCharacterReputation(int);
     void SetCharacterCommunity(LPCSTR, int, int);
 

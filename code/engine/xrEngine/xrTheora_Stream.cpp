@@ -7,7 +7,6 @@ CTheoraStream::CTheoraStream() {
     fpms = 0.f;
     d_frame = -1;
     tm_total = 0;
-    key_rate = 0;
     // start up Ogg stream synchronization layer
     ogg_sync_init(&o_sync_state);
     // init supporting Theora structures needed in header parsing
@@ -127,16 +126,10 @@ BOOL CTheoraStream::ParseHeaders() {
     fpms = ((float)t_info.fps_numerator / (float)t_info.fps_denominator) / 1000.f;
 
     //. XXX hack (maybe slow)
-    // calculate frame count & total length in ms & key rate
+    // calculate frame count & total length in ms
     ogg_int64_t frame_count = 0;
-    ogg_int64_t p_key = 0, c_key = 0;
     while (TRUE) {
         while (ogg_stream_packetout(&o_stream_state, &o_packet) > 0) {
-            if ((0 == key_rate) && theora_packet_iskeyframe(&o_packet)) {
-                p_key = c_key;
-                c_key = frame_count;
-                key_rate = (u32)(c_key - p_key);
-            }
             frame_count++;
         }
         // check eof
@@ -160,7 +153,6 @@ BOOL CTheoraStream::Decode(u32 in_tm_play) {
     VERIFY(in_tm_play < tm_total);
     ogg_int64_t t_frame;
     t_frame = iFloor(in_tm_play * fpms);
-    ogg_int64_t k_frame = t_frame - t_frame % key_rate;
 
     if (d_frame < t_frame) {
         BOOL result = FALSE;
@@ -171,17 +163,9 @@ BOOL CTheoraStream::Decode(u32 in_tm_play) {
                 if (ogg_stream_packetout(&o_stream_state, &o_packet) > 0 &&
                     !theora_packet_isheader(&o_packet)) {
                     d_frame++;
-                    //. hack preroll
-                    if (d_frame < k_frame) {
-                        //.						dbg_log
-                        //((stderr,"%04d: preroll\n",d_frame));
-                        VERIFY((0 != d_frame % key_rate) ||
-                               (0 == d_frame % key_rate) && theora_packet_iskeyframe(&o_packet));
-                        continue;
-                    }
-                    BOOL is_key = theora_packet_iskeyframe(&o_packet);
-                    VERIFY((d_frame != k_frame) || ((d_frame == k_frame) && is_key));
-                    // real decode
+                    // Decode every packet up to the requested frame: interframes
+                    // need the previous reference frames, even when not displayed.
+                    // Keyframes may occur at irregular intervals (scene changes).
                     //.					dbg_log					((stderr,"%04d:
                     //decode\n",d_frame));
                     int res = theora_decode_packetin(&t_state, &o_packet);

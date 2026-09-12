@@ -19,6 +19,10 @@ CUILines::CUILines() {
     m_eVTextAlign = valTop;
     m_dwTextColor = 0xffffffff;
     m_TextOffset.set(0.0f, 0.0f);
+    // Layout can be queried before the first Draw() synchronizes the owner size.
+    // Never compare or calculate alignment using uninitialized vector components.
+    m_wndSize.set(0.0f, 0.0f);
+    m_wndPos.set(0.0f, 0.0f);
     m_text = "";
     uFlags.zero();
     uFlags.set(flNeedReparse, FALSE);
