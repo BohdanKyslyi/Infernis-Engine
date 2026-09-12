@@ -10,7 +10,7 @@ enable_custom_lightning = true ;Renders lightning strikes around the player base
 
 ;Extended UI parameters
 [ui_extensions]
-show_dialog_portraits = false ; true - показувати бокові панелі в діалогах, false - приховати
+show_dialog_portraits = false ; true - РїРѕРєР°Р·СѓРІР°С‚Рё Р±РѕРєРѕРІС– РїР°РЅРµР»С– РІ РґС–Р°Р»РѕРіР°С…, false - РїСЂРёС…РѕРІР°С‚Рё
 
 ; =======================================================
 ; Noir Engine Modular Inventory Slots
@@ -27,8 +27,12 @@ backpack_slot	= true	; false = disable backpack slot
 
 ;Infernis Engine extended HUD parameters
 [hud_extensions]
-viewport_near = 0.2f ; 0.05f - для юзу сучасних збройових паків, 0.2f - для ванільних
+viewport_near = 0.2f ; 0.05f - РґР»СЏ СЋР·Сѓ СЃСѓС‡Р°СЃРЅРёС… Р·Р±СЂРѕР№РѕРІРёС… РїР°РєС–РІ, 0.2f - РґР»СЏ РІР°РЅС–Р»СЊРЅРёС…
 hands_animations_path = hands_animations\*.omf
+enable_actor_legs = false ; Enables a synchronized first-person legs model from actor HUD sections
+legs_attach_to_camera = true ; Keeps the body centered under the first-person camera
+legs_fwd_offset = -0.5 ; Base forward/backward correction for regular actor visuals
+legs_y_offset = 0.0 ; Base vertical correction
 
 ; =======================================================
 ; Infernis Engine Items Animations Controller parameters
@@ -36,11 +40,11 @@ hands_animations_path = hands_animations\*.omf
 ; =======================================================
 
 [items_animations]
-enable_consumables_animations = true ; анімації використання предметів
-enable_backpack_animations = true ; анімації рюкзаків
-enable_pda_animations = true ; анімації ПДА
-enable_dressing_animations = true ; анімації вдягання броні / шоломів / рюкзаків
-enable_mutant_looting_animations = true ; анімації зрізання частин тіл мутантів
+enable_consumables_animations = true ; Р°РЅС–РјР°С†С–С— РІРёРєРѕСЂРёСЃС‚Р°РЅРЅСЏ РїСЂРµРґРјРµС‚С–РІ
+enable_backpack_animations = true ; Р°РЅС–РјР°С†С–С— СЂСЋРєР·Р°РєС–РІ
+enable_pda_animations = true ; Р°РЅС–РјР°С†С–С— РџР”Рђ
+enable_dressing_animations = true ; Р°РЅС–РјР°С†С–С— РІРґСЏРіР°РЅРЅСЏ Р±СЂРѕРЅС– / С€РѕР»РѕРјС–РІ / СЂСЋРєР·Р°РєС–РІ
+enable_mutant_looting_animations = true ; Р°РЅС–РјР°С†С–С— Р·СЂС–Р·Р°РЅРЅСЏ С‡Р°СЃС‚РёРЅ С‚С–Р» РјСѓС‚Р°РЅС‚С–РІ
 enable_mutant_looting_particles = true
 mutant_looting_particle_timing = 1300
 backpack_hud				= backpack_stalker_hud
@@ -78,6 +82,6 @@ renderer_dx11_image = renderer_dx11
 ; =======================================================
 
 [shader_extensions]
-enable_pbr_rendering = false ; увімкнення PBR-рендерингу
+enable_pbr_rendering = false ; СѓРІС–РјРєРЅРµРЅРЅСЏ PBR-СЂРµРЅРґРµСЂРёРЅРіСѓ
 sslr_mode = off ; performance / balanced / quality / reference / off
-allow_bloodmarks_on_npc = true; відображення кривавих слідів у сталкерів і мутантів
+allow_bloodmarks_on_npc = true; РІС–РґРѕР±СЂР°Р¶РµРЅРЅСЏ РєСЂРёРІР°РІРёС… СЃР»С–РґС–РІ Сѓ СЃС‚Р°Р»РєРµСЂС–РІ С– РјСѓС‚Р°РЅС‚С–РІ

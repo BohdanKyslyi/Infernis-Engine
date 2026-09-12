@@ -2885,10 +2885,12 @@ set(CORE_CLIENT_OBJECTS_ITEMS__AND__WEAPONS_HUDITEM hud_item_object.h
                                                     HudItem.h
                                                     HudSound.h
                                                     player_hud.h
+                                                    player_hud_legs.h
                                                     hud_item_object.cpp
                                                     HudItem.cpp
                                                     HudSound.cpp
                                                     player_hud.cpp
+                                                    player_hud_legs.cpp
                                                     player_hud_tune.cpp)
 
 set(CORE_CLIENT_OBJECTS_ITEMS__AND__WEAPONS_WEAPONS_VARIOUS_WEAPONS_LR300 WeaponLR300.h

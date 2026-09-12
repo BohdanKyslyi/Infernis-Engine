@@ -616,6 +616,30 @@ LPCSTR CScriptGameObject::CharacterIcon() {
     return pInventoryOwner->IconName();
 }
 
+void CScriptGameObject::SetCharacterName(LPCSTR name) {
+    CInventoryOwner* pInventoryOwner = smart_cast<CInventoryOwner*>(&object());
+
+    if (!pInventoryOwner) {
+        ai().script_engine().script_log(ScriptStorage::eLuaMessageTypeError,
+                                        "SetCharacterName available only for InventoryOwner");
+        return;
+    }
+
+    pInventoryOwner->SetCharacterName(*CStringTable().translate(name));
+}
+
+void CScriptGameObject::SetCharacterIcon(LPCSTR icon) {
+    CInventoryOwner* pInventoryOwner = smart_cast<CInventoryOwner*>(&object());
+
+    if (!pInventoryOwner) {
+        ai().script_engine().script_log(ScriptStorage::eLuaMessageTypeError,
+                                        "SetCharacterIcon available only for InventoryOwner");
+        return;
+    }
+
+    pInventoryOwner->SetCharacterIcon(icon);
+}
+
 int CScriptGameObject::CharacterRank() {
     // rank support for monster
     CBaseMonster* monster = smart_cast<CBaseMonster*>(&object());
@@ -662,6 +686,18 @@ int CScriptGameObject::CharacterReputation() {
         return 0;
     }
     return pInventoryOwner->Reputation();
+}
+
+void CScriptGameObject::SetCharacterReputation(int char_rep) {
+    CInventoryOwner* pInventoryOwner = smart_cast<CInventoryOwner*>(&object());
+
+    if (!pInventoryOwner) {
+        ai().script_engine().script_log(
+            ScriptStorage::eLuaMessageTypeError,
+            "SetCharacterReputation available only for InventoryOwner");
+        return;
+    }
+    pInventoryOwner->SetReputation(char_rep);
 }
 
 void CScriptGameObject::ChangeCharacterReputation(int char_rep) {
