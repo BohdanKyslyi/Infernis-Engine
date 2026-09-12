@@ -192,6 +192,7 @@ void CUIStatic::SetShader(const ui_shader& sh) { m_UIStaticItem.SetShader(sh); }
 CUILines* CUIStatic::TextItemControl() {
     if (!m_pTextControl) {
         m_pTextControl = xr_new<CUILines>();
+        m_pTextControl->m_wndSize = GetWndSize();
         m_pTextControl->SetTextAlignment(CGameFont::alLeft);
     }
     return m_pTextControl;
