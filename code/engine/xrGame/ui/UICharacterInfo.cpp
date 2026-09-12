@@ -4,6 +4,7 @@
 
 #include "uicharacterinfo.h"
 #include "../actor.h"
+#include "../InventoryOwner.h"
 #include "../level.h"
 #include "../../xrServerEntities/character_info.h"
 #include "../string_table.h"
@@ -133,19 +134,24 @@ void CUICharacterInfo::InitCharacter(u16 id) {
 
     CCharacterInfo chInfo;
     chInfo.Init(T);
+    CInventoryOwner* inventory_owner =
+        smart_cast<CInventoryOwner*>(Level().Objects.net_Find(m_ownerID));
+    const CCharacterInfo& display_info =
+        inventory_owner ? inventory_owner->CharacterInfo() : chInfo;
 
     if (m_icons[eName]) {
-        m_icons[eName]->TextItemControl()->SetTextST(T->m_character_name.c_str());
+        m_icons[eName]->TextItemControl()->SetText(
+            inventory_owner ? inventory_owner->Name() : T->m_character_name.c_str());
     }
     if (m_icons[eRank]) {
-        m_icons[eRank]->TextItemControl()->SetTextST(GetRankAsText(chInfo.Rank().value()));
+        m_icons[eRank]->TextItemControl()->SetTextST(GetRankAsText(display_info.Rank().value()));
     }
     if (m_icons[eCommunity]) {
-        m_icons[eCommunity]->TextItemControl()->SetTextST(chInfo.Community().id().c_str());
+        m_icons[eCommunity]->TextItemControl()->SetTextST(display_info.Community().id().c_str());
     }
     if (m_icons[eReputation]) {
         m_icons[eReputation]->TextItemControl()->SetTextST(
-            GetReputationAsText(chInfo.Reputation().value()));
+            GetReputationAsText(display_info.Reputation().value()));
     }
 
     // Bio
@@ -160,7 +166,7 @@ void CUICharacterInfo::InitCharacter(u16 id) {
         }
     }
 
-    shared_str const& comm_id = chInfo.Community().id();
+    shared_str const& comm_id = display_info.Community().id();
     LPCSTR community0 = comm_id.c_str();
     string64 community1;
     xr_strcpy(community1, sizeof(community1), community0);
@@ -177,7 +183,10 @@ void CUICharacterInfo::InitCharacter(u16 id) {
         }
     }
 
-    m_texture_name = chInfo.IconName();
+    if (inventory_owner)
+        m_texture_name = inventory_owner->IconName();
+    else
+        m_texture_name = chInfo.IconName();
     if (m_icons[eIcon]) {
         m_icons[eIcon]->InitTexture(m_texture_name.c_str());
     }
