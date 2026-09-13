@@ -1,0 +1,79 @@
+;---------------------------------------------------------------------------------------------
+;		ЗВИЧАЙНИЙ КОСТЮМ ДОЛГУ
+;---------------------------------------------------------------------------------------------
+[dolg_outfit]:outfit_base
+GroupControlSection	= spawn_group
+discovery_dependency =
+$spawn 			= "outfit\dolg_outfit"
+;$prefetch 		= 32
+class			= E_STLK
+cform           = skeleton
+visual          = dynamics\outfit\dolg_outfit
+actor_visual	= actors\stalker_hero\stalker_hero_dolg_1.ogf
+player_hud_section	= dolg_outfit_hud
+
+ef_equipment_type	= 3
+
+inv_name			= dolg_outfit_name
+inv_name_short		= dolg_outfit_name
+description			= dolg_outfit_description
+
+inv_weight			= 7.0
+
+inv_grid_width		= 2
+inv_grid_height		= 3
+inv_grid_x			= 12
+inv_grid_y			= 16
+
+upgr_icon_x			= 0
+upgr_icon_y			= 161
+upgr_icon_width		= 302
+upgr_icon_height   	= 130
+full_icon_name		= npc_icon_dolg_outfit
+
+cost				= 6500
+slot				= 6
+full_scale_icon		= 8,11			;иконка сталкера в костюме в полный рост
+
+immunities_sect		= sect_dolg_outfit_immunities
+
+; LOW RESISTANCE
+burn_protection 				= 0.0500
+shock_protection 				= 0.200
+radiation_protection 			= 0.0025
+chemical_burn_protection 		= 0.0300
+telepatic_protection 			= 0.0
+strike_protection 				= 0.25
+explosion_protection 			= 0.3
+wound_protection				= 0.25
+
+hit_fraction_actor				= 0.6
+bones_koeff_protection 			= actor_armor_dolg_light
+
+artefact_count          = 0
+control_inertion_factor = 1.2
+power_loss				= 0.75
+
+upgrades                = up_gr_firstab_dolg_outfit, up_gr_seconab_dolg_outfit, up_gr_thirdab_dolg_outfit
+installed_upgrades      =
+upgrade_scheme          = upgrade_scheme_dolg_outfit
+
+[sect_dolg_outfit_immunities]:base_immunities
+burn_immunity				= 0.04			;коэффициенты иммунитета самого костюма
+shock_immunity				= 0.04
+wound_immunity				= 0.04
+chemical_burn_immunity		= 0.04
+explosion_immunity			= 0.04
+fire_wound_immunity			= 0.01
+
+[sect_dolg_outfit_immunities_add]:base_immunities
+burn_immunity				= -0.015			;коэффициенты иммунитета самого костюма
+shock_immunity				= -0.015
+wound_immunity				= -0.015
+chemical_burn_immunity		= -0.015
+explosion_immunity			= -0.015
+fire_wound_immunity			= -0.003
+
+[dolg_outfit_hud]:actor_hud
+visual         			= dynamics\weapons\wpn_hand\wpn_hand_02
+legs_visual				= actors\stalker_legs\dolg_outfit

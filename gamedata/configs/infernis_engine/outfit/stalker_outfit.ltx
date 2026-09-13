@@ -1,0 +1,82 @@
+;---------------------------------------------------------------------------------------------
+;		КОСТЮМ НЕЙТРАЛЬНОГО СТАЛКЕРА
+;---------------------------------------------------------------------------------------------
+[stalker_outfit]:outfit_base
+GroupControlSection	= spawn_group
+discovery_dependency =
+$spawn 			= "outfit\stalker_outfit"
+;$prefetch 		= 32
+class			= E_STLK
+cform           = skeleton
+visual          = dynamics\outfit\stalker_outfit
+actor_visual	= actors\stalker_hero\stalker_hero_stalker_1.ogf
+player_hud_section	= stalker_outfit_hud
+
+ef_equipment_type	= 3
+
+inv_name			= stalker_outfit_name
+inv_name_short		= stalker_outfit_name
+description			= stalker_outfit_description
+
+inv_weight			= 5.0
+
+inv_grid_width		= 2
+inv_grid_height		= 3
+inv_grid_x			= 6
+inv_grid_y			= 15
+upgr_icon_x			= 317
+upgr_icon_y			= 0
+upgr_icon_width		= 302
+upgr_icon_height   	= 130
+full_icon_name		= npc_icon_stalker_outfit
+
+cost				= 5000
+slot				= 6
+full_scale_icon		= 14,11			;иконка сталкера в костюме в полный рост
+
+additional_inventory_weight		= 0		; +max_walk_weight
+additional_inventory_weight2	= 0		;	+40 kg
+artefact_count                  = 2
+
+default_to_ruck     = false
+immunities_sect		= sect_stalker_outfit_immunities
+
+; LOW RESISTANCE
+burn_protection 				= 0.0650
+shock_protection 				= 0.200
+radiation_protection 			= 0.0030
+chemical_burn_protection 		= 0.0325
+telepatic_protection 			= 0.0
+strike_protection 				= 0.15
+explosion_protection 			= 0.2
+wound_protection				= 0.15
+
+hit_fraction_actor				= 0.75
+bones_koeff_protection 			= actor_armor_light
+
+control_inertion_factor = 1.2
+power_loss 			= 0.7
+
+upgrades                = up_gr_firstab_stalker_outfit, up_gr_seconab_stalker_outfit, up_gr_thirdab_stalker_outfit
+installed_upgrades      =
+upgrade_scheme          = upgrade_scheme_stalker_outfit
+
+[sect_stalker_outfit_immunities]:base_immunities
+burn_immunity				= 0.03			;коэффициенты иммунитета самого костюма
+shock_immunity				= 0.03
+wound_immunity				= 0.03
+chemical_burn_immunity		= 0.03
+explosion_immunity			= 0.03
+fire_wound_immunity			= 0.015
+
+[sect_stalker_outfit_immunities_add]:base_immunities
+burn_immunity				= -0.015			;коэффициенты иммунитета самого костюма
+shock_immunity				= -0.015
+wound_immunity				= -0.015
+chemical_burn_immunity		= -0.015
+explosion_immunity			= -0.015
+fire_wound_immunity			= -0.005
+
+[stalker_outfit_hud]:actor_hud
+visual         			= dynamics\weapons\wpn_hand\wpn_hand_05
+legs_visual				= actors\stalker_legs\stalker_outfit

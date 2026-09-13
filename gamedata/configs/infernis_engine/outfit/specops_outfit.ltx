@@ -1,0 +1,78 @@
+;---------------------------------------------------------------------------------------------
+;		КОСТЮМ ВІЙСЬКОВОГО СПЕЦНАЗУ
+;---------------------------------------------------------------------------------------------
+[specops_outfit]:outfit_base
+GroupControlSection	= spawn_group
+discovery_dependency =
+$spawn 			= "outfit\specops_outfit"
+;$prefetch 		= 32
+class			= E_STLK
+cform           = skeleton
+visual          = dynamics\outfit\specops_outfit
+actor_visual	= actors\stalker_hero\stalker_hero_specops.ogf
+player_hud_section	= specops_outfit_hud
+
+ef_equipment_type	= 3
+
+inv_name			= specops_outfit_name
+inv_name_short		= specops_outfit_name
+description			= specops_outfit_description
+
+inv_weight			= 9.0
+
+inv_grid_width		= 2
+inv_grid_height		= 3
+inv_grid_x			= 10
+inv_grid_y			= 13
+
+upgr_icon_x			= 318
+upgr_icon_y			= 163
+upgr_icon_width		= 303
+upgr_icon_height   	= 126
+full_icon_name		= npc_icon_specops_outfit
+
+cost				= 12500
+slot				= 6
+full_scale_icon		= 4,6			;иконка сталкера в костюме в полный рост
+power_loss				= 0.8
+immunities_sect			= sect_specops_outfit_immunities
+
+; LOW RESISTANCE
+burn_protection 				= 0.0500
+shock_protection 				= 0.100
+radiation_protection 			= 0.0015
+chemical_burn_protection 		= 0.0250
+telepatic_protection 			= 0.0
+strike_protection 				= 0.3
+explosion_protection 			= 0.35
+wound_protection				= 0.3
+
+hit_fraction_actor				= 0.5
+bones_koeff_protection			= actor_armor_medium
+
+artefact_count          = 0
+control_inertion_factor = 1.5
+
+upgrades                = up_gr_firstab_specops_outfit, up_gr_seconab_specops_outfit, up_gr_thirdab_specops_outfit
+installed_upgrades      =
+upgrade_scheme          = upgrade_scheme_specops
+
+[sect_specops_outfit_immunities]:base_immunities
+burn_immunity				= 0.04			;коэффициенты иммунитета самого костюма
+shock_immunity				= 0.04
+wound_immunity				= 0.04
+chemical_burn_immunity		= 0.04
+explosion_immunity			= 0.04
+fire_wound_immunity			= 0.01
+
+[sect_specops_outfit_immunities_add]:base_immunities
+burn_immunity				= -0.01			;коэффициенты иммунитета самого костюма
+shock_immunity				= -0.01
+wound_immunity				= -0.01
+chemical_burn_immunity		= -0.01
+explosion_immunity			= -0.01
+fire_wound_immunity			= -0.0025
+
+[specops_outfit_hud]:actor_hud
+visual         			= dynamics\weapons\wpn_hand\wpn_hand_06
+legs_visual				= actors\stalker_legs\specops_outfit

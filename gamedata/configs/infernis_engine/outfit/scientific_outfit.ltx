@@ -1,0 +1,76 @@
+;---------------------------------------------------------------------------------------------
+;		НАУКОВИЙ КОСТЮМ
+;---------------------------------------------------------------------------------------------
+[scientific_outfit]:outfit_base
+GroupControlSection	= spawn_group
+discovery_dependency =
+$spawn 			= "outfit\scientific_outfit"
+$prefetch 		= 32
+class			= E_STLK
+cform           = skeleton
+visual          = dynamics\outfit\scientific_outfit
+actor_visual	= actors\stalker_hero\stalker_hero_neutral_nauchniy.ogf
+player_hud_section	= scientific_outfit_hud
+
+ef_equipment_type	= 2
+
+inv_name			= scientific_outfit_name
+inv_name_short		= scientific_outfit_name
+description			= scientific_outfit_description
+
+inv_weight			= 10.0
+
+slot				= 6
+inv_grid_width		= 2
+inv_grid_height		= 3
+inv_grid_x			= 14
+inv_grid_y			= 16
+
+upgr_icon_x			= 646
+upgr_icon_y			= 172
+upgr_icon_width		= 285
+upgr_icon_height   	= 159
+full_icon_name		= npc_icon_scientific_outfit
+
+cost				= 25000
+full_scale_icon		= 12,11			;иконка сталкера в костюме в полный рост
+
+immunities_sect			= sect_scientific_outfit_immunities
+helmet_avaliable	 	= false
+
+; MEDIUM RESISTANCE
+burn_protection 				= 0.0875
+shock_protection 				= 0.400
+radiation_protection 			= 0.0080
+chemical_burn_protection 		= 0.1100
+telepatic_protection 			= 0.0600
+strike_protection 				= 0.22
+explosion_protection 			= 0.25
+wound_protection				= 0.22
+
+hit_fraction_actor				= 0.65
+bones_koeff_protection 			= actor_armor_sci
+
+artefact_count          = 2
+control_inertion_factor = 1.5
+power_loss				= 0.85
+
+upgrades                = up_gr_firstab_scientific_outfit, up_gr_seconab_scientific_outfit, up_gr_thirdab_scientific_outfit, up_gr_fourtab_scientific_outfit, up_gr_fifthab_scientific_outfit
+installed_upgrades      =
+upgrade_scheme          = upgrade_scheme_scientific_outfit
+
+[sect_scientific_outfit_immunities]:base_immunities
+burn_immunity				= 0.01			;коэффициенты иммунитета самого костюма
+wound_immunity				= 0.03
+explosion_immunity			= 0.04
+fire_wound_immunity			= 0.02
+
+[sect_scientific_outfit_immunities_add]:base_immunities
+burn_immunity				= -0.01			;коэффициенты иммунитета самого костюма
+wound_immunity				= -0.01
+explosion_immunity			= -0.01
+fire_wound_immunity			= -0.0025
+
+[scientific_outfit_hud]:actor_hud
+visual         			= dynamics\weapons\wpn_hand\wpn_hand_07
+legs_visual				= actors\stalker_legs\scientific_outfit

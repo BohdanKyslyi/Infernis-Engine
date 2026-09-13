@@ -4,13 +4,13 @@
 
 ; Extended weather and environmental effects
 [environment]
-enable_rain_material_sounds = false ; Enables dynamic rain-on-material impact sounds (true = on / false = off)
-enable_dynamic_rain_wind    = true ; Controls raindrop tilt and fall-speed response based on wind intensity defined in the weather system
-enable_custom_lightning = true ;Renders lightning strikes around the player based on distance tiers and probability weights
+enable_rain_material_sounds	= false	; Enables dynamic rain-on-material impact sounds (true = on / false = off)
+enable_dynamic_rain_wind	= true	; Controls raindrop tilt and fall-speed response based on wind intensity defined in the weather system
+enable_custom_lightning		= true	;Renders lightning strikes around the player based on distance tiers and probability weights
 
 ;Extended UI parameters
 [ui_extensions]
-show_dialog_portraits = false ; true - показувати бокові панелі в діалогах, false - приховати
+show_dialog_portraits = false		; true - показувати бокові панелі в діалогах, false - приховати
 
 ; =======================================================
 ; Noir Engine Modular Inventory Slots
@@ -18,21 +18,18 @@ show_dialog_portraits = false ; true - показувати бокові пан�
 ; =======================================================
 
 [slots]
-enable_modular_slots = true ; true = read independent slot switches
-binocular_slot	= false	; false = original persistent binocular behaviour
-torch_slot		= false	; false = original persistent flashlight behaviour
-knife_slot		= false	; false = original persistent knife behaviour
-pistol_slot		= false	; false = disable the optional third weapon slot
-backpack_slot	= true	; false = disable backpack slot
+enable_modular_slots	= true				; true = read independent slot switches
+binocular_slot			= false				; false = original persistent binocular behaviour
+torch_slot				= false				; false = original persistent flashlight behaviour
+knife_slot				= false				; false = original persistent knife behaviour
+pistol_slot				= false				; false = disable the optional third weapon slot
+backpack_slot			= true				; false = disable backpack slot
 
 ;Infernis Engine extended HUD parameters
 [hud_extensions]
-viewport_near = 0.2f ; 0.05f - для юзу сучасних збройових паків, 0.2f - для ванільних
-hands_animations_path = hands_animations\*.omf
-enable_actor_legs = true ; Enables a synchronized first-person legs model from actor HUD sections
-legs_attach_to_camera = true ; Keeps the body centered under the first-person camera
-legs_fwd_offset = -0.5 ; Base forward/backward correction for regular actor visuals
-legs_y_offset = 0.0 ; Base vertical correction
+viewport_near			= 0.2f				; 0.05f - для юзу сучасних збройових паків, 0.2f - для ванільних
+hands_animations_path	= hands_animations\*.omf
+enable_actor_legs		= true				; Enables a synchronized first-person legs model from actor HUD sections
 
 ; =======================================================
 ; Infernis Engine Items Animations Controller parameters
@@ -40,19 +37,19 @@ legs_y_offset = 0.0 ; Base vertical correction
 ; =======================================================
 
 [items_animations]
-enable_consumables_animations = true ; анімації використання предметів
-enable_backpack_animations = true ; анімації рюкзаків
-enable_pda_animations = true ; анімації ПДА
-enable_dressing_animations = true ; анімації вдягання броні / шоломів / рюкзаків
-enable_mutant_looting_animations = true ; анімації зрізання частин тіл мутантів
-enable_mutant_looting_particles = true
-mutant_looting_particle_timing = 1300
-backpack_hud				= backpack_stalker_hud
-pda_hud               		= device_pda_hud
-outfit_dressing_hud			= outfit_animation_hud
-helmet_dressing_hud			= helm_respirator_hud
-backpack_dressing_hud		= outfit_animation_hud
-mutant_looting_hud			= mutant_looting_hud
+enable_consumables_animations			= true ; анімації використання предметів
+enable_backpack_animations				= true ; анімації рюкзаків
+enable_pda_animations					= true ; анімації ПДА
+enable_dressing_animations				= true ; анімації вдягання броні / шоломів / рюкзаків
+enable_mutant_looting_animations		= true ; анімації зрізання частин тіл мутантів
+enable_mutant_looting_particles			= true ; ефекти партиклів під час зрізання частин тіл мутантів
+mutant_looting_particle_timing			= 1300
+backpack_hud							= backpack_stalker_hud
+pda_hud               					= device_pda_hud
+outfit_dressing_hud						= outfit_animation_hud
+helmet_dressing_hud						= helm_respirator_hud
+backpack_dressing_hud					= outfit_animation_hud
+mutant_looting_hud						= mutant_looting_hud
 
 ; =======================================================
 ; Discord Rich Presence
@@ -60,21 +57,21 @@ mutant_looting_hud			= mutant_looting_hud
 ; =======================================================
 
 [discord_rpc]
-enable = true
-application_id = 1542134331114397736
+enable				= true
+application_id		= 1542134331114397736
 
-show_playtime = true
-show_location = true
-show_renderer = true
-show_task = true
-show_task_name = true
+show_playtime		= true
+show_location		= true
+show_renderer		= true
+show_task			= true
+show_task_name		= true
 
-large_image = infernis
-large_image_text = Infernis Engine
+large_image			= infernis
+large_image_text	= Infernis Engine
 
-renderer_dx9_image = renderer_dx9
-renderer_dx10_image = renderer_dx10
-renderer_dx11_image = renderer_dx11
+renderer_dx9_image 	= renderer_dx9
+renderer_dx10_image	= renderer_dx10
+renderer_dx11_image	= renderer_dx11
 
 ; =======================================================
 ; Infernis Engine extended Shader configuration
@@ -82,6 +79,6 @@ renderer_dx11_image = renderer_dx11
 ; =======================================================
 
 [shader_extensions]
-enable_pbr_rendering = false ; увімкнення PBR-рендерингу
-sslr_mode = off ; performance / balanced / quality / reference / off
-allow_bloodmarks_on_npc = true; відображення кривавих слідів у сталкерів і мутантів
+enable_pbr_rendering	= false ; увімкнення PBR-рендерингу
+sslr_mode				= off ; performance / balanced / quality / reference / off
+allow_bloodmarks_on_npc	= true; відображення кривавих слідів у сталкерів і мутантів

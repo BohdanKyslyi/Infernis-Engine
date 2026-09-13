@@ -1,0 +1,79 @@
+;---------------------------------------------------------------------------------------------
+;		ЛЕГКИЙ КОСТЮМ ВОЛІ
+;---------------------------------------------------------------------------------------------
+[svoboda_light_outfit]:outfit_base
+GroupControlSection	= spawn_group
+discovery_dependency =
+$spawn 			= "outfit\svoboda_light_outfit"
+;$prefetch 		= 32
+class			= E_STLK
+cform           = skeleton
+visual          = dynamics\outfit\svoboda_light_outfit
+actor_visual	= actors\stalker_hero\stalker_hero_freedom_1.ogf
+player_hud_section	= svoboda_light_outfit_hud
+
+ef_equipment_type	= 3
+
+inv_name			= svoboda_light_outfit_name
+inv_name_short		= svoboda_light_outfit_name
+description			= svoboda_light_outfit_description
+
+inv_weight			= 4.0
+
+inv_grid_width		= 2
+inv_grid_height		= 3
+inv_grid_x			= 12
+inv_grid_y			= 13
+
+upgr_icon_x			= 6
+upgr_icon_y			= 455
+upgr_icon_width		= 302
+upgr_icon_height   	= 117
+full_icon_name		= npc_icon_svoboda_light_outfit
+
+cost				= 6500
+slot				= 6
+full_scale_icon		= 10,11			;иконка сталкера в костюме в полный рост
+
+immunities_sect			= sect_svoboda_light_outfit_immunities
+
+; LOW RESISTANCE
+burn_protection 				= 0.0700
+shock_protection 				= 0.250
+radiation_protection 			= 0.0035
+chemical_burn_protection 		= 0.0375
+telepatic_protection 			= 0.0
+strike_protection 				= 0.22
+explosion_protection 			= 0.25
+wound_protection				= 0.22
+
+hit_fraction_actor				= 0.6
+bones_koeff_protection 			= actor_armor_light
+
+artefact_count          = 2
+control_inertion_factor = 1.2
+power_loss				= 0.6
+
+upgrades                = up_gr_firstab_svoboda_light_outfit, up_gr_seconab_svoboda_light_outfit, up_gr_thirdab_svoboda_light_outfit
+installed_upgrades      =
+upgrade_scheme          = upgrade_scheme_svoboda_light_outfit
+
+[sect_svoboda_light_outfit_immunities]:base_immunities
+burn_immunity				= 0.05			;коэффициенты иммунитета самого костюма
+shock_immunity				= 0.05
+wound_immunity				= 0.05
+chemical_burn_immunity		= 0.05
+explosion_immunity			= 0.05
+fire_wound_immunity			= 0.015
+
+[sect_svoboda_light_outfit_immunities_add]:base_immunities
+burn_immunity				= -0.02			;коэффициенты иммунитета самого костюма
+shock_immunity				= -0.02
+wound_immunity				= -0.02
+chemical_burn_immunity		= -0.02
+explosion_immunity			= -0.02
+fire_wound_immunity			= -0.005
+
+[svoboda_light_outfit_hud]:actor_hud
+visual         			= dynamics\weapons\wpn_hand\wpn_hand_03
+legs_visual				= actors\stalker_legs\svoboda_light_outfit

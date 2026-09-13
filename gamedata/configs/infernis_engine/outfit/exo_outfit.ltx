@@ -1,0 +1,86 @@
+;---------------------------------------------------------------------------------------------
+;		ЕКЗОСКЕЛЕТ НЕЙТРАЛЬНОГО СТАЛКЕРУ
+;---------------------------------------------------------------------------------------------
+[exo_outfit]:outfit_base
+GroupControlSection	= spawn_group
+discovery_dependency =
+$spawn 			= "outfit\exo_outfit"
+$prefetch 		= 32
+class			= E_STLK
+cform           = skeleton
+visual          = dynamics\outfit\exo_outfit
+actor_visual	= actors\stalker_hero\stalker_hero_exo.ogf
+;actor_visual	= actors\stalker_neutral\stalker_neutral_4.ogf
+player_hud_section	= exo_outfit_hud
+
+ef_equipment_type	= 5
+
+inv_name			= exo_outfit_name
+inv_name_short		= exo_outfit_name
+description			= exo_outfit_description
+
+inv_weight			= 25.0
+
+slot				= 6
+inv_grid_width		= 2
+inv_grid_height		= 3
+inv_grid_x			= 14
+inv_grid_y			= 13
+
+upgr_icon_x			= 334
+upgr_icon_y			= 450
+upgr_icon_width		= 303
+upgr_icon_height   	= 159
+full_icon_name		= npc_icon_exo_outfit
+
+cost				= 50000
+full_scale_icon		= 2,11			;иконка сталкера в костюме в полный рост
+
+immunities_sect			= sect_exo_outfit_immunities
+
+; MEDIUM RESISTANCE
+burn_protection 				= 0.0750
+shock_protection 				= 0.300
+radiation_protection 			= 0.0040
+chemical_burn_protection 		= 0.0750
+telepatic_protection 			= 0.050
+strike_protection 				= 0.4
+explosion_protection 			= 0.45
+wound_protection				= 0.4
+
+hit_fraction_actor				= 0.25
+bones_koeff_protection			= actor_armor_exo
+
+;запрещение режима Sprint для Актера
+sprint_allowed					= false
+
+helmet_avaliable			 	= false
+power_loss						= 1.0
+additional_inventory_weight		= 30
+additional_inventory_weight2	= 30
+artefact_count                  = 1
+control_inertion_factor			= 2.5
+
+upgrades                = up_gr_firstab_exo_outfit, up_gr_seconab_exo_outfit, up_gr_thirdab_exo_outfit, up_gr_fourtab_exo_outfit, up_gr_fifthab_exo_outfit
+installed_upgrades      =
+upgrade_scheme          = upgrade_scheme_exo_outfit
+
+[sect_exo_outfit_immunities]:base_immunities
+burn_immunity				= 0.02			;коэффициенты иммунитета самого костюма
+shock_immunity				= 0.02
+wound_immunity				= 0.02
+chemical_burn_immunity		= 0.02
+explosion_immunity			= 0.02
+fire_wound_immunity			= 0.02
+
+[sect_exo_outfit_immunities_add]:base_immunities
+burn_immunity				= -0.01			;коэффициенты иммунитета самого костюма
+shock_immunity				= -0.01
+wound_immunity				= -0.01
+chemical_burn_immunity		= -0.01
+explosion_immunity			= -0.01
+fire_wound_immunity			= -0.0025
+
+[exo_outfit_hud]:actor_hud
+visual         			= dynamics\weapons\wpn_hand\wpn_hand_exo
+legs_visual				= actors\stalker_legs\exo_outfit

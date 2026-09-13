@@ -1,0 +1,79 @@
+;---------------------------------------------------------------------------------------------
+;		КОСТЮМ МІЛІТАРІ
+;---------------------------------------------------------------------------------------------
+[military_outfit]:outfit_base
+GroupControlSection	= spawn_group
+discovery_dependency =
+$spawn 			= "outfit\military_outfit"
+;$prefetch 		= 32
+class			= E_STLK
+cform           = skeleton
+visual          = dynamics\outfit\military_outfit
+actor_visual	= actors\stalker_hero\stalker_hero_military.ogf
+;actor_visual	= actors\stalker_soldier\stalker_soldier_4.ogf
+player_hud_section	= military_outfit_hud
+
+ef_equipment_type	= 4
+
+inv_name			= military_outfit_name
+inv_name_short		= military_outfit_name
+description			= military_outfit_description
+
+inv_weight			= 12.0
+
+slot				= 6
+inv_grid_width		= 2
+inv_grid_height		= 3
+inv_grid_x			= 18
+inv_grid_y			= 17
+
+upgr_icon_x			= 648
+upgr_icon_y			= 353
+upgr_icon_width		= 280
+upgr_icon_height   	= 145
+full_icon_name		= npc_icon_military_outfit
+
+cost				= 25000
+full_scale_icon		= 10,6		;иконка сталкера в костюме в полный рост
+power_loss				= 0.85
+immunities_sect			= sect_military_outfit_immunities
+
+; MEDIUM RESISTANCE
+burn_protection 				= 0.0750
+shock_protection 				= 0.200
+radiation_protection 			= 0.0030
+chemical_burn_protection 		= 0.0325
+telepatic_protection 			= 0.0
+strike_protection 				= 0.35
+explosion_protection 			= 0.4
+wound_protection				= 0.35
+
+hit_fraction_actor				= 0.4
+bones_koeff_protection			= actor_armor_heavy
+
+artefact_count          = 0
+control_inertion_factor = 1.8
+
+upgrades                = up_gr_firstab_military_outfit, up_gr_seconab_military_outfit, up_gr_thirdab_military_outfit, up_gr_fourtab_military_outfit
+installed_upgrades      =
+upgrade_scheme          = upgrade_scheme_military_outfit
+
+[sect_military_outfit_immunities]:base_immunities
+burn_immunity				= 0.04			;коэффициенты иммунитета самого костюма
+shock_immunity				= 0.04
+wound_immunity				= 0.04
+chemical_burn_immunity		= 0.04
+explosion_immunity			= 0.03
+fire_wound_immunity			= 0.01
+
+[sect_military_outfit_immunities_add]:base_immunities
+burn_immunity				= -0.01			;коэффициенты иммунитета самого костюма
+shock_immunity				= -0.01
+wound_immunity				= -0.01
+chemical_burn_immunity		= -0.01
+explosion_immunity			= -0.01
+fire_wound_immunity			= -0.002
+
+[military_outfit_hud]:actor_hud
+visual         			= dynamics\weapons\wpn_hand\wpn_hand_06
+legs_visual				= actors\stalker_legs\military_outfit

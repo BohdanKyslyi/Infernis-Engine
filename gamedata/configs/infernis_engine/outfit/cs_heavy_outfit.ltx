@@ -1,0 +1,85 @@
+;---------------------------------------------------------------------------------------------
+;		ВАЖКИЙ КОСТЮМ ЧН
+;---------------------------------------------------------------------------------------------
+[cs_heavy_outfit]:outfit_base
+GroupControlSection	= spawn_group
+discovery_dependency =
+$spawn 			= "outfit\cs_heavy_outfit"
+;$prefetch 		= 32
+class			= E_STLK
+cform           = skeleton
+visual          = dynamics\outfit\cs_heavy_outfit
+actor_visual	= actors\stalker_hero\stalker_hero_cs_heavy.ogf
+player_hud_section	= cs_heavy_outfit_hud
+
+ef_equipment_type	= 3
+
+inv_name			= csky_heavy_outfit_name
+inv_name_short		= csky_heavy_outfit_name
+description			= csky_heavy_outfit_description
+
+inv_weight			= 11.0
+
+inv_grid_width		= 2
+inv_grid_height		= 3
+inv_grid_x			= 8
+inv_grid_y			= 19
+
+upgr_icon_x			= 4
+upgr_icon_y			= 304
+upgr_icon_width		= 305
+upgr_icon_height   	= 131
+full_icon_name		= npc_icon_svoboda_heavy_outfit
+
+cost				= 20000
+slot				= 6
+full_scale_icon		= 2,6			;иконка сталкера в костюме в полный рост
+
+immunities_sect			= sect_cs_heavy_outfit_immunities
+power_loss				= 0.9
+
+; MEDIUM RESISTANCE
+burn_protection 				= 0.0800
+shock_protection 				= 0.300
+radiation_protection 			= 0.0045
+chemical_burn_protection 		= 0.0400
+telepatic_protection 			= 0.0
+strike_protection 				= 0.32
+explosion_protection 			= 0.35
+wound_protection				= 0.32
+
+hit_fraction_actor				= 0.45
+bones_koeff_protection 			= actor_armor_medium
+
+artefact_count          = 1
+control_inertion_factor	= 1.5
+
+upgrades                = up_gr_firstab_cs_heavy_outfit, up_gr_seconab_cs_heavy_outfit, up_gr_thirdab_cs_heavy_outfit, up_gr_fourtab_cs_heavy_outfit
+installed_upgrades      =
+upgrade_scheme          = upgrade_scheme_cs_heavy_outfit
+
+[sect_cs_heavy_outfit_immunities]:base_immunities
+burn_immunity				= 0.04			;коэффициенты иммунитета самого костюма
+strike_immunity				= 0.0
+shock_immunity				= 0.04
+wound_immunity				= 0.04
+radiation_immunity			= 0.0
+telepatic_immunity			= 0.0
+chemical_burn_immunity		= 0.04
+explosion_immunity			= 0.04
+fire_wound_immunity			= 0.01
+
+[sect_cs_heavy_outfit_immunities_add]:base_immunities
+burn_immunity				= -0.01			;коэффициенты иммунитета самого костюма
+strike_immunity				= -0.01
+shock_immunity				= 0.0
+wound_immunity				= -0.01
+radiation_immunity			= 0.0
+telepatic_immunity			= 0.0
+chemical_burn_immunity		= -0.01
+explosion_immunity			= -0.01
+fire_wound_immunity			= -0.0025
+
+[cs_heavy_outfit_hud]:actor_hud
+visual         			= dynamics\weapons\wpn_hand\wpn_hand_04
+legs_visual				= actors\stalker_legs\cs_heavy_outfit
