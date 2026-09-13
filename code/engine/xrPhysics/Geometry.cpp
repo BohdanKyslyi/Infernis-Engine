@@ -60,17 +60,9 @@ void GetBoxExtensions(dGeomID box, const dReal* axis, const dReal* pos, const dR
     __m128 v_abs_mask = _mm_castsi128_ps(_mm_set1_epi32(0x7FFFFFFF));
     __m128 v_abs_dots = _mm_and_ps(v_dots, v_abs_mask);
     
-    // Множимо на довжини Box-а та ділимо на 2.f
-    __m128 v_len = _mm_loadu_ps(length);
-    __m128 v_ful = _mm_mul_ps(v_abs_dots, v_len);
-    
-    // Горизонтальна сума результату
-    __m128 shuf = _mm_movehdup_ps(v_ful);        // (y, y, w, w)
-    __m128 sums = _mm_add_ps(v_ful, shuf);       // (x+y, ...)
-    shuf = _mm_movehl_ps(shuf, sums);            // (z+w, ...)
-    sums = _mm_add_ss(sums, shuf);               // sum у молодшому float
-    
-    dReal ful_ext = _mm_cvtss_f32(sums) * 0.5f;
+    // dGeomBoxGetLengths initializes only xyz; ignore the fourth SIMD lane.
+    __m128 v_len = _mm_set_ps(0.f, length[2], length[1], length[0]);
+    dReal ful_ext = _mm_cvtss_f32(_mm_dp_ps(v_abs_dots, v_len, 0x71)) * 0.5f;
 
     *lo_ext = -ful_ext + dif;
     *hi_ext = ful_ext + dif;
