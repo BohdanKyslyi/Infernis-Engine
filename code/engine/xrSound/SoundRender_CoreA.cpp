@@ -9,10 +9,33 @@ CSoundRender_CoreA* SoundRenderA = 0;
 __declspec(dllexport) u32 snd_device_id = 0;
 __declspec(dllexport) xr_token* snd_devices_token = NULL;
 __declspec(dllexport) int snd_hrtf = 1;
+__declspec(dllexport) u32 snd_output = SoundDevice::Auto;
+
+static void free_device_tokens() {
+    if (!snd_devices_token) return;
+    for (xr_token* token = snd_devices_token; token->name; ++token)
+        xr_free(token->name);
+    xr_free(snd_devices_token);
+}
+
+__declspec(dllexport) void snd_refresh_devices() {
+    if (SoundRenderA) SoundRenderA->refresh_devices();
+}
+
+__declspec(dllexport) void snd_get_status(char* text, u32 size) {
+    if (SoundRenderA) SoundRenderA->get_status(text, size);
+    else xr_strcpy(text, size, "Audio unavailable");
+}
 
 CSoundRender_CoreA::CSoundRender_CoreA() : CSoundRender_Core() {
     pDevice = 0;
     pContext = 0;
+    active_efx = false;
+    apply_failed = false;
+    source_spatialize = false;
+    Listener.position.set(0.f, 0.f, 0.f);
+    Listener.orientation[0].set(0.f, 0.f, -1.f);
+    Listener.orientation[1].set(0.f, 1.f, 0.f);
     effect_slot = 0;
     reverb_effect = 0;
 
@@ -33,52 +56,146 @@ CSoundRender_CoreA::CSoundRender_CoreA() : CSoundRender_Core() {
     env_air_absorption_hf = 0.0f;
 }
 
-CSoundRender_CoreA::~CSoundRender_CoreA() {}
+CSoundRender_CoreA::~CSoundRender_CoreA() {
+    free_device_tokens();
+    SoundRenderA = nullptr;
+}
+
+SoundDevice::Settings CSoundRender_CoreA::requested_settings() const {
+    SoundDevice::Settings settings;
+    settings.hrtf = snd_hrtf;
+    settings.output = snd_output;
+    if (snd_devices_token && snd_device_id != 0) {
+        for (const xr_token* token = snd_devices_token; token->name; ++token) {
+            if (token->id == (int)snd_device_id) {
+                settings.device = token->name;
+                break;
+            }
+        }
+    }
+    return settings;
+}
+
+void CSoundRender_CoreA::refresh_devices() {
+    std::lock_guard<std::recursive_mutex> lock(runtime_mutex);
+    apply_failed = false;
+    const auto selected = requested_settings().device;
+    xr_vector<xr_token> tokens;
+    tokens.push_back({ xr_strdup("Default"), 0 });
+    const ALCchar* devices = nullptr;
+    if (SoundDevice::HasExtension(nullptr, "ALC_ENUMERATE_ALL_EXT"))
+        devices = alcGetString(nullptr, ALC_ALL_DEVICES_SPECIFIER);
+    else if (SoundDevice::HasExtension(nullptr, "ALC_ENUMERATION_EXT"))
+        devices = alcGetString(nullptr, ALC_DEVICE_SPECIFIER);
+    while (devices && *devices) {
+        bool duplicate = false;
+        for (const auto& token : tokens)
+            if (xr_strcmp(token.name, devices) == 0) duplicate = true;
+        if (!duplicate)
+            tokens.push_back({ xr_strdup(devices), (int)tokens.size() });
+        devices += xr_strlen(devices) + 1;
+    }
+    // Keep the selected/active endpoint addressable even after unplugging it.
+    // This also keeps Cancel and a failed switch from selecting another device.
+    for (const auto& name : { selected, active_settings.device }) {
+        if (name.empty()) continue;
+        bool found = false;
+        for (const auto& token : tokens)
+            if (name == token.name) found = true;
+        if (!found)
+            tokens.push_back({ xr_strdup(name.c_str()), (int)tokens.size() });
+    }
+    free_device_tokens();
+    tokens.push_back({ nullptr, -1 });
+    snd_devices_token = xr_alloc<xr_token>(tokens.size());
+    snd_device_id = 0;
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        snd_devices_token[i] = tokens[i];
+        if (tokens[i].name && selected == tokens[i].name)
+            snd_device_id = tokens[i].id;
+    }
+}
+
+void CSoundRender_CoreA::get_status(char* text, u32 size) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_mutex);
+    if (!pDevice || !pContext || !bReady) {
+        xr_strcpy(text, size, "Audio unavailable");
+        return;
+    }
+    ALCint hrtf = ALC_FALSE;
+    ALCint output = ALC_ANY_SOFT;
+    if (SoundDevice::HasExtension(pDevice, "ALC_SOFT_HRTF"))
+        alcGetIntegerv(pDevice, ALC_HRTF_SOFT, 1, &hrtf);
+    if (SoundDevice::HasExtension(pDevice, "ALC_SOFT_output_mode"))
+        alcGetIntegerv(pDevice, ALC_OUTPUT_MODE_SOFT, 1, &output);
+    xr_sprintf(text, size, "EFX: %s | HRTF: %s | %s%s",
+        efx_enabled() ? "on" : "off", hrtf ? "on" : "off",
+        SoundDevice::OutputName(output), apply_failed ? " | APPLY FAILED" : "");
+}
+
+void CSoundRender_CoreA::log_device_status() {
+    string256 status;
+    get_status(status, sizeof(status));
+    const char* name = alcGetString(pDevice, SoundDevice::HasExtension(pDevice, "ALC_ENUMERATE_ALL_EXT")
+        ? ALC_ALL_DEVICES_SPECIFIER : ALC_DEVICE_SPECIFIER);
+    Msg("* [Noir Engine Audio] Device: %s; %s", name ? name : "Default", status);
+    if (SoundDevice::HasExtension(pDevice, "ALC_SOFT_HRTF")) {
+        ALCint state = ALC_HRTF_DISABLED_SOFT;
+        alcGetIntegerv(pDevice, ALC_HRTF_STATUS_SOFT, 1, &state);
+        Msg("* [Noir Engine Audio] HRTF status: %d (requested: %d)", state,
+            SoundDevice::WantsHRTF(active_settings) ? 1 : 0);
+    }
+}
 
 void CSoundRender_CoreA::_restart() {
+    // Serialize with mtSound. The UI calls this once after saving the whole group.
+    std::lock_guard<std::recursive_mutex> lock(runtime_mutex);
+    if (!pDevice || !pContext || !bReady) return;
+    const auto requested = requested_settings();
+    const auto result = SoundDevice::Apply(pDevice, active_settings, requested);
+    apply_failed = result == SoundDevice::ApplyResult::Failed ||
+                   result == SoundDevice::ApplyResult::Unsupported;
+    if (apply_failed) {
+        Msg("! [Noir Engine Audio] Could not apply audio settings (%s, ALC error 0x%x). Previous selection restored.",
+            result == SoundDevice::ApplyResult::Unsupported ? "OpenAL extension unavailable" : "device error",
+            alcGetError(pDevice));
+        snd_hrtf = active_settings.hrtf;
+        snd_output = active_settings.output;
+        snd_device_id = 0;
+        for (const xr_token* token = snd_devices_token; token && token->name; ++token)
+            if (active_settings.device == token->name) snd_device_id = token->id;
+    } else {
+        active_settings = requested;
+    }
+    // EFX can be changed independently even if an endpoint change failed.
+    active_efx = psSoundFlags.test(ss_EFX) != 0;
+    bEFX_Initialized = false;
     inherited::_restart();
+    update_environment(&e_current);
+    for (auto* target : s_targets)
+        static_cast<CSoundRender_TargetA*>(target)->apply_effects();
+    log_device_status();
+}
+
+void CSoundRender_CoreA::update(const Fvector& P, const Fvector& D, const Fvector& N) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_mutex);
+    inherited::update(P, D, N);
 }
 
 void CSoundRender_CoreA::_initialize(int stage) {
     if (stage == 0) {
-        if (!snd_devices_token) {
-            xr_vector<xr_token> tokens;
-            tokens.push_back({ xr_strdup("Default"), 0 });
-            
-            if (alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT")) {
-                const ALCchar* devices = alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER);
-                int id = 1;
-                while (devices && *devices != '\0') {
-                    tokens.push_back({ xr_strdup(devices), id++ });
-                    devices += xr_strlen(devices) + 1; 
-                }
-            }
-            tokens.push_back({ NULL, -1 }); 
-            
-            snd_devices_token = xr_alloc<xr_token>(tokens.size());
-            for (size_t i = 0; i < tokens.size(); ++i) {
-                snd_devices_token[i] = tokens[i];
-            }
-        }
+        refresh_devices();
         return;
     }
-
-    LPCSTR device_to_open = nullptr;
-    if (snd_devices_token && snd_device_id != 0) {
-        xr_token* tok = snd_devices_token;
-        while (tok->name) {
-            if (tok->id == (int)snd_device_id) {
-                device_to_open = tok->name;
-                break;
-            }
-            tok++;
-        }
-    }
+    active_settings = requested_settings();
+    LPCSTR device_to_open = active_settings.device.empty() ? nullptr : active_settings.device.c_str();
 
     pDevice = alcOpenDevice(device_to_open); 
     if (pDevice == NULL) {
         Msg("! [Noir Engine] OpenAL: Failed to open device '%s'. Falling back to default.", device_to_open ? device_to_open : "Default");
-        pDevice = alcOpenDevice(nullptr); 
+        pDevice = alcOpenDevice(nullptr);
+        active_settings.device.clear();
+        snd_device_id = 0;
         if (pDevice == NULL) {
             CHECK_OR_EXIT(0, "! [Noir Engine] OpenAL: Failed to create device.");
             bPresent = FALSE;
@@ -86,10 +203,14 @@ void CSoundRender_CoreA::_initialize(int stage) {
         }
     }
 
-    ALCint contextAttr[] = { ALC_HRTF_SOFT, (snd_hrtf ? ALC_TRUE : ALC_FALSE), 0 };
-    pContext = alcCreateContext(pDevice, contextAttr);
+    const auto contextAttr = SoundDevice::Attributes(pDevice, active_settings);
+    pContext = alcCreateContext(pDevice, contextAttr.data());
     if (0 == pContext) {
-        pContext = alcCreateContext(pDevice, nullptr); 
+        Msg("! [Noir Engine Audio] Requested output unavailable; trying default context attributes.");
+        active_settings.hrtf = snd_hrtf = 0;
+        active_settings.output = snd_output = SoundDevice::Auto;
+        const auto fallbackAttr = SoundDevice::Attributes(pDevice, active_settings);
+        pContext = alcCreateContext(pDevice, fallbackAttr.data());
         if (0 == pContext) {
             CHECK_OR_EXIT(0, "! [Noir Engine] OpenAL: Failed to create context.");
             bPresent = FALSE;
@@ -99,38 +220,48 @@ void CSoundRender_CoreA::_initialize(int stage) {
         }
     }
 
+    if (!alcMakeContextCurrent(pContext)) {
+        alcDestroyContext(pContext);
+        pContext = nullptr;
+        alcCloseDevice(pDevice);
+        pDevice = nullptr;
+        bPresent = FALSE;
+        CHECK_OR_EXIT(0, "! [Noir Engine Audio] Failed to activate OpenAL context.");
+        return;
+    }
     alGetError();
     alcGetError(pDevice);
-    AC_CHK(alcMakeContextCurrent(pContext));
+    source_spatialize = alIsExtensionPresent("AL_SOFT_source_spatialize") == AL_TRUE;
 
-    ALCint hrtf_state;
-    alcGetIntegerv(pDevice, ALC_HRTF_SOFT, 1, &hrtf_state);
-    Msg("* [Noir Engine] OpenAL Soft: HRTF is %s", hrtf_state ? "ENABLED" : "DISABLED");
-    
     alDistanceModel(AL_EXPONENT_DISTANCE_CLAMPED);
     
     A_CHK(alListener3f(AL_POSITION, 0.f, 0.f, 0.f));
     A_CHK(alListener3f(AL_VELOCITY, 0.f, 0.f, 0.f));
-    Fvector orient[2] = { { 0.f, 0.f, 1.f }, { 0.f, 1.f, 0.f } };
+    Fvector orient[2] = { { 0.f, 0.f, -1.f }, { 0.f, 1.f, 0.f } };
     A_CHK(alListenerfv(AL_ORIENTATION, &orient[0].x));
     A_CHK(alListenerf(AL_GAIN, 1.f));
 
-    // ПЕРЕМИКАЧ EFX (Апаратний рівень)
-    bEFX = false;
-    bEFX_Initialized = false; 
-    
-    if (alcIsExtensionPresent(pDevice, "ALC_EXT_EFX")) {
-        Msg("* [Noir Engine] OpenAL: Hardware supports EFX. Ready for dynamic toggling.");
-        bEFX = true;
-        
+    bEFX = FALSE;
+    bEFX_Initialized = false;
+    active_efx = psSoundFlags.test(ss_EFX) != 0;
+    if (SoundDevice::HasExtension(pDevice, "ALC_EXT_EFX")) {
+        alGetError();
         alGenAuxiliaryEffectSlots(1, &effect_slot);
         alGenEffects(1, &reverb_effect);
         alEffecti(reverb_effect, AL_EFFECT_TYPE, AL_EFFECT_REVERB);
-    } else {
-        Msg("* [Noir Engine] OpenAL: EFX is NOT supported by hardware.");
+        bEFX = alGetError() == AL_NO_ERROR && effect_slot && reverb_effect;
+        if (!bEFX) {
+            if (effect_slot) alDeleteAuxiliaryEffectSlots(1, &effect_slot);
+            if (reverb_effect) alDeleteEffects(1, &reverb_effect);
+            effect_slot = reverb_effect = 0;
+            alGetError();
+            Msg("! [Noir Engine Audio] EFX initialization failed; continuing with dry audio.");
+        }
     }
 
     inherited::_initialize(stage);
+    update_environment(&e_current);
+    log_device_status();
 
     if (stage == 1) {
         CSoundRender_Target* T = 0;
@@ -153,24 +284,27 @@ void CSoundRender_CoreA::set_master_volume(float f) {
 }
 
 void CSoundRender_CoreA::_clear() {
+    std::lock_guard<std::recursive_mutex> lock(runtime_mutex);
+    // Release emitter/decoder references before the base destroys the sources.
+    stop_emitters();
     inherited::_clear();
-    CSoundRender_Target* T = 0;
-    for (u32 tit = 0; tit < s_targets.size(); tit++) {
-        T = s_targets[tit];
-        T->_destroy();
-        xr_delete(T);
+    for (auto* target : s_targets) {
+        target->_destroy();
+        xr_delete(target);
     }
-
-    if (bEFX) {
-        alDeleteEffects(1, &reverb_effect);
-        alDeleteAuxiliaryEffectSlots(1, &effect_slot);
-    }
-
-    alcMakeContextCurrent(NULL);
+    s_targets.clear();
+    s_targets_defer.clear();
+    if (effect_slot) alDeleteAuxiliaryEffectSlots(1, &effect_slot);
+    if (reverb_effect) alDeleteEffects(1, &reverb_effect);
+    effect_slot = reverb_effect = 0;
+    bEFX = FALSE;
+    bPresent = FALSE;
+    active_efx = false;
+    alcMakeContextCurrent(nullptr);
     if (pContext) alcDestroyContext(pContext);
-    pContext = 0;
+    pContext = nullptr;
     if (pDevice) alcCloseDevice(pDevice);
-    pDevice = 0;
+    pDevice = nullptr;
 }
 
 // СКРИПТОВИЙ КОНТРОЛЬ EFX
@@ -290,9 +424,10 @@ void CSoundRender_CoreA::set_efx_override(LPCSTR preset_name) {
 void CSoundRender_CoreA::update_environment(CSound_environment* _E) {
     if (!bEFX) return;
     
-    if (!psSoundFlags.test(ss_EFX)) {
-        alEffectf(reverb_effect, AL_REVERB_GAIN, 0.0f);
-        alAuxiliaryEffectSloti(effect_slot, AL_EFFECTSLOT_EFFECT, reverb_effect);
+    if (!efx_enabled()) {
+        // Mute the wet bus immediately, including the existing reverb tail.
+        alAuxiliaryEffectSlotf(effect_slot, AL_EFFECTSLOT_GAIN, 0.0f);
+        alAuxiliaryEffectSloti(effect_slot, AL_EFFECTSLOT_EFFECT, AL_EFFECT_NULL);
         bEFX_Initialized = false; 
         return;
     }
@@ -383,6 +518,7 @@ void CSoundRender_CoreA::update_environment(CSound_environment* _E) {
     alEffectf(reverb_effect, AL_REVERB_ROOM_ROLLOFF_FACTOR,   env_room_rolloff_factor);
 
     alAuxiliaryEffectSloti(effect_slot, AL_EFFECTSLOT_EFFECT, reverb_effect);
+    alAuxiliaryEffectSlotf(effect_slot, AL_EFFECTSLOT_GAIN, 1.0f);
 }
 
 void CSoundRender_CoreA::update_listener(const Fvector& P, const Fvector& D, const Fvector& N, float dt) {

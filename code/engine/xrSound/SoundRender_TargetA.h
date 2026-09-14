@@ -35,6 +35,7 @@ public:
     virtual void stop();
     virtual void update();
     virtual void fill_parameters();
+    void apply_effects();
     void source_changed();
 };
 #endif

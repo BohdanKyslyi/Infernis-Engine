@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<string_table>
+    <string id="ui_mm_audio_efx"><text>Ефекти EFX</text></string>
+    <string id="ui_mm_audio_hrtf"><text>HRTF</text></string>
+    <string id="ui_mm_audio_output"><text>Формат виводу</text></string>
+    <string id="ui_mm_audio_hint"><text>HRTF — просторовий звук для навушників. Для колонок 5.1/7.1 HRTF не застосовується. Зміни діють після натискання «Прийняти».</text></string>
+    <string id="ui_mm_audio_apply_failed"><text>Не вдалося застосувати налаштування звуку. Попередній вибір пристрою та формату відновлено. Перевірте підключення пристрою та підтримку розширень OpenAL Soft. Докладніше — у журналі гри.</text></string>
+    <string id="snd_output_auto"><text>Автоматично</text></string>
+    <string id="snd_output_stereo"><text>Стерео</text></string>
+    <string id="snd_output_surround51"><text>Об’ємний 5.1</text></string>
+    <string id="snd_output_surround71"><text>Об’ємний 7.1</text></string>
+</string_table>

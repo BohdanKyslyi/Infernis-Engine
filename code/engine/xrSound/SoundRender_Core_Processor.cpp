@@ -88,7 +88,7 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
     }
 
     // === EFX РЕФАКТОРИНГ: Застосування реверберації Зони ===
-    if (psSoundFlags.test(ss_EFX) && bEFX) {
+    if (bEFX) {
         if (bListenerMoved) {
             bListenerMoved = FALSE;
             e_target = *get_environment(P);

@@ -5,7 +5,7 @@ project(xrSound)
 set(CACHE_SRC SoundRender_Cache.h SoundRender_Cache.cpp)
 set(CORE_SRC SoundRender_Core.h SoundRender_Core.cpp SoundRender_Core_Processor.cpp
              SoundRender_Core_SourceManager.cpp SoundRender_Core_StartStop.cpp)
-set(CORE_OPENAL_SRC SoundRender_CoreA.h SoundRender_CoreA.cpp)
+set(CORE_OPENAL_SRC SoundRender_CoreA.h SoundRender_CoreA.cpp SoundRender_Device.h)
 set(EMITTER_SRC SoundRender_Emitter.h SoundRender_Emitter.cpp SoundRender_Emitter_FSM.cpp
                 SoundRender_Emitter_StartStop.cpp SoundRender_Emitter_streamer.cpp SoundRender_Acoustics.cpp SoundRender_Acoustics.h)
 set(ENV_SRC SoundRender_Environment.h SoundRender_Environment.cpp)

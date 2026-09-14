@@ -7,6 +7,43 @@
 
 #define CB_HEIGHT 20.0f
 
+namespace {
+xr_string SoundDeviceDisplayName(LPCSTR name, bool keepEndpointType = false) {
+    xr_string text = name ? name : "";
+    static const char prefix[] = "OpenAL Soft on ";
+    if (text.compare(0, sizeof(prefix) - 1, prefix) == 0)
+        text.erase(0, sizeof(prefix) - 1);
+
+    if (keepEndpointType)
+        return text;
+
+    // Strip only recognized endpoint labels, keeping parentheses in actual
+    // hardware names (e.g. "USB DAC (Studio)") intact.
+    static const char* wrappers[] = {
+        "Speakers (", "Headphones (", "Headset (", "Line Out (",
+        "Digital Audio (S/PDIF) (", "Digital Output ("
+    };
+    for (const char* wrapper : wrappers) {
+        const size_t length = xr_strlen(wrapper);
+        if (text.size() <= length + 1 || text.compare(0, length, wrapper) != 0 || text.back() != ')')
+            continue;
+        int depth = 0;
+        bool outerPair = true;
+        for (size_t i = length - 1; i < text.size(); ++i) {
+            if (text[i] == '(') ++depth;
+            if (text[i] == ')') --depth;
+            if (depth <= 0 && i != text.size() - 1) {
+                outerPair = false;
+                break;
+            }
+        }
+        if (outerPair && depth == 0)
+            return text.substr(length, text.size() - length - 1);
+    }
+    return text;
+}
+} // namespace
+
 CUIComboBox::CUIComboBox() {
     AttachChild(&m_frameLine);
     AttachChild(&m_text);
@@ -113,6 +150,35 @@ void CUIComboBox::SetCurrentOptValue() {
 
     m_list_box.Clear();
     xr_token* tok = GetOptToken();
+
+    if (m_entry == "snd_device") {
+        const xr_string current = GetOptTokenValue();
+        CUIListBoxItem* selected = nullptr;
+        for (xr_token* device = tok; device && device->name; ++device) {
+            if (std::find(m_disabled.begin(), m_disabled.end(), device->id) != m_disabled.end())
+                continue;
+
+            xr_string display = SoundDeviceDisplayName(device->name);
+            // Two endpoints can belong to the same sound card. Keep their type
+            // when shortening would make the choices indistinguishable.
+            for (const xr_token* other = tok; other && other->name; ++other) {
+                if (other->id != device->id && SoundDeviceDisplayName(other->name) == display) {
+                    display = SoundDeviceDisplayName(device->name, true);
+                    break;
+                }
+            }
+            CUIListBoxItem* item = AddItem_(device->name, device->id);
+            item->SetText(display.c_str());
+            item->SetTAG(device->id); // SetItemToken/UndoOptValue select by TAG.
+            if (current == device->name)
+                selected = item;
+        }
+        // Match the original token, never the potentially shortened label.
+        m_list_box.SetSelected(selected);
+        m_text.SetText(selected ? selected->GetText() : SoundDeviceDisplayName(current.c_str()).c_str());
+        m_itoken_id = selected ? (int)(__int64)selected->GetData() : 0;
+        return;
+    }
 
     while (tok->name) {
         if (m_disabled.end() == std::find(m_disabled.begin(), m_disabled.end(), tok->id)) {

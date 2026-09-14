@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<string_table>
+    <string id="ui_mm_audio_efx"><text>EFX effects</text></string>
+    <string id="ui_mm_audio_hrtf"><text>HRTF</text></string>
+    <string id="ui_mm_audio_output"><text>Output layout</text></string>
+    <string id="ui_mm_audio_hint"><text>HRTF provides spatial audio for headphones. It is inactive with 5.1/7.1 speakers. Changes take effect after pressing Apply.</text></string>
+    <string id="ui_mm_audio_apply_failed"><text>Could not apply audio settings. The previous device and layout selection was restored. Check the device connection and OpenAL Soft extension support. See the game log for details.</text></string>
+    <string id="snd_output_auto"><text>Automatic</text></string>
+    <string id="snd_output_stereo"><text>Stereo</text></string>
+    <string id="snd_output_surround51"><text>Surround 5.1</text></string>
+    <string id="snd_output_surround71"><text>Surround 7.1</text></string>
+</string_table>

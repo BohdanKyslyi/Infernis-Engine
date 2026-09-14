@@ -11,6 +11,7 @@ CSoundRender_TargetA::CSoundRender_TargetA() : CSoundRender_Target() {
     cache_gain = 0.f;
     cache_pitch = 1.f;
     pSource = 0;
+    ZeroMemory(pBuffers, sizeof(pBuffers));
     filter_lowpass = 0;
 }
 
@@ -28,10 +29,18 @@ BOOL CSoundRender_TargetA::_initialize() {
         A_CHK(alSourcef(pSource, AL_GAIN, cache_gain));
         A_CHK(alSourcef(pSource, AL_PITCH, cache_pitch));
         
-        // === Генерація Low-Pass фільтру ===
-        A_CHK(alGenFilters(1, &filter_lowpass));
-        A_CHK(alFilteri(filter_lowpass, AL_FILTER_TYPE, AL_FILTER_LOWPASS));
-        // ==========================================
+        // Filter objects are optional even when the device supports EFX.
+        if (SoundRenderA->bEFX) {
+            alGetError();
+            alGenFilters(1, &filter_lowpass);
+            alFilteri(filter_lowpass, AL_FILTER_TYPE, AL_FILTER_LOWPASS);
+            if (alGetError() != AL_NO_ERROR) {
+                if (filter_lowpass) alDeleteFilters(1, &filter_lowpass);
+                filter_lowpass = 0;
+                alGetError();
+                Msg("! [Noir Engine Audio] Low-pass filter unavailable for this source.");
+            }
+        }
 
         return TRUE;
     } else {
@@ -45,10 +54,11 @@ void CSoundRender_TargetA::_destroy() {
         alDeleteSources(1, &pSource);
     A_CHK(alDeleteBuffers(sdef_target_count, pBuffers));
 
-    // Видалення фільтру з пам'яті 
-    if (alIsFilter(filter_lowpass)) {
+    if (filter_lowpass)
         alDeleteFilters(1, &filter_lowpass);
-    }
+    filter_lowpass = 0;
+    pSource = 0;
+    ZeroMemory(pBuffers, sizeof(pBuffers));
 }
 
 void CSoundRender_TargetA::_restart() {
@@ -105,13 +115,15 @@ void CSoundRender_TargetA::update() {
             A_CHK(alSourceQueueBuffers(pSource, 1, &BufferID));
             --processed;
         }
-    } else {
-        ALint state;
-        A_CHK(alGetSourcei(pSource, AL_SOURCE_STATE, &state));
-        if (state != AL_PLAYING) {
-            A_CHK(alSourcePlay(pSource));
-        }
     }
+    // Recover only after refilling processed buffers. Restarting from
+    // fill_parameters() could replay the old queue after an underrun.
+    ALint state = AL_INITIAL;
+    ALint queued = 0;
+    A_CHK(alGetSourcei(pSource, AL_SOURCE_STATE, &state));
+    A_CHK(alGetSourcei(pSource, AL_BUFFERS_QUEUED, &queued));
+    if (rendering && queued > 0 && state == AL_STOPPED)
+        A_CHK(alSourcePlay(pSource));
 }
 
 void CSoundRender_TargetA::fill_parameters() {
@@ -122,9 +134,14 @@ void CSoundRender_TargetA::fill_parameters() {
 
     A_CHK(alSourcef(pSource, AL_REFERENCE_DISTANCE, m_pEmitter->p_source.min_distance));
     A_CHK(alSourcef(pSource, AL_MAX_DISTANCE, m_pEmitter->p_source.max_distance));
-    A_CHK(alSource3f(pSource, AL_POSITION, m_pEmitter->p_source.position.x, m_pEmitter->p_source.position.y, -m_pEmitter->p_source.position.z));
-    A_CHK(alSourcei(pSource, AL_SOURCE_RELATIVE, m_pEmitter->b2D));
-    A_CHK(alSourcef(pSource, AL_ROLLOFF_FACTOR, psSoundRolloff));
+    const bool spatial = !m_pEmitter->b2D;
+    const Fvector& position = m_pEmitter->p_source.position;
+    A_CHK(alSource3f(pSource, AL_POSITION, spatial ? position.x : 0.f,
+        spatial ? position.y : 0.f, spatial ? -position.z : 0.f));
+    A_CHK(alSourcei(pSource, AL_SOURCE_RELATIVE, spatial ? AL_FALSE : AL_TRUE));
+    A_CHK(alSourcef(pSource, AL_ROLLOFF_FACTOR, spatial ? psSoundRolloff : 0.f));
+    if (SoundRenderA->has_source_spatialize())
+        A_CHK(alSourcei(pSource, AL_SOURCE_SPATIALIZE_SOFT, spatial ? AL_TRUE : AL_FALSE));
 
     float _gain = m_pEmitter->smooth_volume;
     clamp(_gain, EPS_S, 1.f);
@@ -140,40 +157,25 @@ void CSoundRender_TargetA::fill_parameters() {
         A_CHK(alSourcef(pSource, AL_PITCH, _pitch));
     }
 
-    // ФІКС ЗНИКНЕННЯ ЗВУКУ ПІСЛЯ ФРІЗІВ (BUFFER UNDERRUN)
-    ALint state;
-    alGetSourcei(pSource, AL_SOURCE_STATE, &state);
-    
-    if (state == AL_STOPPED) 
-    {
-        alSourcePlay(pSource);
-    }
- 
-	// EFX РЕФАКТОРИНГ: Підключення джерела до слоту реверберації та фільтрів 
-    if (SoundRenderA->bEFX) {
-        // Дістаємо тип звуку: Музика чи Ефекти (зброя, кроки тощо)
-        esound_type soundType = m_pEmitter->owner_data->s_type;
+    apply_effects();
+}
 
-        // Вимикаємо луну ТІЛЬКИ якщо це 2D звук І це фонова музика
-        if (m_pEmitter->b2D && soundType == st_Music) {
-            // Музику і UI звуки не пропускаємо через реверберацію Зони
-            A_CHK(alSource3i(pSource, AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, 0, AL_FILTER_NULL));
-            // Також вимикаємо будь-які Low-Pass фільтри для 2D звуків
-            A_CHK(alSourcei(pSource, AL_DIRECT_FILTER, AL_FILTER_NULL));
-        } else {
-            // 3D звуки АБО 2D-ефекти (зброя в руках актора) підключаємо до слоту луни
-            A_CHK(alSource3i(pSource, AL_AUXILIARY_SEND_FILTER, SoundRenderA->effect_slot, 0, AL_FILTER_NULL));
-
-            // ДИНАМІЧНИЙ LOW-PASS FILTER (ОКЛЮЗІЯ ЗА СТІНАМИ)
-            float occ = m_pEmitter->occluder_volume; 
-            clamp(occ, 0.05f, 1.0f); // 0.05 - щоб звук за дуже товстою стіною не зникав повністю
-
-            A_CHK(alFilterf(filter_lowpass, AL_LOWPASS_GAIN, 1.0f)); // Загальну гучність рушій і так ріже сам
-            A_CHK(alFilterf(filter_lowpass, AL_LOWPASS_GAINHF, occ)); // Чим менше occ (товща стіна), тим більше зрізаються дзвінкі частоти
-
-            // Застосовуємо налаштований фільтр до джерела звуку
-            A_CHK(alSourcei(pSource, AL_DIRECT_FILTER, filter_lowpass));
-        }
+void CSoundRender_TargetA::apply_effects() {
+    if (!SoundRenderA->bEFX || !pSource) return;
+    const bool music = m_pEmitter && m_pEmitter->owner_data &&
+        m_pEmitter->owner_data->s_type == st_Music;
+    const bool wet = SoundRenderA->efx_enabled() && m_pEmitter && !music;
+    A_CHK(alSource3i(pSource, AL_AUXILIARY_SEND_FILTER,
+        wet ? SoundRenderA->effect_slot : AL_EFFECTSLOT_NULL, 0, AL_FILTER_NULL));
+    // Screen-relative sounds have no wall occlusion; retain reverb for HUD effects.
+    if (wet && !m_pEmitter->b2D && filter_lowpass) {
+        float occ = m_pEmitter->occluder_volume;
+        clamp(occ, 0.05f, 1.0f);
+        A_CHK(alFilterf(filter_lowpass, AL_LOWPASS_GAIN, 1.0f));
+        A_CHK(alFilterf(filter_lowpass, AL_LOWPASS_GAINHF, occ));
+        A_CHK(alSourcei(pSource, AL_DIRECT_FILTER, filter_lowpass));
+    } else {
+        A_CHK(alSourcei(pSource, AL_DIRECT_FILTER, AL_FILTER_NULL));
     }
 }
 
