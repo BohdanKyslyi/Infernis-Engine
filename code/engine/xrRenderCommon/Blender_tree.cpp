@@ -108,13 +108,14 @@ void CBlender_Tree::Compile(CBlender_Compile& C) {
             }
             break;
         case SE_R1_NORMAL_LQ:
-            // Level view
+            // Keep animated trees on the same deformation in HQ, LQ and light passes.
+            // Object LOD materials intentionally remain static.
             if (oBlend.value)
-                C.r_Pass("tree_s", "vert", TRUE, TRUE, TRUE, TRUE, D3DBLEND_SRCALPHA,
-                         D3DBLEND_INVSRCALPHA, TRUE, tree_aref);
+                C.r_Pass(oNotAnTree.value ? "tree_s" : "tree_w", "vert", TRUE, TRUE, TRUE, TRUE,
+                         D3DBLEND_SRCALPHA, D3DBLEND_INVSRCALPHA, TRUE, tree_aref);
             else
-                C.r_Pass("tree_s", "vert", TRUE, TRUE, TRUE, TRUE, D3DBLEND_ONE, D3DBLEND_ZERO,
-                         TRUE, tree_aref);
+                C.r_Pass(oNotAnTree.value ? "tree_s" : "tree_w", "vert", TRUE, TRUE, TRUE, TRUE,
+                         D3DBLEND_ONE, D3DBLEND_ZERO, TRUE, tree_aref);
             C.r_Sampler("s_base", C.L_textures[0]);
             C.r_End();
             break;
