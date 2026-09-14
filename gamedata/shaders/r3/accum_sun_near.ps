@@ -17,9 +17,9 @@
 
 #ifdef USE_SUNFILTER
 #ifdef MSAA_OPTIMIZATION
-float4 main ( v2p_TL2uv I, uint iSample : SV_SAMPLEINDEX  ) : SV_Target
+float4 main ( v2p_volume I, uint iSample : SV_SAMPLEINDEX  ) : SV_Target
 #else
-float4 main ( v2p_TL2uv I  ) : SV_Target
+float4 main ( v2p_volume I  ) : SV_Target
 #endif
 {
 	//float4 _P = tex2D( s_position, tc );
@@ -27,8 +27,8 @@ float4 main ( v2p_TL2uv I  ) : SV_Target
 	// Infernis PBR Stage 2.20: derive the G-buffer UV from the exact raster
 	// pixel. Interpolated light-volume UVs can disagree with SV_Position at
 	// cascade edges and make position.w (the PBR marker) come from a neighbour.
-	float2 gbufferTC = I.HPos.xy / pos_decompression_params2.xy;
-	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.HPos, ISAMPLE) );
+	float2 gbufferTC = I.hpos.xy / pos_decompression_params2.xy;
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.hpos, ISAMPLE) );
 
 #if IE_PBR_SUN_PASS_MODE == 1
 	// Red: near/middle directional cascade.
@@ -44,20 +44,15 @@ float4 main ( v2p_TL2uv I  ) : SV_Target
 
 	float4 PS = mul( m_shadow,  _P );
 
-	float s =
-    shadowtest_sun(
-        PS,
-        float4(I.Tex1, 0.0f, 0.0f)
-    ) *
-    sunmask(_P);
+	float s = shadowtest_sun(PS, I.tcJ) * sunmask(_P);
 
 	return s;
 }
 #else
 #ifdef MSAA_OPTIMIZATION
-float4 main ( v2p_TL2uv I,  uint iSample : SV_SAMPLEINDEX ) : SV_Target
+float4 main ( v2p_volume I,  uint iSample : SV_SAMPLEINDEX ) : SV_Target
 #else
-float4 main ( v2p_TL2uv I ) : SV_Target
+float4 main ( v2p_volume I ) : SV_Target
 #endif
 {
 	//float4 	_P	= tex2D( s_position, tc );
@@ -66,8 +61,8 @@ float4 main ( v2p_TL2uv I ) : SV_Target
 	// Infernis PBR Stage 2.20: derive the G-buffer UV from the exact raster
 	// pixel. Interpolated light-volume UVs can disagree with SV_Position at
 	// cascade edges and make position.w (the PBR marker) come from a neighbour.
-	float2 gbufferTC = I.HPos.xy / pos_decompression_params2.xy;
-	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.HPos, ISAMPLE) );
+	float2 gbufferTC = I.hpos.xy / pos_decompression_params2.xy;
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.hpos, ISAMPLE) );
 
 #if IE_PBR_SUN_PASS_MODE == 1
 	// Red: near/middle directional cascade.
@@ -112,14 +107,15 @@ else
   	float4 	P4 	= float4( _P.x, _P.y, _P.z, 1.f);
 	float4 	PS	= mul( m_shadow, P4 );
 	float 	s 	= sunmask( P4 );
-	#ifdef 	USE_SJITTER
-	  		s *= shadowtest_sun(
-    PS,
-    float4(I.Tex1, 0.0f, 0.0f)
-);
+	#if defined(USE_SJITTER) || SUN_QUALITY==2
+			s *= shadow_high(PS);
 	#else
 #ifdef SM_MINMAX
-	  		s 	*= shadow_dx10_1( PS, I.Tex1, I.HPos.xy );
+		#ifdef USE_SJITTER
+			s *= shadow_dx10_1(PS, I.tcJ, I.hpos.xy);
+		#else
+			s *= shadow(PS);
+		#endif
 #else
 			s *= shadow( PS );
 #endif
@@ -143,7 +139,7 @@ else
 
 	    return blend(
 	        float4(pbrTransport, 0.0f),
-	        I.Tex0
+	        I.tc.xy / I.tc.w
 	    );
 #endif
 	}
@@ -152,12 +148,12 @@ else
 	// Green means the runtime G-buffer classified this pixel as legacy.
 	return blend(
 	    float4(0.0f, 0.35f, 0.0f, 0.0f),
-	    I.Tex0
+	    I.tc.xy / I.tc.w
 	);
 #else
 	return blend(
 	    Ldynamic_color * light * s,
-	    I.Tex0
+	    I.tc.xy / I.tc.w
 	);
 #endif
 }

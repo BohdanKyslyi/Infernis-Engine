@@ -133,7 +133,15 @@ void FTreeVisual::Render(float LOD) {
     RCache.tree.set_m_xform(xform);                     // matrix
     RCache.tree.set_consts(tvs.scale, tvs.scale, 0, 0); // consts/scale
     RCache.tree.set_wave(tvs.wave);                     // wave
-    RCache.tree.set_wind(tvs.wind);                     // wind
+    // Fade the whole-tree sway near its base so the rendered trunk stays aligned with collision.
+    const float dx = Device.vCameraPosition.x - xform.c.x;
+    const float dz = Device.vCameraPosition.z - xform.c.z;
+    float fade = (std::sqrt(dx * dx + dz * dz) - 2.f) / 10.f;
+    clamp(fade, 0.f, 1.f);
+    fade = fade * fade * (3.f - 2.f * fade);
+    Fvector4 wind = tvs.wind;
+    wind.mul(fade);
+    RCache.tree.set_wind(wind);                         // wind
 #if RENDER != R_R1
     s *= 1.3333f;
     RCache.tree.set_c_scale(s * c_scale.rgb.x, s * c_scale.rgb.y, s * c_scale.rgb.z,
