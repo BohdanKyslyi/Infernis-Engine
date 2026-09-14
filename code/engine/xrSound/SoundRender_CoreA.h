@@ -7,6 +7,8 @@
 #include <openal/al.h>
 #include <openal/alc.h>
 #include <openal/efx.h>
+#include "SoundRender_Device.h"
+#include <mutex>
 
 #ifndef ALC_HRTF_SOFT
 #define ALC_HRTF_SOFT 0x1992
@@ -24,6 +26,14 @@ class CSoundRender_CoreA : public CSoundRender_Core {
     typedef CSoundRender_Core inherited;
     ALCdevice* pDevice;
     ALCcontext* pContext;
+    std::recursive_mutex runtime_mutex;
+    SoundDevice::Settings active_settings;
+    bool active_efx;
+    bool apply_failed;
+    bool source_spatialize;
+
+    SoundDevice::Settings requested_settings() const;
+    void log_device_status();
 
     struct SListener {
         Fvector position;
@@ -82,6 +92,11 @@ public:
     virtual void _initialize(int stage);
     virtual void _clear();
     virtual void _restart();
+    virtual void update(const Fvector& P, const Fvector& D, const Fvector& N);
+    void refresh_devices();
+    void get_status(char* text, u32 size);
+    bool efx_enabled() const { return bEFX && active_efx; }
+    bool has_source_spatialize() const { return source_spatialize; }
 
     virtual void set_master_volume(float f);
     virtual const Fvector& listener_position() { return Listener.position; }

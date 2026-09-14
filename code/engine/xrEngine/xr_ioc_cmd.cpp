@@ -483,12 +483,40 @@ public:
 extern __declspec(dllimport) u32 snd_device_id;
 extern __declspec(dllimport) xr_token* snd_devices_token;
 extern __declspec(dllimport) int snd_hrtf;
+extern __declspec(dllimport) u32 snd_output;
+extern __declspec(dllimport) void snd_refresh_devices();
+extern __declspec(dllimport) void snd_get_status(char* text, u32 size);
+
+static xr_token snd_output_token[] = {
+    { "snd_output_auto", 0 }, { "snd_output_stereo", 1 },
+    { "snd_output_surround51", 2 }, { "snd_output_surround71", 3 }, { nullptr, -1 }
+};
+
+class CCC_SoundDevicesRefresh : public IConsole_Command {
+public:
+    CCC_SoundDevicesRefresh(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; }
+    virtual void Execute(LPCSTR) { snd_refresh_devices(); }
+};
+
+class CCC_SoundStatus : public IConsole_Command {
+public:
+    CCC_SoundStatus(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; }
+    virtual void Execute(LPCSTR) {
+        TStatus text;
+        Status(text);
+        Msg("* [Noir Engine Audio] %s", text);
+    }
+    virtual void Status(TStatus& text) { snd_get_status(text, sizeof(text)); }
+    virtual void Save(IWriter*) {} // Read-only diagnostics are not configuration.
+};
 
 class CCC_soundDevice : public CCC_Token {
     typedef CCC_Token inherited;
 
 public:
-    CCC_soundDevice(LPCSTR N) : inherited(N, &snd_device_id, NULL){};
+    CCC_soundDevice(LPCSTR N) : inherited(N, &snd_device_id, NULL) {
+        bLowerCaseArgs = false; // Preserve UTF-8 endpoint names verbatim.
+    }
     virtual ~CCC_soundDevice() {}
 
     virtual void Execute(LPCSTR args) {
@@ -499,14 +527,19 @@ public:
 
     virtual void Status(TStatus& S) {
         GetToken();
-        if (!tokens) return;
+        if (!tokens) { xr_strcpy(S, "Default"); return; }
         inherited::Status(S);
     }
 
     virtual xr_token* GetToken() {
-        if (!snd_devices_token) return nullptr; // Захист від раннього виклику
-        tokens = snd_devices_token;
+        // A combo box requires a valid sentinel even with -nosound.
+        static xr_token fallback[] = { { "Default", 0 }, { nullptr, -1 } };
+        tokens = snd_devices_token ? snd_devices_token : fallback;
         return inherited::GetToken();
+    }
+
+    virtual void Info(TInfo& I) {
+        xr_strcpy(I, "output device name; use snd_device_refresh to refresh the list");
     }
 
     virtual void Save(IWriter* F) {
@@ -685,6 +718,9 @@ void CCC_Register() {
     CMD1(CCC_r2, "renderer");
 
     CMD1(CCC_soundDevice, "snd_device");
+    CMD1(CCC_SoundDevicesRefresh, "snd_device_refresh");
+    CMD1(CCC_SoundStatus, "snd_status");
+    CMD3(CCC_Token, "snd_output", &snd_output, snd_output_token);
     // psSoundRolloff	= pSettings->r_float	("sound","rolloff");		clamp(psSoundRolloff,			EPS_S,
     // 2.f);
     psSoundOcclusionScale = pSettings->r_float("sound", "occlusion_scale");
