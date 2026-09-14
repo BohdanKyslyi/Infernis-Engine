@@ -49,6 +49,7 @@ private:
     Root DATA;
 
     void Load(IReader* F, const char* path, allow_include_func_t allow_include_func = nullptr);
+    void LoadModularIncludes(LPCSTR szFileName, LPCSTR path, allow_include_func_t allow_include_func);
 public:
     CInifile(IReader* F, const char* path = nullptr, allow_include_func_t allow_include_func = nullptr);
 
@@ -77,14 +78,14 @@ public:
 
     CLASS_ID r_clsid(LPCSTR S, LPCSTR L) const;
     CLASS_ID r_clsid(const shared_str& S, LPCSTR L) const { return r_clsid(*S, L); }
-    LPCSTR r_string(LPCSTR S, LPCSTR L) const; // оставляет кавычки
+    LPCSTR r_string(LPCSTR S, LPCSTR L) const; // Г®Г±ГІГ ГўГ«ГїГҐГІ ГЄГ ГўГ»Г·ГЄГЁ
     LPCSTR r_string(const shared_str& S, LPCSTR L) const {
         return r_string(*S, L);
-    }                                                 // оставляет кавычки
-    shared_str r_string_wb(LPCSTR S, LPCSTR L) const; // убирает кавычки
+    }                                                 // Г®Г±ГІГ ГўГ«ГїГҐГІ ГЄГ ГўГ»Г·ГЄГЁ
+    shared_str r_string_wb(LPCSTR S, LPCSTR L) const; // ГіГЎГЁГ°Г ГҐГІ ГЄГ ГўГ»Г·ГЄГЁ
     shared_str r_string_wb(const shared_str& S, LPCSTR L) const {
         return r_string_wb(*S, L);
-    } // убирает кавычки
+    } // ГіГЎГЁГ°Г ГҐГІ ГЄГ ГўГ»Г·ГЄГЁ
     u8 r_u8(LPCSTR S, LPCSTR L) const;
     u8 r_u8(const shared_str& S, LPCSTR L) const { return r_u8(*S, L); }
     u16 r_u16(LPCSTR S, LPCSTR L) const;
