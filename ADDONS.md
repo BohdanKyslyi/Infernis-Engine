@@ -32,7 +32,7 @@ For example, a modular file next to `configs/system.ltx` may contain:
 
 ```ini
 [wpn_my_weapon]
-icons_texture = ui\\ui_icon_my_weapon_pack
+icons_texture = ui\ui_icon_my_weapon_pack
 inv_grid_x = 0
 inv_grid_y = 0
 inv_grid_width = 5
