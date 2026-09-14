@@ -115,7 +115,13 @@ public:
     void detach_controller_item();
 
     void load(const shared_str& model_name);
-    void load_default() { load("actor_hud_05"); };
+    void load_default() {
+        if (pSettings->section_exist("actor") &&
+            pSettings->line_exist("actor", "player_hud_section")) {
+            LPCSTR player_hud_section = pSettings->r_string("actor", "player_hud_section");
+            load(player_hud_section);
+        }
+    };
     void update(const Fmatrix& trans);
     void render_hud();
     void render_item_ui();
