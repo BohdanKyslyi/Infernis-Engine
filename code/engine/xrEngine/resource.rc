@@ -61,12 +61,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "GSC Game World"
             VALUE "FileDescription", "X-Ray 1.6 Engine"
-            VALUE "FileVersion", "0.2.6"
+            VALUE "FileVersion", "0.2.7"
             VALUE "InternalName", "xrEngine"
             VALUE "LegalCopyright", "Copyright © 2009 GSC Game World"
             VALUE "OriginalFilename", "xrEngine.exe"
             VALUE "ProductName", "Infernis Engine"
-            VALUE "ProductVersion", "0.2.6"
+            VALUE "ProductVersion", "0.2.7"
         END
     END
     BLOCK "VarFileInfo"

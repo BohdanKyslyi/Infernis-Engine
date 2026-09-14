@@ -634,12 +634,12 @@ LPCSTR CMainMenu::GetGSVer() {
     bool usePBR = infernis_pbr_rendering_enabled();
 
     if (usePBR) {
-        xr_strcpy(buff, 255, "0.2.6 x64 PBR");
+        xr_strcpy(buff, 255, "0.2.7 x64 + PBR ver. 1.1");
     } else {
-        xr_strcpy(buff, 255, "0.2.6 x64");
+        xr_strcpy(buff, 255, "0.2.7 x64");
     }
 #else
-    xr_strcpy(buff, 255, "0.2.6");
+    xr_strcpy(buff, 255, "0.2.7");
 #endif
 
     return buff;
