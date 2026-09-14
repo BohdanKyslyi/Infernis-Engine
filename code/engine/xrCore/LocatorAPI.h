@@ -58,7 +58,11 @@ private:
     void check_pathes();
 
     files_set m_files;
+    xr_map<xr_string, xr_string> m_addon_files;
     BOOL bNoRecurse;
+
+    void ScanAddons();
+    void ScanAddonDirectory(const xr_string& disk_path, const xr_string& game_path);
 
     void Register(LPCSTR name, u32 vfs, u32 crc, u32 ptr, u32 size_real, u32 size_compressed,
                   u32 modif);
