@@ -278,6 +278,7 @@ void CInifile::Load(IReader* F, LPCSTR path, allow_include_func_t allow_include_
                     R_ASSERT3(I, "Can't find include file:", inc_name);
                     Load(I, inc_path, allow_include_func);
                     FS.r_close(I);
+                    LoadModularIncludes(fn, inc_path, allow_include_func);
                 }
             }
         } else if (str[0] && (str[0] == '[')) // new section ?
