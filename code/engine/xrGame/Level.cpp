@@ -40,6 +40,7 @@
 #include "MainMenu.h"
 #include "../xrEngine/XR_IOConsole.h"
 #include "actor.h"
+#include "Inventory.h"
 #include "Weapon.h"
 #include "player_hud.h"
 #include "UI/UIGameTutorial.h"
