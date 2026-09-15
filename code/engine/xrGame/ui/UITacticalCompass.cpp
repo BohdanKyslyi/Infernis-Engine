@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "UITacticalCompass.h"
-#include "UIXml.h"
+#include "xrUIXmlParser.h"
 #include "UIXmlInit.h"
 #include "../Actor.h"
 #include "../level.h"
@@ -25,11 +25,13 @@ LPCSTR icon_name(u8 kind) {
 } // namespace
 
 bool CUITacticalCompass::Init() {
-    CUIXml xml;
-    if (!xml.Load(CONFIG_PATH, UI_PATH, "ui_tactical_compass.xml")) {
+    string_path found;
+    if (!FS.exist(found, "$game_config$", "ui\\", "ui_tactical_compass.xml")) {
         Msg("! Tactical compass: ui_tactical_compass.xml is missing");
         return false;
     }
+    CUIXml xml;
+    xml.Load(CONFIG_PATH, UI_PATH, "ui_tactical_compass.xml");
 
     CUIXmlInit init;
     init.InitWindow(xml, "tactical_compass", 0, this);
