@@ -47,6 +47,10 @@
 — Added a metallic/roughness PBR material pipeline for the DX11 renderer. See
 [PBR material authoring](PBR_MATERIALS.md) for texture packing and setup.
 
+### Addon packs
+
+Place each pack in `addons/<pack_name>/` beside `gamedata/`. See [addon packaging](ADDONS.md) or [оформлення аддонів українською](ADDONS_UA.md) for layout, LTX overrides and load order.
+
 ### How do I build the updated engine?
 1) [Install **CMake**](https://cmake.org/download/) version **3.5** or higher
 2) **Clone the repository**

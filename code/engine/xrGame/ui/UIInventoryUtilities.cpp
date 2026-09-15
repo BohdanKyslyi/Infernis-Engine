@@ -210,6 +210,18 @@ const ui_shader& InventoryUtilities::GetWeaponUpgradeIconsShader() {
     return *g_WeaponUpgradeIconsShader;
 }
 
+void InventoryUtilities::SetUpgradeIconShader(CUIStatic& icon, LPCSTR section, bool weapon) {
+    if (pSettings && section && pSettings->line_exist(section, "upgr_icons_texture")) {
+        LPCSTR texture = pSettings->r_string(section, "upgr_icons_texture");
+        if (texture && texture[0]) {
+            icon.CreateShader(texture, "hud\\default");
+            return;
+        }
+    }
+
+    icon.SetShader(weapon ? GetWeaponUpgradeIconsShader() : GetOutfitUpgradeIconsShader());
+}
+
 //////////////////////////////////////////////////////////////////////////
 
 const shared_str InventoryUtilities::GetGameDateAsString(EDatePrecision datePrec,

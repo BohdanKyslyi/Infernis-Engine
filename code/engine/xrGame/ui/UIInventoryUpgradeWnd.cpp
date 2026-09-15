@@ -98,21 +98,18 @@ void CUIInventoryUpgradeWnd::Init() {
 void CUIInventoryUpgradeWnd::InitInventory(CInventoryItem* item, bool can_upgrade) {
     m_inv_item = item;
     bool is_shader = false;
-    // Загружаем картинку
+    bool weapon_icon = false;
     if (smart_cast<CWeapon*>(item)) {
         is_shader = true;
-        m_item->SetShader(InventoryUtilities::GetWeaponUpgradeIconsShader());
-        if (smart_cast<CWeaponRPG7*>(item))
-            m_item->SetShader(InventoryUtilities::GetOutfitUpgradeIconsShader());
+        weapon_icon = !smart_cast<CWeaponRPG7*>(item);
     } else if (smart_cast<CCustomOutfit*>(item) || smart_cast<CHelmet*>(item)) {
         is_shader = true;
-        m_item->SetShader(InventoryUtilities::GetOutfitUpgradeIconsShader());
     } else if (NoirInventorySlots::BackpackEnabled() && ((smart_cast<CCustomOutfit*>(item) || smart_cast<CBackpack*>(item)))) {
         is_shader = true;
-        m_item->SetShader(InventoryUtilities::GetOutfitUpgradeIconsShader());
     }
 
     if (m_item && is_shader) {
+        InventoryUtilities::SetUpgradeIconShader(*m_item, item->object().cNameSect().c_str(), weapon_icon);
 
         Irect item_upgrade_grid_rect = item->GetUpgrIconRect();
         Frect texture_rect;

@@ -35,6 +35,7 @@ void CPSLibrary::OnCreate() {
         string_path fn;
         FS.update_path(fn, _game_data_, "particles.xr");
         Load(fn);
+        Load2();
     }
 }
 

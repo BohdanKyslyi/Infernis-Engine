@@ -487,7 +487,7 @@ bool CLocatorAPI::Recurse(const char* path) {
         xr_strcpy(full_path, sizeof(full_path), path);
         xr_strcat(full_path, sFile.name);
 
-        // загоняем в вектор для того *.db* приходили в сортированном порядке
+        // Г§Г ГЈГ®Г­ГїГҐГ¬ Гў ГўГҐГЄГІГ®Г° Г¤Г«Гї ГІГ®ГЈГ® *.db* ГЇГ°ГЁГµГ®Г¤ГЁГ«ГЁ Гў Г±Г®Г°ГІГЁГ°Г®ГўГ Г­Г­Г®Г¬ ГЇГ®Г°ГїГ¤ГЄГҐ
         if (!ignore_name(sFile.name) && !ignore_path(full_path))
             rec_files.push_back(sFile);
 
@@ -498,7 +498,7 @@ bool CLocatorAPI::Recurse(const char* path) {
                 rec_files.push_back(sFile);
         }
     } else {
-        // загоняем в вектор для того *.db* приходили в сортированном порядке
+        // Г§Г ГЈГ®Г­ГїГҐГ¬ Гў ГўГҐГЄГІГ®Г° Г¤Г«Гї ГІГ®ГЈГ® *.db* ГЇГ°ГЁГµГ®Г¤ГЁГ«ГЁ Гў Г±Г®Г°ГІГЁГ°Г®ГўГ Г­Г­Г®Г¬ ГЇГ®Г°ГїГ¤ГЄГҐ
         if (!ignore_name(sFile.name))
             rec_files.push_back(sFile);
 
@@ -587,6 +587,112 @@ IReader* CLocatorAPI::setup_fs_ltx(LPCSTR fs_name) {
         _register_open_file(result, fs_file_name);
 
     return result;
+}
+
+// Index addon resources under their normal gamedata paths while keeping their bytes
+// in separate addon directories. Later (alphabetical) packs replace earlier files.
+void CLocatorAPI::ScanAddonDirectory(const xr_string& disk_path, const xr_string& game_path) {
+    if (disk_path.size() + 2 >= sizeof(string_path) || game_path.size() + 2 >= sizeof(string_path))
+        return;
+
+    string_path pattern;
+    strconcat(sizeof(pattern), pattern, disk_path.c_str(), "*.*");
+
+    _finddata_t entry;
+    intptr_t handle = _findfirst(pattern, &entry);
+    if (handle == -1)
+        return;
+
+    xr_vector<_finddata_t> entries;
+    do {
+        if (xr_strcmp(entry.name, ".") && xr_strcmp(entry.name, "..") &&
+            !(entry.attrib & _A_HIDDEN) && !(entry.attrib & FILE_ATTRIBUTE_REPARSE_POINT))
+            entries.push_back(entry);
+    } while (_findnext(handle, &entry) == 0);
+    _findclose(handle);
+
+    std::sort(entries.begin(), entries.end(), [](const _finddata_t& left, const _finddata_t& right) {
+        return _stricmp(left.name, right.name) < 0;
+    });
+
+    for (const auto& item : entries) {
+        if (disk_path.size() + xr_strlen(item.name) + 2 >= sizeof(string_path) ||
+            game_path.size() + xr_strlen(item.name) + 2 >= sizeof(string256)) {
+            Msg("! Addon path too long: %s%s", game_path.c_str(), item.name);
+            continue;
+        }
+
+        string_path disk_file, game_file;
+        strconcat(sizeof(disk_file), disk_file, disk_path.c_str(), item.name);
+        strconcat(sizeof(game_file), game_file, game_path.c_str(), item.name);
+        xr_strlwr(disk_file);
+        xr_strlwr(game_file);
+
+        if (item.attrib & _A_SUBDIR) {
+            xr_strcat(disk_file, "\\");
+            xr_strcat(game_file, "\\");
+            ScanAddonDirectory(disk_file, game_file);
+        } else {
+            // X-Ray archives require their own mount points; addon packs contain loose files.
+            LPCSTR ext = strext(game_file);
+            if (ext && (!xr_strcmp(ext, ".db") || !xr_strcmp(ext, ".xdb")))
+                continue;
+
+            if (m_addon_files.find(game_file) != m_addon_files.end())
+                Msg("! Addon file overridden: %s (by %s)", game_file, disk_file);
+            m_addon_files[game_file] = disk_file;
+            Register(game_file, 0xffffffff, 0, 0, item.size, item.size, (u32)item.time_write);
+        }
+    }
+}
+
+void CLocatorAPI::ScanAddons() {
+    if (!path_exist("$game_data$"))
+        return;
+
+    xr_string game_path = get_path("$game_data$")->m_Path;
+    if (game_path.empty())
+        return;
+
+    // Place addons beside gamedata, independent of the process working directory.
+    xr_string addons_path = game_path;
+    if (addons_path.back() == '\\')
+        addons_path.pop_back();
+    const auto separator = addons_path.find_last_of("\\/");
+    if (separator == xr_string::npos)
+        return;
+    addons_path.erase(separator + 1);
+    addons_path += "addons\\";
+    if (addons_path.size() + 2 >= sizeof(string_path))
+        return;
+
+    string_path pattern;
+    strconcat(sizeof(pattern), pattern, addons_path.c_str(), "*.*");
+    _finddata_t entry;
+    intptr_t handle = _findfirst(pattern, &entry);
+    if (handle == -1)
+        return;
+
+    xr_vector<xr_string> packs;
+    do {
+        if ((entry.attrib & _A_SUBDIR) && !(entry.attrib & _A_HIDDEN) &&
+            !(entry.attrib & FILE_ATTRIBUTE_REPARSE_POINT) &&
+            xr_strcmp(entry.name, ".") && xr_strcmp(entry.name, ".."))
+            packs.emplace_back(entry.name);
+    } while (_findnext(handle, &entry) == 0);
+    _findclose(handle);
+
+    std::sort(packs.begin(), packs.end(), [](const xr_string& left, const xr_string& right) {
+        return _stricmp(left.c_str(), right.c_str()) < 0;
+    });
+
+    for (const auto& pack : packs) {
+        if (addons_path.size() + pack.size() + 2 >= sizeof(string_path))
+            continue;
+        xr_string root = addons_path + pack + "\\";
+        Msg("FS: loading addon %s", root.c_str());
+        ScanAddonDirectory(root, game_path);
+    }
 }
 
 void CLocatorAPI::_initialize(u32 flags, LPCSTR target_folder, LPCSTR fs_name) {
@@ -698,6 +804,9 @@ void CLocatorAPI::_initialize(u32 flags, LPCSTR target_folder, LPCSTR fs_name) {
         R_ASSERT(path_exist("$app_data_root$"));
     };
 
+    if (!m_Flags.is(flTargetFolderOnly))
+        ScanAddons();
+
     u32 M2 = Memory.mem_usage();
     Msg("FS: %d files cached %d archives, %dKb memory used.", m_files.size(), m_archives.size(),
         (M2 - M1) / 1024);
@@ -743,6 +852,7 @@ void CLocatorAPI::_destroy() {
         xr_delete(it.second);
     }
     pathes.clear();
+    m_addon_files.clear();
     for (auto& it : m_archives) {
         xr_delete(it.header);
         it.close();
@@ -783,7 +893,7 @@ xr_vector<char*>* CLocatorAPI::file_list_open(const char* initial, const char* f
 xr_vector<char*>* CLocatorAPI::file_list_open(const char* _path, u32 flags) {
     R_ASSERT(_path);
     VERIFY(flags);
-    // проверить нужно ли пересканировать пути
+    // ГЇГ°Г®ГўГҐГ°ГЁГІГј Г­ГіГ¦Г­Г® Г«ГЁ ГЇГҐГ°ГҐГ±ГЄГ Г­ГЁГ°Г®ГўГ ГІГј ГЇГіГІГЁ
     check_pathes();
 
     string_path N;
@@ -846,7 +956,7 @@ void CLocatorAPI::file_list_close(xr_vector<char*>*& lst) {
 int CLocatorAPI::file_list(FS_FileSet& dest, LPCSTR path, u32 flags, LPCSTR mask) {
     R_ASSERT(path);
     VERIFY(flags);
-    // проверить нужно ли пересканировать пути
+    // ГЇГ°Г®ГўГҐГ°ГЁГІГј Г­ГіГ¦Г­Г® Г«ГЁ ГЇГҐГ°ГҐГ±ГЄГ Г­ГЁГ°Г®ГўГ ГІГј ГЇГіГІГЁ
     check_pathes();
 
     string_path N;
@@ -1151,7 +1261,7 @@ void CLocatorAPI::copy_file_to_build(T*& r, LPCSTR source_name) {
 
 bool CLocatorAPI::check_for_file(LPCSTR path, LPCSTR _fname, string_path& fname,
                                  const file*& desc) {
-    // проверить нужно ли пересканировать пути
+    // ГЇГ°Г®ГўГҐГ°ГЁГІГј Г­ГіГ¦Г­Г® Г«ГЁ ГЇГҐГ°ГҐГ±ГЄГ Г­ГЁГ°Г®ГўГ ГІГј ГЇГіГІГЁ
     check_pathes();
 
     // correct path
@@ -1182,6 +1292,11 @@ T* CLocatorAPI::r_open_impl(LPCSTR path, LPCSTR _fname) {
 
     if (!check_for_file(path, _fname, fname, desc))
         return (0);
+
+    // Resolve the virtual gamedata path only for reading; writes still target gamedata.
+    const auto addon = m_addon_files.find(fname);
+    if (addon != m_addon_files.end())
+        xr_strcpy(fname, sizeof(fname), addon->second.c_str());
 
     // OK, analyse
     if (0xffffffff == desc->vfs)
@@ -1262,7 +1377,7 @@ void CLocatorAPI::w_close(IWriter*& S) {
 }
 
 CLocatorAPI::files_it CLocatorAPI::file_find_it(LPCSTR fname) {
-    // проверить нужно ли пересканировать пути
+    // ГЇГ°Г®ГўГҐГ°ГЁГІГј Г­ГіГ¦Г­Г® Г«ГЁ ГЇГҐГ°ГҐГ±ГЄГ Г­ГЁГ°Г®ГўГ ГІГј ГЇГіГІГЁ
     check_pathes();
 
     file desc_f;
@@ -1412,7 +1527,7 @@ void CLocatorAPI::update_path(xr_string& dest, LPCSTR initial, LPCSTR src)
 }*/
 
 u32 CLocatorAPI::get_file_age(LPCSTR nm) {
-    // проверить нужно ли пересканировать пути
+    // ГЇГ°Г®ГўГҐГ°ГЁГІГј Г­ГіГ¦Г­Г® Г«ГЁ ГЇГҐГ°ГҐГ±ГЄГ Г­ГЁГ°Г®ГўГ ГІГј ГЇГіГІГЁ
     check_pathes();
 
     files_it I = file_find_it(nm);
@@ -1420,7 +1535,7 @@ u32 CLocatorAPI::get_file_age(LPCSTR nm) {
 }
 
 void CLocatorAPI::set_file_age(LPCSTR nm, u32 age) {
-    // проверить нужно ли пересканировать пути
+    // ГЇГ°Г®ГўГҐГ°ГЁГІГј Г­ГіГ¦Г­Г® Г«ГЁ ГЇГҐГ°ГҐГ±ГЄГ Г­ГЁГ°Г®ГўГ ГІГј ГЇГіГІГЁ
     check_pathes();
 
     // set file

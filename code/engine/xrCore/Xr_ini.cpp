@@ -21,8 +21,49 @@ bool item_pred(const CInifile::Item& x, LPCSTR val) {
         return xr_strcmp(*x.first, val) < 0;
 }
 
+static void insert_item(CInifile::Sect* tgt, const CInifile::Item& I);
+
+static bool is_modular_ini_name(LPCSTR name) {
+    return name && (0 == strncmp(name, "mod_", 4));
+}
+
+static void get_ini_base_name(LPCSTR file_name, LPSTR dest, u32 dest_size) {
+    string_path drive, dir, name, ext;
+    _splitpath(file_name, drive, dir, name, ext);
+    xr_strcpy(dest, dest_size, name);
+    strlwr(dest);
+}
+
+static void commit_section(CInifile::Root& data, CInifile::Sect*& section, bool merge, bool addon) {
+    if (!section)
+        return;
+
+    auto I = std::lower_bound(data.begin(), data.end(), *section->Name, sect_pred);
+    if ((I != data.end()) && ((*I)->Name == section->Name)) {
+        if (!merge && !addon)
+            Debug.fatal(DEBUG_INFO, "Duplicate section '%s' found.", *section->Name);
+
+        if (!merge) {
+            CInifile::Sect* previous = *I;
+            *I = section;
+            section = nullptr;
+            xr_delete(previous);
+            return;
+        }
+
+        for (const auto& item : section->Data)
+            insert_item(*I, item);
+
+        xr_delete(section);
+        return;
+    }
+
+    data.insert(I, section);
+    section = nullptr;
+}
+
 //------------------------------------------------------------------------------
-//Òåëî ôóíêöèé Inifile
+//Ã’Ã¥Ã«Ã® Ã´Ã³Ã­ÃªÃ¶Ã¨Ã© Inifile
 //------------------------------------------------------------------------------
 XRCORE_API BOOL _parse(LPSTR dest, LPCSTR src) {
     BOOL bInsideSTR = false;
@@ -114,7 +155,47 @@ CInifile::CInifile(LPCSTR szFileName, BOOL ReadOnly, BOOL bLoad, BOOL SaveAtEnd,
                 DATA.reserve(sect_count);
             Load(R, path, allow_include_func);
             FS.r_close(R);
+            LoadModularIncludes(szFileName, path, allow_include_func);
         }
+    }
+}
+
+void CInifile::LoadModularIncludes(LPCSTR szFileName, LPCSTR path, allow_include_func_t allow_include_func) {
+    if (!m_flags.test(eReadOnly) || !szFileName || !path || !path[0])
+        return;
+
+    string_path base_name;
+    get_ini_base_name(szFileName, base_name, sizeof(base_name));
+    if (!base_name[0] || is_modular_ini_name(base_name))
+        return;
+
+    string64 mask;
+    xr_sprintf(mask, sizeof(mask), "mod_%s_*.ltx", base_name);
+
+    FS_FileSet files;
+    FS.file_list(files, path, FS_ListFiles, mask);
+
+    for (const auto& file : files) {
+        string_path fn, inc_path, folder;
+        strconcat(sizeof(fn), fn, path, file.name.c_str());
+        if (allow_include_func && !allow_include_func(fn))
+            continue;
+
+        _splitpath(fn, inc_path, folder, 0, 0);
+        xr_strcat(inc_path, sizeof(inc_path), folder);
+
+        IReader* I = FS.r_open(fn);
+        if (!I) {
+            Msg("! Cannot open modular include '%s'", fn);
+            continue;
+        }
+
+        Msg("! Loading modular include '%s'", fn);
+        const bool previous = m_loading_modular_include;
+        m_loading_modular_include = true;
+        Load(I, inc_path, allow_include_func);
+        m_loading_modular_include = previous;
+        FS.r_close(I);
     }
 }
 
@@ -157,6 +238,7 @@ void CInifile::Load(IReader* F, LPCSTR path, allow_include_func_t allow_include_
     string4096 str2;
 
     BOOL bInsideSTR = FALSE;
+    bool bMergeSection = false;
 
     while (!F->eof()) {
         F->r_string(str, sizeof(str));
@@ -207,19 +289,17 @@ void CInifile::Load(IReader* F, LPCSTR path, allow_include_func_t allow_include_
                     R_ASSERT3(I, "Can't find include file:", inc_name);
                     Load(I, inc_path, allow_include_func);
                     FS.r_close(I);
+                    LoadModularIncludes(fn, inc_path, allow_include_func);
                 }
             }
         } else if (str[0] && (str[0] == '[')) // new section ?
         {
             // insert previous filled section
-            if (Current) {
-                // store previous section
-                auto I = std::lower_bound(DATA.begin(), DATA.end(), *Current->Name, sect_pred);
-                if ((I != DATA.end()) && ((*I)->Name == Current->Name))
-                    Debug.fatal(DEBUG_INFO, "Duplicate section '%s' found.", *Current->Name);
-                DATA.insert(I, Current);
-            }
+            if (Current)
+                commit_section(DATA, Current, bMergeSection, m_loading_modular_include);
+
             Current = xr_new<Sect>();
+            bMergeSection = false;
             Current->Name = 0;
             // start new section
             R_ASSERT3(strchr(str, ']'), "Bad ini section found: ", str);
@@ -249,7 +329,12 @@ void CInifile::Load(IReader* F, LPCSTR path, allow_include_func_t allow_include_
                 }
             }
             *strchr(str, ']') = 0;
-            Current->Name = strlwr(str + 1);
+            LPSTR section_name = strlwr(str + 1);
+            if (section_name[0] == '!') {
+                bMergeSection = true;
+                ++section_name;
+            }
+            Current->Name = section_name;
         } else // name = value
         {
             if (Current) {
@@ -307,12 +392,8 @@ void CInifile::Load(IReader* F, LPCSTR path, allow_include_func_t allow_include_
             }
         }
     }
-    if (Current) {
-        auto I = std::lower_bound(DATA.begin(), DATA.end(), *Current->Name, sect_pred);
-        if ((I != DATA.end()) && ((*I)->Name == Current->Name))
-            Debug.fatal(DEBUG_INFO, "Duplicate section '%s' found.", *Current->Name);
-        DATA.insert(I, Current);
-    }
+    if (Current)
+        commit_section(DATA, Current, bMergeSection, m_loading_modular_include);
 }
 
 void CInifile::save_as(IWriter& writer, bool bcheck) const {

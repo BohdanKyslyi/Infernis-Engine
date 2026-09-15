@@ -8,6 +8,26 @@
 #define INV_GRID_WIDTHF 50.0f
 #define INV_GRID_HEIGHTF 50.0f
 
+static void SetItemIconShader(CUIStaticItem& item, LPCSTR section) {
+    if (pSettings->line_exist(section, "icons_texture")) {
+        ui_shader shader;
+        shader->create("hud\\default", pSettings->r_string(section, "icons_texture"));
+        item.SetShader(shader);
+        return;
+    }
+
+    item.SetShader(InventoryUtilities::GetEquipmentIconsShader());
+}
+
+static void SetItemIconShader(CUIStatic* item, LPCSTR section) {
+    if (pSettings->line_exist(section, "icons_texture")) {
+        item->CreateShader(pSettings->r_string(section, "icons_texture"), "hud\\default");
+        return;
+    }
+
+    item->SetShader(InventoryUtilities::GetEquipmentIconsShader());
+}
+
 namespace detail {
 
 struct is_helper_pred {
@@ -20,7 +40,7 @@ struct is_helper_pred {
 CUIInventoryCellItem::CUIInventoryCellItem(CInventoryItem* itm) {
     m_pData = (void*)itm;
 
-    inherited::SetShader(InventoryUtilities::GetEquipmentIconsShader());
+    SetItemIconShader(GetUIStaticItem(), itm->object().cNameSect().c_str());
 
     m_grid_size.set(itm->GetInvGridRect().rb);
     Frect rect;
@@ -358,6 +378,7 @@ void CUIWeaponCellItem::InitAddon(CUIStatic* s, LPCSTR section, Fvector2 addon_o
     }
 
     s->SetWndPos(addon_offset);
+    SetItemIconShader(s, section);
     s->SetTextureRect(tex_rect);
     s->SetStretchTexture(true);
 

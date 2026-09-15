@@ -6,6 +6,7 @@
 #include "ui_defs.h"
 
 class CUITextWnd;
+class CUIStatic;
 
 //размеры сетки в текстуре инвентаря
 #define INV_GRID_WIDTH 50.0f
@@ -42,6 +43,7 @@ const ui_shader& GetMPCharIconsShader();
 const ui_shader& GetOutfitUpgradeIconsShader();
 // get shader for weapon icons in upgrade menu
 const ui_shader& GetWeaponUpgradeIconsShader();
+void SetUpgradeIconShader(CUIStatic& icon, LPCSTR section, bool weapon);
 //удаляем все шейдеры
 void DestroyShaders();
 void CreateShaders();
