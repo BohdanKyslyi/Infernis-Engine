@@ -381,12 +381,14 @@ void CWeapon::Load(LPCSTR section) {
     } else if (m_eScopeStatus == ALife::eAddonPermanent) {
         shared_str scope_tex_name = pSettings->r_string(cNameSect(), "scope_texture");
         m_zoom_params.m_fScopeZoomFactor = pSettings->r_float(cNameSect(), "scope_zoom_factor");
-        m_UIScope = xr_new<CUIWindow>();
-        if (!pWpnScopeXml) {
-            pWpnScopeXml = xr_new<CUIXml>();
-            pWpnScopeXml->Load(CONFIG_PATH, UI_PATH, "scopes.xml");
+        if (UseScopeTexture() && scope_tex_name.size()) {
+            m_UIScope = xr_new<CUIWindow>();
+            if (!pWpnScopeXml) {
+                pWpnScopeXml = xr_new<CUIXml>();
+                pWpnScopeXml->Load(CONFIG_PATH, UI_PATH, "scopes.xml");
+            }
+            CUIXmlInit::InitWindow(*pWpnScopeXml, scope_tex_name.c_str(), 0, m_UIScope);
         }
-        CUIXmlInit::InitWindow(*pWpnScopeXml, scope_tex_name.c_str(), 0, m_UIScope);
     }
 
     if (m_eSilencerStatus == ALife::eAddonAttachable) {
@@ -1077,6 +1079,31 @@ bool CWeapon::IsScopeAttached() const {
            ALife::eAddonPermanent == m_eScopeStatus;
 }
 
+bool CWeapon::Is3DScopeEnabled() const {
+    if (!IsScopeAttached() || !psDeviceFlags.test(rsR4) ||
+        !pSettings->section_exist("weapon_scopes") ||
+        !pSettings->line_exist("weapon_scopes", "enable_3d_scopes") ||
+        !pSettings->r_bool("weapon_scopes", "enable_3d_scopes"))
+        return false;
+
+    const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
+        ? GetScopeName() : cNameSect();
+    const bool enabled = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d",
+        READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "scope_3d", false));
+    const float fov = ScopeLensFov();
+    return enabled && fov >= 5.f && fov <= 90.f;
+}
+
+float CWeapon::ScopeLensFov() const {
+    if (!IsScopeAttached())
+        return 0.f;
+
+    const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
+        ? GetScopeName() : cNameSect();
+    return READ_IF_EXISTS(pSettings, r_float, scope_section, "scope_lens_fov",
+        READ_IF_EXISTS(pSettings, r_float, cNameSect(), "scope_lens_fov", 0.f));
+}
+
 bool CWeapon::IsSilencerAttached() const {
     return (ALife::eAddonAttachable == m_eSilencerStatus &&
             0 != (m_flagsAddOnState & CSE_ALifeItemWeapon::eWeaponAddonSilencer)) ||
@@ -1197,6 +1224,18 @@ float CWeapon::CurrentZoomFactor() {
 void GetZoomData(const float scope_factor, float& delta, float& min_zoom_factor);
 void CWeapon::OnZoomIn() {
     m_zoom_params.m_bIsZoomModeNow = true;
+    if (IsScopeAttached()) {
+        const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
+            ? GetScopeName() : cNameSect();
+        const bool global = pSettings->section_exist("weapon_scopes") &&
+            pSettings->line_exist("weapon_scopes", "enable_3d_scopes") &&
+            pSettings->r_bool("weapon_scopes", "enable_3d_scopes");
+        const bool configured = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d",
+            READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "scope_3d", false));
+        Msg("* ScopeLens: weapon=%s optic=%s R4=%d global=%d scope_3d=%d lens_fov=%.1f active=%d",
+            cNameSect().c_str(), scope_section.c_str(), !!psDeviceFlags.test(rsR4),
+            !!global, !!configured, ScopeLensFov(), !!Is3DScopeEnabled());
+    }
     if (m_zoom_params.m_bUseDynamicZoom)
         SetZoomFactor(m_fRTZoomFactor);
     else

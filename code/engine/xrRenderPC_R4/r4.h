@@ -157,6 +157,7 @@ public:
     bool m_bMakeAsyncSS;
     bool m_bFirstFrameAfterReset; // Determines weather the frame is the first after resetting
                                   // device.
+    bool m_bScopeLensRendered = false;
     xr_vector<sun::cascade> m_sun_cascades;
 
 private:
@@ -330,6 +331,7 @@ public:
     // Main
     virtual void Calculate();
     virtual void Render();
+    bool CaptureScopeLens() override;
     virtual void Screenshot(ScreenshotMode mode = SM_NORMAL, LPCSTR name = 0);
     virtual void Screenshot(ScreenshotMode mode, CMemoryWriter& memory_writer);
     virtual void ScreenshotAsyncBegin();

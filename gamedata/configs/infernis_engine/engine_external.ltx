@@ -83,3 +83,8 @@ renderer_dx11_image	= renderer_dx11
 enable_pbr_rendering	= false ; увімкнення PBR-рендерингу
 sslr_mode				= off ; performance / balanced / quality / reference / off
 allow_bloodmarks_on_npc	= true; відображення кривавих слідів у сталкерів і мутантів
+
+; R4 draws the world a second time for optics with scope_3d and scope_lens_fov.
+; The existing 2D overlay is used if this switch is disabled.
+[weapon_scopes]
+enable_3d_scopes		= false

@@ -869,9 +869,11 @@ void CWeaponMagazined::InitAddons() {
                 xr_delete(m_UIScope);
             }
 
-            m_UIScope = xr_new<CUIWindow>();
-            createWpnScopeXML();
-            CUIXmlInit::InitWindow(*pWpnScopeXml, scope_tex_name.c_str(), 0, m_UIScope);
+            if (UseScopeTexture() && scope_tex_name.size()) {
+                m_UIScope = xr_new<CUIWindow>();
+                createWpnScopeXML();
+                CUIXmlInit::InitWindow(*pWpnScopeXml, scope_tex_name.c_str(), 0, m_UIScope);
+            }
         }
     } else {
         if (m_UIScope) {

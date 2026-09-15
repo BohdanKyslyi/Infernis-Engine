@@ -99,6 +99,7 @@ public:
 
     virtual void OnFrame(void);
     virtual void OnRender(void);
+    virtual float ScopeLensFov() const { return 0.f; }
 
     virtual shared_str OpenDemoFile(LPCSTR demo_file_name) = 0;
     virtual void net_StartPlayDemo() = 0;

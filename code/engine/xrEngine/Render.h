@@ -288,6 +288,8 @@ public:
     // Main
     virtual void Calculate() = 0;
     virtual void Render() = 0;
+    // Only renderers that support a separate lens image override this hook.
+    virtual bool CaptureScopeLens() { return false; }
 
     virtual void Screenshot(ScreenshotMode mode = SM_NORMAL, LPCSTR name = 0) = 0;
     virtual void Screenshot(ScreenshotMode mode, CMemoryWriter& memory_writer) = 0;

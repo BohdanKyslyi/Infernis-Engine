@@ -28,6 +28,7 @@ public:
     virtual bool CanAttach(PIItem pIItem);
     virtual bool CanDetach(const char* item_section_name);
     virtual void InitAddons();
+    bool Is3DScopeEnabled() const override;
     virtual bool UseScopeTexture();
     virtual float CurrentZoomFactor();
     virtual u8 GetCurrentHudOffsetIdx();

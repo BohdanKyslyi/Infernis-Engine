@@ -493,11 +493,15 @@ void CWeaponMagazinedWGrenade::InitAddons() {
     }
 }
 
+bool CWeaponMagazinedWGrenade::Is3DScopeEnabled() const {
+    return !(IsGrenadeLauncherAttached() && m_bGrenadeMode) && inherited::Is3DScopeEnabled();
+}
+
 bool CWeaponMagazinedWGrenade::UseScopeTexture() {
     if (IsGrenadeLauncherAttached() && m_bGrenadeMode)
         return false;
 
-    return true;
+    return inherited::UseScopeTexture();
 };
 
 float CWeaponMagazinedWGrenade::CurrentZoomFactor() {
