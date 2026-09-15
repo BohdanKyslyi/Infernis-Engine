@@ -49,7 +49,7 @@
 
 ### Addon packs
 
-Place each pack in `addons/<pack_name>/` beside `gamedata/`. See [addon packaging](ADDONS.md) for the directory layout, LTX merges and load order.
+Place each pack in `addons/<pack_name>/` beside `gamedata/`. See [addon packaging](ADDONS.md) or [оформлення аддонів українською](ADDONS_UA.md) for layout, LTX overrides and load order.
 
 ### How do I build the updated engine?
 1) [Install **CMake**](https://cmake.org/download/) version **3.5** or higher
