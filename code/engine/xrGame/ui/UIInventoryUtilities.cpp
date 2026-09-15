@@ -122,8 +122,8 @@ bool InventoryUtilities::FreeRoom_inBelt(TIItemContainer& item_list, PIItem _ite
          ++it) {
         PIItem pItem = *it;
         Ivector2 iWH = pItem->GetInvGridRect().rb;
-        //ГЇГ°Г®ГўГҐГ°ГЁГІГј Г¬Г®Г¦Г­Г® Г«ГЁ Г°Г Г§Г¬ГҐГ±ГІГЁГІГј ГЅГ«ГҐГ¬ГҐГ­ГІ,
-        //ГЇГ°Г®ГўГҐГ°ГїГҐГ¬ ГЇГ®Г±Г«ГҐГ¤Г®ГўГ ГІГҐГ«ГјГ­Г® ГЄГ Г¦Г¤ГіГѕ ГЄГ«ГҐГІГ®Г·ГЄГі
+        //проверить можно ли разместить элемент,
+        //проверяем последовательно каждую клеточку
         found_place = false;
 
         for (i = 0; (i < height - iWH.y + 1) && !found_place; ++i) {
@@ -145,7 +145,7 @@ bool InventoryUtilities::FreeRoom_inBelt(TIItemContainer& item_list, PIItem _ite
             }
         }
 
-        //Г°Г Г§Г¬ГҐГ±ГІГЁГІГј ГЅГ«ГҐГ¬ГҐГ­ГІ Г­Г  Г­Г Г©Г¤ГҐГ­Г­Г®Г¬ Г¬ГҐГ±ГІГҐ
+        //разместить элемент на найденном месте
         if (found_place) {
             for (k = 0; k < iWH.y; ++k) {
                 for (m = 0; m < iWH.x; ++m) {
@@ -158,7 +158,7 @@ bool InventoryUtilities::FreeRoom_inBelt(TIItemContainer& item_list, PIItem _ite
     // remove
     item_list.erase(std::remove(item_list.begin(), item_list.end(), _item), item_list.end());
 
-    //Г¤Г«Гї ГЄГ ГЄГ®ГЈГ®-ГІГ® ГЅГ«ГҐГ¬ГҐГ­ГІГ  Г¬ГҐГ±ГІГ  Г­ГҐ Г­Г ГёГ«Г®Г±Гј
+    //для какого-то элемента места не нашлось
     if (!found_place)
         return false;
 
@@ -483,8 +483,8 @@ LPCSTR InventoryUtilities::GetGoodwillAsText(CHARACTER_GOODWILL goodwill) {
 }
 
 //////////////////////////////////////////////////////////////////////////
-// Г±ГЇГҐГ¶ГЁГ Г«ГјГ­Г Гї ГґГіГ­ГЄГ¶ГЁГї Г¤Г«Гї ГЇГҐГ°ГҐГ¤Г Г·ГЁ info_portions ГЇГ°ГЁ Г­Г Г¦Г ГІГЁГЁ ГЄГ­Г®ГЇГ®ГЄ UI
-// (Г¤Г«Гї tutorial)
+// специальная функция для передачи info_portions при нажатии кнопок UI
+// (для tutorial)
 void InventoryUtilities::SendInfoToActor(LPCSTR info_id) {
     if (GameID() != eGameIDSingle)
         return;
