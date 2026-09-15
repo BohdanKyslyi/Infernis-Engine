@@ -396,6 +396,7 @@ CRenderTarget::CRenderTarget() {
 
         // generic(LDR) RTs
         rt_Generic_0.create(r2_RT_generic0, w, h, D3DFMT_A8R8G8B8, 1);
+        rt_ScopeLens.create(r2_RT_scope_lens, w, h, D3DFMT_A8R8G8B8, 1);
         rt_Generic_1.create(r2_RT_generic1, w, h, D3DFMT_A8R8G8B8, 1);
         if (RImplementation.o.dx10_msaa) {
             rt_Generic_0_r.create(r2_RT_generic0_r, w, h, D3DFMT_A8R8G8B8, SampleCount);
@@ -960,6 +961,22 @@ CRenderTarget::CRenderTarget() {
     //
     dwWidth = Device.dwWidth;
     dwHeight = Device.dwHeight;
+}
+
+void CRenderTarget::CaptureScopeLens() {
+    // The main render is drawn into these intermediates on the next pass.
+    // Unbind the source RTV and any lens SRV left by the previous frame.
+    static STextureList no_textures;
+    RCache.set_Textures(&no_textures);
+    SRVSManager.Apply();
+    RCache.set_RT(nullptr, 0);
+    RCache.set_RT(nullptr, 1);
+    RCache.set_RT(nullptr, 2);
+    HW.pContext->CopyResource(rt_ScopeLens->pTexture->surface_get(),
+                              rt_Generic_0->pTexture->surface_get());
+    // The main world pass shares intermediates and the same Device.dwFrame.
+    // Force its lighting accumulator to clear rather than reuse lens lighting.
+    dwAccumulatorClearMark = 0;
 }
 
 CRenderTarget::~CRenderTarget() {

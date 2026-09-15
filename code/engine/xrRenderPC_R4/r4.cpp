@@ -95,6 +95,19 @@ static class cl_ie_pbr_hud_projection_params : public R_constant_setup {
     }
 } binder_ie_pbr_hud_projection_params;
 
+static class cl_scope_lens_state : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        const float active = Device.scopeLensActive && !Device.scopeLensPass ? 1.f : 0.f;
+        RCache.set_c(C, active, 0.f, 0.f, 0.f);
+    }
+} binder_scope_lens_state;
+
+static class cl_scope_lens_size : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        RCache.set_c(C, (float)Device.dwWidth, (float)Device.dwHeight, 0.f, 0.f);
+    }
+} binder_scope_lens_size;
+
 static class cl_water_intensity : public R_constant_setup {
     virtual void setup(R_constant* C) {
         CEnvDescriptor& E = *g_pGamePersistent->Environment().CurrentEnv;
@@ -399,6 +412,10 @@ void CRender::create() {
         "pos_decompression_params2", &binder_pos_decompress_params2);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
         "ie_pbr_hud_projection_params", &binder_ie_pbr_hud_projection_params);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "scope_lens_state", &binder_scope_lens_state);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "scope_lens_size", &binder_scope_lens_size);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("triLOD", &binder_LOD);
 
     c_lmaterial = "L_material";

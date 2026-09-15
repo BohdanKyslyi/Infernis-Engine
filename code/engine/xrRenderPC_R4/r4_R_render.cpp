@@ -131,11 +131,11 @@ void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
                 break; // exit loop on frustums
             }
         }
-        if (g_pGameLevel && (phase == PHASE_NORMAL))
+        if (g_pGameLevel && (phase == PHASE_NORMAL) && !Device.scopeLensPass)
             g_hud->Render_Last(); // HUD
     } else {
         set_Object(0);
-        if (g_pGameLevel && (phase == PHASE_NORMAL))
+        if (g_pGameLevel && (phase == PHASE_NORMAL) && !Device.scopeLensPass)
             g_hud->Render_Last(); // HUD
     }
 }
@@ -193,6 +193,8 @@ extern u32 g_r;
 void CRender::Render() {
     PIX_EVENT(CRender_Render);
 
+    if (Device.scopeLensPass)
+        m_bScopeLensRendered = false;
     g_r = 1;
     VERIFY(0 == mapDistort.size());
 
@@ -232,9 +234,11 @@ void CRender::Render() {
     // HOM
     ViewBase.CreateFromMatrix(Device.mFullTransform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
     View = 0;
-    if (!ps_r2_ls_flags.test(R2FLAG_EXP_MT_CALC)) {
+    if (!Device.scopeLensPass && !ps_r2_ls_flags.test(R2FLAG_EXP_MT_CALC)) {
         HOM.Enable();
         HOM.Render(ViewBase);
+    } else if (Device.scopeLensPass) {
+        HOM.Disable();
     }
 
     //******* Z-prefill calc - DEFERRER RENDERER
@@ -311,7 +315,8 @@ void CRender::Render() {
         PIX_EVENT(DEFER_PART0_NO_SPLIT);
         // level, DO NOT SPLIT
         Target->phase_scene_begin();
-        r_dsgraph_render_hud();
+        if (!Device.scopeLensPass)
+            r_dsgraph_render_hud();
         r_dsgraph_render_graph(0);
         r_dsgraph_render_lods(true, true);
         if (Details)
@@ -402,14 +407,15 @@ void CRender::Render() {
 
         // level
         Target->phase_scene_begin();
-        r_dsgraph_render_hud();
+        if (!Device.scopeLensPass)
+            r_dsgraph_render_hud();
         r_dsgraph_render_lods(true, true);
         if (Details)
             Details->Render();
         Target->phase_scene_end();
     }
 
-    if (g_hud && g_hud->RenderActiveItemUIQuery()) {
+    if (!Device.scopeLensPass && g_hud && g_hud->RenderActiveItemUIQuery()) {
         Target->phase_wallmarks();
         r_dsgraph_render_hud_ui();
     }
@@ -503,8 +509,29 @@ void CRender::Render() {
         PIX_EVENT(DEFER_LIGHT_COMBINE);
         Target->phase_combine();
     }
+    if (Device.scopeLensPass)
+        m_bScopeLensRendered = true;
 
     VERIFY(0 == mapDistort.size());
+}
+
+bool CRender::CaptureScopeLens() {
+    if (!Device.scopeLensPass || !Target)
+        return false;
+
+    // A second Calculate() in the same frame must be able to discover these lights again.
+    // Render marks each light with Device.dwFrame to avoid duplicates within one view.
+    for (light* L : Lights.package.v_point)
+        L->frame_render = 0;
+    for (light* L : Lights.package.v_spot)
+        L->frame_render = 0;
+    for (light* L : Lights.package.v_shadowed)
+        L->frame_render = 0;
+
+    if (!m_bScopeLensRendered)
+        return false;
+    Target->CaptureScopeLens();
+    return true;
 }
 
 void CRender::render_forward() {

@@ -129,8 +129,9 @@ void CRenderTarget::phase_bloom() {
 
         // Perform combine (all scalers must account for 4 samples + final diffuse multiply);
         float s = ps_r2_ls_bloom_threshold; // scale
-        f_bloom_factor =
-            .9f * f_bloom_factor + .1f * ps_r2_ls_bloom_speed * Device.fTimeDelta; // speed
+        if (!Device.scopeLensPass)
+            f_bloom_factor =
+                .9f * f_bloom_factor + .1f * ps_r2_ls_bloom_speed * Device.fTimeDelta; // speed
         if (!RImplementation.o.dx10_msaa)
             RCache.set_Element(s_bloom->E[0]);
         else
@@ -141,7 +142,9 @@ void CRenderTarget::phase_bloom() {
     }
 
     // Capture luminance values
-    phase_luminance();
+    // Only the main camera advances auto-exposure once per simulation frame.
+    if (!Device.scopeLensPass)
+        phase_luminance();
 
     if (ps_r2_ls_flags.test(R2FLAG_FASTBLOOM)) {
         // FAST FILTER

@@ -381,12 +381,14 @@ void CWeapon::Load(LPCSTR section) {
     } else if (m_eScopeStatus == ALife::eAddonPermanent) {
         shared_str scope_tex_name = pSettings->r_string(cNameSect(), "scope_texture");
         m_zoom_params.m_fScopeZoomFactor = pSettings->r_float(cNameSect(), "scope_zoom_factor");
-        m_UIScope = xr_new<CUIWindow>();
-        if (!pWpnScopeXml) {
-            pWpnScopeXml = xr_new<CUIXml>();
-            pWpnScopeXml->Load(CONFIG_PATH, UI_PATH, "scopes.xml");
+        if (UseScopeTexture() && scope_tex_name.size()) {
+            m_UIScope = xr_new<CUIWindow>();
+            if (!pWpnScopeXml) {
+                pWpnScopeXml = xr_new<CUIXml>();
+                pWpnScopeXml->Load(CONFIG_PATH, UI_PATH, "scopes.xml");
+            }
+            CUIXmlInit::InitWindow(*pWpnScopeXml, scope_tex_name.c_str(), 0, m_UIScope);
         }
-        CUIXmlInit::InitWindow(*pWpnScopeXml, scope_tex_name.c_str(), 0, m_UIScope);
     }
 
     if (m_eSilencerStatus == ALife::eAddonAttachable) {
@@ -1075,6 +1077,31 @@ bool CWeapon::IsScopeAttached() const {
     return (ALife::eAddonAttachable == m_eScopeStatus &&
             0 != (m_flagsAddOnState & CSE_ALifeItemWeapon::eWeaponAddonScope)) ||
            ALife::eAddonPermanent == m_eScopeStatus;
+}
+
+bool CWeapon::Is3DScopeEnabled() const {
+    if (!IsScopeAttached() || !psDeviceFlags.test(rsR4) ||
+        !pSettings->section_exist("weapon_scopes") ||
+        !pSettings->line_exist("weapon_scopes", "enable_3d_scopes") ||
+        !pSettings->r_bool("weapon_scopes", "enable_3d_scopes"))
+        return false;
+
+    const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
+        ? GetScopeName() : cNameSect();
+    const bool enabled = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d",
+        READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "scope_3d", false));
+    const float fov = ScopeLensFov();
+    return enabled && fov >= 5.f && fov <= 90.f;
+}
+
+float CWeapon::ScopeLensFov() const {
+    if (!IsScopeAttached())
+        return 0.f;
+
+    const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
+        ? GetScopeName() : cNameSect();
+    return READ_IF_EXISTS(pSettings, r_float, scope_section, "scope_lens_fov",
+        READ_IF_EXISTS(pSettings, r_float, cNameSect(), "scope_lens_fov", 0.f));
 }
 
 bool CWeapon::IsSilencerAttached() const {

@@ -40,6 +40,7 @@
 #include "MainMenu.h"
 #include "../xrEngine/XR_IOConsole.h"
 #include "actor.h"
+#include "Weapon.h"
 #include "player_hud.h"
 #include "UI/UIGameTutorial.h"
 #include "message_filter.h"
@@ -489,6 +490,20 @@ void CLevel::OnFrame()
 
 void CLevel::script_gc() { 
     lua_gc(ai().script_engine().lua(), LUA_GCSTEP, psLUA_GCSTEP); 
+}
+
+float CLevel::ScopeLensFov() const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return 0.f;
+
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    if (!weapon || !weapon->Is3DScopeEnabled() || !weapon->IsZoomed() ||
+        weapon->IsRotatingToZoom())
+        return 0.f;
+
+    return weapon->ScopeLensFov();
 }
 
 void CLevel::OnRender() 
