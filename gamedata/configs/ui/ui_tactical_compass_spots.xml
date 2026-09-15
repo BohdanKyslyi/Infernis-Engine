@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<w>
+    <!-- type is a map_spots.xml location name; * covers any unlisted level spot. -->
+    <!-- x/y/width/height are pixel coordinates in the specified texture atlas. -->
+    <!-- size is the on-screen height; width follows the rectangle's aspect ratio. -->
+    <spot type="*" texture="ui\tactic_compass\markers" x="210" y="0" width="30" height="30" size="18" />
+    <spot type="@quest_storyline" texture="ui\tactic_compass\markers" x="270" y="0" width="30" height="30" size="18" />
+    <spot type="@quest_additional" texture="ui\tactic_compass\markers" x="240" y="0" width="30" height="30" size="18" />
+    <spot type="@enemy" texture="ui\tactic_compass\markers" x="300" y="60" width="30" height="30" size="18" />
+    <spot type="treasure" texture="ui\tactic_compass\markers" x="150" y="0" width="30" height="30" size="18" />
+    <spot type="treasure_unique" texture="ui\tactic_compass\markers" x="90" y="0" width="30" height="30" size="18" />
+    <spot type="level_changer_up" texture="ui\tactic_compass\markers" x="300" y="0" width="30" height="30" size="18" />
+    <spot type="level_changer_down" texture="ui\tactic_compass\markers" x="300" y="0" width="30" height="30" size="18" />
+</w>

@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <window>
-    <tactical_compass x="332" y="24" width="360" height="40" show_markers="1" marker_max_distance="500">
+    <tactical_compass x="332" y="40" width="360" height="66" show_markers="1"
+                      marker_max_distance="500" enemy_max_distance="120"
+                      marker_y="-12" focus_angle="20" distance_unit="m">
         <strip x="0" y="0" width="360" height="20" stretch="1">
             <texture>ie_compass_cardinal_dir</texture>
         </strip>
         <frame x="0" y="17" width="360" height="20" stretch="1">
             <texture>ie_compass_static_frame</texture>
         </frame>
+        <title x="0" y="-32" width="360" height="18">
+            <text font="letterica16" align="c" vert_align="c" r="235" g="235" b="235"/>
+        </title>
+        <distance x="0" y="28" width="360" height="18">
+            <text font="letterica16" align="c" vert_align="c" r="235" g="235" b="235"/>
+        </distance>
     </tactical_compass>
 </window>
