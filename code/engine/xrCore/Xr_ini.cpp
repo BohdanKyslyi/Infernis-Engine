@@ -34,14 +34,22 @@ static void get_ini_base_name(LPCSTR file_name, LPSTR dest, u32 dest_size) {
     strlwr(dest);
 }
 
-static void commit_section(CInifile::Root& data, CInifile::Sect*& section, bool merge) {
+static void commit_section(CInifile::Root& data, CInifile::Sect*& section, bool merge, bool addon) {
     if (!section)
         return;
 
     auto I = std::lower_bound(data.begin(), data.end(), *section->Name, sect_pred);
     if ((I != data.end()) && ((*I)->Name == section->Name)) {
-        if (!merge)
+        if (!merge && !addon)
             Debug.fatal(DEBUG_INFO, "Duplicate section '%s' found.", *section->Name);
+
+        if (!merge) {
+            CInifile::Sect* previous = *I;
+            *I = section;
+            section = nullptr;
+            xr_delete(previous);
+            return;
+        }
 
         for (const auto& item : section->Data)
             insert_item(*I, item);
@@ -183,7 +191,10 @@ void CInifile::LoadModularIncludes(LPCSTR szFileName, LPCSTR path, allow_include
         }
 
         Msg("! Loading modular include '%s'", fn);
+        const bool previous = m_loading_modular_include;
+        m_loading_modular_include = true;
         Load(I, inc_path, allow_include_func);
+        m_loading_modular_include = previous;
         FS.r_close(I);
     }
 }
@@ -285,7 +296,7 @@ void CInifile::Load(IReader* F, LPCSTR path, allow_include_func_t allow_include_
         {
             // insert previous filled section
             if (Current)
-                commit_section(DATA, Current, bMergeSection);
+                commit_section(DATA, Current, bMergeSection, m_loading_modular_include);
 
             Current = xr_new<Sect>();
             bMergeSection = false;
@@ -382,7 +393,7 @@ void CInifile::Load(IReader* F, LPCSTR path, allow_include_func_t allow_include_
         }
     }
     if (Current)
-        commit_section(DATA, Current, bMergeSection);
+        commit_section(DATA, Current, bMergeSection, m_loading_modular_include);
 }
 
 void CInifile::save_as(IWriter& writer, bool bcheck) const {
