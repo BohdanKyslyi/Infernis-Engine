@@ -35,7 +35,7 @@ void CUITacticalCompass::LoadSpotStyles() {
 
     string_path found;
     if (!FS.exist(found, "$game_config$", "ui\\", "ui_tactical_compass_spots.xml")) {
-        Msg("! Tactical compass: no spot styles XML, using generic markers");
+        Msg("! Tactical compass: no spot styles XML, markers are disabled");
         return;
     }
 
@@ -63,18 +63,18 @@ void CUITacticalCompass::LoadSpotStyles() {
         style.rect.set(x, y, x + w, y + h);
 
         if (!xr_strcmp(type, "*")) {
-            m_styles[0] = style;
-        } else {
-            const u32 index = static_cast<u32>(m_styles.size());
-            m_styles.push_back(style);
-            m_style_by_type[type] = index;
+            Msg("! Tactical compass: wildcard spot style is not supported; list each spot type");
+            continue;
         }
+        const u32 index = static_cast<u32>(m_styles.size());
+        m_styles.push_back(style);
+        m_style_by_type[type] = index;
     }
 }
 
 u32 CUITacticalCompass::StyleFor(LPCSTR type) const {
     const auto it = m_style_by_type.find(type);
-    return it == m_style_by_type.end() ? 0 : it->second;
+    return it == m_style_by_type.end() ? u32(-1) : it->second;
 }
 
 bool CUITacticalCompass::Init() {
@@ -108,7 +108,7 @@ bool CUITacticalCompass::Init() {
     m_max_distance = xml.ReadAttribFlt("tactical_compass", 0, "marker_max_distance", 500.f);
     m_enemy_max_distance = xml.ReadAttribFlt("tactical_compass", 0, "enemy_max_distance", 120.f);
     m_focus_angle = xml.ReadAttribFlt("tactical_compass", 0, "focus_angle", 20.f);
-    m_icon_y = xml.ReadAttribFlt("tactical_compass", 0, "marker_y", -12.f);
+    m_icon_y = xml.ReadAttribFlt("tactical_compass", 0, "marker_y", -2.f);
     m_distance_unit = xml.ReadAttrib("tactical_compass", 0, "distance_unit", "m");
     m_show_markers = xml.ReadAttribInt("tactical_compass", 0, "show_markers", 1) != 0;
     LoadSpotStyles();
@@ -202,17 +202,23 @@ void CUITacticalCompass::RefreshSpots() {
 
         marker.style_index = StyleFor(type);
         if (task) {
-            marker.style_index = StyleFor(task->GetTaskType() == eTaskTypeAdditional
-                                              ? "@quest_additional" : "@quest_storyline");
+            const u32 task_style = StyleFor(task->GetTaskType() == eTaskTypeAdditional
+                                                ? "@quest_additional" : "@quest_storyline");
+            if (task_style != u32(-1))
+                marker.style_index = task_style;
         } else if (!xr_strcmp(type, "enemy_location")) {
-            marker.style_index = StyleFor("@enemy");
+            const u32 enemy_style = StyleFor("@enemy");
+            if (enemy_style != u32(-1))
+                marker.style_index = enemy_style;
         }
+        if (marker.style_index == u32(-1))
+            continue;
 
         const SpotStyle& style = m_styles[marker.style_index];
         marker.max_distance = style.max_distance > 0.f ? style.max_distance :
             (!xr_strcmp(type, "enemy_location") ? m_enemy_max_distance : m_max_distance);
         marker.distance_sqr = marker.position.distance_to_sqr(Device.vCameraPosition);
-        if (marker.distance_sqr > marker.max_distance * marker.max_distance)
+        if (!marker.active_task && marker.distance_sqr > marker.max_distance * marker.max_distance)
             continue;
         marker.rank = marker.active_task ? -1.f : marker.distance_sqr;
 
@@ -247,7 +253,7 @@ void CUITacticalCompass::UpdateMarkers(float heading) {
         Fvector direction;
         direction.sub(position, Device.vCameraPosition);
         const float distance_sqr = direction.square_magnitude();
-        if (distance_sqr > marker.max_distance * marker.max_distance)
+        if (!marker.active_task && distance_sqr > marker.max_distance * marker.max_distance)
             continue;
 
         float angle = atan2f(direction.x, direction.z) - heading;
