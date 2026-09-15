@@ -166,9 +166,6 @@ void CInifile::LoadModularIncludes(LPCSTR szFileName, LPCSTR path, allow_include
 
     FS_FileSet files;
     FS.file_list(files, path, FS_ListFiles, mask);
-    std::sort(files.begin(), files.end(), [](const FS_File& a, const FS_File& b) {
-        return xr_strcmp(a.name.c_str(), b.name.c_str()) < 0;
-    });
 
     for (const auto& file : files) {
         string_path fn, inc_path, folder;
