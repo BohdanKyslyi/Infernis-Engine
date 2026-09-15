@@ -26,7 +26,7 @@ Pack directories are loaded alphabetically (case-insensitive); when two packs pr
 
 ## Config additions
 
-For any loaded read-only `name.ltx`, place `mod_name_<unique_pack_id>.ltx` in the same relative directory. The modular loader reads matching files in filename order and applies `![section]` updates to existing sections, or `[new_section]` for new ones. A matching base `name.ltx` must exist and be loaded for these additions to run.
+For any loaded read-only `name.ltx`, place `mod_name_<unique_pack_id>.ltx` in the same relative directory. The modular loader reads matching files in filename order and applies `![section]` updates to existing sections, or `[new_section]` for new ones. A matching base `name.ltx` must exist and be loaded for these additions to run. This also applies to files reached through `#include` (for example, `system.ltx` includes `infernis_engine/backpacks.ltx`, so `infernis_engine/mod_backpacks_<pack>.ltx` is picked up).
 
 For example, a modular file next to `configs/system.ltx` may contain:
 
