@@ -63,8 +63,6 @@ void CUITacticalCompass::RefreshSpots() {
         return;
 
     for (const auto& key : Level().MapManager().Locations()) {
-        if (m_candidates.size() >= MAX_MARKERS)
-            break;
         CMapLocation* location = key.location;
         if (!location || !location->SpotEnabled())
             continue;
@@ -98,7 +96,18 @@ void CUITacticalCompass::RefreshSpots() {
                 continue;
         }
         marker.kind = kind;
-        m_candidates.push_back(marker);
+        marker.distance_sqr = marker.position.distance_to_sqr(Device.vCameraPosition);
+        if (marker.distance_sqr > m_max_distance * m_max_distance)
+            continue;
+
+        if (m_candidates.size() < MAX_MARKERS) {
+            m_candidates.push_back(marker);
+        } else {
+            auto farthest = std::max_element(m_candidates.begin(), m_candidates.end(),
+                [](const Marker& a, const Marker& b) { return a.distance_sqr < b.distance_sqr; });
+            if (marker.distance_sqr < farthest->distance_sqr)
+                *farthest = marker;
+        }
     }
 }
 

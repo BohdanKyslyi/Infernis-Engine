@@ -11,6 +11,7 @@ class CUITacticalCompass : public CUIWindow {
         u16 object_id;
         Fvector position;
         EMarkerKind kind;
+        float distance_sqr;
     };
 
     static constexpr u32 MAX_MARKERS = 16;
