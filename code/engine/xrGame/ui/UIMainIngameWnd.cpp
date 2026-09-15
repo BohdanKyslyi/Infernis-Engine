@@ -51,6 +51,7 @@
 
 #include "static_cast_checked.hpp"
 #include "UIHudStatesWnd.h"
+#include "UITacticalCompass.h"
 #include "UIActorMenu.h"
 
 void test_draw();
@@ -132,6 +133,19 @@ void CUIMainIngameWnd::Init() {
 
     //индикаторы
     UIZoneMap->Init();
+
+    const bool compass_enabled = !pSettings->section_exist("ui_extensions") ||
+        !pSettings->line_exist("ui_extensions", "enable_tactical_compass") ||
+        pSettings->r_bool("ui_extensions", "enable_tactical_compass");
+    if (compass_enabled && IsGameTypeSingle()) {
+        CUITacticalCompass* compass = xr_new<CUITacticalCompass>();
+        if (compass->Init()) {
+            compass->SetAutoDelete(true);
+            AttachChild(compass);
+        } else {
+            xr_delete(compass);
+        }
+    }
 
     // Подсказки, которые возникают при наведении прицела на объект
     UIStaticQuickHelp = UIHelper::CreateTextWnd(uiXml, "quick_info", this);

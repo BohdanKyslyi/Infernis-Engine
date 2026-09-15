@@ -603,6 +603,7 @@ set(AI_ACOVER_SMART_COVER_DETAIL smart_cover_detail.h
 set(AI_ASCRIPT_SCRIPTCLASSES_UI_COMMON_MAININGAME ui/UICarPanel.h
                                                   ui/UIHudStatesWnd.h
                                                   ui/UIMainIngameWnd.h
+                                                  ui/UITacticalCompass.h
                                                   ui/UIMessagesWindow.h
                                                   ui/UIMoneyIndicator.h
                                                   ui/UIMotionIcon.h
@@ -612,6 +613,7 @@ set(AI_ASCRIPT_SCRIPTCLASSES_UI_COMMON_MAININGAME ui/UICarPanel.h
                                                   ui/UICarPanel.cpp
                                                   ui/UIHudStatesWnd.cpp
                                                   ui/UIMainIngameWnd.cpp
+                                                  ui/UITacticalCompass.cpp
                                                   ui/UIMessagesWindow.cpp
                                                   ui/UIMoneyIndicator.cpp
                                                   ui/UIMotionIcon.cpp
