@@ -1224,6 +1224,18 @@ float CWeapon::CurrentZoomFactor() {
 void GetZoomData(const float scope_factor, float& delta, float& min_zoom_factor);
 void CWeapon::OnZoomIn() {
     m_zoom_params.m_bIsZoomModeNow = true;
+    if (IsScopeAttached()) {
+        const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
+            ? GetScopeName() : cNameSect();
+        const bool global = pSettings->section_exist("weapon_scopes") &&
+            pSettings->line_exist("weapon_scopes", "enable_3d_scopes") &&
+            pSettings->r_bool("weapon_scopes", "enable_3d_scopes");
+        const bool configured = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d",
+            READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "scope_3d", false));
+        Msg("* ScopeLens: weapon=%s optic=%s R4=%d global=%d scope_3d=%d lens_fov=%.1f active=%d",
+            cNameSect().c_str(), scope_section.c_str(), !!psDeviceFlags.test(rsR4),
+            !!global, !!configured, ScopeLensFov(), !!Is3DScopeEnabled());
+    }
     if (m_zoom_params.m_bUseDynamicZoom)
         SetZoomFactor(m_fRTZoomFactor);
     else

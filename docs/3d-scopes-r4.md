@@ -14,6 +14,12 @@ in the first-person HUD model, assign `models\lense_scope`, and give its base te
 an alpha-channel reticle. A 2D optic works as before while the global switch is off;
 the global switch defaults to off until a scope model is available for a game test.
 
+If the 2D overlay still appears, look for `* ScopeLens:` in the game log after aiming.
+The `R4`, `global`, and `scope_3d` values must all be `1`, `lens_fov` must be between
+5 and 90, and `active` must be `1`. `optic` shows which section takes priority over
+the weapon section for an attachable scope. The shader material loads independently
+of these settings; the lens mesh position comes from the HUD model and its bones.
+
 The prototype shares the full-screen render targets with the normal view and copies
 one full-screen LDR texture each aimed frame. It supports R4 only. Test at runtime on
 DX11 with and without MSAA, including local lights, sun shadows, zoom transitions,
