@@ -47,6 +47,7 @@ private:
     Flags8 m_flags;
     string_path m_file_name;
     Root DATA;
+    bool m_loading_modular_include = false;
 
     void Load(IReader* F, const char* path, allow_include_func_t allow_include_func = nullptr);
     void LoadModularIncludes(LPCSTR szFileName, LPCSTR path, allow_include_func_t allow_include_func);
