@@ -717,6 +717,26 @@ private:
     void set_state_box(u32 mstate);
 
 private:
+    struct VisualAccessory {
+        IRenderVisual* visual = nullptr;
+        shared_str name;
+        shared_str bone_name;
+        IKinematics* owner_kinematics = nullptr;
+        xr_vector<u16> bone_map;
+        u16 bone_id = u16(-1);
+        Fmatrix transform;
+    };
+
+    VisualAccessory m_helmet_visual;
+    VisualAccessory m_backpack_visual;
+    bool m_visual_accessories_frozen = false;
+
+    void ClearVisualAccessory(VisualAccessory& accessory);
+    void ClearVisualAccessories();
+    void SyncVisualAccessories();
+    void UpdateVisualAccessory(VisualAccessory& accessory, CInventoryItem* item);
+    void RenderVisualAccessory(VisualAccessory& accessory, LPCSTR default_bone);
+
     bool m_disabled_hitmarks = false;
     bool m_inventory_disabled = false;
 

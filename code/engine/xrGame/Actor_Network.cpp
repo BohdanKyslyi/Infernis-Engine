@@ -502,6 +502,8 @@ void CActor::net_Import_Physic_proceed() {
 };
 
 BOOL CActor::net_Spawn(CSE_Abstract* DC) {
+    ClearVisualAccessories();
+    m_visual_accessories_frozen = false;
     m_holder_id = ALife::_OBJECT_ID(-1);
     m_feel_touch_characters = 0;
     m_snd_noise = 0.0f;
@@ -692,6 +694,8 @@ BOOL CActor::net_Spawn(CSE_Abstract* DC) {
 }
 
 void CActor::net_Destroy() {
+    ClearVisualAccessories();
+    m_visual_accessories_frozen = false;
     // Controller cleanup must happen while the actor camera manager, HUD and
     // level objects are still alive. The actor camera manager is deleted later
     // in this method, so postponing Cancel() until CActor's destructor makes
