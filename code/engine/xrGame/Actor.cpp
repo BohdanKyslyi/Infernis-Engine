@@ -198,6 +198,7 @@ CActor::CActor() : CEntityAlive(), current_ik_cam_shift(0) {
 }
 
 CActor::~CActor() {
+    ClearVisualAccessories();
     xr_delete(m_item_use);
     xr_delete(m_location_manager);
     xr_delete(m_memory);
@@ -609,6 +610,8 @@ void CActor::Die(CObject* who) {
 #ifdef DEBUG
     Msg("--- Actor [%s] dies !", this->Name());
 #endif // #ifdef DEBUG
+    SyncVisualAccessories();
+    m_visual_accessories_frozen = true;
     inherited::Die(who);
 
     if (OnServer()) {
@@ -1114,6 +1117,11 @@ void CActor::renderable_Render() {
     inherited::renderable_Render();
     if (1 /*!HUDview()*/) {
         CInventoryOwner::renderable_Render();
+    }
+    SyncVisualAccessories();
+    if (Visual()) {
+        RenderVisualAccessory(m_helmet_visual, "bip01_head");
+        RenderVisualAccessory(m_backpack_visual, "bip01_spine2");
     }
     VERIFY(xr::valid(XFORM()));
 }
