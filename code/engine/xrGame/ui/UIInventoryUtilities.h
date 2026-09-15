@@ -6,19 +6,20 @@
 #include "ui_defs.h"
 
 class CUITextWnd;
+class CUIStatic;
 
-//размеры сетки в текстуре инвентаря
+//Г°Г Г§Г¬ГҐГ°Г» Г±ГҐГІГЄГЁ Гў ГІГҐГЄГ±ГІГіГ°ГҐ ГЁГ­ГўГҐГ­ГІГ Г°Гї
 #define INV_GRID_WIDTH 50.0f
 #define INV_GRID_HEIGHT 50.0f
 
-//размеры сетки в текстуре иконок персонажей
+//Г°Г Г§Г¬ГҐГ°Г» Г±ГҐГІГЄГЁ Гў ГІГҐГЄГ±ГІГіГ°ГҐ ГЁГЄГ®Г­Г®ГЄ ГЇГҐГ°Г±Г®Г­Г Г¦ГҐГ©
 #define ICON_GRID_WIDTH 64.0f
 #define ICON_GRID_HEIGHT 64.0f
-//размер иконки персонажа для инвенторя и торговли
+//Г°Г Г§Г¬ГҐГ° ГЁГЄГ®Г­ГЄГЁ ГЇГҐГ°Г±Г®Г­Г Г¦Г  Г¤Г«Гї ГЁГ­ГўГҐГ­ГІГ®Г°Гї ГЁ ГІГ®Г°ГЈГ®ГўГ«ГЁ
 #define CHAR_ICON_WIDTH 2
 #define CHAR_ICON_HEIGHT 2
 
-//размер иконки персонажа в полный рост
+//Г°Г Г§Г¬ГҐГ° ГЁГЄГ®Г­ГЄГЁ ГЇГҐГ°Г±Г®Г­Г Г¦Г  Гў ГЇГ®Г«Г­Г»Г© Г°Г®Г±ГІ
 #define CHAR_ICON_FULL_WIDTH 2
 #define CHAR_ICON_FULL_HEIGHT 5
 
@@ -26,29 +27,30 @@ class CUITextWnd;
 
 namespace InventoryUtilities {
 
-//сравнивает элементы по пространству занимаемому ими в рюкзаке
-//для сортировки
+//Г±Г°Г ГўГ­ГЁГўГ ГҐГІ ГЅГ«ГҐГ¬ГҐГ­ГІГ» ГЇГ® ГЇГ°Г®Г±ГІГ°Г Г­Г±ГІГўГі Г§Г Г­ГЁГ¬Г ГҐГ¬Г®Г¬Гі ГЁГ¬ГЁ Гў Г°ГѕГЄГ§Г ГЄГҐ
+//Г¤Г«Гї Г±Г®Г°ГІГЁГ°Г®ГўГЄГЁ
 bool GreaterRoomInRuck(PIItem item1, PIItem item2);
-//для проверки свободного места
+//Г¤Г«Гї ГЇГ°Г®ГўГҐГ°ГЄГЁ Г±ГўГ®ГЎГ®Г¤Г­Г®ГЈГ® Г¬ГҐГ±ГІГ 
 bool FreeRoom_inBelt(TIItemContainer& item_list, PIItem item, int width, int height);
 
 // get shader for BuyWeaponWnd
 const ui_shader& GetBuyMenuShader();
-//получить shader на иконки инвенторя
+//ГЇГ®Г«ГіГ·ГЁГІГј shader Г­Г  ГЁГЄГ®Г­ГЄГЁ ГЁГ­ГўГҐГ­ГІГ®Г°Гї
 const ui_shader& GetEquipmentIconsShader();
-// shader на иконки персонажей в мультиплеере
+// shader Г­Г  ГЁГЄГ®Г­ГЄГЁ ГЇГҐГ°Г±Г®Г­Г Г¦ГҐГ© Гў Г¬ГіГ«ГјГІГЁГЇГ«ГҐГҐГ°ГҐ
 const ui_shader& GetMPCharIconsShader();
 // get shader for outfit icons in upgrade menu
 const ui_shader& GetOutfitUpgradeIconsShader();
 // get shader for weapon icons in upgrade menu
 const ui_shader& GetWeaponUpgradeIconsShader();
-//удаляем все шейдеры
+void SetUpgradeIconShader(CUIStatic& icon, LPCSTR section, bool weapon);
+//ГіГ¤Г Г«ГїГҐГ¬ ГўГ±ГҐ ГёГҐГ©Г¤ГҐГ°Г»
 void DestroyShaders();
 void CreateShaders();
 
-// Получить значение времени в текстовом виде
+// ГЏГ®Г«ГіГ·ГЁГІГј Г§Г­Г Г·ГҐГ­ГЁГҐ ГўГ°ГҐГ¬ГҐГ­ГЁ Гў ГІГҐГЄГ±ГІГ®ГўГ®Г¬ ГўГЁГ¤ГҐ
 
-// Точность возвращаемого функцией GetGameDateTimeAsString значения: до часов, до минут, до секунд
+// Г’Г®Г·Г­Г®Г±ГІГј ГўГ®Г§ГўГ°Г Г№Г ГҐГ¬Г®ГЈГ® ГґГіГ­ГЄГ¶ГЁГҐГ© GetGameDateTimeAsString Г§Г­Г Г·ГҐГ­ГЁГї: Г¤Г® Г·Г Г±Г®Гў, Г¤Г® Г¬ГЁГ­ГіГІ, Г¤Г® Г±ГҐГЄГіГ­Г¤
 enum ETimePrecision {
     etpTimeToHours = 0,
     etpTimeToMinutes,
@@ -57,7 +59,7 @@ enum ETimePrecision {
     etpTimeToSecondsAndDay
 };
 
-// Точность возвращаемого функцией GetGameDateTimeAsString значения: до года, до месяца, до дня
+// Г’Г®Г·Г­Г®Г±ГІГј ГўГ®Г§ГўГ°Г Г№Г ГҐГ¬Г®ГЈГ® ГґГіГ­ГЄГ¶ГЁГҐГ© GetGameDateTimeAsString Г§Г­Г Г·ГҐГ­ГЁГї: Г¤Г® ГЈГ®Г¤Г , Г¤Г® Г¬ГҐГ±ГїГ¶Г , Г¤Г® Г¤Г­Гї
 enum EDatePrecision { edpDateToDay, edpDateToMonth, edpDateToYear };
 
 const shared_str GetGameDateAsString(EDatePrecision datePrec, char dateSeparator = ',');
@@ -70,10 +72,10 @@ const shared_str GetTimeAndDateAsString(ALife::_TIME_ID time);
 const shared_str Get_GameTimeAndDate_AsString();
 
 LPCSTR GetTimePeriodAsString(LPSTR _buff, u32 buff_sz, ALife::_TIME_ID _from, ALife::_TIME_ID _to);
-// Отобразить вес, который несет (*pInvOwner)
+// ГЋГІГ®ГЎГ°Г Г§ГЁГІГј ГўГҐГ±, ГЄГ®ГІГ®Г°Г»Г© Г­ГҐГ±ГҐГІ (*pInvOwner)
 void UpdateWeightStr(CUITextWnd& wnd, CUITextWnd& wnd_max, CInventoryOwner* pInvOwner);
 
-// Функции получения строки-идентификатора ранга и отношения по их числовому идентификатору
+// Г”ГіГ­ГЄГ¶ГЁГЁ ГЇГ®Г«ГіГ·ГҐГ­ГЁГї Г±ГІГ°Г®ГЄГЁ-ГЁГ¤ГҐГ­ГІГЁГґГЁГЄГ ГІГ®Г°Г  Г°Г Г­ГЈГ  ГЁ Г®ГІГ­Г®ГёГҐГ­ГЁГї ГЇГ® ГЁГµ Г·ГЁГ±Г«Г®ГўГ®Г¬Гі ГЁГ¤ГҐГ­ГІГЁГґГЁГЄГ ГІГ®Г°Гі
 LPCSTR GetRankAsText(CHARACTER_RANK_VALUE rankID);
 LPCSTR GetReputationAsText(CHARACTER_REPUTATION_VALUE rankID);
 LPCSTR GetGoodwillAsText(CHARACTER_GOODWILL goodwill);
