@@ -24,7 +24,7 @@ bool item_pred(const CInifile::Item& x, LPCSTR val) {
 static void insert_item(CInifile::Sect* tgt, const CInifile::Item& I);
 
 static bool is_modular_ini_name(LPCSTR name) {
-    return name && (0 == xr_strncmp(name, "mod_", 4));
+    return name && (0 == strncmp(name, "mod_", 4));
 }
 
 static void get_ini_base_name(LPCSTR file_name, LPSTR dest, u32 dest_size) {
