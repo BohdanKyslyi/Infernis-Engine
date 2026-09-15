@@ -1,0 +1,13 @@
+<w>
+    <file name="ui\tactic_compass\cardinal_directions">
+        <texture id="ie_compass_cardinal_dir" x="0" y="0" width="4096" height="128" />
+    </file>
+    <file name="ui\tactic_compass\static_frame">
+        <texture id="ie_compass_static_frame" x="0" y="0" width="400" height="30" />
+    </file>
+    <file name="ui\tactic_compass\markers">
+        <texture id="ie_tc_stash" x="150" y="0" width="30" height="30" />
+        <texture id="ie_tc_quest_prim" x="270" y="0" width="30" height="30" />
+        <texture id="ie_tc_transition_blue" x="300" y="0" width="30" height="30" />
+    </file>
+</w>

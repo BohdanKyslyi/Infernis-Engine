@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<window>
+    <tactical_compass x="332" y="24" width="360" height="40" show_markers="1" marker_max_distance="500">
+        <strip x="0" y="0" width="360" height="20" stretch="1">
+            <texture>ie_compass_cardinal_dir</texture>
+        </strip>
+        <frame x="0" y="17" width="360" height="20" stretch="1">
+            <texture>ie_compass_static_frame</texture>
+        </frame>
+    </tactical_compass>
+</window>
