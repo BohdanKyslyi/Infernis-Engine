@@ -63,7 +63,7 @@ static void commit_section(CInifile::Root& data, CInifile::Sect*& section, bool 
 }
 
 //------------------------------------------------------------------------------
-//Тело функций Inifile
+//Г’ГҐГ«Г® ГґГіГ­ГЄГ¶ГЁГ© Inifile
 //------------------------------------------------------------------------------
 XRCORE_API BOOL _parse(LPSTR dest, LPCSTR src) {
     BOOL bInsideSTR = false;
