@@ -473,7 +473,9 @@ void CRenderTarget::phase_combine() {
         .RenderFlares(); // lens-flares
 
     //	PP-if required
-    if (PP_Complex) {
+    // The lens image is copied from rt_Generic_0, not from the back buffer.
+    // Do not run a second full-screen postprocess over the player's frame.
+    if (PP_Complex && !Device.scopeLensPass) {
         PIX_EVENT(phase_pp);
         phase_pp();
     }
