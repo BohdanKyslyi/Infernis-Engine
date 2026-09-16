@@ -63,6 +63,13 @@ CEnvironment::CEnvironment() : CurrentEnv(nullptr), m_ambients_config(nullptr) {
 
     fGameTime = 0.f;
     fTimeFactor = 12.f;
+    m_weather_editor_active = false;
+    m_weather_editor_time = 0.f;
+    m_use_weather_sun_direction = false;
+    if (pSettings && pSettings->section_exist("environment") &&
+        pSettings->line_exist("environment", "use_weather_sun_direction"))
+        m_use_weather_sun_direction =
+            !!pSettings->r_bool("environment", "use_weather_sun_direction");
 
     wind_strength_factor = 0.f;
     wind_gust_factor = 0.f;
@@ -188,6 +195,42 @@ void CEnvironment::ChangeGameTime(float game_time) {
     fGameTime = NormalizeTime(fGameTime + game_time);
 };
 
+void CEnvironment::BeginWeatherEditorSession(const std::string& weather, float game_time) {
+    m_weather_editor_active = true;
+    UpdateWeatherEditorSession(weather, game_time);
+}
+
+void CEnvironment::UpdateWeatherEditorSession(const std::string& weather, float game_time) {
+    if (!m_weather_editor_active)
+        return;
+
+    m_weather_editor_time = clampr(game_time, 0.f, DAY_LENGTH - 1.f);
+    if (!weather.empty())
+        m_weather_editor_cycle = weather;
+
+#ifndef _EDITOR
+    const bool stopped_weather_fx = bWFX;
+    if (stopped_weather_fx)
+        StopWFX();
+    if (!m_weather_editor_cycle.empty() &&
+        (stopped_weather_fx || CurrentCycleName != m_weather_editor_cycle ||
+         CurrentWeatherName != m_weather_editor_cycle))
+        SetWeather(m_weather_editor_cycle, true);
+
+    // Keep the editor independent from scripted/server time updates. The
+    // selected descriptor remains the rendered descriptor until the editor is
+    // explicitly closed, including while the UI is hidden for Preview.
+    fGameTime = m_weather_editor_time;
+    m_paused = true;
+    SelectEnvs(fGameTime);
+#endif
+}
+
+void CEnvironment::EndWeatherEditorSession() {
+    m_weather_editor_active = false;
+    m_weather_editor_cycle.clear();
+}
+
 void CEnvironment::SetGameTime(float game_time, float time_factor) {
 #ifndef _EDITOR
     if (m_paused) {
@@ -211,6 +254,15 @@ float CEnvironment::NormalizeTime(float tm) {
 }
 
 void CEnvironment::SetWeather(const std::string& name, bool forced) {
+#ifndef _EDITOR
+    // Scripts and level logic must not replace the cycle that is currently
+    // being edited. UpdateWeatherEditorSession changes the locked name before
+    // calling this method, so deliberate selections in the editor still work.
+    if (m_weather_editor_active && !m_weather_editor_cycle.empty() &&
+        name != m_weather_editor_cycle)
+        return;
+#endif
+
     //.	static BOOL bAlready = FALSE;
     //.	if(bAlready)	return;
     if (name.size()) {
@@ -243,6 +295,11 @@ void CEnvironment::SetWeather(const std::string& name, bool forced) {
 }
 
 bool CEnvironment::SetWeatherFX(const std::string& name) {
+#ifndef _EDITOR
+    if (m_weather_editor_active)
+        return false;
+#endif
+
     if (bWFX)
         return false;
     if (name.size()) {
@@ -437,14 +494,27 @@ void CEnvironment::OnFrame() {
 #else
     if (!g_pGameLevel)
         return;
+
+    if (m_weather_editor_active) {
+        const bool stopped_weather_fx = bWFX;
+        if (stopped_weather_fx)
+            StopWFX();
+        if (!m_weather_editor_cycle.empty() &&
+            (stopped_weather_fx || CurrentCycleName != m_weather_editor_cycle ||
+             CurrentWeatherName != m_weather_editor_cycle))
+            SetWeather(m_weather_editor_cycle, true);
+        fGameTime = m_weather_editor_time;
+    }
 #endif
 
     //	if (pInput->iGetAsyncKeyState(DIK_O))		SetWeatherFX("surge_day");
     float current_weight;
     lerp(current_weight);
 
-    //	Igor. Dynamic sun position.
-    if (!::Render->is_sun_static())
+    // The weather editor must always display the angles being edited. Outside
+    // the editor, dynamic renderers use either the engine-calculated sun or
+    // the interpolated weather angles according to the global extension flag.
+    if (!m_weather_editor_active && !m_use_weather_sun_direction && !::Render->is_sun_static())
         calculate_dynamic_sun_dir();
 
 #ifndef MASTER_GOLD

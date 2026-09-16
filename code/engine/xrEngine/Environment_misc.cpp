@@ -264,6 +264,9 @@ void CEnvDescriptor::load(CEnvironment& environment, CInifile& config) {
     hemi_color = config.r_fvector4(m_identifier.c_str(), "hemisphere_color");
     sun_color = config.r_fvector3(m_identifier.c_str(), "sun_color");
     //	if (config.line_exist(m_identifier.c_str(),"sun_altitude"))
+    // Legacy X-Ray naming is counter-intuitive: sun_altitude is stored as the
+    // vector heading (horizontal azimuth), while sun_longitude is its pitch
+    // (vertical altitude). Keep this disk format for mod compatibility.
     sun_dir.setHP(deg2rad(config.r_float(m_identifier.c_str(), "sun_altitude")),
                   deg2rad(config.r_float(m_identifier.c_str(), "sun_longitude")));
     R_ASSERT(xr::valid(sun_dir));
@@ -773,6 +776,7 @@ bool CEnvironment::SaveWeather(const std::string& name, bool make_backup,
     // source is packed, CInifile reads it through the VFS and the save creates
     // a loose override in $game_weathers$.
     CInifile config(file_name, FALSE, TRUE, FALSE);
+    config.set_override_names(TRUE);
     for (const CEnvDescriptor* descriptor : weather->second)
         descriptor->save(config);
 

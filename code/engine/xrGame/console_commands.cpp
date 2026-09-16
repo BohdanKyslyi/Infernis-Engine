@@ -205,9 +205,10 @@ public:
             ToggleWeatherEditor();
         else if (!_stricmp(args, "on") || !_stricmp(args, "1"))
             ToggleWeatherEditor(true, false);
-        else if (!_stricmp(args, "off") || !_stricmp(args, "preview") ||
-                 !_stricmp(args, "0"))
+        else if (!_stricmp(args, "off") || !_stricmp(args, "0"))
             ToggleWeatherEditor(false, true);
+        else if (!_stricmp(args, "preview"))
+            PreviewWeatherEditor();
         else
             Msg("! Usage: weather_editor [on|off|preview|toggle]");
     }

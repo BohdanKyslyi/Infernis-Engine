@@ -331,6 +331,10 @@ public:
     bool SaveWeather(const std::string& name, bool make_backup, std::string* saved_path = nullptr);
     bool AddWeatherFrame(const std::string& name, float game_time,
                          const CEnvDescriptor& source, CEnvDescriptor** created = nullptr);
+    void BeginWeatherEditorSession(const std::string& weather, float game_time);
+    void UpdateWeatherEditorSession(const std::string& weather, float game_time);
+    void EndWeatherEditorSession();
+    bool IsWeatherEditorSessionActive() const { return m_weather_editor_active; }
     void ChangeGameTime(float game_time);
     void SetGameTime(float game_time, float time_factor);
 
@@ -348,6 +352,14 @@ public:
 #else // #ifdef _EDITOR
     bool m_paused;
 #endif // #ifdef _EDITOR
+
+private:
+    bool m_weather_editor_active;
+    float m_weather_editor_time;
+    std::string m_weather_editor_cycle;
+    bool m_use_weather_sun_direction;
+
+public:
 
     CInifile* m_ambients_config;
     CInifile* m_sound_channels_config;
