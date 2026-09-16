@@ -966,8 +966,7 @@ CRenderTarget::CRenderTarget() {
 void CRenderTarget::CaptureScopeLens() {
     // The main render is drawn into these intermediates on the next pass.
     // Unbind the source RTV and any lens SRV left by the previous frame.
-    static STextureList no_textures;
-    RCache.set_Textures(&no_textures);
+    RCache.set_Textures(&m_scopeLensEmptyTextures);
     SRVSManager.Apply();
     RCache.set_RT(nullptr, 0);
     RCache.set_RT(nullptr, 1);

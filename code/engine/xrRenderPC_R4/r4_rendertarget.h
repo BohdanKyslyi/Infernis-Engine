@@ -82,6 +82,7 @@ public:
         rt_Generic_1; // 32bit		(r,g,b,a)				// post-process,
                       // intermidiate results, etc.
     ref_rt rt_ScopeLens; // separate world view copied before drawing the main HUD
+    STextureList m_scopeLensEmptyTextures; // destroyed with the target, before the resource manager
     void CaptureScopeLens();
     //	Igor: for volumetric lights
     ref_rt
