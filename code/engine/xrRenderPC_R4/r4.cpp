@@ -1523,8 +1523,15 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     }
 
     HRESULT _result = E_FAIL;
-    const bool scope_lens_pixel_shader =
-        0 == xr_strcmp(name, "model_scope_lense") && 'p' == pTarget[0];
+    // DX10 appends an MSAA index (for example, model_scope_lense_0) to PS names.
+    // Match the actual compiled name, not just the source file's base name.
+    const LPCSTR lens_ps_name = "model_scope_lense";
+    const u32 lens_ps_name_len = xr_strlen(lens_ps_name);
+    const bool scope_lens_pixel_shader = 'p' == pTarget[0] &&
+        0 == strncmp(name, lens_ps_name, lens_ps_name_len) &&
+        name[lens_ps_name_len] == '_' &&
+        name[lens_ps_name_len + 1] >= '0' && name[lens_ps_name_len + 1] <= '7' &&
+        name[lens_ps_name_len + 2] == 0;
     bool loaded_from_cache = false;
 
     string_path folder_name, folder;
