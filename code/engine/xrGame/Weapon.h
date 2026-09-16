@@ -139,6 +139,7 @@ public:
     virtual bool Is3DScopeEnabled() const;
     float ScopeLensFov() const;
     u8 ScopeLensMode() const;
+    void ScopeLensGlass(float* params) const;
     bool HasScopeDetector() const;
     shared_str ScopeSettingSection(LPCSTR key) const;
     bool IsSilencerAttached() const;

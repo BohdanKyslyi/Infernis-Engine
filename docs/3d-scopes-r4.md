@@ -25,6 +25,10 @@ aim_hud_offset_pos_16x9 = 0.0, 0.0, 0.0
 aim_hud_offset_rot_16x9 = 0.0, 0.0, 0.0
 scope_3d = true
 scope_lens_fov = 20
+; Optional R4 glass settings, per optic. Values below are the defaults.
+scope_lens_eye_relief = 0.12
+scope_lens_shadow_strength = 0.40
+scope_lens_reflection_strength = 0.025
 
 [scope_susat_custom_ar]:scope_ar_3d
 scope_name = wpn_addon_scope_susat_custom
@@ -54,6 +58,14 @@ for legacy 2D scopes. `scope_alive_detector` draws corner markers around up to
 eight living targets currently visible to the actor, inside the lens image only.
 Its existing `scope_detector` sound and target-update logic remains active.
 
+In normal 3D mode, the lens uses its skinned HUD position and tangent frame to
+shift a soft pupil shadow as the eye moves off axis. `scope_lens_eye_relief`
+controls that shift (0–0.5), `scope_lens_shadow_strength` controls edge darkness
+(0–0.8), and `scope_lens_reflection_strength` controls a subtle moving highlight
+(0–0.15). Put overrides on the optic wrapper or its `scope_name` section; omitted
+keys use the defaults above. Night and contrast modes keep their own appearance.
+The highlight is procedural and does not require the 3DSS reflection texture.
+
 If the 3D mode needs an explicit override, set `scope_lens_effect = contrast` or
 `scope_lens_effect = nightvision` in the appropriate `scopes_sect` entry. By
 default, the engine derives the mode from `scope_nightvision` and that section's
@@ -72,5 +84,4 @@ The prototype shares the full-screen render targets with the normal view and cop
 one full-screen LDR texture each aimed frame. It supports R4 only. Test at runtime on
 DX11 with and without MSAA, including local lights, sun shadows, zoom transitions,
 underbarrel grenade mode, a renderer reset and a resolution change. A separate lower
-resolution viewport, image inversion, lens distortion and night vision are follow-up
-work after that game test.
+resolution viewport and lens distortion are follow-up work after that game test.

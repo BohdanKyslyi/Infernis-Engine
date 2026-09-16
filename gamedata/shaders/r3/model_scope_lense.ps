@@ -2,11 +2,16 @@
 
 Texture2D s_vp2;
 uniform float4 scope_lens_state;
+uniform float4 scope_lens_glass;
 uniform float4 scope_lens_size;
 uniform float4 scope_lens_targets[8];
 
 struct p_scope_lens {
     float2 tc : TEXCOORD0;
+    float3 view_pos : TEXCOORD1;
+    float3 view_tangent : TEXCOORD2;
+    float3 view_binormal : TEXCOORD3;
+    float3 view_normal : TEXCOORD4;
 };
 
 float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
@@ -30,10 +35,20 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
         scene *= lerp(float3(0.99f, 0.99f, 0.98f),
                       float3(0.80f, 0.80f, 0.76f), rim);
 
-        // A weak broad reflection sits off axis and leaves the reticle clear.
-        float2 glint_uv = (I.tc - float2(0.29f, 0.23f)) * float2(1.0f, 1.4f);
+        float3 eye = normalize(-I.view_pos);
+        float3 normal = normalize(I.view_normal);
+        float facing = max(abs(dot(eye, normal)), 0.2f);
+        float2 eye_offset = float2(dot(eye, normalize(I.view_tangent)),
+                                   dot(eye, normalize(I.view_binormal))) / facing;
+        float pupil = length(lens_uv + eye_offset * scope_lens_glass.x);
+        float pupil_shadow = smoothstep(0.55f, 1.0f, pupil);
+        scene *= 1.0f - pupil_shadow * scope_lens_glass.z;
+
+        // Move a weak broad reflection with the viewing angle.
+        float2 glint_uv = (I.tc - float2(0.29f, 0.23f) - eye_offset * 0.04f)
+                          * float2(1.0f, 1.4f);
         float glint = exp2(-22.0f * dot(glint_uv, glint_uv));
-        scene = saturate(scene + 0.025f * glint * (1.0f - rim));
+        scene = saturate(scene + scope_lens_glass.y * glint * (1.0f - rim));
     }
     float3 image = lerp(scene, reticle.rgb, reticle.a);
     // The 2D optic's PPE is applied to the final screen. Keep optic modes inside

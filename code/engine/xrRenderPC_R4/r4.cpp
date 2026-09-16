@@ -109,6 +109,15 @@ static class cl_scope_lens_state : public R_constant_setup {
     }
 } binder_scope_lens_state;
 
+static class cl_scope_lens_glass : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[3] = { 0.12f, 0.025f, 0.40f };
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->ScopeLensGlass(params);
+        RCache.set_c(C, params[0], params[1], params[2], 0.f);
+    }
+} binder_scope_lens_glass;
+
 static class cl_scope_lens_targets : public R_constant_setup {
     virtual void setup(R_constant* C) {
         float targets[8 * 4];
@@ -435,6 +444,8 @@ void CRender::create() {
         "ie_pbr_hud_projection_params", &binder_ie_pbr_hud_projection_params);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
         "scope_lens_state", &binder_scope_lens_state);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "scope_lens_glass", &binder_scope_lens_glass);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
         "scope_lens_size", &binder_scope_lens_size);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
@@ -1523,15 +1534,16 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     }
 
     HRESULT _result = E_FAIL;
-    // DX10 appends an MSAA index (for example, model_scope_lense_0) to PS names.
-    // Match the actual compiled name, not just the source file's base name.
-    const LPCSTR lens_ps_name = "model_scope_lense";
-    const u32 lens_ps_name_len = xr_strlen(lens_ps_name);
-    const bool scope_lens_pixel_shader = 'p' == pTarget[0] &&
-        0 == strncmp(name, lens_ps_name, lens_ps_name_len) &&
-        name[lens_ps_name_len] == '_' &&
-        name[lens_ps_name_len + 1] >= '0' && name[lens_ps_name_len + 1] <= '7' &&
-        name[lens_ps_name_len + 2] == 0;
+    // DX10 appends skinning/MSAA indices (e.g. model_scope_lense_0).
+    // Both stages must be refreshed when their source or vertex layout changes.
+    const LPCSTR lens_shader_name = "model_scope_lense";
+    const u32 lens_shader_name_len = xr_strlen(lens_shader_name);
+    const bool scope_lens_shader = ('p' == pTarget[0] || 'v' == pTarget[0]) &&
+        0 == strncmp(name, lens_shader_name, lens_shader_name_len) &&
+        (name[lens_shader_name_len] == 0 ||
+         (name[lens_shader_name_len] == '_' &&
+          name[lens_shader_name_len + 1] >= '0' && name[lens_shader_name_len + 1] <= '7' &&
+          name[lens_shader_name_len + 2] == 0));
     bool loaded_from_cache = false;
 
     string_path folder_name, folder;
@@ -1558,10 +1570,10 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         xr_strcat(file, extension);
         xr_strcat(file, "\\");
         xr_strcat(file, sh_name);
-        // The lens pixel shader is updated alongside gameplay features. Its old
+        // The lens shaders are updated alongside gameplay features. Their old
         // cached bytecode can be valid while ignoring new scope_lens_state modes.
         // Keep its cache key tied to the source without invalidating other shaders.
-        if (scope_lens_pixel_shader) {
+        if (scope_lens_shader) {
             string16 source_crc;
             xr_sprintf(source_crc, "_%08x", crc32(pSrcData, SrcDataLen));
             xr_strcat(file, source_crc);
@@ -1623,8 +1635,8 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         }
     }
 
-    if (scope_lens_pixel_shader && SUCCEEDED(_result))
-        Msg("* ScopeLensPS: %s source_crc=%08x file=%s",
+    if (scope_lens_shader && SUCCEEDED(_result))
+        Msg("* ScopeLens%s: %s source_crc=%08x file=%s", pTarget[0] == 'v' ? "VS" : "PS",
             loaded_from_cache ? "cached" : "compiled", crc32(pSrcData, SrcDataLen), file_name);
 
     return _result;

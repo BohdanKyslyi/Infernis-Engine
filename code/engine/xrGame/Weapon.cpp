@@ -1151,6 +1151,18 @@ u8 CWeapon::ScopeLensMode() const {
     return 0;
 }
 
+void CWeapon::ScopeLensGlass(float* params) const {
+    params[0] = READ_IF_EXISTS(pSettings, r_float,
+        ScopeSettingSection("scope_lens_eye_relief"), "scope_lens_eye_relief", 0.12f);
+    params[1] = READ_IF_EXISTS(pSettings, r_float,
+        ScopeSettingSection("scope_lens_reflection_strength"), "scope_lens_reflection_strength", 0.025f);
+    params[2] = READ_IF_EXISTS(pSettings, r_float,
+        ScopeSettingSection("scope_lens_shadow_strength"), "scope_lens_shadow_strength", 0.40f);
+    clamp(params[0], 0.f, 0.5f);
+    clamp(params[1], 0.f, 0.15f);
+    clamp(params[2], 0.f, 0.8f);
+}
+
 bool CWeapon::HasScopeDetector() const {
     return IsZoomed() && Is3DScopeEnabled() && m_zoom_params.m_sUseBinocularVision.size();
 }

@@ -518,6 +518,17 @@ u8 CLevel::ScopeLensMode() const
     return weapon && weapon->IsZoomed() ? weapon->ScopeLensMode() : 0;
 }
 
+void CLevel::ScopeLensGlass(float* params) const
+{
+    IGame_Level::ScopeLensGlass(params);
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return;
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    if (weapon && weapon->IsZoomed() && weapon->Is3DScopeEnabled())
+        weapon->ScopeLensGlass(params);
+}
+
 bool CLevel::ScopeLensHasDetector() const
 {
     const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
