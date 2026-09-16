@@ -417,10 +417,12 @@ set(AI_ACOVER_SMART_COVER_STORAGE_DESCRIPTION smart_cover_description.h
                                               smart_cover_description.cpp)
 
 set(AI_ASCRIPT_SCRIPTCLASSES_UI_UIWINDOWS_WINDOWS ui/UIDialogWnd.h
+                                                  ui/UIWeatherEditor.h
                                                   ui/UIFrameLineWnd.h
                                                   ui/UIFrameWindow.h
                                                   ui/UIWindow.h
                                                   ui/UIDialogWnd.cpp
+                                                  ui/UIWeatherEditor.cpp
                                                   ui/UIFrameLineWnd.cpp
                                                   ui/UIFrameWindow.cpp
                                                   ui/UIWindow.cpp
@@ -603,7 +605,7 @@ set(AI_ACOVER_SMART_COVER_DETAIL smart_cover_detail.h
 set(AI_ASCRIPT_SCRIPTCLASSES_UI_COMMON_MAININGAME ui/UICarPanel.h
                                                   ui/UIHudStatesWnd.h
                                                   ui/UIMainIngameWnd.h
-                                                  ui/UITacticalCompass.h
+												  ui/UITacticalCompass.h
                                                   ui/UIMessagesWindow.h
                                                   ui/UIMoneyIndicator.h
                                                   ui/UIMotionIcon.h
@@ -613,7 +615,7 @@ set(AI_ASCRIPT_SCRIPTCLASSES_UI_COMMON_MAININGAME ui/UICarPanel.h
                                                   ui/UICarPanel.cpp
                                                   ui/UIHudStatesWnd.cpp
                                                   ui/UIMainIngameWnd.cpp
-                                                  ui/UITacticalCompass.cpp
+												  ui/UITacticalCompass.cpp
                                                   ui/UIMessagesWindow.cpp
                                                   ui/UIMoneyIndicator.cpp
                                                   ui/UIMotionIcon.cpp
@@ -2856,7 +2858,7 @@ set(CORE_CLIENT_OBJECTS_ACTOR_BASE Actor.h
                                    ActorCondition.h
                                    fire_disp_controller.h
                                    Actor.cpp
-                                   ActorVisualAccessories.cpp
+								   ActorVisualAccessories.cpp
                                    ItemUseController.cpp
                                    ItemUseController.h
                                    actor_communication.cpp

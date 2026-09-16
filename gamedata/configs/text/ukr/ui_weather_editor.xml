@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<string_table>
+    <string id="ui_weather_editor_title"><text>РЕДАКТОР ПОГОДИ</text></string>
+    <string id="ui_weather_editor_weather"><text>Погода</text></string>
+    <string id="ui_weather_editor_keyframe"><text>Секція</text></string>
+    <string id="ui_weather_editor_sky"><text>Небо</text></string>
+    <string id="ui_weather_editor_clouds"><text>Хмари</text></string>
+    <string id="ui_weather_editor_ambient"><text>Амбієнт</text></string>
+    <string id="ui_weather_editor_sun"><text>Сонце</text></string>
+    <string id="ui_weather_editor_thunderbolt_selector"><text>Блискавка</text></string>
+    <string id="ui_weather_editor_thunderbolt"><text>БЛИСКАВКА</text></string>
+    <string id="ui_weather_editor_time"><text>Час</text></string>
+    <string id="ui_weather_editor_add_section"><text>НОВА СЕКЦІЯ</text></string>
+    <string id="ui_weather_editor_preview"><text>ПЕРЕГЛЯД [F7]</text></string>
+    <string id="ui_weather_editor_section"><text>СЕКЦІЯ</text></string>
+    <string id="ui_weather_editor_value"><text>Значення</text></string>
+    <string id="ui_weather_editor_save"><text>ЗБЕРЕГТИ [F6]</text></string>
+    <string id="ui_weather_editor_revert"><text>ВІДКАТ [F5]</text></string>
+    <string id="ui_weather_editor_close"><text>ЗАКРИТИ [ESC]</text></string>
+    <string id="ui_weather_editor_footer"><text>F5: відкат секції | F6: зберегти | F7: перегляд | weather_editor: відкрити</text></string>
+    <string id="ui_weather_editor_none"><text>&lt;немає&gt;</text></string>
+
+    <string id="ui_weather_editor_ambient_color_rgb"><text>КОЛІР АМБІЄНТУ [RGB]</text></string>
+    <string id="ui_weather_editor_fog_color_rgb"><text>КОЛІР ТУМАНУ [RGB]</text></string>
+    <string id="ui_weather_editor_sky_color_rgb"><text>КОЛІР НЕБА [RGB]</text></string>
+    <string id="ui_weather_editor_clouds_color_rgba"><text>КОЛІР ХМАР [RGBA]</text></string>
+    <string id="ui_weather_editor_hemisphere_color_rgba"><text>КОЛІР ПІВСФЕРИ [RGBA]</text></string>
+    <string id="ui_weather_editor_rain_color_rgb"><text>КОЛІР ДОЩУ [RGB]</text></string>
+    <string id="ui_weather_editor_sun_color_rgb"><text>КОЛІР СОНЦЯ [RGB]</text></string>
+    <string id="ui_weather_editor_wind"><text>ВІТЕР</text></string>
+
+    <string id="ui_weather_editor_channel_r"><text>R</text></string>
+    <string id="ui_weather_editor_channel_g"><text>G</text></string>
+    <string id="ui_weather_editor_channel_b"><text>B</text></string>
+    <string id="ui_weather_editor_channel_a"><text>A</text></string>
+    <string id="ui_weather_editor_fog_density"><text>Густина туману</text></string>
+    <string id="ui_weather_editor_fog_distance"><text>Дальність туману</text></string>
+    <string id="ui_weather_editor_far_plane"><text>Дальня межа</text></string>
+    <string id="ui_weather_editor_water_intensity"><text>Сила води</text></string>
+    <string id="ui_weather_editor_sky_rotation"><text>Обертання неба</text></string>
+    <string id="ui_weather_editor_sun_shafts"><text>Промені сонця</text></string>
+    <string id="ui_weather_editor_rain_density"><text>Сила дощу</text></string>
+    <string id="ui_weather_editor_sun_altitude"><text>Висота сонця</text></string>
+    <string id="ui_weather_editor_sun_longitude"><text>Азимут сонця</text></string>
+    <string id="ui_weather_editor_wind_velocity"><text>Швидкість</text></string>
+    <string id="ui_weather_editor_wind_direction"><text>Напрямок</text></string>
+    <string id="ui_weather_editor_thunderbolt_period"><text>Період</text></string>
+    <string id="ui_weather_editor_thunderbolt_duration"><text>Тривалість</text></string>
+
+    <string id="ui_weather_editor_status_ready"><text>Готово. Зміни відображаються одразу; кнопка збереження записує поточний .ltx.</text></string>
+    <string id="ui_weather_editor_status_editing"><text>Редагування [%s] / [%s]</text></string>
+    <string id="ui_weather_editor_status_sky_changed"><text>Небо змінено в реальному часі: %s</text></string>
+    <string id="ui_weather_editor_status_clouds_changed"><text>Хмари змінено в реальному часі: %s</text></string>
+    <string id="ui_weather_editor_status_ambient_changed"><text>Амбієнт змінено в реальному часі: %s</text></string>
+    <string id="ui_weather_editor_status_sun_changed"><text>Параметри сонця змінено в реальному часі: %s</text></string>
+    <string id="ui_weather_editor_status_thunderbolt_changed"><text>Колекцію блискавок змінено: %s</text></string>
+    <string id="ui_weather_editor_status_color_picker"><text>Палітра: рухайте маркер у полі та на смузі відтінку; RGB змінюється в реальному часі.</text></string>
+    <string id="ui_weather_editor_status_duplicate_time"><text>Неможливо додати секцію: цей час уже використовується.</text></string>
+    <string id="ui_weather_editor_status_frame_added"><text>Додано нову часову секцію [%s]. Збережіть погоду, щоб записати її на диск.</text></string>
+    <string id="ui_weather_editor_status_preview"><text>Режим перегляду. Скористайтеся командою weather_editor, щоб повернути редактор.</text></string>
+    <string id="ui_weather_editor_status_save_error"><text>ПОМИЛКА: конфіг погоди не збережено. Перевірте журнал гри.</text></string>
+    <string id="ui_weather_editor_status_saved"><text>Збережено: %s (резервна копія першого збереження: .weather_editor.bak)</text></string>
+    <string id="ui_weather_editor_status_reverted"><text>Часову секцію повернено до останнього збереженого або початкового стану.</text></string>
+</string_table>
