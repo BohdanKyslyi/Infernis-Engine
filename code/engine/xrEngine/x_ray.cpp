@@ -218,13 +218,18 @@ void Startup() {
     Memory.mem_usage();
     Device.Run();
 
+    CTimer exit_timer;
+    exit_timer.Start();
+    Msg("* Shutdown timing: main loop stopped");
     g_discord.Shutdown();
+    Msg("* Shutdown timing: Discord shutdown %u ms", exit_timer.GetElapsed_ms());
 
     // Destroy APP
     xr_delete(g_SpatialSpacePhysic);
     xr_delete(g_SpatialSpace);
     DEL_INSTANCE(g_pGamePersistent);
     xr_delete(pApp);
+    Msg("* Shutdown timing: application destroyed %u ms", exit_timer.GetElapsed_ms());
     //Engine.Event.Dump();
 
     // Destroying
@@ -242,6 +247,7 @@ void Startup() {
         Console->Destroy();
 
     destroySound();
+    Msg("* Shutdown timing: sound destroyed %u ms", exit_timer.GetElapsed_ms());
 
     destroyEngine();
 }
@@ -818,6 +824,8 @@ void CApplication::OnEvent(EVENT E, u64 P1, u64 P2) {
         xr_free(op_server);
         xr_free(op_client);
     } else if (E == eDisconnect) {
+        CTimer disconnect_timer;
+        disconnect_timer.Start();
         ls_header[0] = '\0';
         ls_tip_number[0] = '\0';
         ls_tip[0] = '\0';
@@ -825,7 +833,9 @@ void CApplication::OnEvent(EVENT E, u64 P1, u64 P2) {
         if (g_pGameLevel) {
             Console->Hide();
             g_pGameLevel->net_Stop();
+            Msg("* Shutdown timing: net_Stop %u ms", disconnect_timer.GetElapsed_ms());
             DEL_INSTANCE(g_pGameLevel);
+            Msg("* Shutdown timing: level destruction %u ms", disconnect_timer.GetElapsed_ms());
             Console->Show();
 
             if ((FALSE == Engine.Event.Peek("KERNEL:quit")) &&
@@ -836,6 +846,7 @@ void CApplication::OnEvent(EVENT E, u64 P1, u64 P2) {
         }
         R_ASSERT(0 != g_pGamePersistent);
         g_pGamePersistent->Disconnect();
+        Msg("* Shutdown timing: persistent disconnect %u ms", disconnect_timer.GetElapsed_ms());
     } else if (E == eConsole) {
         LPSTR command = (LPSTR)P1;
         Console->ExecuteCommand(command, false);
