@@ -36,11 +36,16 @@ PROTECT_API void CEngine::Initialize(void) {
 }
 
 void CEngine::Destroy() {
+    CTimer shutdown_timer;
+    shutdown_timer.Start();
     Engine.Sheduler.Destroy();
+    Msg("* Shutdown engine: scheduler %u ms", shutdown_timer.GetElapsed_ms());
     Engine.External.Destroy();
+    Msg("* Shutdown engine: external modules %u ms", shutdown_timer.GetElapsed_ms());
 
     if (hPSGP) {
         FreeLibrary(hPSGP);
+        Msg("* Shutdown engine: CPU pipe unloaded %u ms", shutdown_timer.GetElapsed_ms());
         hPSGP = 0;
         std::memset(&PSGP, 0, sizeof(PSGP));
     }
