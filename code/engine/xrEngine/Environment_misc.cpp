@@ -773,6 +773,7 @@ bool CEnvironment::SaveWeather(const std::string& name, bool make_backup,
     // source is packed, CInifile reads it through the VFS and the save creates
     // a loose override in $game_weathers$.
     CInifile config(file_name, FALSE, TRUE, FALSE);
+    config.set_override_names(TRUE);
     for (const CEnvDescriptor* descriptor : weather->second)
         descriptor->save(config);
 

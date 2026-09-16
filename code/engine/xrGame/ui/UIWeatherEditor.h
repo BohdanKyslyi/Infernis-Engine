@@ -26,6 +26,11 @@ public:
     virtual void SendMessage(CUIWindow* pWnd, s16 msg, void* pData = nullptr);
     virtual bool OnKeyboardAction(int dik, EUIMessages keyboard_action);
 
+    bool IsSessionActive() const { return m_session_active; }
+    bool IsPreviewing() const { return m_previewing; }
+    void EnterPreview();
+    void CloseEditorSession();
+
 private:
     struct SPropertyControl {
         u32 property_index;
@@ -92,6 +97,8 @@ private:
 
     void OnWeatherChanged(CUIWindow*, void*);
     void OnFrameChanged(CUIWindow*, void*);
+    void OnTimeChanged(CUIWindow*, void*);
+    void OnPropertyChanged(CUIWindow*, void*);
     void OnSkyChanged(CUIWindow*, void*);
     void OnCloudsChanged(CUIWindow*, void*);
     void OnAmbientChanged(CUIWindow*, void*);
@@ -138,8 +145,11 @@ private:
     int m_active_color_property;
     bool m_synchronizing;
     bool m_previous_pause;
+    bool m_session_active;
+    bool m_previewing;
 };
 
 void ToggleWeatherEditor(bool force_show = false, bool force_hide = false);
+void PreviewWeatherEditor();
 void DestroyWeatherEditor();
 bool WeatherEditorShown();

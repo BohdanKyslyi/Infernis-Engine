@@ -343,7 +343,7 @@ static const SPropertyInfo properties[] = {
     {0.f, 1.5f, .01f},      {0.f, 1.5f, .01f},    {0.f, 1.5f, .01f},
     {0.f, 1.5f, .01f},      {0.f, 1.5f, .01f},    {0.f, 1.5f, .01f},
     {0.f, 1.f, .01f},       {0.f, 1.5f, .01f},    {0.f, 1.5f, .01f},
-    {0.f, 1.5f, .01f},      {-90.f, 90.f, 1.f},   {-180.f, 180.f, 1.f},
+    {0.f, 1.5f, .01f},      {-180.f, 180.f, 1.f}, {-90.f, -.1f, .1f},
 };
 
 constexpr float property_y_offset = 35.f;
@@ -371,7 +371,8 @@ CUIWeatherEditor::CUIWeatherEditor()
       m_thunderbolt_definition(nullptr), m_time_slider(nullptr), m_time_value(nullptr),
       m_add_frame(nullptr), m_preview(nullptr), m_save(nullptr), m_revert(nullptr),
       m_close(nullptr), m_color_picker(nullptr), m_descriptor(nullptr), m_editor_time(0.f),
-      m_active_color_property(-1), m_synchronizing(false), m_previous_pause(false) {
+      m_active_color_property(-1), m_synchronizing(false), m_previous_pause(false),
+      m_session_active(false), m_previewing(false) {
     m_bWorkInPause = true;
 }
 
@@ -448,6 +449,7 @@ void CUIWeatherEditor::Init() {
 
     Register(m_weather);
     Register(m_frame);
+    Register(m_time_slider);
     Register(m_sky);
     Register(m_clouds);
     Register(m_ambient_definition);
@@ -461,11 +463,15 @@ void CUIWeatherEditor::Init() {
     Register(m_color_picker);
     for (SColorControl& control : m_color_controls)
         Register(control.swatch);
+    for (SPropertyControl& control : m_property_controls)
+        Register(control.slider);
 
     AddCallback(m_weather, LIST_ITEM_SELECT,
                 CUIWndCallback::void_function(this, &CUIWeatherEditor::OnWeatherChanged));
     AddCallback(m_frame, LIST_ITEM_SELECT,
                 CUIWndCallback::void_function(this, &CUIWeatherEditor::OnFrameChanged));
+    AddCallback(m_time_slider, BUTTON_CLICKED,
+                CUIWndCallback::void_function(this, &CUIWeatherEditor::OnTimeChanged));
     AddCallback(m_sky, LIST_ITEM_SELECT,
                 CUIWndCallback::void_function(this, &CUIWeatherEditor::OnSkyChanged));
     AddCallback(m_clouds, LIST_ITEM_SELECT,
@@ -491,6 +497,9 @@ void CUIWeatherEditor::Init() {
     for (SColorControl& control : m_color_controls)
         AddCallback(control.swatch, BUTTON_CLICKED,
                     CUIWndCallback::void_function(this, &CUIWeatherEditor::OnColorSwatch));
+    for (SPropertyControl& control : m_property_controls)
+        AddCallback(control.slider, BUTTON_CLICKED,
+                    CUIWndCallback::void_function(this, &CUIWeatherEditor::OnPropertyChanged));
 
     SetStatus("ui_weather_editor_status_ready");
 }
@@ -498,9 +507,20 @@ void CUIWeatherEditor::Init() {
 void CUIWeatherEditor::Show(bool status) {
     if (status && !IsShown()) {
         CEnvironment& environment = g_pGamePersistent->Environment();
+        if (m_session_active) {
+            m_previewing = false;
+            environment.UpdateWeatherEditorSession(environment.CurrentCycleName, m_editor_time);
+            inherited::Show(true);
+            SyncTimeControl(m_editor_time);
+            SyncPropertyControls();
+            return;
+        }
+
         const float current_time = environment.GetGameTime();
         m_previous_pause = environment.m_paused;
-        environment.m_paused = true;
+        m_session_active = true;
+        m_previewing = false;
+        environment.BeginWeatherEditorSession(environment.CurrentCycleName, current_time);
         m_color_picker->Show(false);
         m_active_color_property = -1;
         inherited::Show(true);
@@ -508,15 +528,17 @@ void CUIWeatherEditor::Show(bool status) {
         FillTextureLists();
         FillDefinitionLists();
         SelectCurrentWeather();
-        ApplyEditorTime(current_time);
-        SyncTimeControl(current_time);
         return;
     }
     if (!status && IsShown()) {
         m_color_picker->Show(false);
         m_active_color_property = -1;
-        if (g_pGamePersistent)
-            g_pGamePersistent->Environment().m_paused = m_previous_pause;
+        if (g_pGamePersistent && !m_previewing) {
+            CEnvironment& environment = g_pGamePersistent->Environment();
+            environment.EndWeatherEditorSession();
+            environment.m_paused = m_previous_pause;
+            m_session_active = false;
+        }
 
         // An expanded combo registers itself in seqRender and captures the
         // parent. Close every list before hiding/deleting the dialog.
@@ -527,13 +549,15 @@ void CUIWeatherEditor::Show(bool status) {
         Device.seqRender.Remove(m_ambient_definition);
         Device.seqRender.Remove(m_sun_definition);
         Device.seqRender.Remove(m_thunderbolt_definition);
-        clear_combo(m_weather);
-        clear_combo(m_frame);
-        clear_combo(m_sky);
-        clear_combo(m_clouds);
-        clear_combo(m_ambient_definition);
-        clear_combo(m_sun_definition);
-        clear_combo(m_thunderbolt_definition);
+        if (!m_previewing) {
+            clear_combo(m_weather);
+            clear_combo(m_frame);
+            clear_combo(m_sky);
+            clear_combo(m_clouds);
+            clear_combo(m_ambient_definition);
+            clear_combo(m_sun_definition);
+            clear_combo(m_thunderbolt_definition);
+        }
     }
     inherited::Show(status);
 }
@@ -885,18 +909,7 @@ void CUIWeatherEditor::ApplyEditorTime(float game_time) {
 
     CEnvironment& environment = g_pGamePersistent->Environment();
     const float normalized_time = clampr(game_time, 0.f, DAY_LENGTH - 1.f);
-    if (environment.IsWFXPlaying())
-        environment.StopWFX();
-
-    // SetGameTime intentionally ignores changes while m_paused is true. Toggle
-    // it only for this atomic update, then immediately freeze the selected time.
-    environment.m_paused = false;
-    environment.SetGameTime(normalized_time, environment.fTimeFactor);
-    if (g_pGameLevel)
-        g_pGameLevel->SetEnvironmentGameTimeFactor(
-            (u64)iFloor(normalized_time * 1000.f), environment.fTimeFactor);
-    environment.SelectEnvs(normalized_time);
-    environment.m_paused = true;
+    environment.UpdateWeatherEditorSession(environment.CurrentCycleName, normalized_time);
     m_editor_time = normalized_time;
 }
 
@@ -1161,9 +1174,7 @@ void CUIWeatherEditor::OnWeatherChanged(CUIWindow*, void*) {
     if (index < 0 || (u32)index >= m_weather_names.size())
         return;
     CEnvironment& environment = g_pGamePersistent->Environment();
-    if (environment.IsWFXPlaying())
-        environment.StopWFX();
-    environment.SetWeather(m_weather_names[index], true);
+    environment.UpdateWeatherEditorSession(m_weather_names[index], m_editor_time);
     FillFrameList();
     SelectFrame(0);
 }
@@ -1171,6 +1182,32 @@ void CUIWeatherEditor::OnWeatherChanged(CUIWindow*, void*) {
 void CUIWeatherEditor::OnFrameChanged(CUIWindow*, void*) {
     if (!m_synchronizing)
         SelectFrame((u32)m_frame->CurrentID());
+}
+
+void CUIWeatherEditor::OnTimeChanged(CUIWindow*, void*) {
+    if (m_synchronizing || !m_descriptor)
+        return;
+    ApplyEditorTime(m_time_slider->GetFValue());
+}
+
+void CUIWeatherEditor::OnPropertyChanged(CUIWindow* window, void*) {
+    if (m_synchronizing || !m_descriptor)
+        return;
+
+    for (SPropertyControl& control : m_property_controls) {
+        if (control.slider != window)
+            continue;
+
+        // A property belongs to a concrete weather section. If the timeline
+        // was left between sections, snap back to that section so the edit is
+        // visible at full weight instead of looking like a frozen slider.
+        if (!fsimilar(m_editor_time, m_descriptor->exec_time, .5f)) {
+            ApplyEditorTime(m_descriptor->exec_time);
+            SyncTimeControl(m_descriptor->exec_time);
+        }
+        SetPropertyValue(control.property_index, control.slider->GetFValue());
+        return;
+    }
 }
 
 void CUIWeatherEditor::OnSkyChanged(CUIWindow*, void*) {
@@ -1323,7 +1360,32 @@ void CUIWeatherEditor::OnAddFrame(CUIWindow*, void*) {
 
 void CUIWeatherEditor::OnPreview(CUIWindow*, void*) {
     SetStatus("ui_weather_editor_status_preview");
+    EnterPreview();
+}
+
+void CUIWeatherEditor::EnterPreview() {
+    if (!m_session_active || !IsShown())
+        return;
+    m_previewing = true;
     HideDialog();
+}
+
+void CUIWeatherEditor::CloseEditorSession() {
+    if (!m_session_active)
+        return;
+
+    m_previewing = false;
+    if (IsShown()) {
+        HideDialog();
+        return;
+    }
+
+    if (g_pGamePersistent) {
+        CEnvironment& environment = g_pGamePersistent->Environment();
+        environment.EndWeatherEditorSession();
+        environment.m_paused = m_previous_pause;
+    }
+    m_session_active = false;
 }
 
 void CUIWeatherEditor::OnSave(CUIWindow*, void*) {
@@ -1370,19 +1432,28 @@ void ToggleWeatherEditor(bool force_show, bool force_hide) {
         weather_editor = xr_new<CUIWeatherEditor>();
         weather_editor->Init();
     }
-    const bool show = force_show || (!force_hide && !weather_editor->IsShown());
+    if (force_hide) {
+        weather_editor->CloseEditorSession();
+        return;
+    }
+
+    const bool show = force_show || !weather_editor->IsShown();
     if (show && !weather_editor->IsShown())
         weather_editor->ShowDialog(true);
-    else if (!show && weather_editor->IsShown())
-        weather_editor->HideDialog();
+    else if (!force_show && weather_editor->IsShown())
+        weather_editor->CloseEditorSession();
+}
+
+void PreviewWeatherEditor() {
+    if (weather_editor)
+        weather_editor->EnterPreview();
 }
 
 void DestroyWeatherEditor() {
     if (!weather_editor)
         return;
-    if (weather_editor->IsShown())
-        weather_editor->HideDialog();
+    weather_editor->CloseEditorSession();
     xr_delete(weather_editor);
 }
 
-bool WeatherEditorShown() { return weather_editor && weather_editor->IsShown(); }
+bool WeatherEditorShown() { return weather_editor && weather_editor->IsSessionActive(); }
