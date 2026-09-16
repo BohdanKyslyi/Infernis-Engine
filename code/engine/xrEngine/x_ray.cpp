@@ -172,8 +172,12 @@ void destroyConsole() {
 }
 
 void destroyEngine() {
+    CTimer destroy_timer;
+    destroy_timer.Start();
     Device.Destroy();
+    Msg("* Shutdown timing: device destroyed %u ms", destroy_timer.GetElapsed_ms());
     Engine.Destroy();
+    Msg("* Shutdown timing: engine destroyed %u ms", destroy_timer.GetElapsed_ms());
 }
 
 void execUserScript() {
@@ -634,6 +638,7 @@ int APIENTRY WinMain_impl(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lp
         Console->Execute("stat_memory");
 
         Startup();
+        Msg("* Shutdown timing: startup returned");
         Core._destroy();
 
         // check for need to execute something external
@@ -790,9 +795,12 @@ CApplication::~CApplication() {
 }
 
 extern CRenderDevice Device;
+ENGINE_API u32 g_shutdownProbeStart = 0;
 
 void CApplication::OnEvent(EVENT E, u64 P1, u64 P2) {
     if (E == eQuit) {
+        if (g_shutdownProbeStart)
+            Msg("* Shutdown frame: quit event %u ms", GetTickCount() - g_shutdownProbeStart);
         PostQuitMessage(0);
 
         for (u32 i = 0; i < Levels.size(); i++) {
@@ -824,6 +832,8 @@ void CApplication::OnEvent(EVENT E, u64 P1, u64 P2) {
         xr_free(op_server);
         xr_free(op_client);
     } else if (E == eDisconnect) {
+        if (Engine.Event.Peek("KERNEL:quit"))
+            g_shutdownProbeStart = GetTickCount();
         CTimer disconnect_timer;
         disconnect_timer.Start();
         ls_header[0] = '\0';
@@ -847,6 +857,8 @@ void CApplication::OnEvent(EVENT E, u64 P1, u64 P2) {
         R_ASSERT(0 != g_pGamePersistent);
         g_pGamePersistent->Disconnect();
         Msg("* Shutdown timing: persistent disconnect %u ms", disconnect_timer.GetElapsed_ms());
+        if (g_shutdownProbeStart)
+            Msg("* Shutdown frame: disconnect finished %u ms", GetTickCount() - g_shutdownProbeStart);
     } else if (E == eConsole) {
         LPSTR command = (LPSTR)P1;
         Console->ExecuteCommand(command, false);
@@ -951,8 +963,12 @@ void CApplication::LoadSwitch() {}
 // Sequential
 void CApplication::OnFrame() {
     Engine.Event.OnFrame();
+    if (g_shutdownProbeStart)
+        Msg("* Shutdown frame: events processed %u ms", GetTickCount() - g_shutdownProbeStart);
     g_SpatialSpace->update();
     g_SpatialSpacePhysic->update();
+    if (g_shutdownProbeStart)
+        Msg("* Shutdown frame: spatial databases updated %u ms", GetTickCount() - g_shutdownProbeStart);
     if (g_pGameLevel)
         g_pGameLevel->SoundEvent_Dispatch();
 }
