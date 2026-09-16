@@ -19,17 +19,20 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
     // SV_Position addresses the lens pixel in the full-screen world pass.
     float2 tc = saturate(pos2d.xy / scope_lens_size.xy);
     float3 scene = s_vp2.Sample(smp_rtlinear, tc).rgb;
+    float3 image = lerp(scene, reticle.rgb, reticle.a);
     // The 2D optic's PPE is applied to the final screen. Keep optic modes inside
     // the physical lens instead of changing the player's entire field of view.
+    // Apply them after the reticle blend: an opaque reticle texture must not
+    // conceal the effect on the view through the lens.
     if (scope_lens_state.y > 1.5f)
     {
-        float luma = dot(scene, float3(0.299f, 0.587f, 0.114f));
-        scene = saturate(float3(0.08f, 1.0f, 0.13f) * pow(saturate(luma * 2.2f), 0.75f));
+        float luma = dot(image, float3(0.299f, 0.587f, 0.114f));
+        image = saturate(float3(0.08f, 1.0f, 0.13f) * pow(saturate(luma * 2.2f), 0.75f));
     }
     else if (scope_lens_state.y > 0.5f)
     {
-        float luma = dot(scene, float3(0.299f, 0.587f, 0.114f));
-        scene = saturate(lerp(scene, luma.xxx, 0.45f) * 1.55f - 0.15f);
+        float luma = dot(image, float3(0.299f, 0.587f, 0.114f));
+        image = saturate(lerp(image, luma.xxx, 0.45f) * 1.55f - 0.15f);
     }
     // Detector frames are projected with the lens camera and are only visible
     // through this material. The rest of the HUD never receives these pixels.
@@ -48,9 +51,8 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
             bool horizontal = (abs(tc.y - box.y) < edge.y || abs(tc.y - box.w) < edge.y) &&
                 (tc.x < box.x + corner.x || tc.x > box.z - corner.x);
             if (inside && (vertical || horizontal))
-                scene = float3(0.65f, 0.9f, 0.65f);
+                image = float3(0.65f, 0.9f, 0.65f);
         }
     }
-    float3 image = lerp(scene, reticle.rgb, reticle.a);
     return float4(image, active);
 }

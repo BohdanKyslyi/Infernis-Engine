@@ -1523,6 +1523,9 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     }
 
     HRESULT _result = E_FAIL;
+    const bool scope_lens_pixel_shader =
+        0 == xr_strcmp(name, "model_scope_lense") && 'p' == pTarget[0];
+    bool loaded_from_cache = false;
 
     string_path folder_name, folder;
     xr_strcpy(folder, "r3\\objects\\r4\\");
@@ -1551,7 +1554,7 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         // The lens pixel shader is updated alongside gameplay features. Its old
         // cached bytecode can be valid while ignoring new scope_lens_state modes.
         // Keep its cache key tied to the source without invalidating other shaders.
-        if (0 == xr_strcmp(name, "model_scope_lense") && 'p' == pTarget[0]) {
+        if (scope_lens_pixel_shader) {
             string16 source_crc;
             xr_sprintf(source_crc, "_%08x", crc32(pSrcData, SrcDataLen));
             xr_strcat(file, source_crc);
@@ -1573,6 +1576,7 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
             if (real_crc == crc) {
                 _result = create_shader(pTarget, (DWORD*)file->pointer(), file->elapsed(),
                                         file_name, result, o.disasm);
+                loaded_from_cache = SUCCEEDED(_result);
             }
         }
         file->close();
@@ -1611,6 +1615,10 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
                 Msg("Can't compile shader hr=0x%08x", _result);
         }
     }
+
+    if (scope_lens_pixel_shader && SUCCEEDED(_result))
+        Msg("* ScopeLensPS: %s source_crc=%08x file=%s",
+            loaded_from_cache ? "cached" : "compiled", crc32(pSrcData, SrcDataLen), file_name);
 
     return _result;
 }
