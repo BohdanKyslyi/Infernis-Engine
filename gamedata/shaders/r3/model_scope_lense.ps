@@ -32,7 +32,10 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
     else if (scope_lens_state.y > 0.5f)
     {
         float luma = dot(image, float3(0.299f, 0.587f, 0.114f));
-        image = saturate(lerp(image, luma.xxx, 0.45f) * 1.55f - 0.15f);
+        // The legacy contrast.ppe also gives the 2D optic its yellow/olive
+        // palette. Keep that palette confined to the physical 3D lens.
+        float contrast = saturate(luma * 1.55f - 0.12f);
+        image = contrast * float3(1.0f, 0.96f, 0.20f);
     }
     // Detector frames are projected with the lens camera and are only visible
     // through this material. The rest of the HUD never receives these pixels.
