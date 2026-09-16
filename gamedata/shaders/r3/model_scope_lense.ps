@@ -19,6 +19,22 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
     // SV_Position addresses the lens pixel in the full-screen world pass.
     float2 tc = saturate(pos2d.xy / scope_lens_size.xy);
     float3 scene = s_vp2.Sample(smp_rtlinear, tc).rgb;
+
+    // The 3DSS config dims older optics to (0.8, 0.8, 0.76). Keep most of
+    // that absorption near the rim so the center stays readable. Lens UVs
+    // follow the HUD mesh, while the world image still uses SV_Position.
+    if (scope_lens_state.y < 0.5f)
+    {
+        float2 lens_uv = I.tc * 2.0f - 1.0f;
+        float rim = smoothstep(0.25f, 0.95f, dot(lens_uv, lens_uv));
+        scene *= lerp(float3(0.99f, 0.99f, 0.98f),
+                      float3(0.80f, 0.80f, 0.76f), rim);
+
+        // A weak broad reflection sits off axis and leaves the reticle clear.
+        float2 glint_uv = (I.tc - float2(0.29f, 0.23f)) * float2(1.0f, 1.4f);
+        float glint = exp2(-22.0f * dot(glint_uv, glint_uv));
+        scene = saturate(scene + 0.025f * glint * (1.0f - rim));
+    }
     float3 image = lerp(scene, reticle.rgb, reticle.a);
     // The 2D optic's PPE is applied to the final screen. Keep optic modes inside
     // the physical lens instead of changing the player's entire field of view.
