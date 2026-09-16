@@ -98,9 +98,24 @@ static class cl_ie_pbr_hud_projection_params : public R_constant_setup {
 static class cl_scope_lens_state : public R_constant_setup {
     virtual void setup(R_constant* C) {
         const float active = Device.scopeLensActive && !Device.scopeLensPass ? 1.f : 0.f;
-        RCache.set_c(C, active, 0.f, 0.f, 0.f);
+        const float mode = active && g_pGameLevel ? (float)g_pGameLevel->ScopeLensMode() : 0.f;
+        const float detector = active && g_pGameLevel && g_pGameLevel->ScopeLensHasDetector() ? 1.f : 0.f;
+        RCache.set_c(C, active, mode, detector, 0.f);
     }
 } binder_scope_lens_state;
+
+static class cl_scope_lens_targets : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        Fvector4 targets[8];
+        for (u32 i = 0; i < 8; ++i)
+            targets[i].set(-1.f, -1.f, -1.f, -1.f);
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel &&
+            g_pGameLevel->ScopeLensHasDetector())
+            g_pGameLevel->ScopeLensTargets(targets, 8);
+        for (u32 i = 0; i < 8; ++i)
+            RCache.set_ca(C, i, targets[i].x, targets[i].y, targets[i].z, targets[i].w);
+    }
+} binder_scope_lens_targets;
 
 static class cl_scope_lens_size : public R_constant_setup {
     virtual void setup(R_constant* C) {
@@ -416,6 +431,8 @@ void CRender::create() {
         "scope_lens_state", &binder_scope_lens_state);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
         "scope_lens_size", &binder_scope_lens_size);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "scope_lens_targets", &binder_scope_lens_targets);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("triLOD", &binder_LOD);
 
     c_lmaterial = "L_material";

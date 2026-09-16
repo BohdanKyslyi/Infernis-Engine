@@ -138,6 +138,9 @@ public:
     bool IsScopeAttached() const;
     virtual bool Is3DScopeEnabled() const;
     float ScopeLensFov() const;
+    u8 ScopeLensMode() const;
+    bool HasScopeDetector() const;
+    shared_str ScopeSettingSection(LPCSTR key) const;
     bool IsSilencerAttached() const;
 
     virtual bool GrenadeLauncherAttachable();

@@ -849,6 +849,11 @@ void CWeaponMagazined::LoadAddons()
 void CWeaponMagazined::InitAddons() {
     m_zoom_params.m_fIronSightZoomFactor =
         READ_IF_EXISTS(pSettings, r_float, cNameSect(), "ironsight_zoom_factor", 50.0f);
+    m_zoom_params.m_fScopeZoomFactor = pSettings->r_float(cNameSect(), "scope_zoom_factor");
+    m_zoom_params.m_bUseDynamicZoom = READ_IF_EXISTS(pSettings, r_bool, cNameSect(),
+        "scope_dynamic_zoom", FALSE);
+    m_zoom_params.m_sUseZoomPostprocess = 0;
+    m_zoom_params.m_sUseBinocularVision = 0;
     if (IsScopeAttached()) {
         shared_str scope_tex_name;
         if (m_eScopeStatus == ALife::eAddonAttachable) {
@@ -856,15 +861,18 @@ void CWeaponMagazined::InitAddons() {
             // m_scopes[cur_scope]->m_iScopeX	 = pSettings->r_s32(cNameSect(),"scope_x");
             // m_scopes[cur_scope]->m_iScopeY	 = pSettings->r_s32(cNameSect(),"scope_y");
 
-            scope_tex_name = pSettings->r_string(GetScopeName(), "scope_texture");
-            m_zoom_params.m_fScopeZoomFactor =
-                pSettings->r_float(GetScopeName(), "scope_zoom_factor");
-            m_zoom_params.m_sUseZoomPostprocess =
-                READ_IF_EXISTS(pSettings, r_string, GetScopeName(), "scope_nightvision", 0);
-            m_zoom_params.m_bUseDynamicZoom =
-                READ_IF_EXISTS(pSettings, r_bool, GetScopeName(), "scope_dynamic_zoom", FALSE);
-            m_zoom_params.m_sUseBinocularVision =
-                READ_IF_EXISTS(pSettings, r_string, GetScopeName(), "scope_alive_detector", 0);
+            scope_tex_name = READ_IF_EXISTS(pSettings, r_string,
+                ScopeSettingSection("scope_texture"), "scope_texture", "");
+            m_zoom_params.m_fScopeZoomFactor = READ_IF_EXISTS(pSettings, r_float,
+                ScopeSettingSection("scope_zoom_factor"), "scope_zoom_factor",
+                m_zoom_params.m_fScopeZoomFactor);
+            m_zoom_params.m_sUseZoomPostprocess = READ_IF_EXISTS(pSettings, r_string,
+                ScopeSettingSection("scope_nightvision"), "scope_nightvision", 0);
+            m_zoom_params.m_bUseDynamicZoom = READ_IF_EXISTS(pSettings, r_bool,
+                ScopeSettingSection("scope_dynamic_zoom"), "scope_dynamic_zoom", FALSE);
+            m_zoom_params.m_sUseBinocularVision = READ_IF_EXISTS(pSettings, r_string,
+                ScopeSettingSection("scope_alive_detector"), "scope_alive_detector", 0);
+            m_fRTZoomFactor = m_zoom_params.m_fScopeZoomFactor;
             if (m_UIScope) {
                 xr_delete(m_UIScope);
             }

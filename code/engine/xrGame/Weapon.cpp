@@ -1079,6 +1079,19 @@ bool CWeapon::IsScopeAttached() const {
            ALife::eAddonPermanent == m_eScopeStatus;
 }
 
+shared_str CWeapon::ScopeSettingSection(LPCSTR key) const {
+    if (IsScopeAttached() && m_eScopeStatus == ALife::eAddonAttachable &&
+        m_cur_scope < m_scopes.size()) {
+        const shared_str& wrapper = m_scopes[m_cur_scope];
+        if (pSettings->line_exist(wrapper, key))
+            return wrapper;
+        const shared_str optic = GetScopeName();
+        if (pSettings->line_exist(optic, key))
+            return optic;
+    }
+    return cNameSect();
+}
+
 bool CWeapon::Is3DScopeEnabled() const {
     if (!IsScopeAttached() || !psDeviceFlags.test(rsR4) ||
         !pSettings->section_exist("weapon_scopes") ||
@@ -1086,10 +1099,8 @@ bool CWeapon::Is3DScopeEnabled() const {
         !pSettings->r_bool("weapon_scopes", "enable_3d_scopes"))
         return false;
 
-    const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
-        ? GetScopeName() : cNameSect();
-    const bool enabled = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d",
-        READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "scope_3d", false));
+    const bool enabled = READ_IF_EXISTS(pSettings, r_bool,
+        ScopeSettingSection("scope_3d"), "scope_3d", false);
     const float fov = ScopeLensFov();
     return enabled && fov >= 5.f && fov <= 90.f;
 }
@@ -1098,10 +1109,32 @@ float CWeapon::ScopeLensFov() const {
     if (!IsScopeAttached())
         return 0.f;
 
-    const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
-        ? GetScopeName() : cNameSect();
-    return READ_IF_EXISTS(pSettings, r_float, scope_section, "scope_lens_fov",
-        READ_IF_EXISTS(pSettings, r_float, cNameSect(), "scope_lens_fov", 0.f));
+    float fov = READ_IF_EXISTS(pSettings, r_float,
+        ScopeSettingSection("scope_lens_fov"), "scope_lens_fov", 0.f);
+    if (fov >= 5.f && fov <= 90.f && m_zoom_params.m_bUseDynamicZoom &&
+        m_zoom_params.m_fScopeZoomFactor > 0.f && IsZoomed()) {
+        fov *= GetZoomFactor() / m_zoom_params.m_fScopeZoomFactor;
+        clamp(fov, 5.f, 90.f);
+    }
+    return fov;
+}
+
+u8 CWeapon::ScopeLensMode() const {
+    if (!Is3DScopeEnabled() || !m_zoom_params.m_sUseZoomPostprocess.size())
+        return 0;
+    const shared_str& section = m_zoom_params.m_sUseZoomPostprocess;
+    if (!pSettings->section_exist(section) || !pSettings->line_exist(section, "pp_eff_name"))
+        return 0;
+    const LPCSTR effect = pSettings->r_string(section, "pp_eff_name");
+    if (strstr(effect, "contrast"))
+        return 1;
+    if (strstr(effect, "nightvision"))
+        return 2;
+    return 0;
+}
+
+bool CWeapon::HasScopeDetector() const {
+    return IsZoomed() && Is3DScopeEnabled() && m_zoom_params.m_sUseBinocularVision.size();
 }
 
 bool CWeapon::IsSilencerAttached() const {
@@ -1225,13 +1258,11 @@ void GetZoomData(const float scope_factor, float& delta, float& min_zoom_factor)
 void CWeapon::OnZoomIn() {
     m_zoom_params.m_bIsZoomModeNow = true;
     if (IsScopeAttached()) {
-        const shared_str scope_section = m_eScopeStatus == ALife::eAddonAttachable
-            ? GetScopeName() : cNameSect();
+        const shared_str scope_section = ScopeSettingSection("scope_3d");
         const bool global = pSettings->section_exist("weapon_scopes") &&
             pSettings->line_exist("weapon_scopes", "enable_3d_scopes") &&
             pSettings->r_bool("weapon_scopes", "enable_3d_scopes");
-        const bool configured = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d",
-            READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "scope_3d", false));
+        const bool configured = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d", false);
         Msg("* ScopeLens: weapon=%s optic=%s R4=%d global=%d scope_3d=%d lens_fov=%.1f active=%d",
             cNameSect().c_str(), scope_section.c_str(), !!psDeviceFlags.test(rsR4),
             !!global, !!configured, ScopeLensFov(), !!Is3DScopeEnabled());
@@ -1503,18 +1534,17 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
         curr_offs = hi->m_measures.m_hands_offset[0][idx]; // pos,aim
         curr_rot = hi->m_measures.m_hands_offset[1][idx];  // rot,aim
         if (idx == 1 && IsScopeAttached() && m_eScopeStatus == ALife::eAddonAttachable) {
-            const shared_str scope_section = GetScopeName();
             const bool widescreen = hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
             LPCSTR pos_key = widescreen ? "aim_hud_offset_pos_16x9" : "aim_hud_offset_pos";
             LPCSTR rot_key = widescreen ? "aim_hud_offset_rot_16x9" : "aim_hud_offset_rot";
-            if (pSettings->line_exist(scope_section, pos_key))
-                curr_offs = pSettings->r_fvector3(scope_section, pos_key);
-            else if (widescreen && pSettings->line_exist(scope_section, "aim_hud_offset_pos"))
-                curr_offs = pSettings->r_fvector3(scope_section, "aim_hud_offset_pos");
-            if (pSettings->line_exist(scope_section, rot_key))
-                curr_rot = pSettings->r_fvector3(scope_section, rot_key);
-            else if (widescreen && pSettings->line_exist(scope_section, "aim_hud_offset_rot"))
-                curr_rot = pSettings->r_fvector3(scope_section, "aim_hud_offset_rot");
+            if (pSettings->line_exist(ScopeSettingSection(pos_key), pos_key))
+                curr_offs = pSettings->r_fvector3(ScopeSettingSection(pos_key), pos_key);
+            else if (widescreen && pSettings->line_exist(ScopeSettingSection("aim_hud_offset_pos"), "aim_hud_offset_pos"))
+                curr_offs = pSettings->r_fvector3(ScopeSettingSection("aim_hud_offset_pos"), "aim_hud_offset_pos");
+            if (pSettings->line_exist(ScopeSettingSection(rot_key), rot_key))
+                curr_rot = pSettings->r_fvector3(ScopeSettingSection(rot_key), rot_key);
+            else if (widescreen && pSettings->line_exist(ScopeSettingSection("aim_hud_offset_rot"), "aim_hud_offset_rot"))
+                curr_rot = pSettings->r_fvector3(ScopeSettingSection("aim_hud_offset_rot"), "aim_hud_offset_rot");
         }
         curr_offs.mul(m_zoom_params.m_fZoomRotationFactor);
         curr_rot.mul(m_zoom_params.m_fZoomRotationFactor);

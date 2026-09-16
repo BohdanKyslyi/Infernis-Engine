@@ -48,6 +48,7 @@
 #include "demoplay_control.h"
 #include "demoinfo.h"
 #include "CustomDetector.h"
+#include "visual_memory_manager.h"
 
 #include "../xrphysics/iphworld.h"
 #include "../xrphysics/console_vars.h"
@@ -505,6 +506,78 @@ float CLevel::ScopeLensFov() const
         return 0.f;
 
     return weapon->ScopeLensFov();
+}
+
+u8 CLevel::ScopeLensMode() const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return 0;
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    return weapon && weapon->IsZoomed() ? weapon->ScopeLensMode() : 0;
+}
+
+bool CLevel::ScopeLensHasDetector() const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return false;
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    return weapon && weapon->HasScopeDetector();
+}
+
+u32 CLevel::ScopeLensTargets(Fvector4* targets, u32 capacity) const
+{
+    if (!capacity)
+        return 0;
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return 0;
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    if (!weapon || !weapon->HasScopeDetector())
+        return 0;
+
+    Fmatrix lens_projection, lens_full;
+    lens_projection.build_projection(deg2rad(weapon->ScopeLensFov()), Device.fASPECT,
+        VIEWPORT_NEAR, g_pGamePersistent->Environment().CurrentEnv->far_plane);
+    lens_full.mul(lens_projection, Device.mView);
+
+    u32 count = 0;
+    const CVisualMemoryManager::VISIBLES& visible = actor->memory().visual().objects();
+    for (const auto& entry : visible) {
+        const CGameObject* object = smart_cast<const CGameObject*>(entry.m_object);
+        const CEntityAlive* alive = smart_cast<const CEntityAlive*>(entry.m_object);
+        if (!object || !alive || !alive->g_Alive() || !object->Visual() ||
+            !actor->memory().visual().visible_now(object))
+            continue;
+
+        Fvector camera_pos;
+        Device.mView.transform_tiny(camera_pos, object->Position());
+        if (camera_pos.z <= VIEWPORT_NEAR)
+            continue;
+
+        Fmatrix xform;
+        xform.mul(lens_full, object->XFORM());
+        const Fbox& box = object->Visual()->getVisData().box;
+        float left = 1.f, top = 1.f, right = 0.f, bottom = 0.f;
+        for (u32 corner = 0; corner < 8; ++corner) {
+            Fvector point;
+            box.getpoint(corner, point);
+            xform.transform(point);
+            left = std::min(left, (1.f + point.x) * 0.5f);
+            right = std::max(right, (1.f + point.x) * 0.5f);
+            top = std::min(top, (1.f - point.y) * 0.5f);
+            bottom = std::max(bottom, (1.f - point.y) * 0.5f);
+        }
+        if (left >= right || top >= bottom || right <= 0.f || left >= 1.f ||
+            bottom <= 0.f || top >= 1.f)
+            continue;
+        targets[count].set(std::max(0.f, left), std::max(0.f, top),
+            std::min(1.f, right), std::min(1.f, bottom));
+        if (++count == capacity)
+            break;
+    }
+    return count;
 }
 
 void CLevel::OnRender() 

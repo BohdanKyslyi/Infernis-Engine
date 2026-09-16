@@ -3,6 +3,7 @@
 Texture2D s_vp2;
 uniform float4 scope_lens_state;
 uniform float4 scope_lens_size;
+uniform float4 scope_lens_targets[8];
 
 struct p_scope_lens {
     float2 tc : TEXCOORD0;
@@ -18,6 +19,38 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
     // SV_Position addresses the lens pixel in the full-screen world pass.
     float2 tc = saturate(pos2d.xy / scope_lens_size.xy);
     float3 scene = s_vp2.Sample(smp_rtlinear, tc).rgb;
+    // The 2D optic's PPE is applied to the final screen. Keep optic modes inside
+    // the physical lens instead of changing the player's entire field of view.
+    if (scope_lens_state.y > 1.5f)
+    {
+        float luma = dot(scene, float3(0.299f, 0.587f, 0.114f));
+        scene = saturate(float3(0.08f, 1.0f, 0.13f) * pow(saturate(luma * 2.2f), 0.75f));
+    }
+    else if (scope_lens_state.y > 0.5f)
+    {
+        float luma = dot(scene, float3(0.299f, 0.587f, 0.114f));
+        scene = saturate(lerp(scene, luma.xxx, 0.45f) * 1.55f - 0.15f);
+    }
+    // Detector frames are projected with the lens camera and are only visible
+    // through this material. The rest of the HUD never receives these pixels.
+    if (scope_lens_state.z > 0.5f)
+    {
+        [unroll] for (int i = 0; i < 8; ++i)
+        {
+            float4 box = scope_lens_targets[i];
+            if (box.z <= box.x || box.w <= box.y)
+                continue;
+            float2 edge = float2(2.0f, 2.0f) / scope_lens_size.xy;
+            float2 corner = float2(11.0f, 11.0f) / scope_lens_size.xy;
+            bool inside = all(tc >= box.xy) && all(tc <= box.zw);
+            bool vertical = (abs(tc.x - box.x) < edge.x || abs(tc.x - box.z) < edge.x) &&
+                (tc.y < box.y + corner.y || tc.y > box.w - corner.y);
+            bool horizontal = (abs(tc.y - box.y) < edge.y || abs(tc.y - box.w) < edge.y) &&
+                (tc.x < box.x + corner.x || tc.x > box.z - corner.x);
+            if (inside && (vertical || horizontal))
+                scene = float3(0.65f, 0.9f, 0.65f);
+        }
+    }
     float3 image = lerp(scene, reticle.rgb, reticle.a);
     return float4(image, active);
 }

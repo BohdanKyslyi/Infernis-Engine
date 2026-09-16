@@ -14,26 +14,45 @@ in the first-person HUD model, assign `models\lense_scope`, and give its base te
 an alpha-channel reticle. A 2D optic works as before while the global switch is off;
 the global switch defaults to off until a scope model is available for a game test.
 
-For an attachable optic, the section named by `scope_name` can also override its
-weapon HUD aiming position and rotation. For example:
+For an attachable optic, its entry in the weapon's `scopes_sect` list can override
+the weapon HUD aiming position and rotation. An inherited base section works too:
 
 ```ini
-[my_scope]
+[scope_ar_3d]
 aim_hud_offset_pos = 0.0, 0.0, 0.0
 aim_hud_offset_rot = 0.0, 0.0, 0.0
 aim_hud_offset_pos_16x9 = 0.0, 0.0, 0.0
 aim_hud_offset_rot_16x9 = 0.0, 0.0, 0.0
-scope_zoom_factor = 50
+scope_3d = true
 scope_lens_fov = 20
+
+[scope_susat_custom_ar]:scope_ar_3d
+scope_name = wpn_addon_scope_susat_custom
+scope_zoom_factor = 30
+scope_dynamic_zoom = on
+scope_nightvision = scope_contrast
+scope_alive_detector = scope_detector
 ```
 
-Each aim value is independent: if absent, the corresponding HUD value is used.
+For each key, the selected `scopes_sect` entry takes priority over the inventory
+item section named by `scope_name`, then the weapon section where applicable.
+Each aim value is independent: if absent from both optic sections, the corresponding
+HUD value is used.
 On a widescreen display, an optic's `_16x9` value takes priority over its unsuffixed
 value; if both are absent, the weapon HUD's `_16x9` value is used. Removing or
 switching the optic restores the appropriate offsets automatically. Existing
 `scope_zoom_factor` controls the weapon's zoom for that optic; `scope_lens_fov`
-controls magnification inside its 3D lens. A permanently mounted scope keeps its
+sets the lens FOV at its strongest dynamic zoom. With `scope_dynamic_zoom = on`,
+changing zoom scales the lens FOV with the weapon's zoom factor. A permanently mounted scope keeps its
 aiming offsets in the weapon HUD section and its zoom settings in the weapon section.
+
+For each optic variant, override `scope_lens_fov` in its own `scopes_sect` entry
+when a different fixed magnification is desired. `scope_nightvision` sections
+whose `pp_eff_name` contains `contrast` or `nightvision` enable a lens-only
+contrast or green night-vision approximation; the original `.ppe` is still used
+for legacy 2D scopes. `scope_alive_detector` draws corner markers around up to
+eight living targets currently visible to the actor, inside the lens image only.
+Its existing `scope_detector` sound and target-update logic remains active.
 
 If the 2D overlay still appears, look for `* ScopeLens:` in the game log after aiming.
 The `R4`, `global`, and `scope_3d` values must all be `1`, `lens_fov` must be between
