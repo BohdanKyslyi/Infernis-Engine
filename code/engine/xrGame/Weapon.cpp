@@ -1502,6 +1502,20 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
         Fvector curr_offs, curr_rot;
         curr_offs = hi->m_measures.m_hands_offset[0][idx]; // pos,aim
         curr_rot = hi->m_measures.m_hands_offset[1][idx];  // rot,aim
+        if (idx == 1 && IsScopeAttached() && m_eScopeStatus == ALife::eAddonAttachable) {
+            const shared_str scope_section = GetScopeName();
+            const bool widescreen = hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
+            LPCSTR pos_key = widescreen ? "aim_hud_offset_pos_16x9" : "aim_hud_offset_pos";
+            LPCSTR rot_key = widescreen ? "aim_hud_offset_rot_16x9" : "aim_hud_offset_rot";
+            if (pSettings->line_exist(scope_section, pos_key))
+                curr_offs = pSettings->r_fvector3(scope_section, pos_key);
+            else if (widescreen && pSettings->line_exist(scope_section, "aim_hud_offset_pos"))
+                curr_offs = pSettings->r_fvector3(scope_section, "aim_hud_offset_pos");
+            if (pSettings->line_exist(scope_section, rot_key))
+                curr_rot = pSettings->r_fvector3(scope_section, rot_key);
+            else if (widescreen && pSettings->line_exist(scope_section, "aim_hud_offset_rot"))
+                curr_rot = pSettings->r_fvector3(scope_section, "aim_hud_offset_rot");
+        }
         curr_offs.mul(m_zoom_params.m_fZoomRotationFactor);
         curr_rot.mul(m_zoom_params.m_fZoomRotationFactor);
 
