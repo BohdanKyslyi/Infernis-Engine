@@ -6,17 +6,22 @@
 #include "xr_IOConsole.h"
 
 void CRenderDevice::_Destroy(BOOL bKeepTextures) {
+    CTimer destroy_timer;
+    destroy_timer.Start();
     DU->OnDeviceDestroy();
 
     // before destroy
     b_is_Ready = FALSE;
     Statistic->OnDeviceDestroy();
     ::Render->destroy();
+    Msg("* Shutdown timing: renderer destroyed %u ms", destroy_timer.GetElapsed_ms());
     m_pRender->OnDeviceDestroy(bKeepTextures);
+    Msg("* Shutdown timing: device resources released %u ms", destroy_timer.GetElapsed_ms());
     // Resources->OnDeviceDestroy	(bKeepTextures);
     // RCache.OnDeviceDestroy		();
 
     Memory.mem_compact();
+    Msg("* Shutdown timing: memory compacted %u ms", destroy_timer.GetElapsed_ms());
 }
 
 void CRenderDevice::Destroy(void) {
@@ -24,14 +29,18 @@ void CRenderDevice::Destroy(void) {
         return;
 
     Log("Destroying Direct3D...");
+    CTimer destroy_timer;
+    destroy_timer.Start();
 
     ShowCursor(TRUE);
     m_pRender->ValidateHW();
 
     _Destroy(FALSE);
+    Msg("* Shutdown timing: Direct3D cleanup %u ms", destroy_timer.GetElapsed_ms());
 
     // real destroy
     m_pRender->DestroyHW();
+    Msg("* Shutdown timing: hardware destroyed %u ms", destroy_timer.GetElapsed_ms());
 
     // xr_delete					(Resources);
     // HW.DestroyDevice			();

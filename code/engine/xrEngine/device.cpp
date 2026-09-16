@@ -346,13 +346,18 @@ void CRenderDevice::Run() {
 
     message_loop();
 
+    CTimer exit_timer;
+    exit_timer.Start();
+    Msg("* Shutdown timing: message loop stopped");
     seqAppEnd.Process(rp_AppEnd);
+    Msg("* Shutdown timing: app end callbacks %u ms", exit_timer.GetElapsed_ms());
 
     // Stop Balance-Thread
     mt_bMustExit = true;
     mt_csEnter.unlock();
 
     second_thread.join();
+    Msg("* Shutdown timing: render thread joined %u ms", exit_timer.GetElapsed_ms());
 }
 
 u32 app_inactive_time = 0;
