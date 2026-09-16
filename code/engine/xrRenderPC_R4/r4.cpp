@@ -1548,6 +1548,14 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         xr_strcat(file, extension);
         xr_strcat(file, "\\");
         xr_strcat(file, sh_name);
+        // The lens pixel shader is updated alongside gameplay features. Its old
+        // cached bytecode can be valid while ignoring new scope_lens_state modes.
+        // Keep its cache key tied to the source without invalidating other shaders.
+        if (0 == xr_strcmp(name, "model_scope_lense") && 'p' == pTarget[0]) {
+            string16 source_crc;
+            xr_sprintf(source_crc, "_%08x", crc32(pSrcData, SrcDataLen));
+            xr_strcat(file, source_crc);
+        }
         FS.update_path(file_name, "$app_data_root$", file);
     } else {
         xr_strcpy(file_name, folder_name);
