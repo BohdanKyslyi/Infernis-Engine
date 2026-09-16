@@ -65,6 +65,11 @@ CEnvironment::CEnvironment() : CurrentEnv(nullptr), m_ambients_config(nullptr) {
     fTimeFactor = 12.f;
     m_weather_editor_active = false;
     m_weather_editor_time = 0.f;
+    m_use_weather_sun_direction = false;
+    if (pSettings && pSettings->section_exist("environment") &&
+        pSettings->line_exist("environment", "use_weather_sun_direction"))
+        m_use_weather_sun_direction =
+            !!pSettings->r_bool("environment", "use_weather_sun_direction");
 
     wind_strength_factor = 0.f;
     wind_gust_factor = 0.f;
@@ -506,8 +511,10 @@ void CEnvironment::OnFrame() {
     float current_weight;
     lerp(current_weight);
 
-    //	Igor. Dynamic sun position.
-    if (!::Render->is_sun_static() && !m_weather_editor_active)
+    // The weather editor must always display the angles being edited. Outside
+    // the editor, dynamic renderers use either the engine-calculated sun or
+    // the interpolated weather angles according to the global extension flag.
+    if (!m_weather_editor_active && !m_use_weather_sun_direction && !::Render->is_sun_static())
         calculate_dynamic_sun_dir();
 
 #ifndef MASTER_GOLD

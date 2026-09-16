@@ -357,6 +357,7 @@ private:
     bool m_weather_editor_active;
     float m_weather_editor_time;
     std::string m_weather_editor_cycle;
+    bool m_use_weather_sun_direction;
 
 public:
 

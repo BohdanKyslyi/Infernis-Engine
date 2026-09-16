@@ -343,7 +343,7 @@ static const SPropertyInfo properties[] = {
     {0.f, 1.5f, .01f},      {0.f, 1.5f, .01f},    {0.f, 1.5f, .01f},
     {0.f, 1.5f, .01f},      {0.f, 1.5f, .01f},    {0.f, 1.5f, .01f},
     {0.f, 1.f, .01f},       {0.f, 1.5f, .01f},    {0.f, 1.5f, .01f},
-    {0.f, 1.5f, .01f},      {-180.f, 180.f, 1.f}, {-90.f, -.1f, .1f},
+    {0.f, 1.5f, .01f},      {-90.f, -.1f, .1f},   {-180.f, 180.f, 1.f},
 };
 
 constexpr float property_y_offset = 35.f;
@@ -1108,8 +1108,10 @@ float CUIWeatherEditor::GetPropertyValue(u32 property_index) const {
     case 31: return d.sun_color.x;
     case 32: return d.sun_color.y;
     case 33: return d.sun_color.z;
-    case 34: return rad2deg(d.sun_dir.getH());
-    case 35: return rad2deg(d.sun_dir.getP());
+    // UI uses the physical meaning of the angles. The legacy .ltx key names
+    // remain swapped only in CEnvDescriptor::load/save for compatibility.
+    case 34: return rad2deg(d.sun_dir.getP());
+    case 35: return rad2deg(d.sun_dir.getH());
     default: return 0.f;
     }
 }
@@ -1159,8 +1161,8 @@ void CUIWeatherEditor::SetPropertyValue(u32 property_index, float value) {
     case 31: d.sun_color.x = value; break;
     case 32: d.sun_color.y = value; break;
     case 33: d.sun_color.z = value; break;
-    case 34: d.sun_dir.setHP(deg2rad(value), pitch); break;
-    case 35: d.sun_dir.setHP(heading, deg2rad(value)); break;
+    case 34: d.sun_dir.setHP(heading, deg2rad(value)); break;
+    case 35: d.sun_dir.setHP(deg2rad(value), pitch); break;
     }
 
     if (property_index == 1)
