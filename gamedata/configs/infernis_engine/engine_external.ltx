@@ -88,3 +88,7 @@ allow_bloodmarks_on_npc	= true; відображення кривавих слі
 ; The existing 2D overlay is used if this switch is disabled.
 [weapon_scopes]
 enable_3d_scopes		= false
+; Fraction of screen width/height included in second-view visibility queries (0.5-1.0).
+; 1.0 renders the whole world view; 0.8 saves scene traversal outside the lens.
+; Increase this if a very large or off-centre lens clips world objects.
+scope_world_cull_scale	= 0.8

@@ -29,8 +29,6 @@ IGame_Level::IGame_Level() {
 //#include "resourcemanager.h"
 
 IGame_Level::~IGame_Level() {
-    CTimer unload_timer;
-    unload_timer.Start();
     if (strstr(Core.Params, "-nes_texture_storing"))
         // Device.Resources->StoreNecessaryTextures();
         Device.m_pRender->ResourcesStoreNecessaryTextures();
@@ -38,7 +36,6 @@ IGame_Level::~IGame_Level() {
 
     // Render-level unload
     Render->level_Unload();
-    Msg("* Shutdown timing: renderer level_Unload %u ms", unload_timer.GetElapsed_ms());
     xr_delete(m_pCameras);
     // Unregister
     Device.seqRender.Remove(this);

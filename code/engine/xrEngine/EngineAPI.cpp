@@ -145,24 +145,18 @@ void CEngineAPI::Initialize(void) {
 }
 
 void CEngineAPI::Destroy(void) {
-    CTimer shutdown_timer;
-    shutdown_timer.Start();
     if (hGame) {
         FreeLibrary(hGame);
-        Msg("* Shutdown engine: game DLL unloaded %u ms", shutdown_timer.GetElapsed_ms());
         hGame = 0;
     }
     if (hRender) {
         FreeLibrary(hRender);
-        Msg("* Shutdown engine: renderer DLL unloaded %u ms", shutdown_timer.GetElapsed_ms());
         hRender = 0;
     }
     pCreate = 0;
     pDestroy = 0;
     Engine.Event._destroy();
-    Msg("* Shutdown engine: events cleared %u ms", shutdown_timer.GetElapsed_ms());
     XRC.r_clear_compact();
-    Msg("* Shutdown engine: collision cache cleared %u ms", shutdown_timer.GetElapsed_ms());
 }
 
 extern "C" {

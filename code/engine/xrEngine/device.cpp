@@ -29,7 +29,6 @@ ENGINE_API CLoadScreenRenderer load_screen_renderer;
 ENGINE_API float IE_VIEWPORT_NEAR; // 0.05f - для юзу сучасних збройових паків, 0.2f - для ванільних
 
 ENGINE_API BOOL g_bRendering = FALSE;
-extern ENGINE_API u32 g_shutdownProbeStart;
 
 BOOL g_bLoaded = FALSE;
 ref_light precache_light = 0;
@@ -214,8 +213,6 @@ void CRenderDevice::on_idle() {
         return;
     } else {
         FrameMove();
-        if (g_shutdownProbeStart)
-            Msg("* Shutdown frame: FrameMove %u ms", GetTickCount() - g_shutdownProbeStart);
     }
 
     // Precache
@@ -255,8 +252,6 @@ void CRenderDevice::on_idle() {
         if (Begin()) {
 
             seqRender.Process(rp_Render);
-            if (g_shutdownProbeStart)
-                Msg("* Shutdown frame: render %u ms", GetTickCount() - g_shutdownProbeStart);
             if (psDeviceFlags.test(rsCameraPos) || psDeviceFlags.test(rsStatistic) ||
                 Statistic->errors.size())
                 Statistic->Show();
@@ -264,8 +259,6 @@ void CRenderDevice::on_idle() {
             // Statistic->RenderTOTAL_Real.End			();
             //	Present goes here
             End();
-            if (g_shutdownProbeStart)
-                Msg("* Shutdown frame: present %u ms", GetTickCount() - g_shutdownProbeStart);
         }
     }
     Statistic->RenderTOTAL_Real.End();
@@ -276,8 +269,6 @@ void CRenderDevice::on_idle() {
     // Release end point - allow thread to wait for startup point
     mt_csEnter.lock();
     mt_csLeave.unlock();
-    if (g_shutdownProbeStart)
-        Msg("* Shutdown frame: render thread synchronized %u ms", GetTickCount() - g_shutdownProbeStart);
 
     // Ensure, that second thread gets chance to execute anyway
     if (dwFrame != mt_Thread_marker) {
@@ -355,18 +346,13 @@ void CRenderDevice::Run() {
 
     message_loop();
 
-    CTimer exit_timer;
-    exit_timer.Start();
-    Msg("* Shutdown timing: message loop stopped");
     seqAppEnd.Process(rp_AppEnd);
-    Msg("* Shutdown timing: app end callbacks %u ms", exit_timer.GetElapsed_ms());
 
     // Stop Balance-Thread
     mt_bMustExit = true;
     mt_csEnter.unlock();
 
     second_thread.join();
-    Msg("* Shutdown timing: render thread joined %u ms", exit_timer.GetElapsed_ms());
 }
 
 u32 app_inactive_time = 0;

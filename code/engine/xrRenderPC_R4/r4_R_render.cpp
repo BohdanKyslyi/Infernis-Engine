@@ -12,6 +12,27 @@ IC bool pred_sp_sort(ISpatial* _1, ISpatial* _2) {
     return d1 < d2;
 }
 
+// Only the centre of the second view can be seen through an aimed scope.
+// Narrow visibility queries without changing the actual rendering projection:
+// screen-space sampling and the weapon's point of aim stay exactly the same.
+static Fmatrix scope_visibility_transform() {
+    if (!Device.scopeLensPass || !pSettings ||
+        !pSettings->section_exist("weapon_scopes") ||
+        !pSettings->line_exist("weapon_scopes", "scope_world_cull_scale"))
+        return Device.mFullTransform;
+
+    const float scale = pSettings->r_float("weapon_scopes", "scope_world_cull_scale");
+    if (!(scale >= 0.5f && scale < 1.f))
+        return Device.mFullTransform;
+
+    const float half_fov = atanf(tanf(deg2rad(Device.fFOV * 0.5f)) * scale);
+    Fmatrix projection, transform;
+    projection.build_projection(2.f * half_fov, Device.fASPECT, VIEWPORT_NEAR,
+                                g_pGamePersistent->Environment().CurrentEnv->far_plane);
+    transform.mul(projection, Device.mView);
+    return transform;
+}
+
 void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
     PIX_EVENT(render_main);
     //	Msg						("---begin");
@@ -232,7 +253,8 @@ void CRender::Render() {
     // bSUN?"true":"false");
 
     // HOM
-    ViewBase.CreateFromMatrix(Device.mFullTransform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
+    Fmatrix visibility_transform = scope_visibility_transform();
+    ViewBase.CreateFromMatrix(visibility_transform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
     View = 0;
     if (!Device.scopeLensPass && !ps_r2_ls_flags.test(R2FLAG_EXP_MT_CALC)) {
         HOM.Enable();
@@ -301,7 +323,7 @@ void CRender::Render() {
     else
         set_Recorder(NULL);
     phase = PHASE_NORMAL;
-    render_main(Device.mFullTransform, true);
+    render_main(visibility_transform, true);
     set_Recorder(NULL);
     r_pmask(true, false); // disable priority "1"
     Device.Statistic->RenderCALC.End();
@@ -544,7 +566,8 @@ void CRender::render_forward() {
         // level
         r_pmask(false, true); // enable priority "1"
         phase = PHASE_NORMAL;
-        render_main(Device.mFullTransform, false); //
+        Fmatrix visibility_transform = scope_visibility_transform();
+        render_main(visibility_transform, false); //
         //	Igor: we don't want to render old lods on next frame.
         mapLOD.clear();
         r_dsgraph_render_graph(1);                     // normal level, secondary priority

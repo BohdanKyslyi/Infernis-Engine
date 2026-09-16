@@ -107,8 +107,6 @@ extern CUISequencer* g_tutorial2;
 
 void CLevel::net_Stop() {
     Msg("- Disconnect");
-    CTimer stop_timer;
-    stop_timer.Start();
 
     if (CurrentGameUI()) {
         CurrentGameUI()->HideShownDialogs();
@@ -134,13 +132,11 @@ void CLevel::net_Stop() {
         SaveDemoInfo();
 
     remove_objects();
-    Msg("* Shutdown timing: remove_objects %u ms", stop_timer.GetElapsed_ms());
 
     // WARNING ! remove_objects() uses this flag, so position of this line must e here ..
     game_configured = FALSE;
 
     IGame_Level::net_Stop();
-    Msg("* Shutdown timing: level net_Stop %u ms", stop_timer.GetElapsed_ms());
     IPureClient::Disconnect();
 
     if (Server) {
@@ -149,7 +145,6 @@ void CLevel::net_Stop() {
     }
 
     ai().script_engine().collect_all_garbage();
-    Msg("* Shutdown timing: Lua garbage collection %u ms", stop_timer.GetElapsed_ms());
 
 #ifdef DEBUG
     show_animation_stats();
