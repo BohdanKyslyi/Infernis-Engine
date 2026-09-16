@@ -54,6 +54,14 @@ for legacy 2D scopes. `scope_alive_detector` draws corner markers around up to
 eight living targets currently visible to the actor, inside the lens image only.
 Its existing `scope_detector` sound and target-update logic remains active.
 
+If the 3D mode needs an explicit override, set `scope_lens_effect = contrast` or
+`scope_lens_effect = nightvision` in the appropriate `scopes_sect` entry. By
+default, the engine derives the mode from `scope_nightvision` and that section's
+`pp_eff_name`. The `* ScopeLensEffect:` log line reports the chosen config
+sections and numeric mode (0=normal, 1=contrast, 2=night vision). The
+`* ScopeLensShader:` line confirms which mode actually reached the R4 lens
+material; the new shader file must also be installed for the effect to appear.
+
 If the 2D overlay still appears, look for `* ScopeLens:` in the game log after aiming.
 The `R4`, `global`, and `scope_3d` values must all be `1`, `lens_fov` must be between
 5 and 90, and `active` must be `1`. `optic` shows which section takes priority over

@@ -1120,15 +1120,33 @@ float CWeapon::ScopeLensFov() const {
 }
 
 u8 CWeapon::ScopeLensMode() const {
-    if (!Is3DScopeEnabled() || !m_zoom_params.m_sUseZoomPostprocess.size())
+    if (!Is3DScopeEnabled())
         return 0;
-    const shared_str& section = m_zoom_params.m_sUseZoomPostprocess;
-    if (!pSettings->section_exist(section) || !pSettings->line_exist(section, "pp_eff_name"))
+
+    // An explicit 3D effect can be set on the weapon's scope wrapper. Older
+    // scopes continue to derive the mode from their 2D night-vision section.
+    const shared_str mode_section = ScopeSettingSection("scope_lens_effect");
+    if (pSettings->line_exist(mode_section, "scope_lens_effect")) {
+        const LPCSTR mode = pSettings->r_string(mode_section, "scope_lens_effect");
+        if (strstr(mode, "contrast"))
+            return 1;
+        if (strstr(mode, "night"))
+            return 2;
         return 0;
-    const LPCSTR effect = pSettings->r_string(section, "pp_eff_name");
+    }
+
+    const shared_str effect_section = ScopeSettingSection("scope_nightvision");
+    const shared_str effect_name = READ_IF_EXISTS(pSettings, r_string,
+        effect_section, "scope_nightvision", 0);
+    if (!effect_name.size())
+        return 0;
+
+    LPCSTR effect = effect_name.c_str();
+    if (pSettings->section_exist(effect_name) && pSettings->line_exist(effect_name, "pp_eff_name"))
+        effect = pSettings->r_string(effect_name, "pp_eff_name");
     if (strstr(effect, "contrast"))
         return 1;
-    if (strstr(effect, "nightvision"))
+    if (strstr(effect, "night"))
         return 2;
     return 0;
 }
@@ -1266,6 +1284,14 @@ void CWeapon::OnZoomIn() {
         Msg("* ScopeLens: weapon=%s optic=%s R4=%d global=%d scope_3d=%d lens_fov=%.1f active=%d",
             cNameSect().c_str(), scope_section.c_str(), !!psDeviceFlags.test(rsR4),
             !!global, !!configured, ScopeLensFov(), !!Is3DScopeEnabled());
+        Msg("* ScopeLensEffect: wrapper=%s config=%s section=%s effect=%s mode=%u",
+            m_eScopeStatus == ALife::eAddonAttachable && m_cur_scope < m_scopes.size()
+                ? m_scopes[m_cur_scope].c_str() : cNameSect().c_str(),
+            ScopeSettingSection("scope_lens_effect").c_str(),
+            ScopeSettingSection("scope_nightvision").c_str(),
+            m_zoom_params.m_sUseZoomPostprocess.size()
+                ? m_zoom_params.m_sUseZoomPostprocess.c_str() : "none",
+            (u32)ScopeLensMode());
     }
     if (m_zoom_params.m_bUseDynamicZoom)
         SetZoomFactor(m_fRTZoomFactor);

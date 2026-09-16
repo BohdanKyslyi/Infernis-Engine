@@ -100,6 +100,11 @@ static class cl_scope_lens_state : public R_constant_setup {
         const float active = Device.scopeLensActive && !Device.scopeLensPass ? 1.f : 0.f;
         const float mode = active && g_pGameLevel ? (float)g_pGameLevel->ScopeLensMode() : 0.f;
         const float detector = active && g_pGameLevel && g_pGameLevel->ScopeLensHasDetector() ? 1.f : 0.f;
+        static int last_logged_mode = -1;
+        if (active && int(mode) != last_logged_mode) {
+            Msg("* ScopeLensShader: mode=%d detector=%d", int(mode), int(detector));
+            last_logged_mode = int(mode);
+        }
         RCache.set_c(C, active, mode, detector, 0.f);
     }
 } binder_scope_lens_state;
