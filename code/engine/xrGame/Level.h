@@ -233,7 +233,7 @@ public:
     float ScopeLensFov() const override;
     u8 ScopeLensMode() const override;
     bool ScopeLensHasDetector() const override;
-    u32 ScopeLensTargets(Fvector4* targets, u32 capacity) const override;
+    u32 ScopeLensTargets(float* targets, u32 capacity) const override;
 
     virtual shared_str OpenDemoFile(LPCSTR demo_file_name) override;
     virtual void net_StartPlayDemo() override;

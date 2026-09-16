@@ -102,7 +102,7 @@ public:
     virtual float ScopeLensFov() const { return 0.f; }
     virtual u8 ScopeLensMode() const { return 0; }
     virtual bool ScopeLensHasDetector() const { return false; }
-    virtual u32 ScopeLensTargets(Fvector4*, u32) const { return 0; }
+    virtual u32 ScopeLensTargets(float*, u32) const { return 0; }
 
     virtual shared_str OpenDemoFile(LPCSTR demo_file_name) = 0;
     virtual void net_StartPlayDemo() = 0;

@@ -40,6 +40,7 @@
 #include "MainMenu.h"
 #include "../xrEngine/XR_IOConsole.h"
 #include "actor.h"
+#include "actor_memory.h"
 #include "Inventory.h"
 #include "Weapon.h"
 #include "player_hud.h"
@@ -526,7 +527,7 @@ bool CLevel::ScopeLensHasDetector() const
     return weapon && weapon->HasScopeDetector();
 }
 
-u32 CLevel::ScopeLensTargets(Fvector4* targets, u32 capacity) const
+u32 CLevel::ScopeLensTargets(float* targets, u32 capacity) const
 {
     if (!capacity)
         return 0;
@@ -572,8 +573,10 @@ u32 CLevel::ScopeLensTargets(Fvector4* targets, u32 capacity) const
         if (left >= right || top >= bottom || right <= 0.f || left >= 1.f ||
             bottom <= 0.f || top >= 1.f)
             continue;
-        targets[count].set(std::max(0.f, left), std::max(0.f, top),
-            std::min(1.f, right), std::min(1.f, bottom));
+        targets[count * 4 + 0] = std::max(0.f, left);
+        targets[count * 4 + 1] = std::max(0.f, top);
+        targets[count * 4 + 2] = std::min(1.f, right);
+        targets[count * 4 + 3] = std::min(1.f, bottom);
         if (++count == capacity)
             break;
     }

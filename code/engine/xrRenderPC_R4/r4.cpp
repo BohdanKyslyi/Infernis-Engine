@@ -106,14 +106,15 @@ static class cl_scope_lens_state : public R_constant_setup {
 
 static class cl_scope_lens_targets : public R_constant_setup {
     virtual void setup(R_constant* C) {
-        Fvector4 targets[8];
-        for (u32 i = 0; i < 8; ++i)
-            targets[i].set(-1.f, -1.f, -1.f, -1.f);
+        float targets[8 * 4];
+        for (u32 i = 0; i < 8 * 4; ++i)
+            targets[i] = -1.f;
         if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel &&
             g_pGameLevel->ScopeLensHasDetector())
             g_pGameLevel->ScopeLensTargets(targets, 8);
         for (u32 i = 0; i < 8; ++i)
-            RCache.set_ca(C, i, targets[i].x, targets[i].y, targets[i].z, targets[i].w);
+            RCache.set_ca(C, i, targets[i * 4 + 0], targets[i * 4 + 1],
+                targets[i * 4 + 2], targets[i * 4 + 3]);
     }
 } binder_scope_lens_targets;
 
