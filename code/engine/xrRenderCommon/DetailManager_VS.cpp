@@ -272,7 +272,10 @@ void CDetailManager::hw_Render_dump(ref_constant x_array, u32 var_id, u32 lod_id
                 RCache.Render(D3DPT_TRIANGLELIST, vOffset, 0, dwCNT_verts, iOffset, dwCNT_prims);
                 RCache.stat.r.s_details.add(dwCNT_verts);
             }
-            vis.clear();
+            // Both views use the same frame's visibility result. The main view
+            // consumes it after the scope lens has finished drawing.
+            if (!RDEVICE.scopeLensPass)
+                vis.clear();
         }
         vOffset += hw_BatchSize * Object.number_vertices;
         iOffset += hw_BatchSize * Object.number_indices;

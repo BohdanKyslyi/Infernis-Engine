@@ -120,6 +120,8 @@ void CDetailManager::soft_Render() {
             }
         }
         // Clean up
-        _vis.clear();
+        // Retain the visible instances for the main camera after the lens pass.
+        if (!RDEVICE.scopeLensPass)
+            _vis.clear();
     }
 }
