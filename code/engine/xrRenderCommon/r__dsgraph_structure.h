@@ -41,6 +41,7 @@ public:
     // ;
     R_dsgraph::mapMatrixPasses_T mapMatrixPasses[2];
     R_dsgraph::mapSorted_T mapSorted;
+    R_dsgraph::mapSorted_T mapHUDSorted;
     R_dsgraph::mapHUD_T mapHUD;
     R_dsgraph::mapLOD_T mapLOD;
     R_dsgraph::mapSorted_T mapDistort;
@@ -166,6 +167,7 @@ public:
             mapMatrixPasses[1][i].destroy();
         }
         mapSorted.destroy();
+        mapHUDSorted.destroy();
         mapHUD.destroy();
         mapLOD.destroy();
         mapDistort.destroy();

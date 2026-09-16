@@ -619,6 +619,29 @@ void R_dsgraph_structure::r_dsgraph_render_sorted() {
     // Sorted (back to front)
     mapSorted.traverseRL(sorted_L1);
     mapSorted.clear();
+
+    if (!mapHUDSorted.size())
+        return;
+
+    // Transparent HUD meshes (including scope lenses) are drawn in the forward
+    // pass, but their vertices still need the weapon's near plane and HUD FOV.
+    extern ENGINE_API float psHUD_FOV;
+    Fmatrix Pold = Device.mProject;
+    Fmatrix FTold = Device.mFullTransform;
+    Device.mProject.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT,
+                                     IE_VIEWPORT_NEAR,
+                                     g_pGamePersistent->Environment().CurrentEnv->far_plane);
+    Device.mFullTransform.mul(Device.mProject, Device.mView);
+    RCache.set_xform_project(Device.mProject);
+
+    rmNear();
+    mapHUDSorted.traverseRL(sorted_L1);
+    mapHUDSorted.clear();
+    rmNormal();
+
+    Device.mProject = Pold;
+    Device.mFullTransform = FTold;
+    RCache.set_xform_project(Device.mProject);
 }
 
 //////////////////////////////////////////////////////////////////////////
