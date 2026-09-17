@@ -572,7 +572,9 @@ void CRender::render_forward() {
         mapLOD.clear();
         r_dsgraph_render_graph(1);                     // normal level, secondary priority
         PortalTraverser.fade_render();                 // faded-portals
-        r_dsgraph_render_sorted();                     // strict-sorted geoms
+        // Postprocessing uses the HUD depth/normal buffers and can reintroduce
+        // the optic housing over an opaque lens. Draw sorted HUD after it.
+        r_dsgraph_render_sorted(!Device.scopeLensActive || Device.scopeLensPass);
         g_pGamePersistent->Environment().RenderLast(); // rain/thunder-bolts
     }
 

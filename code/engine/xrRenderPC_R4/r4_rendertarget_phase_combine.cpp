@@ -480,6 +480,16 @@ void CRenderTarget::phase_combine() {
         phase_pp();
     }
 
+    // In an active 3D scope, the lens must be the last optical layer. The
+    // final combine and postprocess read the opaque HUD's depth and normals;
+    // drawing the lens before them lets the housing bleed back into its image.
+    if (Device.scopeLensActive && !Device.scopeLensPass) {
+        RCache.set_CullMode(CULL_CCW);
+        RCache.set_Stencil(FALSE);
+        RCache.set_ColorWriteEnable();
+        RImplementation.r_dsgraph_render_sorted();
+    }
+
     //	Re-adapt luminance
     RCache.set_Stencil(FALSE);
 

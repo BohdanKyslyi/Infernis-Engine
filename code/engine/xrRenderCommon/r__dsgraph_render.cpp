@@ -615,12 +615,12 @@ void R_dsgraph_structure::r_dsgraph_render_hud_ui() {
 
 //////////////////////////////////////////////////////////////////////////
 // strict-sorted render
-void R_dsgraph_structure::r_dsgraph_render_sorted() {
+void R_dsgraph_structure::r_dsgraph_render_sorted(bool renderHUD) {
     // Sorted (back to front)
     mapSorted.traverseRL(sorted_L1);
     mapSorted.clear();
 
-    if (!mapHUDSorted.size())
+    if (!renderHUD || !mapHUDSorted.size())
         return;
 
     // Transparent HUD meshes (including scope lenses) are drawn in the forward
