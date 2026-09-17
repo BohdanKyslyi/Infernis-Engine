@@ -111,8 +111,9 @@ void CRenderTarget::phase_combine() {
         m_invview.invert(Device.mView);
         m_previous.mul(m_saved_viewproj, m_invview);
         m_current.set(Device.mProject);
-        m_saved_viewproj.set(Device.mFullTransform);
-        float scale = ps_r2_mblur / 2.f;
+        if (!Device.scopeLensPass)
+            m_saved_viewproj.set(Device.mFullTransform);
+        float scale = Device.scopeLensPass ? 0.f : ps_r2_mblur / 2.f;
         m_blur_scale.set(scale, -scale).div(12.f);
     }
 
@@ -269,7 +270,7 @@ void CRenderTarget::phase_combine() {
         //	TODO: DX10: CHeck this!
         // g_pGamePersistent->Environment().RenderClouds	();
         RImplementation.render_forward();
-        if (g_pGamePersistent)
+        if (g_pGamePersistent && !Device.scopeLensPass)
             g_pGamePersistent->OnRenderPPUI_main(); // PP-UI
     }
 
@@ -319,7 +320,7 @@ void CRenderTarget::phase_combine() {
             // CHK_DX(HW.pDevice->Clear	( 0L, NULL, D3DCLEAR_TARGET, color_rgba(127,127,0,127),
             // 1.0f, 0L));
             RImplementation.r_dsgraph_render_distort();
-            if (g_pGamePersistent)
+            if (g_pGamePersistent && !Device.scopeLensPass)
                 g_pGamePersistent->OnRenderPPUI_PP(); // PP-UI
         }
     }
@@ -340,7 +341,7 @@ void CRenderTarget::phase_combine() {
     if (_menu_pp)
         PP_Complex = FALSE;
 
-    if (!_menu_pp) {
+    if (!_menu_pp && !Device.scopeLensPass) {
         if (ps_r2_rain_drops_flags.test(R2FLAG_RAIN_DROPS))
             PhaseRainDrops();
     }
@@ -469,9 +470,16 @@ void CRenderTarget::phase_combine() {
         .RenderFlares(); // lens-flares
 
     //	PP-if required
-    if (PP_Complex) {
+    if (PP_Complex && !Device.scopeLensPass) {
         PIX_EVENT(phase_pp);
         phase_pp();
+    }
+
+    if (Device.scopeLensActive && !Device.scopeLensPass) {
+        RCache.set_CullMode(CULL_CCW);
+        RCache.set_Stencil(FALSE);
+        RCache.set_ColorWriteEnable();
+        RImplementation.r_dsgraph_render_sorted();
     }
 
     //	Re-adapt luminance
@@ -479,7 +487,8 @@ void CRenderTarget::phase_combine() {
 
     //*** exposure-pipeline-clear
     {
-        std::swap(rt_LUM_pool[gpu_id * 2 + 0], rt_LUM_pool[gpu_id * 2 + 1]);
+        if (!Device.scopeLensPass)
+            std::swap(rt_LUM_pool[gpu_id * 2 + 0], rt_LUM_pool[gpu_id * 2 + 1]);
         t_LUM_src->surface_set(NULL);
         t_LUM_dest->surface_set(NULL);
     }

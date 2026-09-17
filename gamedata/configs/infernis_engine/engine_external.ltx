@@ -84,8 +84,9 @@ enable_pbr_rendering	= false ; увімкнення PBR-рендерингу
 sslr_mode				= off ; performance / balanced / quality / reference / off
 allow_bloodmarks_on_npc	= true; відображення кривавих слідів у сталкерів і мутантів
 
-; R4 draws the world a second time for optics with scope_3d and scope_lens_fov.
-; The existing 2D overlay is used if this switch is disabled.
+; R4 and R3 draw the scoped world with glass effects; R2 uses a basic DX9 lens.
+; R1 retains the lens material fallback and the ordinary 2D scope overlay.
+; Disabling this switch restores the 2D overlay on every renderer.
 [weapon_scopes]
 enable_3d_scopes		= false
 ; Fraction of screen width/height included in second-view visibility queries (0.5-1.0).

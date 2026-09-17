@@ -1093,7 +1093,7 @@ shared_str CWeapon::ScopeSettingSection(LPCSTR key) const {
 }
 
 bool CWeapon::Is3DScopeEnabled() const {
-    if (!IsScopeAttached() || !psDeviceFlags.test(rsR4) ||
+    if (!IsScopeAttached() || !(psDeviceFlags.test(rsR4) || psDeviceFlags.test(rsR3) || psDeviceFlags.test(rsR2)) ||
         !pSettings->section_exist("weapon_scopes") ||
         !pSettings->line_exist("weapon_scopes", "enable_3d_scopes") ||
         !pSettings->r_bool("weapon_scopes", "enable_3d_scopes"))

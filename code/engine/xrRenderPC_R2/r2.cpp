@@ -67,6 +67,19 @@ static class cl_pos_decompress_params : public R_constant_setup {
     }
 } binder_pos_decompress_params;
 
+static class cl_scope_lens_basic : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float white_key = 0.f;
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel) {
+            float glass[4];
+            g_pGameLevel->ScopeLensGlass(glass);
+            white_key = glass[3];
+        }
+        RCache.set_c(C, (float)Device.dwWidth, (float)Device.dwHeight,
+                     Device.scopeLensActive && !Device.scopeLensPass ? 1.f : 0.f, white_key);
+    }
+} binder_scope_lens_basic;
+
 static class cl_water_intensity : public R_constant_setup {
     virtual void setup(R_constant* C) {
         CEnvDescriptor& E = *g_pGamePersistent->Environment().CurrentEnv;
@@ -268,6 +281,7 @@ void CRender::create() {
 
     // constants
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("parallax", &binder_parallax);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("scope_lens_basic", &binder_scope_lens_basic);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("water_intensity",
                                                                       &binder_water_intensity);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("sun_shafts_intensity",

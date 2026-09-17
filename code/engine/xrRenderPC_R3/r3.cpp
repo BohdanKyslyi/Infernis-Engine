@@ -90,6 +90,58 @@ static class cl_ie_pbr_hud_projection_params : public R_constant_setup {
     }
 } binder_ie_pbr_hud_projection_params;
 
+static class cl_scope_lens_state : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        const float active = Device.scopeLensActive && !Device.scopeLensPass ? 1.f : 0.f;
+        const float mode = active && g_pGameLevel ? (float)g_pGameLevel->ScopeLensMode() : 0.f;
+        const float detector = active && g_pGameLevel && g_pGameLevel->ScopeLensHasDetector() ? 1.f : 0.f;
+        static int last_logged_mode = -1;
+        if (active && int(mode) != last_logged_mode) {
+            Msg("* ScopeLensShader: mode=%d detector=%d", int(mode), int(detector));
+            last_logged_mode = int(mode);
+        }
+        RCache.set_c(C, active, mode, detector, 0.f);
+    }
+} binder_scope_lens_state;
+
+static class cl_scope_lens_glass : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[4] = { 0.12f, 0.025f, 0.40f, 0.f };
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->ScopeLensGlass(params);
+        RCache.set_c(C, params[0], params[1], params[2], params[3]);
+    }
+} binder_scope_lens_glass;
+
+static class cl_scope_lens_targets : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float targets[8 * 4];
+        for (u32 i = 0; i < 8 * 4; ++i)
+            targets[i] = -1.f;
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel &&
+            g_pGameLevel->ScopeLensHasDetector())
+            g_pGameLevel->ScopeLensTargets(targets, 8);
+        for (u32 i = 0; i < 8; ++i)
+            RCache.set_ca(C, i, targets[i * 4 + 0], targets[i * 4 + 1],
+                targets[i * 4 + 2], targets[i * 4 + 3]);
+    }
+} binder_scope_lens_targets;
+
+static class cl_scope_lens_size : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float chromatic_pixels = 0.f;
+        if (Device.scopeLensActive && !Device.scopeLensPass && pSettings &&
+            pSettings->section_exist("weapon_scopes")) {
+            chromatic_pixels = 0.8f;
+            if (pSettings->line_exist("weapon_scopes", "scope_lens_chromatic_aberration"))
+                chromatic_pixels = pSettings->r_float("weapon_scopes", "scope_lens_chromatic_aberration");
+            clamp(chromatic_pixels, 0.f, 10.f);
+        }
+        RCache.set_c(C, (float)Device.dwWidth, (float)Device.dwHeight,
+                     chromatic_pixels, 0.f);
+    }
+} binder_scope_lens_size;
+
 static class cl_water_intensity : public R_constant_setup {
     virtual void setup(R_constant* C) {
         CEnvDescriptor& E = *g_pGamePersistent->Environment().CurrentEnv;
@@ -387,6 +439,10 @@ void CRender::create() {
         "pos_decompression_params2", &binder_pos_decompress_params2);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
         "ie_pbr_hud_projection_params", &binder_ie_pbr_hud_projection_params);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("scope_lens_state", &binder_scope_lens_state);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("scope_lens_glass", &binder_scope_lens_glass);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("scope_lens_size", &binder_scope_lens_size);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("scope_lens_targets", &binder_scope_lens_targets);
 
     c_lmaterial = "L_material";
     c_sbase = "s_base";

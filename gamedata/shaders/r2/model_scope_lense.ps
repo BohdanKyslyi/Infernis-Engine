@@ -1,0 +1,32 @@
+#include "common.h"
+
+sampler2D s_vp2;
+uniform float4 scope_lens_basic; // width, height, active, white-key reticle
+
+struct p_scope_lens {
+    float2 tc : TEXCOORD0;
+};
+
+float4 main(p_scope_lens I, float2 screen_pos : VPOS) : COLOR0 {
+    float4 reticle = tex2D(s_base, I.tc);
+    if (scope_lens_basic.z < 0.5f)
+        return reticle;
+
+    float2 uv = saturate(screen_pos / scope_lens_basic.xy);
+    float3 world = tex2D(s_vp2, uv).rgb;
+    float ink = saturate(reticle.a);
+    float coverage = 1.0f;
+    if (scope_lens_basic.w > 0.5f) {
+        float radius = length(I.tc * 2.0f - 1.0f);
+        float brightest = max(reticle.r, max(reticle.g, reticle.b));
+        float darkest = min(reticle.r, min(reticle.g, reticle.b));
+        float chroma = brightest - darkest;
+        float luma = dot(reticle.rgb, float3(0.299f, 0.587f, 0.114f));
+        ink = saturate(max((1.0f - smoothstep(0.18f, 0.32f, luma)) *
+                           (1.0f - saturate(chroma * 4.0f)),
+                           saturate(chroma * 5.0f)) * reticle.a *
+                       (1.0f - smoothstep(0.70f, 0.76f, radius)));
+        coverage = 1.0f - smoothstep(0.855f, 0.865f, radius);
+    }
+    return float4(lerp(world, reticle.rgb, ink), coverage);
+}
