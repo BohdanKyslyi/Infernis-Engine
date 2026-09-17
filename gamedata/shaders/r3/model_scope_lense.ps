@@ -53,11 +53,17 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
         float glint = exp2(-22.0f * dot(glint_uv, glint_uv));
         scene = saturate(scene + scope_lens_glass.y * glint * (1.0f - rim));
     }
-    // Optic textures often put a translucent glass/tint into their alpha as
-    // well as the sharp reticle. Mixing that tint with the world duplicates
-    // parts of the old lens artwork and looks like a ghosted HUD underneath.
-    // Keep only the near-opaque reticle marks over the captured world view.
-    float ink = smoothstep(0.72f, 0.96f, reticle.a);
+    // Some reticles are authored with transparent black outside their marks;
+    // others have opaque black corners and a colored mark with partial alpha.
+    // The latter cannot use alpha as a mask: it paints a black ring over the
+    // captured world while fading the actual colored reticle. The corner is
+    // uniform across the lens, so this lookup is reused by the texture cache.
+    float4 corner = s_base.SampleLevel(smp_base, float2(0.02f, 0.02f), 0);
+    float black_backdrop = step(0.9f, corner.a) *
+        (1.0f - step(0.04f, max(corner.r, max(corner.g, corner.b))));
+    float colored_ink = reticle.a *
+        saturate((max(reticle.r, max(reticle.g, reticle.b)) - 0.015f) * 8.0f);
+    float ink = lerp(reticle.a, colored_ink, black_backdrop);
     float3 image = lerp(scene, reticle.rgb, ink);
     // The 2D optic's PPE is applied to the final screen. Keep optic modes inside
     // the physical lens instead of changing the player's entire field of view.
