@@ -111,10 +111,10 @@ static class cl_scope_lens_state : public R_constant_setup {
 
 static class cl_scope_lens_glass : public R_constant_setup {
     virtual void setup(R_constant* C) {
-        float params[3] = { 0.12f, 0.025f, 0.40f };
+        float params[4] = { 0.12f, 0.025f, 0.40f, 0.f };
         if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel)
             g_pGameLevel->ScopeLensGlass(params);
-        RCache.set_c(C, params[0], params[1], params[2], 0.f);
+        RCache.set_c(C, params[0], params[1], params[2], params[3]);
     }
 } binder_scope_lens_glass;
 

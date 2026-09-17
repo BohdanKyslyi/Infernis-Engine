@@ -15,6 +15,13 @@ uses its colored pixels together with alpha as the reticle mask. This keeps
 colored markings visible and prevents the black backdrop covering the view.
 For a dark reticle, author the texture with transparent background and opaque
 markings: black markings on an opaque black background cannot be separated.
+For a reticle with white glass, black graduations, and colored illumination,
+set `scope_lens_white_key = true` in that optic's section. This opt-in mode
+uses the white area as clear glass, retains black and colored markings, and
+fades out the black canvas beyond a centered circular UV aperture (radius
+0.80–0.88 in UV space). Keep the lens art centered in the texture. It does not
+require a transparent alpha channel; `scope_lens_shadow_strength = 0` disables
+the separate eye-box shading if a completely clear view is desired.
 
 To try it with a weapon, set `[weapon_scopes] enable_3d_scopes = true` in
 `gamedata/configs/infernis_engine/engine_external.ltx`. In the weapon section for a
@@ -39,6 +46,8 @@ scope_lens_fov = 20
 scope_lens_eye_relief = 0.12
 scope_lens_shadow_strength = 0.40
 scope_lens_reflection_strength = 0.025
+; Use only with a centered white-background reticle texture:
+; scope_lens_white_key = true
 
 [scope_susat_custom_ar]:scope_ar_3d
 scope_name = wpn_addon_scope_susat_custom

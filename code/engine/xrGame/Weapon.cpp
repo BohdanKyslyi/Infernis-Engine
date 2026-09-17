@@ -1161,6 +1161,8 @@ void CWeapon::ScopeLensGlass(float* params) const {
     clamp(params[0], 0.f, 0.5f);
     clamp(params[1], 0.f, 0.15f);
     clamp(params[2], 0.f, 0.8f);
+    params[3] = READ_IF_EXISTS(pSettings, r_bool,
+        ScopeSettingSection("scope_lens_white_key"), "scope_lens_white_key", false) ? 1.f : 0.f;
 }
 
 bool CWeapon::HasScopeDetector() const {

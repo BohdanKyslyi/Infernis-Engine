@@ -53,17 +53,37 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
         float glint = exp2(-22.0f * dot(glint_uv, glint_uv));
         scene = saturate(scene + scope_lens_glass.y * glint * (1.0f - rim));
     }
-    // Some reticles are authored with transparent black outside their marks;
-    // others have opaque black corners and a colored mark with partial alpha.
-    // The latter cannot use alpha as a mask: it paints a black ring over the
-    // captured world while fading the actual colored reticle. The corner is
-    // uniform across the lens, so this lookup is reused by the texture cache.
-    float4 corner = s_base.SampleLevel(smp_base, float2(0.02f, 0.02f), 0);
-    float black_backdrop = step(0.9f, corner.a) *
-        (1.0f - step(0.04f, max(corner.r, max(corner.g, corner.b))));
-    float colored_ink = reticle.a *
-        saturate((max(reticle.r, max(reticle.g, reticle.b)) - 0.015f) * 8.0f);
-    float ink = lerp(reticle.a, colored_ink, black_backdrop);
+    float ink;
+    if (scope_lens_glass.w > 0.5f)
+    {
+        // White-key reticles can keep black graduations and colored illumination
+        // in the same texture. The outer black canvas is outside the aperture;
+        // do not draw it over the HUD or the captured world.
+        float brightest = max(reticle.r, max(reticle.g, reticle.b));
+        float darkest = min(reticle.r, min(reticle.g, reticle.b));
+        float chroma = brightest - darkest;
+        float luma = dot(reticle.rgb, float3(0.299f, 0.587f, 0.114f));
+        float darkness = saturate(1.0f - luma);
+        float dark_ink = darkness * darkness * darkness *
+            (1.0f - saturate(chroma * 4.0f));
+        float colored_mark = saturate(chroma * 5.0f);
+        float aperture = 1.0f - smoothstep(0.80f, 0.88f,
+            length(I.tc * 2.0f - 1.0f));
+        ink = saturate(max(dark_ink, colored_mark) * reticle.a * aperture);
+    }
+    else
+    {
+        // Some reticles are authored with transparent black outside their marks;
+        // others have opaque black corners and a colored mark with partial alpha.
+        // The latter cannot use alpha as a mask: it paints a black ring over the
+        // world. The corner is uniform and stays resident in the texture cache.
+        float4 corner = s_base.SampleLevel(smp_base, float2(0.02f, 0.02f), 0);
+        float black_backdrop = step(0.9f, corner.a) *
+            (1.0f - step(0.04f, max(corner.r, max(corner.g, corner.b))));
+        float colored_ink = reticle.a *
+            saturate((max(reticle.r, max(reticle.g, reticle.b)) - 0.015f) * 8.0f);
+        ink = lerp(reticle.a, colored_ink, black_backdrop);
+    }
     float3 image = lerp(scene, reticle.rgb, ink);
     // The 2D optic's PPE is applied to the final screen. Keep optic modes inside
     // the physical lens instead of changing the player's entire field of view.

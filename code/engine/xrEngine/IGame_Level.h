@@ -105,6 +105,7 @@ public:
         params[0] = 0.12f; // pupil shift
         params[1] = 0.025f; // reflection strength
         params[2] = 0.40f; // edge shadow strength
+        params[3] = 0.f; // white-key reticle texture
     }
     virtual bool ScopeLensHasDetector() const { return false; }
     virtual u32 ScopeLensTargets(float*, u32) const { return 0; }
