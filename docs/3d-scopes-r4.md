@@ -73,6 +73,9 @@ controls that shift (0–0.5), `scope_lens_shadow_strength` controls edge darkne
 (0–0.15). Put overrides on the optic wrapper or its `scope_name` section; omitted
 keys use the defaults above. Night and contrast modes keep their own appearance.
 The highlight is procedural and does not require the 3DSS reflection texture.
+The pupil shadow starts at the outer edge of the lens, leaving its viewing area
+clear when the eye is centered. Set `scope_lens_shadow_strength = 0` on an optic
+to disable the shadow completely when checking its reticle texture.
 
 If the 3D mode needs an explicit override, set `scope_lens_effect = contrast` or
 `scope_lens_effect = nightvision` in the appropriate `scopes_sect` entry. By

@@ -41,7 +41,10 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
         float2 eye_offset = float2(dot(eye, normalize(I.view_tangent)),
                                    dot(eye, normalize(I.view_binormal))) / facing;
         float pupil = length(lens_uv + eye_offset * scope_lens_glass.x);
-        float pupil_shadow = smoothstep(0.55f, 1.0f, pupil);
+        // Start the eye-box shadow at the physical rim. An earlier threshold
+        // of 0.55 darkened most of the lens and left a conspicuous bright disc
+        // at its center, which looked like black translucent HUD geometry.
+        float pupil_shadow = smoothstep(0.90f, 1.15f, pupil);
         scene *= 1.0f - pupil_shadow * scope_lens_glass.z;
 
         // Move a weak broad reflection with the viewing angle.
