@@ -1,0 +1,80 @@
+-- Public EFX API for arbitrary Lua scripts.
+--
+-- Logic effects keep using xr_effects because it is the standard X-Ray logic
+-- dispatcher. Any regular script can use this module directly:
+--
+--   noir_efx.set_preset("cave")
+--   noir_efx.disable_override()
+
+local function valid_name(value)
+    return type(value) == "string" and value ~= "" and value ~= "none"
+end
+
+local function number_or_nil(value)
+    if value == nil then
+        return nil
+    end
+
+    return tonumber(value)
+end
+
+function set_preset(preset_name)
+    if not valid_name(preset_name) then
+        printf("! noir_efx.set_preset: preset name is empty")
+        return false
+    end
+
+    level.set_efx_preset(preset_name)
+    return true
+end
+
+function disable_override()
+    level.disable_efx_override()
+    return true
+end
+
+function set_override(room, room_hf, decay_time, decay_hf_ratio,
+    reflections_delay, reverb_delay, room_rolloff, diffusion,
+    reflections, reverb, air_hf)
+
+    room = number_or_nil(room)
+    room_hf = number_or_nil(room_hf)
+    decay_time = number_or_nil(decay_time)
+    decay_hf_ratio = number_or_nil(decay_hf_ratio)
+    reflections_delay = number_or_nil(reflections_delay)
+    reverb_delay = number_or_nil(reverb_delay)
+    room_rolloff = number_or_nil(room_rolloff)
+    diffusion = number_or_nil(diffusion)
+
+    if room == nil or room_hf == nil or decay_time == nil or
+        decay_hf_ratio == nil or reflections_delay == nil or
+        reverb_delay == nil or room_rolloff == nil or diffusion == nil then
+        printf("! noir_efx.set_override: the first 8 parameters must be numbers")
+        return false
+    end
+
+    reflections = number_or_nil(reflections) or -2602.0
+    reverb = number_or_nil(reverb) or 200.0
+    air_hf = number_or_nil(air_hf) or -5.0
+
+    level.set_efx_override(
+        room,
+        room_hf,
+        decay_time,
+        decay_hf_ratio,
+        reflections_delay,
+        reverb_delay,
+        room_rolloff,
+        diffusion,
+        reflections,
+        reverb,
+        air_hf
+    )
+
+    return true
+end
+
+-- Aliases matching the existing level.* and xr_effects names.
+set_efx_preset = set_preset
+set_efx_override = set_override
+disable_efx_override = disable_override
