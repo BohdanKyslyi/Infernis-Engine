@@ -140,7 +140,7 @@ static class cl_scope_lens_size : public R_constant_setup {
             chromatic_pixels = 0.8f;
             if (pSettings->line_exist("weapon_scopes", "scope_lens_chromatic_aberration"))
                 chromatic_pixels = pSettings->r_float("weapon_scopes", "scope_lens_chromatic_aberration");
-            clamp(chromatic_pixels, 0.f, 3.f);
+            clamp(chromatic_pixels, 0.f, 10.f);
         }
         RCache.set_c(C, (float)Device.dwWidth, (float)Device.dwHeight,
                      chromatic_pixels, 0.f);

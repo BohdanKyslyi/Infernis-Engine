@@ -57,7 +57,7 @@ aiming. The setting is read when frames render, so it does not require rebuildin
 `[weapon_scopes] scope_lens_chromatic_aberration = 0.8` shifts the captured
 world's red and blue samples outward and inward by up to 0.8 screen pixels near
 the edge of the lens. The center and reticle remain sharp. Values are clamped
-to 0–3 pixels; use `0` to disable the effect without changing the shader. This
+to 0–10 pixels; use `0` to disable the effect without changing the shader. This
 adds two scene texture samples per normal lens pixel while enabled.
 
 For an attachable optic, its entry in the weapon's `scopes_sect` list can override
