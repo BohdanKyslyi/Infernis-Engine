@@ -39,6 +39,16 @@ scope_lens_output main(p_scope_lens I, float4 pos2d : SV_Position)
     // SV_Position addresses the lens pixel in the full-screen world pass.
     float2 tc = saturate(pos2d.xy / scope_lens_size.xy);
     float3 scene = s_vp2.Sample(smp_rtlinear, tc).rgb;
+    // Separate only the captured world's red and blue channels near the glass
+    // rim. The offset is in screen pixels; reticle strokes stay sharp.
+    if (scope_lens_state.y < 0.5f && scope_lens_size.z > 0.001f)
+    {
+        float2 radial = I.tc * 2.0f - 1.0f;
+        float rim_amount = smoothstep(0.25f, 0.85f, dot(radial, radial));
+        float2 offset = radial * (scope_lens_size.z * rim_amount / scope_lens_size.xy);
+        scene.r = s_vp2.Sample(smp_rtlinear, saturate(tc + offset)).r;
+        scene.b = s_vp2.Sample(smp_rtlinear, saturate(tc - offset)).b;
+    }
     // The 3DSS config dims older optics to (0.8, 0.8, 0.76). Keep most of
     // that absorption near the rim so the center stays readable. Lens UVs
     // follow the HUD mesh, while the world image still uses SV_Position.

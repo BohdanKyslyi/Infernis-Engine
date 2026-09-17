@@ -134,7 +134,16 @@ static class cl_scope_lens_targets : public R_constant_setup {
 
 static class cl_scope_lens_size : public R_constant_setup {
     virtual void setup(R_constant* C) {
-        RCache.set_c(C, (float)Device.dwWidth, (float)Device.dwHeight, 0.f, 0.f);
+        float chromatic_pixels = 0.f;
+        if (Device.scopeLensActive && !Device.scopeLensPass && pSettings &&
+            pSettings->section_exist("weapon_scopes")) {
+            chromatic_pixels = 0.8f;
+            if (pSettings->line_exist("weapon_scopes", "scope_lens_chromatic_aberration"))
+                chromatic_pixels = pSettings->r_float("weapon_scopes", "scope_lens_chromatic_aberration");
+            clamp(chromatic_pixels, 0.f, 3.f);
+        }
+        RCache.set_c(C, (float)Device.dwWidth, (float)Device.dwHeight,
+                     chromatic_pixels, 0.f);
     }
 } binder_scope_lens_size;
 
