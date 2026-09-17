@@ -78,8 +78,11 @@ scope_lens_output main(p_scope_lens I, float4 pos2d : SV_Position)
         float darkest = min(reticle.r, min(reticle.g, reticle.b));
         float chroma = brightest - darkest;
         float luma = dot(reticle.rgb, float3(0.299f, 0.587f, 0.114f));
-        float darkness = saturate(1.0f - luma);
-        float dark_ink = darkness * darkness * darkness *
+        // The white-key reticle has a broad gray glass gradient. Treating
+        // every gray texel as ink blends that gradient over the captured view
+        // and makes the HUD optic look translucent even at alpha = 1. Only
+        // near-black strokes are reticle marks; gray glass stays clear.
+        float dark_ink = (1.0f - smoothstep(0.18f, 0.32f, luma)) *
             (1.0f - saturate(chroma * 4.0f));
         float colored_mark = saturate(chroma * 5.0f);
         // The old 0.80-0.88 feather alpha-blended the scope body back into
