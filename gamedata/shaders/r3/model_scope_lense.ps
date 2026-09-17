@@ -39,15 +39,6 @@ scope_lens_output main(p_scope_lens I, float4 pos2d : SV_Position)
     // SV_Position addresses the lens pixel in the full-screen world pass.
     float2 tc = saturate(pos2d.xy / scope_lens_size.xy);
     float3 scene = s_vp2.Sample(smp_rtlinear, tc).rgb;
-    // Diagnostic modes separate an artifact already in the captured view from
-    // the reticle/glass shader and from later HUD draws. Both are fully opaque.
-    if (scope_lens_state.w > 0.5f)
-    {
-        result.color = float4(scope_lens_state.w > 1.5f ?
-            float3(1.0f, 0.0f, 1.0f) : scene, 1.0f);
-        return result;
-    }
-
     // The 3DSS config dims older optics to (0.8, 0.8, 0.76). Keep most of
     // that absorption near the rim so the center stays readable. Lens UVs
     // follow the HUD mesh, while the world image still uses SV_Position.
@@ -90,10 +81,13 @@ scope_lens_output main(p_scope_lens I, float4 pos2d : SV_Position)
         float darkest = min(reticle.r, min(reticle.g, reticle.b));
         float chroma = brightest - darkest;
         float luma = dot(reticle.rgb, float3(0.299f, 0.587f, 0.114f));
-        // The white-key reticle has a broad gray glass gradient. Treating
-        // every gray texel as ink blends that gradient over the captured view
-        // and makes the HUD optic look translucent even at alpha = 1. Only
-        // near-black strokes are reticle marks; gray glass stays clear.
+        // Keep the gray glass wear from the original texture. Modulate the
+        // captured world gently rather than blending gray pixels as opaque
+        // ink: that preserves scratches without revealing the HUD underneath.
+        float wear = smoothstep(0.32f, 0.55f, luma) * (1.0f - luma) * 0.35f *
+            (1.0f - saturate(chroma * 4.0f)) * reticle.a * reticle_disc;
+        scene *= 1.0f - wear;
+        // Near-black strokes are reticle ink; gray glass remains transparent.
         float dark_ink = (1.0f - smoothstep(0.18f, 0.32f, luma)) *
             (1.0f - saturate(chroma * 4.0f));
         float colored_mark = saturate(chroma * 5.0f);

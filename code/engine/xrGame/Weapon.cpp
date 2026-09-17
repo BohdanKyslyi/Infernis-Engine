@@ -1119,6 +1119,19 @@ float CWeapon::ScopeLensFov() const {
     return fov;
 }
 
+bool CWeapon::ScopeLensShouldRender() const {
+    if (!Is3DScopeEnabled())
+        return false;
+
+    const LPCSTR setting = READ_IF_EXISTS(pSettings, r_string,
+        "weapon_scopes", "scope_render_mode", "balanced");
+    if (!strcmp(setting, "quality"))
+        return true;
+    if (!strcmp(setting, "performance") || !strcmp(setting, "perfomance"))
+        return IsZoomed() && !IsRotatingToZoom();
+    return IsZoomed(); // balanced: from the start of the aim transition
+}
+
 u8 CWeapon::ScopeLensMode() const {
     if (!Is3DScopeEnabled())
         return 0;

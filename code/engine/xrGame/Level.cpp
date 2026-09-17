@@ -502,7 +502,7 @@ float CLevel::ScopeLensFov() const
         return 0.f;
 
     const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
-    if (!weapon || !weapon->Is3DScopeEnabled() || !weapon->IsZoomed())
+    if (!weapon || !weapon->ScopeLensShouldRender())
         return 0.f;
 
     return weapon->ScopeLensFov();
@@ -514,7 +514,7 @@ u8 CLevel::ScopeLensMode() const
     if (!actor || actor->cam_Active() != actor->cam_FirstEye())
         return 0;
     const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
-    return weapon && weapon->IsZoomed() ? weapon->ScopeLensMode() : 0;
+    return weapon && weapon->ScopeLensShouldRender() ? weapon->ScopeLensMode() : 0;
 }
 
 void CLevel::ScopeLensGlass(float* params) const
@@ -524,7 +524,7 @@ void CLevel::ScopeLensGlass(float* params) const
     if (!actor || actor->cam_Active() != actor->cam_FirstEye())
         return;
     const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
-    if (weapon && weapon->IsZoomed() && weapon->Is3DScopeEnabled())
+    if (weapon && weapon->ScopeLensShouldRender())
         weapon->ScopeLensGlass(params);
 }
 

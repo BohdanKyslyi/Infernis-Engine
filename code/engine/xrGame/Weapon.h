@@ -138,6 +138,7 @@ public:
     bool IsScopeAttached() const;
     virtual bool Is3DScopeEnabled() const;
     float ScopeLensFov() const;
+    bool ScopeLensShouldRender() const;
     u8 ScopeLensMode() const;
     void ScopeLensGlass(float* params) const;
     bool HasScopeDetector() const;

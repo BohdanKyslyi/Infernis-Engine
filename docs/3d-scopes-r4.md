@@ -1,12 +1,15 @@
 # 3D scope prototype (R4 / DX11)
 
-This prototype renders the world twice while an actor aims through an enabled optic. The
+This prototype renders the world twice while an enabled optic is active according to
+`[weapon_scopes] scope_render_mode`. The
 first pass uses the optic's FOV, skips the weapon HUD and UI, and copies the world image
 into `$user$scope_lens`. The second pass draws the normal camera and HUD; the material
 `models\lense_scope` samples that image on the physical lens mesh and overlays the
 reticle from its base texture.
-The lens pass starts as soon as aiming begins; the lens mesh follows the weapon's
-normal aim animation. While active, the captured world image covers HUD weapon
+By default, the lens pass starts as soon as aiming begins; the lens mesh follows the weapon's
+normal aim animation. The lens is drawn after final screen compositing so HUD depth
+and normal postprocessing cannot restore the optic housing in the aperture.
+While active, the captured world image covers HUD weapon
 parts behind the optical aperture. The shader tests HUD depth when aiming is
 inactive, then brings only the active aperture forward; the scope housing and
 the area outside the aperture remain part of the HUD model. A white-key optic
@@ -24,7 +27,8 @@ fades out the black canvas beyond a centered circular UV aperture (radius
 0.855–0.865 in UV space). The world image remains opaque within this aperture,
 so the HUD scope body cannot bleed into it through a wide alpha transition.
 Only near-black strokes and distinctly colored marks from the reticle texture
-are overlaid on the world; mid-gray texture shading is treated as clear glass.
+are overlaid as ink. Mid-gray scratches and glass wear gently darken the captured
+world while leaving the lens opaque over the weapon HUD.
 Keep the lens art centered in the texture. It does not
 require a transparent alpha channel; `scope_lens_shadow_strength = 0` disables
 the separate eye-box shading if a completely clear view is desired.
@@ -37,15 +41,18 @@ in the first-person HUD model, assign `models\lense_scope`, and give its base te
 an alpha-channel reticle. A 2D optic works as before while the global switch is off;
 the global switch defaults to off until a scope model is available for a game test.
 
-To locate a ghost image inside the lens, temporarily set
-`scope_lens_debug_view = 1` under `[weapon_scopes]`. The aimed lens then shows
-only the captured world, without reticle, glass shading, or a transparency
-feather. If the optic silhouette remains, inspect the capture pass. If it
-disappears, inspect the lens shader. Set the value to `2` for a solid magenta
-lens: any optic silhouette visible *above* magenta is drawn after the lens or
-is not covered by the lens mesh. Restore `0` for normal rendering. These modes
-work only while the 3D scope is active and require recompiling the engine and
-shader cache after first adding the setting.
+Choose when the second world projection runs in `[weapon_scopes]`:
+
+| `scope_render_mode` | Activation |
+| --- | --- |
+| `performance` | Once the aiming transition finishes. |
+| `balanced` (default) | From the start of the aiming transition. |
+| `quality` | Whenever the equipped 3D scoped weapon is active, including hip fire. |
+
+All three modes still require `enable_3d_scopes = true`, an attached or permanent
+scope with `scope_3d = true`, and a valid `scope_lens_fov`. Only `quality` runs the
+second world pass while the player is not aiming. Detector overlays still require
+aiming. The setting is read when frames render, so it does not require rebuilding.
 
 For an attachable optic, its entry in the weapon's `scopes_sect` list can override
 the weapon HUD aiming position and rotation. An inherited base section works too:
