@@ -3,9 +3,9 @@
 function normal(shader, t_base, t_second, t_detail)
     shader:begin("model_scope_lense", "model_scope_lense")
         :fog(false)
-        -- The lens is drawn after the opaque HUD. Ignore its depth so the
-        -- captured world view replaces weapon parts crossing the ocular mesh.
-        :zb(false, false)
+        -- Keep the housing in front of the physical lens at rest. While
+        -- aiming, the pixel shader brings only the optical aperture forward.
+        :zb(true, false)
         :blend(true, blend.srcalpha, blend.invsrcalpha)
         :aref(false, 0)
         :sorting(2, true)

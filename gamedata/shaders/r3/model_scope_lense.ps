@@ -14,12 +14,27 @@ struct p_scope_lens {
     float3 view_normal : TEXCOORD4;
 };
 
-float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
+struct scope_lens_output {
+    float4 color : SV_Target;
+    float depth : SV_Depth;
+};
+
+scope_lens_output main(p_scope_lens I, float4 pos2d : SV_Position)
 {
+    scope_lens_output result;
     float4 reticle = s_base.Sample(smp_base, I.tc);
     float active = saturate(scope_lens_state.x);
     if (active < 0.5f)
-        return reticle;
+    {
+        result.color = reticle;
+        result.depth = pos2d.z;
+        return result;
+    }
+
+    // Only the active image passes in front of the opaque HUD. Pixels outside
+    // the authored optic aperture must leave the scope housing untouched.
+    result.depth = 0.0f;
+    float coverage = active;
 
     // SV_Position addresses the lens pixel in the full-screen world pass.
     float2 tc = saturate(pos2d.xy / scope_lens_size.xy);
@@ -69,6 +84,7 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
         float colored_mark = saturate(chroma * 5.0f);
         float aperture = 1.0f - smoothstep(0.80f, 0.88f,
             length(I.tc * 2.0f - 1.0f));
+        coverage *= aperture;
         ink = saturate(max(dark_ink, colored_mark) * reticle.a * aperture);
     }
     else
@@ -122,5 +138,6 @@ float4 main(p_scope_lens I, float4 pos2d : SV_Position) : SV_Target
                 image = float3(0.65f, 0.9f, 0.65f);
         }
     }
-    return float4(image, active);
+    result.color = float4(image, coverage);
+    return result;
 }

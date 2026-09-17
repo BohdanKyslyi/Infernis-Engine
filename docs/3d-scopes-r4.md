@@ -7,8 +7,10 @@ into `$user$scope_lens`. The second pass draws the normal camera and HUD; the ma
 reticle from its base texture.
 The lens pass starts as soon as aiming begins; the lens mesh follows the weapon's
 normal aim animation. While active, the captured world image covers HUD weapon
-parts behind the physical lens mesh. This only affects pixels inside that mesh;
-its silhouette and the optic housing remain part of the HUD model.
+parts behind the optical aperture. The shader tests HUD depth when aiming is
+inactive, then brings only the active aperture forward; the scope housing and
+the area outside the aperture remain part of the HUD model. A white-key optic
+needs centered UVs on the lens mesh for the circular aperture to fit its frame.
 Reticle textures with a transparent background use their original alpha for
 the reticle. When the texture has opaque black corners instead, the shader
 uses its colored pixels together with alpha as the reticle mask. This keeps
