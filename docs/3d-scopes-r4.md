@@ -37,6 +37,16 @@ in the first-person HUD model, assign `models\lense_scope`, and give its base te
 an alpha-channel reticle. A 2D optic works as before while the global switch is off;
 the global switch defaults to off until a scope model is available for a game test.
 
+To locate a ghost image inside the lens, temporarily set
+`scope_lens_debug_view = 1` under `[weapon_scopes]`. The aimed lens then shows
+only the captured world, without reticle, glass shading, or a transparency
+feather. If the optic silhouette remains, inspect the capture pass. If it
+disappears, inspect the lens shader. Set the value to `2` for a solid magenta
+lens: any optic silhouette visible *above* magenta is drawn after the lens or
+is not covered by the lens mesh. Restore `0` for normal rendering. These modes
+work only while the 3D scope is active and require recompiling the engine and
+shader cache after first adding the setting.
+
 For an attachable optic, its entry in the weapon's `scopes_sect` list can override
 the weapon HUD aiming position and rotation. An inherited base section works too:
 
