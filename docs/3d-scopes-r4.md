@@ -9,6 +9,10 @@ The lens pass starts as soon as aiming begins; the lens mesh follows the weapon'
 normal aim animation. While active, the captured world image covers HUD weapon
 parts behind the physical lens mesh. This only affects pixels inside that mesh;
 its silhouette and the optic housing remain part of the HUD model.
+For a clear view, use near-opaque alpha for reticle markings and transparent
+alpha for the lens background in the optic's base texture. Intermediate alpha
+values below 0.72 are treated as glass tint and do not cover the world image;
+the reticle fades in fully by alpha 0.96.
 
 To try it with a weapon, set `[weapon_scopes] enable_3d_scopes = true` in
 `gamedata/configs/infernis_engine/engine_external.ltx`. In the weapon section for a
