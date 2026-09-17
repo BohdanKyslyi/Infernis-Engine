@@ -5,6 +5,10 @@ first pass uses the optic's FOV, skips the weapon HUD and UI, and copies the wor
 into `$user$scope_lens`. The second pass draws the normal camera and HUD; the material
 `models\lense_scope` samples that image on the physical lens mesh and overlays the
 reticle from its base texture.
+The lens pass starts as soon as aiming begins; the lens mesh follows the weapon's
+normal aim animation. While active, the captured world image covers HUD weapon
+parts behind the physical lens mesh. This only affects pixels inside that mesh;
+its silhouette and the optic housing remain part of the HUD model.
 
 To try it with a weapon, set `[weapon_scopes] enable_3d_scopes = true` in
 `gamedata/configs/infernis_engine/engine_external.ltx`. In the weapon section for a

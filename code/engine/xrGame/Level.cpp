@@ -502,8 +502,7 @@ float CLevel::ScopeLensFov() const
         return 0.f;
 
     const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
-    if (!weapon || !weapon->Is3DScopeEnabled() || !weapon->IsZoomed() ||
-        weapon->IsRotatingToZoom())
+    if (!weapon || !weapon->Is3DScopeEnabled() || !weapon->IsZoomed())
         return 0.f;
 
     return weapon->ScopeLensFov();
