@@ -82,8 +82,12 @@ scope_lens_output main(p_scope_lens I, float4 pos2d : SV_Position)
         float dark_ink = darkness * darkness * darkness *
             (1.0f - saturate(chroma * 4.0f));
         float colored_mark = saturate(chroma * 5.0f);
-        float aperture = 1.0f - smoothstep(0.80f, 0.88f,
-            length(I.tc * 2.0f - 1.0f));
+        // The old 0.80-0.88 feather alpha-blended the scope body back into
+        // the captured world across a wide part of the optical opening. Keep
+        // the image opaque up to the inner housing rim (about 0.875 on the AR
+        // lens) and soften only the last couple of pixels.
+        float radius = length(I.tc * 2.0f - 1.0f);
+        float aperture = 1.0f - smoothstep(0.855f, 0.865f, radius);
         coverage *= aperture;
         ink = saturate(max(dark_ink, colored_mark) * reticle.a * aperture);
     }

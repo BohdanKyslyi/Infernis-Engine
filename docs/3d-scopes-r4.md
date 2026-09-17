@@ -21,7 +21,9 @@ For a reticle with white glass, black graduations, and colored illumination,
 set `scope_lens_white_key = true` in that optic's section. This opt-in mode
 uses the white area as clear glass, retains black and colored markings, and
 fades out the black canvas beyond a centered circular UV aperture (radius
-0.80–0.88 in UV space). Keep the lens art centered in the texture. It does not
+0.855–0.865 in UV space). The world image remains opaque within this aperture,
+so the HUD scope body cannot bleed into it through a wide alpha transition.
+Keep the lens art centered in the texture. It does not
 require a transparent alpha channel; `scope_lens_shadow_strength = 0` disables
 the separate eye-box shading if a completely clear view is desired.
 
