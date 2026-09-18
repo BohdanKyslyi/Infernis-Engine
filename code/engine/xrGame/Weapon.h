@@ -136,6 +136,13 @@ protected:
 public:
     bool IsGrenadeLauncherAttached() const;
     bool IsScopeAttached() const;
+    virtual bool Is3DScopeEnabled() const;
+    float ScopeLensFov() const;
+    bool ScopeLensShouldRender() const;
+    u8 ScopeLensMode() const;
+    void ScopeLensGlass(float* params) const;
+    bool HasScopeDetector() const;
+    shared_str ScopeSettingSection(LPCSTR key) const;
     bool IsSilencerAttached() const;
 
     virtual bool GrenadeLauncherAttachable();
@@ -146,7 +153,7 @@ public:
     ALife::EWeaponAddonStatus get_ScopeStatus() const { return m_eScopeStatus; }
     ALife::EWeaponAddonStatus get_SilencerStatus() const { return m_eSilencerStatus; }
 
-    virtual bool UseScopeTexture() { return true; };
+    virtual bool UseScopeTexture() { return !Is3DScopeEnabled(); };
 
     //обновление видимости для косточек аддонов
     void UpdateAddonsVisibility();

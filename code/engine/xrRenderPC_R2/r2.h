@@ -128,6 +128,7 @@ public:
     IDirect3DQuery9* q_sync_point[CHWCaps::MAX_GPUS];
     u32 q_sync_count;
 
+    bool m_bScopeLensRendered = false;
     bool m_bMakeAsyncSS;
     bool m_bFirstFrameAfterReset; // Determines weather the frame is the first after resetting
                                   // device.
@@ -298,6 +299,7 @@ public:
     // Main
     virtual void Calculate();
     virtual void Render();
+    bool CaptureScopeLens() override;
     virtual void Screenshot(ScreenshotMode mode = SM_NORMAL, LPCSTR name = 0);
     virtual void Screenshot(ScreenshotMode mode, CMemoryWriter& memory_writer);
     virtual void ScreenshotAsyncBegin();

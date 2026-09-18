@@ -235,6 +235,7 @@ CRenderTarget::CRenderTarget() {
 
         // generic(LDR) RTs
         rt_Generic_0.create(r2_RT_generic0, w, h, D3DFMT_A8R8G8B8);
+        rt_ScopeLens.create(r2_RT_scope_lens, w, h, D3DFMT_A8R8G8B8);
         rt_Generic_1.create(r2_RT_generic1, w, h, D3DFMT_A8R8G8B8);
         //	Igor: for volumetric lights
         // rt_Generic_2.create			(r2_RT_generic2,w,h,D3DFMT_A8R8G8B8		);
@@ -564,6 +565,15 @@ CRenderTarget::CRenderTarget() {
     //
     dwWidth = Device.dwWidth;
     dwHeight = Device.dwHeight;
+}
+
+void CRenderTarget::CaptureScopeLens() {
+    // StretchRect copies the finished world image without reading the HUD.
+    RCache.set_Textures(&m_scopeLensEmptyTextures);
+    u_setrt(Device.dwWidth, Device.dwHeight, HW.pBaseRT, NULL, NULL, HW.pBaseZB);
+    CHK_DX(HW.pDevice->StretchRect(rt_Generic_0->pRT, NULL,
+                                   rt_ScopeLens->pRT, NULL, D3DTEXF_NONE));
+    dwAccumulatorClearMark = 0;
 }
 
 CRenderTarget::~CRenderTarget() {

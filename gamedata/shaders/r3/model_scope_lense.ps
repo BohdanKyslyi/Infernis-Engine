@@ -1,0 +1,164 @@
+#include "common.h"
+
+Texture2D s_vp2;
+uniform float4 scope_lens_state;
+uniform float4 scope_lens_glass;
+uniform float4 scope_lens_size;
+uniform float4 scope_lens_targets[8];
+
+struct p_scope_lens {
+    float2 tc : TEXCOORD0;
+    float3 view_pos : TEXCOORD1;
+    float3 view_tangent : TEXCOORD2;
+    float3 view_binormal : TEXCOORD3;
+    float3 view_normal : TEXCOORD4;
+};
+
+struct scope_lens_output {
+    float4 color : SV_Target;
+    float depth : SV_Depth;
+};
+
+scope_lens_output main(p_scope_lens I, float4 pos2d : SV_Position)
+{
+    scope_lens_output result;
+    float4 reticle = s_base.Sample(smp_base, I.tc);
+    float active = saturate(scope_lens_state.x);
+    if (active < 0.5f)
+    {
+        result.color = reticle;
+        result.depth = pos2d.z;
+        return result;
+    }
+
+    // Only the active image passes in front of the opaque HUD. Pixels outside
+    // the authored optic aperture must leave the scope housing untouched.
+    result.depth = 0.0f;
+    float coverage = active;
+
+    // SV_Position addresses the lens pixel in the full-screen world pass.
+    float2 tc = saturate(pos2d.xy / scope_lens_size.xy);
+    float3 scene = s_vp2.Sample(smp_rtlinear, tc).rgb;
+    // Separate only the captured world's red and blue channels near the glass
+    // rim. The offset is in screen pixels; reticle strokes stay sharp.
+    if (scope_lens_state.y < 0.5f && scope_lens_size.z > 0.001f)
+    {
+        float2 radial = I.tc * 2.0f - 1.0f;
+        float rim_amount = smoothstep(0.25f, 0.85f, dot(radial, radial));
+        float2 offset = radial * (scope_lens_size.z * rim_amount / scope_lens_size.xy);
+        scene.r = s_vp2.Sample(smp_rtlinear, saturate(tc + offset)).r;
+        scene.b = s_vp2.Sample(smp_rtlinear, saturate(tc - offset)).b;
+    }
+    // The 3DSS config dims older optics to (0.8, 0.8, 0.76). Keep most of
+    // that absorption near the rim so the center stays readable. Lens UVs
+    // follow the HUD mesh, while the world image still uses SV_Position.
+    if (scope_lens_state.y < 0.5f)
+    {
+        float2 lens_uv = I.tc * 2.0f - 1.0f;
+        float rim = smoothstep(0.25f, 0.95f, dot(lens_uv, lens_uv));
+        scene *= lerp(float3(0.99f, 0.99f, 0.98f),
+                      float3(0.80f, 0.80f, 0.76f), rim);
+
+        float3 eye = normalize(-I.view_pos);
+        float3 normal = normalize(I.view_normal);
+        float facing = max(abs(dot(eye, normal)), 0.2f);
+        float2 eye_offset = float2(dot(eye, normalize(I.view_tangent)),
+                                   dot(eye, normalize(I.view_binormal))) / facing;
+        float pupil = length(lens_uv + eye_offset * scope_lens_glass.x);
+        // Start the eye-box shadow at the physical rim. An earlier threshold
+        // of 0.55 darkened most of the lens and left a conspicuous bright disc
+        // at its center, which looked like black translucent HUD geometry.
+        float pupil_shadow = smoothstep(0.90f, 1.15f, pupil);
+        scene *= 1.0f - pupil_shadow * scope_lens_glass.z;
+
+        // Move a weak broad reflection with the viewing angle.
+        float2 glint_uv = (I.tc - float2(0.29f, 0.23f) - eye_offset * 0.04f)
+                          * float2(1.0f, 1.4f);
+        float glint = exp2(-22.0f * dot(glint_uv, glint_uv));
+        scene = saturate(scene + scope_lens_glass.y * glint * (1.0f - rim));
+    }
+    float ink;
+    if (scope_lens_glass.w > 0.5f)
+    {
+        // The white-key texture has a circular reticle on an opaque black
+        // canvas. The canvas is not the scope housing: it must never become
+        // black "ink" over the captured world within the physical lens.
+        float radius = length(I.tc * 2.0f - 1.0f);
+        // The source starts a dark circular vignette near radius 0.7 and
+        // reaches the black canvas at 0.8. Neither belongs to the reticle.
+        float reticle_disc = 1.0f - smoothstep(0.70f, 0.76f, radius);
+        float brightest = max(reticle.r, max(reticle.g, reticle.b));
+        float darkest = min(reticle.r, min(reticle.g, reticle.b));
+        float chroma = brightest - darkest;
+        float luma = dot(reticle.rgb, float3(0.299f, 0.587f, 0.114f));
+        // Keep the gray glass wear from the original texture. Modulate the
+        // captured world gently rather than blending gray pixels as opaque
+        // ink: that preserves scratches without revealing the HUD underneath.
+        float wear = smoothstep(0.32f, 0.55f, luma) * (1.0f - luma) * 0.35f *
+            (1.0f - saturate(chroma * 4.0f)) * reticle.a * reticle_disc;
+        scene *= 1.0f - wear;
+        // Near-black strokes are reticle ink; gray glass remains transparent.
+        float dark_ink = (1.0f - smoothstep(0.18f, 0.32f, luma)) *
+            (1.0f - saturate(chroma * 4.0f));
+        float colored_mark = saturate(chroma * 5.0f);
+        // The world image covers the complete physical opening, including the
+        // area between the reticle artwork and the housing. Its coverage must
+        // not be derived from the reticle texture's black canvas.
+        float aperture = 1.0f - smoothstep(0.855f, 0.865f, radius);
+        coverage *= aperture;
+        ink = saturate(max(dark_ink, colored_mark) * reticle.a * reticle_disc);
+    }
+    else
+    {
+        // Some reticles are authored with transparent black outside their marks;
+        // others have opaque black corners and a colored mark with partial alpha.
+        // The latter cannot use alpha as a mask: it paints a black ring over the
+        // world. The corner is uniform and stays resident in the texture cache.
+        float4 corner = s_base.SampleLevel(smp_base, float2(0.02f, 0.02f), 0);
+        float black_backdrop = step(0.9f, corner.a) *
+            (1.0f - step(0.04f, max(corner.r, max(corner.g, corner.b))));
+        float colored_ink = reticle.a *
+            saturate((max(reticle.r, max(reticle.g, reticle.b)) - 0.015f) * 8.0f);
+        ink = lerp(reticle.a, colored_ink, black_backdrop);
+    }
+    float3 image = lerp(scene, reticle.rgb, ink);
+    // The 2D optic's PPE is applied to the final screen. Keep optic modes inside
+    // the physical lens instead of changing the player's entire field of view.
+    // Apply them after the reticle blend: an opaque reticle texture must not
+    // conceal the effect on the view through the lens.
+    if (scope_lens_state.y > 1.5f)
+    {
+        float luma = dot(image, float3(0.299f, 0.587f, 0.114f));
+        image = saturate(float3(0.08f, 1.0f, 0.13f) * pow(saturate(luma * 2.2f), 0.75f));
+    }
+    else if (scope_lens_state.y > 0.5f)
+    {
+        float luma = dot(image, float3(0.299f, 0.587f, 0.114f));
+        // The legacy contrast.ppe also gives the 2D optic its yellow/olive
+        // palette. Keep that palette confined to the physical 3D lens.
+        float contrast = saturate(luma * 1.55f - 0.12f);
+        image = contrast * float3(1.0f, 0.96f, 0.20f);
+    }
+    // Detector frames are projected with the lens camera and are only visible
+    // through this material. The rest of the HUD never receives these pixels.
+    if (scope_lens_state.z > 0.5f)
+    {
+        [unroll] for (int i = 0; i < 8; ++i)
+        {
+            float4 box = scope_lens_targets[i];
+            if (box.z <= box.x || box.w <= box.y)
+                continue;
+            float2 edge = float2(2.0f, 2.0f) / scope_lens_size.xy;
+            float2 corner = float2(11.0f, 11.0f) / scope_lens_size.xy;
+            bool inside = all(tc >= box.xy) && all(tc <= box.zw);
+            bool vertical = (abs(tc.x - box.x) < edge.x || abs(tc.x - box.z) < edge.x) &&
+                (tc.y < box.y + corner.y || tc.y > box.w - corner.y);
+            bool horizontal = (abs(tc.y - box.y) < edge.y || abs(tc.y - box.w) < edge.y) &&
+                (tc.x < box.x + corner.x || tc.x > box.z - corner.x);
+            if (inside && (vertical || horizontal))
+                image = float3(0.65f, 0.9f, 0.65f);
+        }
+    }
+    result.color = float4(image, coverage);
+    return result;
+}

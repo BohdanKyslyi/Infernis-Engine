@@ -73,6 +73,9 @@ public:
     ref_rt
         rt_Generic_0; // 32bit		(r,g,b,a)				// post-process,
                       // intermidiate results, etc.
+    ref_rt rt_ScopeLens;
+    STextureList m_scopeLensEmptyTextures;
+    void CaptureScopeLens();
     ref_rt
         rt_Generic_1; // 32bit		(r,g,b,a)				// post-process,
                       // intermidiate results, etc.
