@@ -8,8 +8,8 @@
     <string id="ui_weather_editor_ambient"><text>Ambient</text></string>
     <string id="ui_weather_editor_sun"><text>Sun</text></string>
     <string id="ui_weather_editor_thunderbolt_selector"><text>Thunderbolt</text></string>
-    <string id="ui_weather_editor_new_weather"><text>New weather</text></string>
-    <string id="ui_weather_editor_create_weather"><text>CREATE WEATHER</text></string>
+    <string id="ui_weather_editor_new_weather"><text>New file name</text></string>
+    <string id="ui_weather_editor_create_weather"><text>CREATE FILE</text></string>
     <string id="ui_weather_editor_thunderbolt"><text>THUNDERBOLT</text></string>
     <string id="ui_weather_editor_time"><text>Time</text></string>
     <string id="ui_weather_editor_add_section"><text>ADD SECTION</text></string>
@@ -38,7 +38,7 @@
     <string id="ui_weather_editor_fog_density"><text>Fog density</text></string>
     <string id="ui_weather_editor_fog_distance"><text>Fog distance</text></string>
     <string id="ui_weather_editor_far_plane"><text>Far plane</text></string>
-    <string id="ui_weather_editor_water_intensity"><text>Water intensity</text></string>
+    <string id="ui_weather_editor_water_intensity"><text>Soft water brightness</text></string>
     <string id="ui_weather_editor_sky_rotation"><text>Sky rotation</text></string>
     <string id="ui_weather_editor_sun_shafts"><text>Sun shafts</text></string>
     <string id="ui_weather_editor_rain_density"><text>Rain density</text></string>

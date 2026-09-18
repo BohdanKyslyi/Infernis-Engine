@@ -222,6 +222,12 @@ void CEnvironment::UpdateWeatherEditorSession(const std::string& weather, float 
     // explicitly closed, including while the UI is hidden for Preview.
     fGameTime = m_weather_editor_time;
     m_paused = true;
+
+    // SelectEnvs() is optimized for time moving forward. Editor scrubbing is
+    // bidirectional, so its cached pair can otherwise remain on a later time
+    // range after the slider or keyframe list jumps backwards. Always rebuild
+    // the pair around the requested editor time before rendering it.
+    Current[0] = Current[1] = nullptr;
     SelectEnvs(fGameTime);
 #endif
 }
