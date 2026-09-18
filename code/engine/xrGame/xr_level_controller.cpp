@@ -88,10 +88,13 @@ _action actions[] = {
 
     { "quick_save", kQUICK_SAVE, _sp },
     { "quick_load", kQUICK_LOAD, _sp },
-    //	{ "alife_command",		kALIFE_CMD				,_sp},
+    { "alife_command", kALIFE_CMD, _sp },
 
+    { "wpn_inspect", kWPN_INSPECT, _sp },
     { NULL, kLASTACTION, _both }
 };
+static_assert(sizeof(actions) / sizeof(actions[0]) == bindings_count + 1,
+              "Action table must match EGameActions");
 
 _keyboard keyboards[] = { { "kESCAPE", DIK_ESCAPE },
                           { "k1", DIK_1 },

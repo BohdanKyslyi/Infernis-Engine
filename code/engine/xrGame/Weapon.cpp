@@ -202,6 +202,7 @@ void CWeapon::Load(LPCSTR section) {
     m_bone_upgrade_sections.clear();
     inherited::Load(section);
     CShootingObject::Load(section);
+    m_sounds.LoadSound(section, "snd_boring", "sndInspect", true);
 
     if (pSettings->line_exist(section, "flame_particles_2"))
         m_sFlameParticles2 = pSettings->r_string(section, "flame_particles_2");
@@ -837,6 +838,15 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
         return true;
 
     switch (cmd) {
+    case kWPN_INSPECT: {
+        if ((flags & CMD_START) && IsGameTypeSingle() && GetState() == eIdle &&
+            GetNextState() == eIdle && !IsPending() && !IsZoomed() && GetHUDmode() &&
+            !hud_adj_mode && AllowBore() && !g_player_hud->attached_item(1) &&
+            (pSettings->line_exist(HudSection().c_str(), "anm_boring") ||
+             pSettings->line_exist(HudSection().c_str(), "anm_bore")))
+            SwitchState(eInspect);
+        return true;
+    }
     case kWPN_FIRE: {
         //если оружие чем-то занято, то ничего не делать
         {
@@ -1850,6 +1860,19 @@ void CWeapon::OnStateSwitch(u32 S) {
     inherited::OnStateSwitch(S);
     m_BriefInfo_CalcFrame = 0;
 
+    if (S == eInspect) {
+        SetPending(TRUE);
+        const bool has_inspect_motion = pSettings->line_exist(HudSection().c_str(), "anm_boring");
+        LPCSTR motion = has_inspect_motion ? "anm_boring" : "anm_bore";
+        if (!PlayHUDMotion(motion, TRUE, this, eInspect)) {
+            SetPending(FALSE);
+            SwitchState(eIdle);
+            return;
+        }
+        PlaySound(has_inspect_motion && pSettings->line_exist(cNameSect().c_str(), "snd_boring")
+                      ? "sndInspect" : "sndBore", get_LastFP());
+    }
+
     // if(GetState()==eReload)
     //{
     //	if(H_Parent()==Level().CurrentEntity() && !fsimilar(m_zoom_params.m_ReloadDof.w,-1.0f))
@@ -1862,7 +1885,13 @@ void CWeapon::OnStateSwitch(u32 S) {
     //}
 }
 
-void CWeapon::OnAnimationEnd(u32 state) { inherited::OnAnimationEnd(state); }
+void CWeapon::OnAnimationEnd(u32 state) {
+    if (state == eInspect) {
+        SetPending(FALSE);
+        SwitchState(eIdle);
+    } else
+        inherited::OnAnimationEnd(state);
+}
 
 u8 CWeapon::GetCurrentHudOffsetIdx() {
     CActor* pActor = smart_cast<CActor*>(H_Parent());
