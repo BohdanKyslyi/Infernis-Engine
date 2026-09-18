@@ -56,6 +56,8 @@ protected:
 
 protected:
     virtual void ReloadMagazine();
+    int GetAmmoMagSize() const override { return iMagazineSize + (HasChamberRound() ? 1 : 0); }
+    virtual bool HasChamberRound() const { return m_chamber_round; }
     void ApplySilencerKoeffs();
     void ResetSilencerKoeffs();
 
@@ -133,6 +135,8 @@ protected:
     //переменная блокирует использование
     //только разных типов патронов
     bool m_bLockType;
+    bool m_chamber_round;
+    int m_reload_target_capacity;
 
 public:
     virtual void OnZoomIn();

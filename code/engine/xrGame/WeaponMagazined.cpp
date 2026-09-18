@@ -46,6 +46,8 @@ CWeaponMagazined::CWeaponMagazined(ESoundTypes eSoundType) : CWeapon() {
     m_fOldBulletSpeed = 0;
     m_iQueueSize = WEAPON_ININITE_QUEUE;
     m_bLockType = false;
+    m_chamber_round = false;
+    m_reload_target_capacity = 0;
 }
 
 CWeaponMagazined::~CWeaponMagazined() {
@@ -56,6 +58,7 @@ void CWeaponMagazined::net_Destroy() { inherited::net_Destroy(); }
 
 void CWeaponMagazined::Load(LPCSTR section) {
     inherited::Load(section);
+    m_chamber_round = READ_IF_EXISTS(pSettings, r_bool, section, "chamber_round", false);
 
     // Sounds
     m_sounds.LoadSound(section, "snd_draw", "sndShow", false, m_eSoundShow);
@@ -311,10 +314,14 @@ void CWeaponMagazined::ReloadMagazine() {
 
     VERIFY((u32)iAmmoElapsed == m_magazine.size());
 
+    // Preserve the limit across recursive refills from multiple ammo boxes.
+    if (!m_bLockType)
+        m_reload_target_capacity = iMagazineSize + (HasChamberRound() && iAmmoElapsed > 0 ? 1 : 0);
+
     if (m_DefaultCartridge.m_LocalAmmoType != m_ammoType)
         m_DefaultCartridge.Load(m_ammoTypes[m_ammoType].c_str(), m_ammoType);
     CCartridge l_cartridge = m_DefaultCartridge;
-    while (iAmmoElapsed < iMagazineSize) {
+    while (iAmmoElapsed < m_reload_target_capacity) {
         if (!unlimited_ammo()) {
             if (!m_pCurrentAmmo->Get(l_cartridge))
                 break;
@@ -330,7 +337,7 @@ void CWeaponMagazined::ReloadMagazine() {
     if (m_pCurrentAmmo && !m_pCurrentAmmo->m_boxCurr && OnServer())
         m_pCurrentAmmo->SetDropManual(TRUE);
 
-    if (iMagazineSize > iAmmoElapsed) {
+    if (m_reload_target_capacity > iAmmoElapsed) {
         m_bLockType = true;
         ReloadMagazine();
         m_bLockType = false;
@@ -730,7 +737,7 @@ bool CWeaponMagazined::Action(u16 cmd, u32 flags) {
     switch (cmd) {
     case kWPN_RELOAD: {
         if (flags & CMD_START)
-            if (iAmmoElapsed < iMagazineSize || IsMisfire())
+            if (iAmmoElapsed < GetAmmoMagSize() || IsMisfire())
                 Reload();
     }
         return true;
