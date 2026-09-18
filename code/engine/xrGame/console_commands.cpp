@@ -47,6 +47,7 @@
 #include "cameralook.h"
 #include "character_hit_animations_params.h"
 #include "inventory_upgrade_manager.h"
+#include "ui/UIWeatherEditor.h"
 
 #include "ai_debug_variables.h"
 #include "../xrphysics/console_vars.h"
@@ -181,6 +182,43 @@ static bool is_dev_mode() {
     return strstr(Core.Params, "-dev_mode") != nullptr ||
            strstr(Core.Params, "-developer_mode") != nullptr;
 }
+
+class CCC_WeatherEditor : public IConsole_Command {
+public:
+    CCC_WeatherEditor(LPCSTR name) : IConsole_Command(name) { bEmptyArgsHandled = true; }
+
+    virtual void Execute(LPCSTR args) {
+        if (!is_dev_mode()) {
+            Msg("! Weather editor is available only in -dev_mode");
+            return;
+        }
+        if (!g_pGameLevel || !CurrentGameUI()) {
+            Msg("! Weather editor requires a loaded level");
+            return;
+        }
+        if (!IsGameTypeSingle()) {
+            Msg("! Weather editor is available only in single-player");
+            return;
+        }
+
+        if (!args || !args[0] || !_stricmp(args, "toggle"))
+            ToggleWeatherEditor();
+        else if (!_stricmp(args, "on") || !_stricmp(args, "1"))
+            ToggleWeatherEditor(true, false);
+        else if (!_stricmp(args, "off") || !_stricmp(args, "0"))
+            ToggleWeatherEditor(false, true);
+        else if (!_stricmp(args, "preview"))
+            PreviewWeatherEditor();
+        else
+            Msg("! Usage: weather_editor [on|off|preview|toggle]");
+    }
+
+    virtual void Status(TStatus& status) {
+        xr_strcpy(status, WeatherEditorShown() ? "on" : "off");
+    }
+
+    virtual void Info(TInfo& info) { xr_strcpy(info, "[on|off|preview|toggle]"); }
+};
 
 class CCC_Mask_Dev : public CCC_Mask {
 public:
@@ -2008,6 +2046,7 @@ void CCC_RegisterCommands() {
     CMD3(CCC_Mask_Dev, "g_god", &psActorFlags, AF_GODMODE);
     CMD3(CCC_Mask_Dev, "g_unlimitedammo", &psActorFlags, AF_UNLIMITEDAMMO);
     CMD1(CCC_FovDev, "fov");
+    CMD1(CCC_WeatherEditor, "weather_editor");
 
 #ifdef DEBUG_CAPS
     CMD1(CCC_GreedIsGood, "g_greedisgood");

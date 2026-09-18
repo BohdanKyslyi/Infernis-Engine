@@ -187,6 +187,16 @@ public:
     void on_device_create();
     void on_device_destroy();
 
+    // Runtime weather editor helpers. These are intentionally available in
+    // release builds: changing a texture also refreshes the renderer-owned
+    // resources, so the new sky/clouds are visible on the next frame.
+    bool set_sky_texture(LPCSTR texture_name);
+    bool set_clouds_texture(LPCSTR texture_name);
+    bool set_ambient(CEnvironment& environment, LPCSTR ambient_name);
+    bool set_sun(CEnvironment& environment, LPCSTR sun_name);
+    bool set_thunderbolt_collection(CEnvironment& environment, LPCSTR collection_name);
+    void save(CInifile& config) const;
+
     std::string m_identifier;
 };
 
@@ -317,6 +327,14 @@ public:
 
     void SetWeather(const std::string& name, bool forced = false);
     const std::string& GetWeather() const { return CurrentWeatherName; }
+    float GetGameTime() const { return fGameTime; }
+    bool SaveWeather(const std::string& name, bool make_backup, std::string* saved_path = nullptr);
+    bool AddWeatherFrame(const std::string& name, float game_time,
+                         const CEnvDescriptor& source, CEnvDescriptor** created = nullptr);
+    void BeginWeatherEditorSession(const std::string& weather, float game_time);
+    void UpdateWeatherEditorSession(const std::string& weather, float game_time);
+    void EndWeatherEditorSession();
+    bool IsWeatherEditorSessionActive() const { return m_weather_editor_active; }
     void ChangeGameTime(float game_time);
     void SetGameTime(float game_time, float time_factor);
 
@@ -331,14 +349,17 @@ public:
 
 public:
     void ED_Reload();
-    float GetGameTime() { return fGameTime; }
 #else // #ifdef _EDITOR
-#ifdef INGAME_EDITOR
-    float GetGameTime() { return fGameTime; }
-#endif // #ifdef INGAME_EDITOR
-
     bool m_paused;
 #endif // #ifdef _EDITOR
+
+private:
+    bool m_weather_editor_active;
+    float m_weather_editor_time;
+    std::string m_weather_editor_cycle;
+    bool m_use_weather_sun_direction;
+
+public:
 
     CInifile* m_ambients_config;
     CInifile* m_sound_channels_config;

@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <io.h>
 #pragma hdrstop
 
 #include "Environment.h"
@@ -235,9 +236,11 @@ void CEnvDescriptor::load(CEnvironment& environment, CInifile& config) {
     // TODO: [imdex] remove shared_str (ini)
     clouds_texture_name = config.r_string(m_identifier.c_str(), "clouds_texture");
     LPCSTR cldclr = config.r_string(m_identifier.c_str(), "clouds_color");
-    float multiplier = 0, save = 0;
-    sscanf(cldclr, "%f,%f,%f,%f,%f", &clouds_color.x, &clouds_color.y, &clouds_color.z,
-           &clouds_color.w, &multiplier);
+    float multiplier = 2.f, save = 0;
+    const int clouds_values =
+        sscanf(cldclr, "%f,%f,%f,%f,%f", &clouds_color.x, &clouds_color.y, &clouds_color.z,
+               &clouds_color.w, &multiplier);
+    R_ASSERT3(clouds_values >= 4, "Invalid clouds_color", m_identifier.c_str());
     save = clouds_color.w;
     clouds_color.mul(.5f * multiplier);
     clouds_color.w = save;
@@ -261,6 +264,9 @@ void CEnvDescriptor::load(CEnvironment& environment, CInifile& config) {
     hemi_color = config.r_fvector4(m_identifier.c_str(), "hemisphere_color");
     sun_color = config.r_fvector3(m_identifier.c_str(), "sun_color");
     //	if (config.line_exist(m_identifier.c_str(),"sun_altitude"))
+    // Legacy X-Ray naming is counter-intuitive: sun_altitude is stored as the
+    // vector heading (horizontal azimuth), while sun_longitude is its pitch
+    // (vertical altitude). Keep this disk format for mod compatibility.
     sun_dir.setHP(deg2rad(config.r_float(m_identifier.c_str(), "sun_altitude")),
                   deg2rad(config.r_float(m_identifier.c_str(), "sun_longitude")));
     R_ASSERT(xr::valid(sun_dir));
@@ -322,6 +328,158 @@ void CEnvDescriptor::on_device_destroy() {
     sky_texture_env.destroy	();
     clouds_texture.destroy	();
     */
+}
+
+bool CEnvDescriptor::set_sky_texture(LPCSTR texture_name) {
+    if (!texture_name || !texture_name[0])
+        return false;
+
+    string_path texture_path;
+    string_path environment_texture;
+    strconcat(sizeof(environment_texture), environment_texture, texture_name, "#small");
+    if (!FS.exist(texture_path, "$game_textures$", texture_name, ".dds") ||
+        !FS.exist(texture_path, "$game_textures$", environment_texture, ".dds")) {
+        Msg("! Weather editor: sky cubemap [%s] or its #small texture is missing", texture_name);
+        return false;
+    }
+
+    if (sky_texture_name == texture_name)
+        return true;
+
+    on_device_destroy();
+    sky_texture_name = texture_name;
+    sky_texture_env_name = environment_texture;
+    on_device_create();
+    return true;
+}
+
+bool CEnvDescriptor::set_clouds_texture(LPCSTR texture_name) {
+    if (!texture_name || !texture_name[0])
+        return false;
+
+    string_path texture_path;
+    if (!FS.exist(texture_path, "$game_textures$", texture_name, ".dds")) {
+        Msg("! Weather editor: clouds texture [%s] is missing", texture_name);
+        return false;
+    }
+
+    if (clouds_texture_name == texture_name)
+        return true;
+
+    on_device_destroy();
+    clouds_texture_name = texture_name;
+    on_device_create();
+    return true;
+}
+
+bool CEnvDescriptor::set_ambient(CEnvironment& environment, LPCSTR ambient_name) {
+    if (!ambient_name)
+        return false;
+    if (!ambient_name[0]) {
+        env_ambient = nullptr;
+        environment.Invalidate();
+        return true;
+    }
+    if (!environment.m_ambients_config ||
+        !environment.m_ambients_config->section_exist(ambient_name)) {
+        Msg("! Weather editor: ambient [%s] was not found",
+            ambient_name ? ambient_name : "<null>");
+        return false;
+    }
+
+    if (env_ambient && env_ambient->name() == ambient_name)
+        return true;
+
+    env_ambient = environment.AppendEnvAmb(ambient_name);
+    environment.Invalidate();
+    return env_ambient != nullptr;
+}
+
+bool CEnvDescriptor::set_sun(CEnvironment& environment, LPCSTR sun_name) {
+    if (!sun_name)
+        return false;
+    if (!sun_name[0]) {
+        lens_flare_id.clear();
+        environment.Invalidate();
+        return true;
+    }
+    if (!environment.m_suns_config || !environment.m_suns_config->section_exist(sun_name)) {
+        Msg("! Weather editor: sun definition [%s] was not found",
+            sun_name ? sun_name : "<null>");
+        return false;
+    }
+
+    if (lens_flare_id == sun_name)
+        return true;
+
+    lens_flare_id =
+        environment.eff_LensFlare->AppendDef(environment, environment.m_suns_config, sun_name);
+    environment.Invalidate();
+    return !lens_flare_id.empty();
+}
+
+bool CEnvDescriptor::set_thunderbolt_collection(CEnvironment& environment,
+                                                 LPCSTR collection_name) {
+    if (!collection_name)
+        return false;
+    if (!collection_name[0]) {
+        tb_id.clear();
+        environment.Invalidate();
+        return true;
+    }
+    if (!environment.m_thunderbolt_collections_config ||
+        !environment.m_thunderbolt_collections_config->section_exist(collection_name)) {
+        Msg("! Weather editor: thunderbolt collection [%s] was not found",
+            collection_name ? collection_name : "<null>");
+        return false;
+    }
+
+    if (tb_id == collection_name)
+        return true;
+
+    tb_id = environment.eff_Thunderbolt->AppendDef(
+        environment, environment.m_thunderbolt_collections_config,
+        environment.m_thunderbolts_config, collection_name);
+    environment.Invalidate();
+    return !tb_id.empty();
+}
+
+void CEnvDescriptor::save(CInifile& config) const {
+    LPCSTR section = m_identifier.c_str();
+    if (env_ambient)
+        config.w_string(section, "ambient", env_ambient->name().c_str());
+    else if (config.line_exist(section, "ambient"))
+        config.remove_line(section, "ambient");
+    config.w_fvector3(section, "ambient_color", ambient);
+    config.w_string(section, "clouds_texture", clouds_texture_name.c_str());
+    config.w_float(section, "far_plane", far_plane);
+    config.w_float(section, "fog_distance", fog_distance);
+    config.w_float(section, "fog_density", fog_density);
+    config.w_fvector3(section, "fog_color", fog_color);
+    config.w_fvector3(section, "rain_color", rain_color);
+    config.w_float(section, "rain_density", rain_density);
+    config.w_fvector3(section, "sky_color", sky_color);
+    config.w_float(section, "sky_rotation", rad2deg(sky_rotation));
+    config.w_string(section, "sky_texture", sky_texture_name.c_str());
+    config.w_fvector3(section, "sun_color", sun_color);
+    config.w_float(section, "sun_shafts_intensity", m_fSunShaftsIntensity);
+    config.w_string(section, "sun", lens_flare_id.c_str());
+    config.w_string(section, "thunderbolt_collection", tb_id.c_str());
+    config.w_float(section, "thunderbolt_duration", bolt_duration);
+    config.w_float(section, "thunderbolt_period", bolt_period);
+    config.w_float(section, "water_intensity", m_fWaterIntensity);
+    config.w_float(section, "wind_direction", rad2deg(wind_direction));
+    config.w_float(section, "wind_velocity", wind_velocity);
+    config.w_fvector4(section, "hemisphere_color", hemi_color);
+    config.w_float(section, "sun_altitude", rad2deg(sun_dir.getH()));
+    config.w_float(section, "sun_longitude", rad2deg(sun_dir.getP()));
+
+    // Runtime stores RGB after the loader's 0.5 * multiplier conversion.
+    // A multiplier of 2 writes an exactly reversible five-component value.
+    string256 clouds;
+    xr_sprintf(clouds, "%.6f, %.6f, %.6f, %.6f, 2.000000", clouds_color.x,
+               clouds_color.y, clouds_color.z, clouds_color.w);
+    config.w_string(section, "clouds_color", clouds);
 }
 
 //-----------------------------------------------------------------------------
@@ -600,6 +758,118 @@ void CEnvironment::load_weathers() {
     }
     R_ASSERT2(!WeatherCycles.empty(), "Empty weathers.");
     SetWeather((*WeatherCycles.begin()).first);
+}
+
+bool CEnvironment::SaveWeather(const std::string& name, bool make_backup,
+                               std::string* saved_path) {
+    const EnvsMap::const_iterator weather = WeatherCycles.find(name);
+    if (weather == WeatherCycles.end() || weather->second.empty()) {
+        Msg("! Weather editor: weather cycle [%s] was not found", name.c_str());
+        return false;
+    }
+
+    string_path file_name;
+    FS.update_path(file_name, "$game_weathers$", name.c_str());
+    xr_strcat(file_name, ".ltx");
+
+    // Load the original first so custom/unknown keys survive the edit. If the
+    // source is packed, CInifile reads it through the VFS and the save creates
+    // a loose override in $game_weathers$.
+    CInifile config(file_name, FALSE, TRUE, FALSE);
+    config.set_override_names(TRUE);
+    for (const CEnvDescriptor* descriptor : weather->second)
+        descriptor->save(config);
+
+    string_path temporary_name;
+    xr_strcpy(temporary_name, file_name);
+    xr_strcat(temporary_name, ".weather_editor.tmp");
+    if (!config.save_as(temporary_name)) {
+        Msg("! Weather editor: cannot write temporary config [%s]", temporary_name);
+        return false;
+    }
+
+    if (make_backup) {
+        string_path backup_name;
+        xr_strcpy(backup_name, file_name);
+        xr_strcat(backup_name, ".weather_editor.bak");
+        if (!FS.exist(backup_name) && FS.exist(file_name))
+            FS.file_copy(file_name, backup_name);
+    }
+
+    const DWORD attributes = GetFileAttributes(file_name);
+    if (attributes != DWORD(-1) && (attributes & FILE_ATTRIBUTE_READONLY))
+        SetFileAttributes(file_name, attributes & ~FILE_ATTRIBUTE_READONLY);
+    FS.file_rename(temporary_name, file_name, true);
+    if (_access(file_name, 0) != 0 || _access(temporary_name, 0) == 0) {
+        Msg("! Weather editor: cannot replace config [%s]", file_name);
+        return false;
+    }
+
+    if (saved_path)
+        *saved_path = file_name;
+    Msg("* Weather editor: saved [%s]", file_name);
+    return true;
+}
+
+bool CEnvironment::AddWeatherFrame(const std::string& name, float game_time,
+                                   const CEnvDescriptor& source,
+                                   CEnvDescriptor** created) {
+    const EnvsMap::iterator weather = WeatherCycles.find(name);
+    if (weather == WeatherCycles.end())
+        return false;
+
+    const u32 total_seconds = (u32)iFloor(clampr(game_time, 0.f, DAY_LENGTH - 1.f) + .5f);
+    const u32 hours = total_seconds / 3600;
+    const u32 minutes = (total_seconds % 3600) / 60;
+    const u32 seconds = total_seconds % 60;
+    string16 identifier;
+    xr_sprintf(identifier, "%02u:%02u:%02u", hours, minutes, seconds);
+
+    for (const CEnvDescriptor* descriptor : weather->second) {
+        if (descriptor->m_identifier == identifier) {
+            Msg("! Weather editor: frame [%s] already exists", identifier);
+            return false;
+        }
+    }
+
+    CEnvDescriptor* descriptor = create_descriptor(identifier, nullptr);
+    descriptor->exec_time = (float)total_seconds;
+    descriptor->exec_time_loaded = descriptor->exec_time;
+    descriptor->clouds_color = source.clouds_color;
+    descriptor->sky_color = source.sky_color;
+    descriptor->sky_rotation = source.sky_rotation;
+    descriptor->far_plane = source.far_plane;
+    descriptor->fog_color = source.fog_color;
+    descriptor->fog_density = source.fog_density;
+    descriptor->fog_distance = source.fog_distance;
+    descriptor->rain_density = source.rain_density;
+    descriptor->rain_color = source.rain_color;
+    descriptor->bolt_period = source.bolt_period;
+    descriptor->bolt_duration = source.bolt_duration;
+    descriptor->wind_velocity = source.wind_velocity;
+    descriptor->wind_direction = source.wind_direction;
+    descriptor->ambient = source.ambient;
+    descriptor->hemi_color = source.hemi_color;
+    descriptor->sun_color = source.sun_color;
+    descriptor->sun_dir = source.sun_dir;
+    descriptor->m_fSunShaftsIntensity = source.m_fSunShaftsIntensity;
+    descriptor->m_fWaterIntensity = source.m_fWaterIntensity;
+    descriptor->sky_texture_name = source.sky_texture_name;
+    descriptor->sky_texture_env_name = source.sky_texture_env_name;
+    descriptor->clouds_texture_name = source.clouds_texture_name;
+    descriptor->lens_flare_id = source.lens_flare_id;
+    descriptor->tb_id = source.tb_id;
+    descriptor->env_ambient = source.env_ambient;
+    descriptor->on_device_create();
+
+    weather->second.push_back(descriptor);
+    std::sort(weather->second.begin(), weather->second.end(), sort_env_etl_pred);
+    Invalidate();
+
+    if (created)
+        *created = descriptor;
+    Msg("* Weather editor: added frame [%s] to [%s]", identifier, name.c_str());
+    return true;
 }
 
 void CEnvironment::load_weather_effects() {

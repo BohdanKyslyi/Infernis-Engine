@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<string_table>
+    <string id="ui_weather_editor_title"><text>WEATHER EDITOR</text></string>
+    <string id="ui_weather_editor_weather"><text>Weather</text></string>
+    <string id="ui_weather_editor_keyframe"><text>Keyframe</text></string>
+    <string id="ui_weather_editor_sky"><text>Sky</text></string>
+    <string id="ui_weather_editor_clouds"><text>Clouds</text></string>
+    <string id="ui_weather_editor_ambient"><text>Ambient</text></string>
+    <string id="ui_weather_editor_sun"><text>Sun</text></string>
+    <string id="ui_weather_editor_thunderbolt_selector"><text>Thunderbolt</text></string>
+    <string id="ui_weather_editor_thunderbolt"><text>THUNDERBOLT</text></string>
+    <string id="ui_weather_editor_time"><text>Time</text></string>
+    <string id="ui_weather_editor_add_section"><text>ADD SECTION</text></string>
+    <string id="ui_weather_editor_preview"><text>PREVIEW [F7]</text></string>
+    <string id="ui_weather_editor_section"><text>SECTION</text></string>
+    <string id="ui_weather_editor_value"><text>Value</text></string>
+    <string id="ui_weather_editor_save"><text>SAVE WEATHER [F6]</text></string>
+    <string id="ui_weather_editor_revert"><text>REVERT FRAME [F5]</text></string>
+    <string id="ui_weather_editor_close"><text>CLOSE [ESC]</text></string>
+    <string id="ui_weather_editor_footer"><text>F5: revert section | F6: save | F7: preview | weather_editor: reopen</text></string>
+    <string id="ui_weather_editor_none"><text>&lt;none&gt;</text></string>
+
+    <string id="ui_weather_editor_ambient_color_rgb"><text>AMBIENT COLOR [RGB]</text></string>
+    <string id="ui_weather_editor_fog_color_rgb"><text>FOG COLOR [RGB]</text></string>
+    <string id="ui_weather_editor_sky_color_rgb"><text>SKY COLOR [RGB]</text></string>
+    <string id="ui_weather_editor_clouds_color_rgba"><text>CLOUDS COLOR [RGBA]</text></string>
+    <string id="ui_weather_editor_hemisphere_color_rgba"><text>HEMISPHERE COLOR [RGBA]</text></string>
+    <string id="ui_weather_editor_rain_color_rgb"><text>RAIN COLOR [RGB]</text></string>
+    <string id="ui_weather_editor_sun_color_rgb"><text>SUN COLOR [RGB]</text></string>
+    <string id="ui_weather_editor_wind"><text>WIND</text></string>
+
+    <string id="ui_weather_editor_channel_r"><text>R</text></string>
+    <string id="ui_weather_editor_channel_g"><text>G</text></string>
+    <string id="ui_weather_editor_channel_b"><text>B</text></string>
+    <string id="ui_weather_editor_channel_a"><text>A</text></string>
+    <string id="ui_weather_editor_fog_density"><text>Fog density</text></string>
+    <string id="ui_weather_editor_fog_distance"><text>Fog distance</text></string>
+    <string id="ui_weather_editor_far_plane"><text>Far plane</text></string>
+    <string id="ui_weather_editor_water_intensity"><text>Water intensity</text></string>
+    <string id="ui_weather_editor_sky_rotation"><text>Sky rotation</text></string>
+    <string id="ui_weather_editor_sun_shafts"><text>Sun shafts</text></string>
+    <string id="ui_weather_editor_rain_density"><text>Rain density</text></string>
+    <string id="ui_weather_editor_sun_altitude"><text>Sun altitude</text></string>
+    <string id="ui_weather_editor_sun_longitude"><text>Sun longitude</text></string>
+    <string id="ui_weather_editor_wind_velocity"><text>Velocity</text></string>
+    <string id="ui_weather_editor_wind_direction"><text>Direction</text></string>
+    <string id="ui_weather_editor_thunderbolt_period"><text>Period</text></string>
+    <string id="ui_weather_editor_thunderbolt_duration"><text>Duration</text></string>
+
+    <string id="ui_weather_editor_status_ready"><text>Ready. Changes are previewed immediately; Save writes the current .ltx.</text></string>
+    <string id="ui_weather_editor_status_editing"><text>Editing [%s] / [%s]</text></string>
+    <string id="ui_weather_editor_status_sky_changed"><text>Sky changed in real time: %s</text></string>
+    <string id="ui_weather_editor_status_clouds_changed"><text>Clouds changed in real time: %s</text></string>
+    <string id="ui_weather_editor_status_ambient_changed"><text>Ambient changed in real time: %s</text></string>
+    <string id="ui_weather_editor_status_sun_changed"><text>Sun definition changed in real time: %s</text></string>
+    <string id="ui_weather_editor_status_thunderbolt_changed"><text>Thunderbolt collection changed: %s</text></string>
+    <string id="ui_weather_editor_status_color_picker"><text>Color picker: drag in the field and hue strip; RGB updates in real time.</text></string>
+    <string id="ui_weather_editor_status_duplicate_time"><text>Cannot add section: this time already exists.</text></string>
+    <string id="ui_weather_editor_status_frame_added"><text>Added new time section [%s]. Save weather to write it to disk.</text></string>
+    <string id="ui_weather_editor_status_preview"><text>Preview mode. Use the weather_editor command to reopen the editor.</text></string>
+    <string id="ui_weather_editor_status_save_error"><text>ERROR: weather config was not saved. See the log.</text></string>
+    <string id="ui_weather_editor_status_saved"><text>Saved: %s (first-save backup: .weather_editor.bak)</text></string>
+    <string id="ui_weather_editor_status_reverted"><text>Keyframe reverted to its last saved/opened state.</text></string>
+</string_table>

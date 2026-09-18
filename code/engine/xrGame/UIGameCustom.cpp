@@ -12,6 +12,7 @@
 #include "ui/UIMainIngameWnd.h"
 #include "ui/UIMessagesWindow.h"
 #include "ui/UIHudStatesWnd.h"
+#include "ui/UIWeatherEditor.h"
 #include "actor.h"
 #include "inventory.h"
 #include "ItemUseController.h"
@@ -47,6 +48,7 @@ CUIGameCustom::CUIGameCustom()
 bool g_b_ClearGameCaptions = false;
 
 CUIGameCustom::~CUIGameCustom() {
+    DestroyWeatherEditor();
     delete_data(m_custom_statics);
     g_b_ClearGameCaptions = false;
 }
@@ -512,6 +514,7 @@ void CUIGameCustom::UpdatePdaHudAnimation() {
 void CUIGameCustom::SetClGame(game_cl_GameState* g) { g->SetGameUI(this); }
 
 void CUIGameCustom::UnLoad() {
+    DestroyWeatherEditor();
     m_pda_hud_animation_active = false;
     m_pda_hud_pending_open = false;
     m_inventory_hud_animation_active = false;

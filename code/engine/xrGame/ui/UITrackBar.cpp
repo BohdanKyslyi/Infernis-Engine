@@ -277,7 +277,10 @@ void CUITrackBar::SetOptIBounds(int imin, int imax) {
 void CUITrackBar::SetOptFBounds(float fmin, float fmax) {
     m_f_min = fmin;
     m_f_max = fmax;
-    if (m_i_val < m_i_min || m_i_val > m_i_max) {
+    // m_f_* and m_i_* share a union. Comparing the integer aliases here made
+    // negative float ranges (notably the weather editor's sun angles) behave
+    // unpredictably and occasionally clamp a live slider to the wrong edge.
+    if (m_f_val < m_f_min || m_f_val > m_f_max) {
         clamp(m_f_val, m_f_min, m_f_max);
         OnChangedOptValue();
     }
