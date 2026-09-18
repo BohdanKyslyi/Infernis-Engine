@@ -5,6 +5,7 @@
 
 class CUI3tButton;
 class CUIComboBox;
+class CUIEditBox;
 class CUIStatic;
 class CUITextWnd;
 class CUITrackBar;
@@ -107,6 +108,7 @@ private:
     void OnColorSwatch(CUIWindow*, void*);
     void OnColorPicked(CUIWindow*, void*);
     void OnAddFrame(CUIWindow*, void*);
+    void OnCreateWeather(CUIWindow*, void*);
     void OnPreview(CUIWindow*, void*);
     void OnSave(CUIWindow*, void*);
     void OnRevert(CUIWindow*, void*);
@@ -125,6 +127,8 @@ private:
     CUITrackBar* m_time_slider;
     CUITextWnd* m_time_value;
     CUI3tButton* m_add_frame;
+    CUIEditBox* m_new_weather_name;
+    CUI3tButton* m_create_weather;
     CUI3tButton* m_preview;
     CUI3tButton* m_save;
     CUI3tButton* m_revert;
@@ -147,6 +151,8 @@ private:
     bool m_previous_pause;
     bool m_session_active;
     bool m_previewing;
+    bool m_time_update_pending;
+    bool m_close_requested;
 };
 
 void ToggleWeatherEditor(bool force_show = false, bool force_hide = false);

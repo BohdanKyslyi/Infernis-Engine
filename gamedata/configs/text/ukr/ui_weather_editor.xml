@@ -8,6 +8,8 @@
     <string id="ui_weather_editor_ambient"><text>Амбієнт</text></string>
     <string id="ui_weather_editor_sun"><text>Сонце</text></string>
     <string id="ui_weather_editor_thunderbolt_selector"><text>Блискавка</text></string>
+    <string id="ui_weather_editor_new_weather"><text>Нова погода</text></string>
+    <string id="ui_weather_editor_create_weather"><text>СТВОРИТИ ПОГОДУ</text></string>
     <string id="ui_weather_editor_thunderbolt"><text>БЛИСКАВКА</text></string>
     <string id="ui_weather_editor_time"><text>Час</text></string>
     <string id="ui_weather_editor_add_section"><text>НОВА СЕКЦІЯ</text></string>
@@ -57,6 +59,8 @@
     <string id="ui_weather_editor_status_color_picker"><text>Палітра: рухайте маркер у полі та на смузі відтінку; RGB змінюється в реальному часі.</text></string>
     <string id="ui_weather_editor_status_duplicate_time"><text>Неможливо додати секцію: цей час уже використовується.</text></string>
     <string id="ui_weather_editor_status_frame_added"><text>Додано нову часову секцію [%s]. Збережіть погоду, щоб записати її на диск.</text></string>
+    <string id="ui_weather_editor_status_create_error"><text>Не вдалося створити погоду. Вкажіть унікальну назву лише з літер, цифр, _ або -.</text></string>
+    <string id="ui_weather_editor_status_created"><text>Створено й обрано новий файл погоди: %s</text></string>
     <string id="ui_weather_editor_status_preview"><text>Режим перегляду. Скористайтеся командою weather_editor, щоб повернути редактор.</text></string>
     <string id="ui_weather_editor_status_save_error"><text>ПОМИЛКА: конфіг погоди не збережено. Перевірте журнал гри.</text></string>
     <string id="ui_weather_editor_status_saved"><text>Збережено: %s (резервна копія першого збереження: .weather_editor.bak)</text></string>

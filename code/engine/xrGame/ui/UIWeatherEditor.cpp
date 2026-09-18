@@ -3,6 +3,7 @@
 #include "UIWeatherEditor.h"
 #include "UI3tButton.h"
 #include "UIComboBox.h"
+#include "UIEditBox.h"
 #include "UIHelper.h"
 #include "UIStatic.h"
 #include "UITextureMaster.h"
@@ -30,6 +31,10 @@ public:
 class CWeatherComboBox : public CUIComboBox {
 public:
     void ClearEditorList() { ClearList(); }
+    void CloseEditorList() {
+        ShowList(false);
+        Device.seqRender.Remove(this);
+    }
 };
 
 } // namespace
@@ -369,10 +374,12 @@ CUIWeatherEditor::CUIWeatherEditor()
       m_sky(nullptr), m_clouds(nullptr),
       m_ambient_definition(nullptr), m_sun_definition(nullptr),
       m_thunderbolt_definition(nullptr), m_time_slider(nullptr), m_time_value(nullptr),
-      m_add_frame(nullptr), m_preview(nullptr), m_save(nullptr), m_revert(nullptr),
+      m_add_frame(nullptr), m_new_weather_name(nullptr), m_create_weather(nullptr),
+      m_preview(nullptr), m_save(nullptr), m_revert(nullptr),
       m_close(nullptr), m_color_picker(nullptr), m_descriptor(nullptr), m_editor_time(0.f),
       m_active_color_property(-1), m_synchronizing(false), m_previous_pause(false),
-      m_session_active(false), m_previewing(false) {
+      m_session_active(false), m_previewing(false), m_time_update_pending(false),
+      m_close_requested(false) {
     m_bWorkInPause = true;
 }
 
@@ -433,6 +440,8 @@ void CUIWeatherEditor::Init() {
     CreatePropertyControls(xml);
 
     m_add_frame = UIHelper::Create3tButton(xml, "main:add_frame", this);
+    m_new_weather_name = UIHelper::CreateEditBox(xml, "main:new_weather_name", this);
+    m_create_weather = UIHelper::Create3tButton(xml, "main:create_weather", this);
     m_preview = UIHelper::Create3tButton(xml, "main:preview", this);
     m_save = UIHelper::Create3tButton(xml, "main:save", this);
     m_revert = UIHelper::Create3tButton(xml, "main:revert", this);
@@ -456,6 +465,7 @@ void CUIWeatherEditor::Init() {
     Register(m_sun_definition);
     Register(m_thunderbolt_definition);
     Register(m_add_frame);
+    Register(m_create_weather);
     Register(m_preview);
     Register(m_save);
     Register(m_revert);
@@ -484,6 +494,8 @@ void CUIWeatherEditor::Init() {
                 CUIWndCallback::void_function(this, &CUIWeatherEditor::OnThunderboltChanged));
     AddCallback(m_add_frame, BUTTON_CLICKED,
                 CUIWndCallback::void_function(this, &CUIWeatherEditor::OnAddFrame));
+    AddCallback(m_create_weather, BUTTON_CLICKED,
+                CUIWndCallback::void_function(this, &CUIWeatherEditor::OnCreateWeather));
     AddCallback(m_preview, BUTTON_CLICKED,
                 CUIWndCallback::void_function(this, &CUIWeatherEditor::OnPreview));
     AddCallback(m_save, BUTTON_CLICKED,
@@ -523,6 +535,8 @@ void CUIWeatherEditor::Show(bool status) {
         environment.BeginWeatherEditorSession(environment.CurrentCycleName, current_time);
         m_color_picker->Show(false);
         m_active_color_property = -1;
+        m_close_requested = false;
+        m_time_update_pending = false;
         inherited::Show(true);
         FillWeatherList();
         FillTextureLists();
@@ -542,34 +556,33 @@ void CUIWeatherEditor::Show(bool status) {
 
         // An expanded combo registers itself in seqRender and captures the
         // parent. Close every list before hiding/deleting the dialog.
-        Device.seqRender.Remove(m_weather);
-        Device.seqRender.Remove(m_frame);
-        Device.seqRender.Remove(m_sky);
-        Device.seqRender.Remove(m_clouds);
-        Device.seqRender.Remove(m_ambient_definition);
-        Device.seqRender.Remove(m_sun_definition);
-        Device.seqRender.Remove(m_thunderbolt_definition);
-        if (!m_previewing) {
-            clear_combo(m_weather);
-            clear_combo(m_frame);
-            clear_combo(m_sky);
-            clear_combo(m_clouds);
-            clear_combo(m_ambient_definition);
-            clear_combo(m_sun_definition);
-            clear_combo(m_thunderbolt_definition);
-        }
+        static_cast<CWeatherComboBox*>(m_weather)->CloseEditorList();
+        static_cast<CWeatherComboBox*>(m_frame)->CloseEditorList();
+        static_cast<CWeatherComboBox*>(m_sky)->CloseEditorList();
+        static_cast<CWeatherComboBox*>(m_clouds)->CloseEditorList();
+        static_cast<CWeatherComboBox*>(m_ambient_definition)->CloseEditorList();
+        static_cast<CWeatherComboBox*>(m_sun_definition)->CloseEditorList();
+        static_cast<CWeatherComboBox*>(m_thunderbolt_definition)->CloseEditorList();
     }
     inherited::Show(status);
 }
 
 void CUIWeatherEditor::Update() {
     inherited::Update();
+    if (m_close_requested) {
+        m_close_requested = false;
+        CloseEditorSession();
+        return;
+    }
     if (!m_descriptor || m_synchronizing)
         return;
 
-    const float requested_time = m_time_slider->GetFValue();
-    if (std::abs(requested_time - m_editor_time) >= 1.f)
-        ApplyEditorTime(requested_time);
+    if (m_time_update_pending) {
+        m_time_update_pending = false;
+        const float requested_time = m_time_slider->GetFValue();
+        if (std::abs(requested_time - m_editor_time) >= 1.f)
+            ApplyEditorTime(requested_time);
+    }
 
     const u32 total_seconds = (u32)iFloor(m_editor_time + .5f);
     string32 time_text;
@@ -608,7 +621,7 @@ void CUIWeatherEditor::SendMessage(CUIWindow* pWnd, s16 msg, void* pData) {
 bool CUIWeatherEditor::OnKeyboardAction(int dik, EUIMessages keyboard_action) {
     if (keyboard_action == WINDOW_KEY_PRESSED) {
         if (dik == DIK_ESCAPE) {
-            HideDialog();
+            m_close_requested = true;
             return true;
         }
         if (dik == DIK_F5) {
@@ -1189,7 +1202,10 @@ void CUIWeatherEditor::OnFrameChanged(CUIWindow*, void*) {
 void CUIWeatherEditor::OnTimeChanged(CUIWindow*, void*) {
     if (m_synchronizing || !m_descriptor)
         return;
-    ApplyEditorTime(m_time_slider->GetFValue());
+    // Mouse motion can generate several callbacks before the next rendered
+    // frame. Coalesce them so environment selection runs at most once per UI
+    // update and the time slider remains responsive.
+    m_time_update_pending = true;
 }
 
 void CUIWeatherEditor::OnPropertyChanged(CUIWindow* window, void*) {
@@ -1360,6 +1376,34 @@ void CUIWeatherEditor::OnAddFrame(CUIWindow*, void*) {
               created->m_identifier.c_str());
 }
 
+void CUIWeatherEditor::OnCreateWeather(CUIWindow*, void*) {
+    if (!m_descriptor)
+        return;
+
+    const std::string name = m_new_weather_name->GetText();
+    CEnvironment& environment = g_pGamePersistent->Environment();
+    std::string path;
+    if (!environment.CreateWeather(name, *m_descriptor, &path)) {
+        SetStatus("ui_weather_editor_status_create_error");
+        return;
+    }
+
+    environment.UpdateWeatherEditorSession(name, 0.f);
+    FillWeatherList();
+    for (u32 index = 0; index < m_weather_names.size(); ++index) {
+        if (m_weather_names[index] != name)
+            continue;
+        m_synchronizing = true;
+        m_weather->SetItemIDX((int)index);
+        m_synchronizing = false;
+        break;
+    }
+    FillFrameList();
+    SelectFrame(0);
+    m_new_weather_name->ClearText();
+    SetStatus("ui_weather_editor_status_created", path.c_str());
+}
+
 void CUIWeatherEditor::OnPreview(CUIWindow*, void*) {
     SetStatus("ui_weather_editor_status_preview");
     EnterPreview();
@@ -1425,7 +1469,7 @@ void CUIWeatherEditor::OnRevert(CUIWindow*, void*) {
     SetStatus("ui_weather_editor_status_reverted");
 }
 
-void CUIWeatherEditor::OnClose(CUIWindow*, void*) { HideDialog(); }
+void CUIWeatherEditor::OnClose(CUIWindow*, void*) { m_close_requested = true; }
 
 void ToggleWeatherEditor(bool force_show, bool force_hide) {
     if (!g_pGameLevel || !g_pGamePersistent)

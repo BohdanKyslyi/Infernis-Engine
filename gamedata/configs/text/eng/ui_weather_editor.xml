@@ -8,6 +8,8 @@
     <string id="ui_weather_editor_ambient"><text>Ambient</text></string>
     <string id="ui_weather_editor_sun"><text>Sun</text></string>
     <string id="ui_weather_editor_thunderbolt_selector"><text>Thunderbolt</text></string>
+    <string id="ui_weather_editor_new_weather"><text>New weather</text></string>
+    <string id="ui_weather_editor_create_weather"><text>CREATE WEATHER</text></string>
     <string id="ui_weather_editor_thunderbolt"><text>THUNDERBOLT</text></string>
     <string id="ui_weather_editor_time"><text>Time</text></string>
     <string id="ui_weather_editor_add_section"><text>ADD SECTION</text></string>
@@ -57,6 +59,8 @@
     <string id="ui_weather_editor_status_color_picker"><text>Color picker: drag in the field and hue strip; RGB updates in real time.</text></string>
     <string id="ui_weather_editor_status_duplicate_time"><text>Cannot add section: this time already exists.</text></string>
     <string id="ui_weather_editor_status_frame_added"><text>Added new time section [%s]. Save weather to write it to disk.</text></string>
+    <string id="ui_weather_editor_status_create_error"><text>Cannot create weather. Use a unique name containing only letters, digits, _ or -.</text></string>
+    <string id="ui_weather_editor_status_created"><text>Created and selected new weather file: %s</text></string>
     <string id="ui_weather_editor_status_preview"><text>Preview mode. Use the weather_editor command to reopen the editor.</text></string>
     <string id="ui_weather_editor_status_save_error"><text>ERROR: weather config was not saved. See the log.</text></string>
     <string id="ui_weather_editor_status_saved"><text>Saved: %s (first-save backup: .weather_editor.bak)</text></string>
