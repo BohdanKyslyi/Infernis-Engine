@@ -273,6 +273,12 @@ void CWeaponMagazined::ReloadMagazine() {
     if (!m_pInventory)
         return;
 
+    // A full magazine with a chambered round needs only one more cartridge.
+    // Keep the existing rounds even when the available ammo box has another type.
+    const bool chamber_top_off = !m_bLockType && HasChamberRound() &&
+        iAmmoElapsed == iMagazineSize &&
+        m_set_next_ammoType_on_reload == undefined_ammo_type;
+
     if (m_set_next_ammoType_on_reload != undefined_ammo_type) {
         m_ammoType = m_set_next_ammoType_on_reload;
         m_set_next_ammoType_on_reload = undefined_ammo_type;
@@ -308,15 +314,16 @@ void CWeaponMagazined::ReloadMagazine() {
         return;
 
     //разрядить магазин, если загружаем патронами другого типа
-    if (!m_bLockType && !m_magazine.empty() &&
+    // Capture whether a round was chambered before an ammo-type change unloads
+    // the old magazine. Recursive refills keep the same target capacity.
+    if (!m_bLockType)
+        m_reload_target_capacity = iMagazineSize + (HasChamberRound() && iAmmoElapsed > 0 ? 1 : 0);
+
+    if (!m_bLockType && !chamber_top_off && !m_magazine.empty() &&
         (!m_pCurrentAmmo || xr_strcmp(m_pCurrentAmmo->cNameSect(), *m_magazine.back().m_ammoSect)))
         UnloadMagazine();
 
     VERIFY((u32)iAmmoElapsed == m_magazine.size());
-
-    // Preserve the limit across recursive refills from multiple ammo boxes.
-    if (!m_bLockType)
-        m_reload_target_capacity = iMagazineSize + (HasChamberRound() && iAmmoElapsed > 0 ? 1 : 0);
 
     if (m_DefaultCartridge.m_LocalAmmoType != m_ammoType)
         m_DefaultCartridge.Load(m_ammoTypes[m_ammoType].c_str(), m_ammoType);
