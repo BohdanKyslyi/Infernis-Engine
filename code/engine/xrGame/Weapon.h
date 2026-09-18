@@ -111,6 +111,7 @@ public:
         eSubstateReloadBegin = 0,
         eSubstateReloadInProcess,
         eSubstateReloadEnd,
+        eSubstateReloadChamber,
     };
     enum { undefined_ammo_type = u8(-1) };
 

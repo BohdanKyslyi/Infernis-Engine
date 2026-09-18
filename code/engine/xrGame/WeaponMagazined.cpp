@@ -63,6 +63,11 @@ void CWeaponMagazined::Load(LPCSTR section) {
     m_sounds.LoadSound(section, "snd_shoot", "sndShot", false, m_eSoundShot);
     m_sounds.LoadSound(section, "snd_empty", "sndEmptyClick", false, m_eSoundEmptyClick);
     m_sounds.LoadSound(section, "snd_reload", "sndReload", true, m_eSoundReload);
+    const LPCSTR reload_sounds[] = {"snd_reload_empty", "snd_reload_full", "snd_reload_misfire",
+                                   "snd_reload_jammed", "snd_reload_jammed_last", "snd_unjam"};
+    for (LPCSTR key : reload_sounds)
+        if (pSettings->line_exist(section, key))
+            m_sounds.LoadSound(section, key, key, true, m_eSoundReload);
 
     m_sSndShotCurrent = "sndShot";
 
@@ -624,7 +629,60 @@ void CWeaponMagazined::switch2_Empty() {
 }
 void CWeaponMagazined::PlayReloadSound() {
     if (m_sounds_enabled)
-        PlaySound("sndReload", get_LastFP());
+        PlaySound(ReloadSound(), get_LastFP());
+}
+
+LPCSTR CWeaponMagazined::ReloadSound() const {
+    const shared_str weapon_section = cNameSect();
+    LPCSTR section = weapon_section.c_str();
+    if (IsMisfire()) {
+        if (!iAmmoElapsed && pSettings->line_exist(section, "snd_reload_jammed_last"))
+            return "snd_reload_jammed_last";
+        const LPCSTR keys[] = {"snd_unjam", "snd_reload_misfire", "snd_reload_jammed"};
+        for (LPCSTR key : keys)
+            if (pSettings->line_exist(section, key)) return key;
+    } else if (!iAmmoElapsed) {
+        const LPCSTR keys[] = {"snd_reload_full", "snd_reload_empty"};
+        for (LPCSTR key : keys)
+            if (pSettings->line_exist(section, key)) return key;
+    }
+    return "sndReload";
+}
+
+LPCSTR CWeaponMagazined::OptionalHudMotion(LPCSTR preferred, LPCSTR fallback) const {
+    return pSettings->line_exist(HudSection().c_str(), preferred) ? preferred : fallback;
+}
+
+LPCSTR CWeaponMagazined::ReloadMotion(bool launcher) const {
+    LPCSTR section = HudSection().c_str();
+    if (IsMisfire()) {
+        if (!iAmmoElapsed && launcher &&
+            pSettings->line_exist(section, "anm_reload_jammed_last_w_gl"))
+            return "anm_reload_jammed_last_w_gl";
+        if (!iAmmoElapsed && pSettings->line_exist(section, "anm_reload_jammed_last"))
+            return "anm_reload_jammed_last";
+        if (launcher) {
+            const LPCSTR keys[] = {"anm_unjam_w_gl", "anm_reload_misfire_w_gl",
+                                  "anm_reload_jammed_w_gl"};
+            for (LPCSTR key : keys)
+                if (pSettings->line_exist(section, key)) return key;
+        }
+        const LPCSTR keys[] = {"anm_unjam", "anm_reload_misfire", "anm_reload_jammed"};
+        for (LPCSTR key : keys)
+            if (pSettings->line_exist(section, key)) return key;
+    } else if (!iAmmoElapsed) {
+        if (launcher) {
+            const LPCSTR keys[] = {"anm_reload_full_w_gl", "anm_reload_empty_w_gl"};
+            for (LPCSTR key : keys)
+                if (pSettings->line_exist(section, key)) return key;
+        }
+        const LPCSTR keys[] = {"anm_reload_full", "anm_reload_empty"};
+        for (LPCSTR key : keys)
+            if (pSettings->line_exist(section, key)) return key;
+    }
+    if (launcher && pSettings->line_exist(section, "anm_reload_w_gl"))
+        return "anm_reload_w_gl";
+    return "anm_reload";
 }
 
 void CWeaponMagazined::switch2_Reload() {
@@ -946,33 +1004,55 @@ void CWeaponMagazined::ResetSilencerKoeffs() { cur_silencer_koef.Reset(); }
 
 void CWeaponMagazined::PlayAnimShow() {
     VERIFY(GetState() == eShowing);
-    PlayHUDMotion("anm_show", FALSE, this, GetState());
+    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_show_empty", "anm_show")
+                                    : "anm_show", FALSE, this, GetState());
 }
 
 void CWeaponMagazined::PlayAnimHide() {
     VERIFY(GetState() == eHiding);
-    PlayHUDMotion("anm_hide", TRUE, this, GetState());
+    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_hide_empty", "anm_hide")
+                                    : "anm_hide", TRUE, this, GetState());
 }
 
 void CWeaponMagazined::PlayAnimReload() {
     VERIFY(GetState() == eReload);
-    PlayHUDMotion("anm_reload", TRUE, this, GetState());
+    PlayHUDMotion(ReloadMotion(), TRUE, this, GetState());
 }
 
-void CWeaponMagazined::PlayAnimAim() { PlayHUDMotion("anm_idle_aim", TRUE, NULL, GetState()); }
+void CWeaponMagazined::PlayAnimAim() {
+    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_idle_aim_empty", "anm_idle_aim")
+                                    : "anm_idle_aim", TRUE, NULL, GetState());
+}
+
+void CWeaponMagazined::PlayAnimIdleMoving() {
+    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_idle_moving_empty", "anm_idle_moving")
+                                    : "anm_idle_moving", TRUE, NULL, GetState());
+}
+
+void CWeaponMagazined::PlayAnimIdleSprint() {
+    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_idle_sprint_empty", "anm_idle_sprint")
+                                    : "anm_idle_sprint", TRUE, NULL, GetState());
+}
+
+void CWeaponMagazined::PlayAnimBore() {
+    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_bore_empty", "anm_bore")
+                                    : "anm_bore", TRUE, this, GetState());
+}
 
 void CWeaponMagazined::PlayAnimIdle() {
     if (GetState() != eIdle)
         return;
     if (IsZoomed()) {
         PlayAnimAim();
-    } else
-        inherited::PlayAnimIdle();
+    } else if (!TryPlayAnimIdle()) {
+        PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_idle_empty", "anm_idle")
+                                        : "anm_idle", TRUE, NULL, GetState());
+    }
 }
 
 void CWeaponMagazined::PlayAnimShoot() {
     VERIFY(GetState() == eFire);
-    PlayHUDMotion("anm_shots", FALSE, this, GetState());
+    PlayHUDMotion(OptionalHudMotion("anm_shots", "anm_shoot"), FALSE, this, GetState());
 }
 
 void CWeaponMagazined::OnZoomIn() {

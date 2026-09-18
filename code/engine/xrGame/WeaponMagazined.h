@@ -156,8 +156,14 @@ protected:
     virtual void PlayAnimHide();
     virtual void PlayAnimReload();
     virtual void PlayAnimIdle();
+    virtual void PlayAnimIdleMoving();
+    virtual void PlayAnimIdleSprint();
+    virtual void PlayAnimBore();
     virtual void PlayAnimShoot();
     virtual void PlayReloadSound();
+    LPCSTR ReloadMotion(bool launcher = false) const;
+    LPCSTR ReloadSound() const;
+    LPCSTR OptionalHudMotion(LPCSTR preferred, LPCSTR fallback) const;
     virtual void PlayAnimAim();
 
     virtual int ShotsFired() { return m_iShotNum; }
