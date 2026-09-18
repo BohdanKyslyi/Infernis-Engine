@@ -31,7 +31,7 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
         if (!test && std::find(m_bone_upgrade_sections.begin(), m_bone_upgrade_sections.end(),
                                shared_str(section)) == m_bone_upgrade_sections.end()) {
             m_bone_upgrade_sections.push_back(section);
-            if (smart_cast<IKinematics*>(Visual()))
+            if (Visual())
                 UpdateAddonsVisibility();
             else
                 UpdateHUDAddonsVisibility();
