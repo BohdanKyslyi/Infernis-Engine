@@ -90,6 +90,8 @@ _action actions[] = {
     { "quick_load", kQUICK_LOAD, _sp },
     { "alife_command", kALIFE_CMD, _sp },
 
+    { "quick_kick", kQUICK_KICK, _sp },
+    { "quick_grenade", kQUICK_GRENADE, _sp },
     { "wpn_inspect", kWPN_INSPECT, _sp },
     { "wpn_zoom_alter", kWPN_ZOOM_ALTER, _sp },
     { NULL, kLASTACTION, _both }

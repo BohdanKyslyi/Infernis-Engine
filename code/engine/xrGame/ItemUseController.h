@@ -6,6 +6,7 @@ class CActor;
 class CInventoryItem;
 class CParticlesObject;
 class CCustomMonster;
+class CWeaponKnife;
 
 class CItemUseController {
 public:
@@ -16,6 +17,7 @@ public:
     // Starts native harvesting for a configured mutant corpse. If the global
     // animation is disabled or invalid, the loot is collected immediately.
     bool StartMutantLoot(CCustomMonster* monster);
+    bool StartQuickKnife(CWeaponKnife* knife);
 
     // Persistent controller-owned HUD lifecycle used by interfaces such as
     // PDA and backpack. Connecting those interfaces is intentionally kept
@@ -51,6 +53,7 @@ private:
         eControllerModeHudAnimation,
         eControllerModeHudAnimationOneShot,
         eControllerModeMutantLoot,
+        eControllerModeQuickKnife,
     };
 
     enum EHudAnimationPhase {
@@ -80,12 +83,14 @@ private:
     void BeginHudAnimationHide();
     void UpdateHudAnimation();
     void UpdateMutantLootAnimation();
+    void UpdateQuickKnifeAnimation();
 
     CCustomMonster* MutantLootTarget() const;
     bool ApplyMutantLootEffect();
     void ApplyMutantLootParticle();
     void ReleaseMutantLootReservation();
     bool CompleteMutantLootImmediately(CCustomMonster* monster);
+    bool ApplyQuickKnifeEffect();
 
     void LockActor();
     void UnlockActor();
@@ -140,6 +145,7 @@ private:
     bool m_hud_animation_hide_requested;
     bool m_hud_animation_allow_inventory;
     u16 m_mutant_loot_target_id;
+    u16 m_quick_knife_id;
     u32 m_mutant_loot_particle_time;
     bool m_mutant_loot_particle_enabled;
     bool m_mutant_loot_particle_started;

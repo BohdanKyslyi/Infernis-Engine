@@ -27,6 +27,9 @@ void CGrenade::Load(LPCSTR section) {
     CExplosive::Load(section);
 
     m_sounds.LoadSound(section, "snd_checkout", "sndCheckout", false, m_eSoundCheckout);
+    if (pSettings->line_exist(section, "snd_throw_quick"))
+        m_sounds.LoadSound(section, "snd_throw_quick", "sndThrowQuick", false,
+                           m_eSoundCheckout);
 
     //////////////////////////////////////
     //время убирания оружия с уровня
@@ -108,6 +111,13 @@ void CGrenade::State(u32 state) {
             }
         };
     } break;
+    case eThrowQuick: {
+        if (m_sounds.FindSoundItem("sndThrowQuick", false)) {
+            Fvector C;
+            Center(C);
+            PlaySound("sndThrowQuick", C);
+        }
+    } break;
     };
     inherited::State(state);
 }
@@ -115,7 +125,7 @@ void CGrenade::State(u32 state) {
 bool CGrenade::DropGrenade() {
     EMissileStates grenade_state = static_cast<EMissileStates>(GetState());
     if (((grenade_state == eThrowStart) || (grenade_state == eReady) ||
-         (grenade_state == eThrow)) &&
+         (grenade_state == eThrow) || (grenade_state == eThrowQuick)) &&
         (!m_thrown)) {
         Throw();
         return true;
@@ -129,12 +139,13 @@ void CGrenade::DiscardState() {
 }
 
 void CGrenade::SendHiddenItem() {
-    if (GetState() == eThrow) {
+    if (GetState() == eThrow || GetState() == eThrowQuick) {
         //		Msg("MotionMarks !!![%d][%d]", ID(), Device.dwFrame);
         Throw();
     }
     CActor* pActor = smart_cast<CActor*>(m_pInventory->GetOwner());
-    if (pActor && (GetState() == eReady || GetState() == eThrow)) {
+    if (pActor &&
+        (GetState() == eReady || GetState() == eThrow || GetState() == eThrowQuick)) {
         return;
     }
 
@@ -307,7 +318,8 @@ void CGrenade::DeactivateItem() {
     // Drop grenade if primed
     StopCurrentAnimWithoutCallback();
     if (!GetTmpPreDestroy() && Local() &&
-        (GetState() == eThrowStart || GetState() == eReady || GetState() == eThrow)) {
+        (GetState() == eThrowStart || GetState() == eReady || GetState() == eThrow ||
+         GetState() == eThrowQuick)) {
         if (m_fake_missile) {
             CGrenade* pGrenade = smart_cast<CGrenade*>(m_fake_missile);
             if (pGrenade) {

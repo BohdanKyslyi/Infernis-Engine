@@ -11,6 +11,7 @@
 
 #include "Actor.h"
 #include "CustomMonster.h"
+#include "WeaponKnife.h"
 #include "HudItem.h"
 #include "player_hud.h"
 #include "inventory.h"
@@ -120,6 +121,7 @@ CItemUseController::CItemUseController(CActor* actor)
       m_hud_animation_hide_requested(false),
       m_hud_animation_allow_inventory(false),
       m_mutant_loot_target_id(u16(-1)),
+      m_quick_knife_id(u16(-1)),
       m_mutant_loot_particle_time(0),
       m_mutant_loot_particle_enabled(false),
       m_mutant_loot_particle_started(false),
@@ -323,6 +325,60 @@ bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
 
     Msg("* MutantLoot: HUD animation waiting for weapon hide, corpse [%u][%s], HUD [%s]",
         (u32)monster->ID(), monster->cNameSect().c_str(), m_hud_section.c_str());
+    return true;
+}
+
+bool CItemUseController::StartQuickKnife(CWeaponKnife* knife) {
+    if (!knife || !m_actor || IsBusy() || !g_player_hud ||
+        !pSettings->section_exist("items_animations"))
+        return false;
+    if (pSettings->line_exist("items_animations", "enable_quick_kick") &&
+        !pSettings->r_bool("items_animations", "enable_quick_kick"))
+        return false;
+
+    LPCSTR hud_line = pSettings->line_exist("items_animations", "quick_kick_hud")
+        ? "quick_kick_hud" : "quick_knife_hud";
+    if (!pSettings->line_exist("items_animations", hud_line))
+        return false;
+    LPCSTR configured_hud = pSettings->r_string("items_animations", hud_line);
+    if (!configured_hud || !configured_hud[0] || !xr_strcmp(configured_hud, "none"))
+        return false;
+
+    shared_str hud_section = configured_hud;
+    if (!pSettings->section_exist(hud_section.c_str()) ||
+        !pSettings->line_exist(hud_section.c_str(), "anm_show") ||
+        !g_player_hud->can_attach_controller_item(hud_section))
+        return false;
+
+    m_item = NULL;
+    m_item_section = knife->cNameSect();
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+    if (pSettings->line_exist(hud_section.c_str(), "action_timing"))
+        m_action_time = pSettings->r_u32(hud_section.c_str(), "action_timing");
+    else if (pSettings->line_exist(hud_section.c_str(), "timing"))
+        m_action_time = pSettings->r_u32(hud_section.c_str(), "timing");
+    else
+        m_action_time = u32(-1);
+
+    m_start_time = 0;
+    m_animation_duration = 0;
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModeQuickKnife;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_quick_knife_id = knife->ID();
+    m_waiting_for_weapon_hide = true;
+    LockActor();
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
     return true;
 }
 
@@ -738,6 +794,23 @@ void CItemUseController::BeginAnimation()
     m_waiting_for_weapon_hide = false;
     m_controller_animation_start_time = Device.dwTimeGlobal;
 
+    if (m_controller_mode == eControllerModeQuickKnife) {
+        shared_str played_motion_name;
+        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
+                                    &played_motion_name)) {
+            Cancel();
+            return;
+        }
+        if (m_action_time == u32(-1))
+            m_action_time = m_animation_duration / 2;
+        else if (m_action_time > m_animation_duration)
+            m_action_time = m_animation_duration;
+        PlayHudAnimationSound("snd_show");
+        StartCameraEffector(played_motion_name);
+        UpdatePPEffect();
+        return;
+    }
+
     if (m_controller_mode == eControllerModeMutantLoot) {
         shared_str played_motion_name;
 
@@ -1042,6 +1115,32 @@ void CItemUseController::UpdateMutantLootAnimation() {
         Finish();
 }
 
+bool CItemUseController::ApplyQuickKnifeEffect() {
+    if (m_effect_applied)
+        return true;
+    if (!m_actor || !m_actor->g_Alive())
+        return false;
+    CWeaponKnife* knife = smart_cast<CWeaponKnife*>(
+        m_actor->inventory().get_object_by_id(m_quick_knife_id));
+    if (!knife || m_actor->inventory().ItemFromSlot(KNIFE_SLOT) != knife)
+        return false;
+    knife->FastStrike(0);
+    m_effect_applied = true;
+    return true;
+}
+
+void CItemUseController::UpdateQuickKnifeAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+    if (!m_effect_applied && elapsed >= m_action_time && !ApplyQuickKnifeEffect()) {
+        Cancel();
+        return;
+    }
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
 void CItemUseController::Update(float dt)
 {
     (void)dt;
@@ -1120,6 +1219,11 @@ void CItemUseController::Update(float dt)
 
     if (m_controller_mode == eControllerModeMutantLoot) {
         UpdateMutantLootAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeQuickKnife) {
+        UpdateQuickKnifeAnimation();
         return;
     }
 
@@ -1215,6 +1319,8 @@ void CItemUseController::Cancel() {
     else if (m_controller_mode == eControllerModeMutantLoot)
         Msg("* MutantLoot: HUD animation cancelled for corpse [%u]",
             (u32)m_mutant_loot_target_id);
+    else if (m_controller_mode == eControllerModeQuickKnife)
+        Msg("* QuickKnife: HUD animation cancelled for knife [%u]", (u32)m_quick_knife_id);
     else
         Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
@@ -1237,6 +1343,12 @@ void CItemUseController::Finish() {
             Cancel();
             return;
         }
+    }
+
+    if (m_controller_mode == eControllerModeQuickKnife && !m_effect_applied &&
+        !ApplyQuickKnifeEffect()) {
+        Cancel();
+        return;
     }
 
     const bool start_queued_consumable =
@@ -1277,6 +1389,8 @@ void CItemUseController::Finish() {
     else if (m_controller_mode == eControllerModeMutantLoot)
         Msg("* MutantLoot: HUD animation finished for corpse [%u]",
             (u32)m_mutant_loot_target_id);
+    else if (m_controller_mode == eControllerModeQuickKnife)
+        Msg("* QuickKnife: HUD animation finished for knife [%u]", (u32)m_quick_knife_id);
     else
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
@@ -1348,6 +1462,7 @@ void CItemUseController::Reset()
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;
     m_mutant_loot_target_id = u16(-1);
+    m_quick_knife_id = u16(-1);
     m_mutant_loot_particle_time = 0;
     m_mutant_loot_particle_enabled = false;
     m_mutant_loot_particle_started = false;

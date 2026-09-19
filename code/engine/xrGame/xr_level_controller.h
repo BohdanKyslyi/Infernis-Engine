@@ -79,6 +79,8 @@ enum EGameActions {
     kQUICK_SAVE,
     kQUICK_LOAD,
     kALIFE_CMD,
+    kQUICK_KICK,
+    kQUICK_GRENADE,
     kWPN_INSPECT,
     kWPN_ZOOM_ALTER,
 
