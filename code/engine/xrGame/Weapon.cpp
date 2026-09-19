@@ -1197,7 +1197,12 @@ bool CWeapon::IsAlternativeAimAllowed() const {
 }
 
 float CWeapon::AlternativeHudFovFactor() const {
-    if (m_fAlternativeAimFactor <= EPS_S)
+    // When alternative aim starts from hip, its HUD offset factor is set to
+    // one immediately because the regular ADS transition supplies the offset
+    // blend. Combine both factors so HUD FOV follows that transition too.
+    const float blend =
+        m_fAlternativeAimFactor * m_zoom_params.m_fZoomRotationFactor;
+    if (blend <= EPS_S)
         return 1.f;
 
     const shared_str section =
@@ -1209,7 +1214,7 @@ float CWeapon::AlternativeHudFovFactor() const {
     if (factor <= EPS_S)
         return 1.f;
 
-    return 1.f + (factor - 1.f) * m_fAlternativeAimFactor;
+    return 1.f + (factor - 1.f) * blend;
 }
 
 bool CWeapon::Is3DScopeEnabled() const {
