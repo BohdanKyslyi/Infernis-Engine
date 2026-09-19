@@ -5,6 +5,7 @@
 
 class CUI3tButton;
 class CUIComboBox;
+class CUICheckButton;
 class CUIEditBox;
 class CUIStatic;
 class CUITextWnd;
@@ -35,12 +36,14 @@ public:
 private:
     struct SPropertyControl {
         u32 property_index;
+        CUITextWnd* label;
         CUITrackBar* slider;
         CUITextWnd* value;
     };
 
     struct SColorControl {
         u32 first_property_index;
+        CUITextWnd* header;
         CWeatherColorSwatch* swatch;
     };
 
@@ -91,6 +94,8 @@ private:
     void RestoreSnapshot(SDescriptorState& state);
     void RefreshTextureSelection();
     void RefreshDefinitionSelection();
+    void UpdateLearningHint();
+    void ClearLearningHint();
     void SetStatus(LPCSTR string_id, ...);
 
     float GetPropertyValue(u32 property_index) const;
@@ -129,6 +134,8 @@ private:
     CUI3tButton* m_add_frame;
     CUIEditBox* m_new_weather_name;
     CUI3tButton* m_create_weather;
+    CUICheckButton* m_learning_mode;
+    CUITextWnd* m_learning_mode_label;
     CUI3tButton* m_preview;
     CUI3tButton* m_save;
     CUI3tButton* m_revert;
@@ -153,6 +160,8 @@ private:
     bool m_previewing;
     bool m_time_update_pending;
     bool m_close_requested;
+    CUIWindow* m_learning_hint_owner;
+    u32 m_learning_hint_start;
 };
 
 void ToggleWeatherEditor(bool force_show = false, bool force_hide = false);

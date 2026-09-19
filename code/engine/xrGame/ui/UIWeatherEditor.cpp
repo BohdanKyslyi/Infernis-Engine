@@ -2,6 +2,8 @@
 
 #include "UIWeatherEditor.h"
 #include "UI3tButton.h"
+#include "UIBtnHint.h"
+#include "UICheckButton.h"
 #include "UIComboBox.h"
 #include "UIEditBox.h"
 #include "UIHelper.h"
@@ -10,6 +12,7 @@
 #include "UITrackBar.h"
 #include "UIXmlInit.h"
 #include "xrUIXmlParser.h"
+#include "UICursor.h"
 #include "../../xrEngine/Environment.h"
 #include "../../xrEngine/IGame_Persistent.h"
 #include "../../xrEngine/xr_input.h"
@@ -351,6 +354,49 @@ static const SPropertyInfo properties[] = {
     {0.f, 1.5f, .01f},      {-90.f, -.1f, .1f},   {-180.f, 180.f, 1.f},
 };
 
+static LPCSTR const property_hint_ids[] = {
+    "ui_weather_editor_hint_sky_rotation",
+    "ui_weather_editor_hint_far_plane",
+    "ui_weather_editor_hint_fog_density",
+    "ui_weather_editor_hint_fog_distance",
+    "ui_weather_editor_hint_rain_density",
+    "ui_weather_editor_hint_wind_velocity",
+    "ui_weather_editor_hint_wind_direction",
+    "ui_weather_editor_hint_thunderbolt_period",
+    "ui_weather_editor_hint_thunderbolt_duration",
+    "ui_weather_editor_hint_sun_shafts",
+    "ui_weather_editor_hint_water_intensity",
+    "ui_weather_editor_hint_sky_color",
+    "ui_weather_editor_hint_sky_color",
+    "ui_weather_editor_hint_sky_color",
+    "ui_weather_editor_hint_clouds_color",
+    "ui_weather_editor_hint_clouds_color",
+    "ui_weather_editor_hint_clouds_color",
+    "ui_weather_editor_hint_clouds_color",
+    "ui_weather_editor_hint_fog_color",
+    "ui_weather_editor_hint_fog_color",
+    "ui_weather_editor_hint_fog_color",
+    "ui_weather_editor_hint_rain_color",
+    "ui_weather_editor_hint_rain_color",
+    "ui_weather_editor_hint_rain_color",
+    "ui_weather_editor_hint_ambient_color",
+    "ui_weather_editor_hint_ambient_color",
+    "ui_weather_editor_hint_ambient_color",
+    "ui_weather_editor_hint_hemisphere_color",
+    "ui_weather_editor_hint_hemisphere_color",
+    "ui_weather_editor_hint_hemisphere_color",
+    "ui_weather_editor_hint_hemisphere_color",
+    "ui_weather_editor_hint_sun_color",
+    "ui_weather_editor_hint_sun_color",
+    "ui_weather_editor_hint_sun_color",
+    "ui_weather_editor_hint_sun_altitude",
+    "ui_weather_editor_hint_sun_longitude",
+};
+
+static_assert(sizeof(property_hint_ids) / sizeof(property_hint_ids[0]) ==
+                  sizeof(properties) / sizeof(properties[0]),
+              "Every weather property must have a learning hint");
+
 constexpr float property_y_offset = 35.f;
 
 CUIWeatherEditor* weather_editor = nullptr;
@@ -375,11 +421,12 @@ CUIWeatherEditor::CUIWeatherEditor()
       m_ambient_definition(nullptr), m_sun_definition(nullptr),
       m_thunderbolt_definition(nullptr), m_time_slider(nullptr), m_time_value(nullptr),
       m_add_frame(nullptr), m_new_weather_name(nullptr), m_create_weather(nullptr),
+      m_learning_mode(nullptr), m_learning_mode_label(nullptr),
       m_preview(nullptr), m_save(nullptr), m_revert(nullptr),
       m_close(nullptr), m_color_picker(nullptr), m_descriptor(nullptr), m_editor_time(0.f),
       m_active_color_property(-1), m_synchronizing(false), m_previous_pause(false),
       m_session_active(false), m_previewing(false), m_time_update_pending(false),
-      m_close_requested(false) {
+      m_close_requested(false), m_learning_hint_owner(nullptr), m_learning_hint_start(0) {
     m_bWorkInPause = true;
 }
 
@@ -442,6 +489,10 @@ void CUIWeatherEditor::Init() {
     m_add_frame = UIHelper::Create3tButton(xml, "main:add_frame", this);
     m_new_weather_name = UIHelper::CreateEditBox(xml, "main:new_weather_name", this);
     m_create_weather = UIHelper::Create3tButton(xml, "main:create_weather", this);
+    m_learning_mode = UIHelper::CreateCheck(xml, "main:learning_mode", this);
+    m_learning_mode->SetCheck(false);
+    m_learning_mode_label =
+        UIHelper::CreateTextWnd(xml, "main:learning_mode_label", this);
     m_preview = UIHelper::Create3tButton(xml, "main:preview", this);
     m_save = UIHelper::Create3tButton(xml, "main:save", this);
     m_revert = UIHelper::Create3tButton(xml, "main:revert", this);
@@ -466,6 +517,7 @@ void CUIWeatherEditor::Init() {
     Register(m_thunderbolt_definition);
     Register(m_add_frame);
     Register(m_create_weather);
+    Register(m_learning_mode);
     Register(m_preview);
     Register(m_save);
     Register(m_revert);
@@ -545,6 +597,7 @@ void CUIWeatherEditor::Show(bool status) {
         return;
     }
     if (!status && IsShown()) {
+        ClearLearningHint();
         m_color_picker->Show(false);
         m_active_color_property = -1;
         if (g_pGamePersistent && !m_previewing) {
@@ -574,8 +627,10 @@ void CUIWeatherEditor::Update() {
         CloseEditorSession();
         return;
     }
-    if (!m_descriptor || m_synchronizing)
+    if (!m_descriptor || m_synchronizing) {
+        UpdateLearningHint();
         return;
+    }
 
     if (m_time_update_pending) {
         m_time_update_pending = false;
@@ -611,6 +666,7 @@ void CUIWeatherEditor::Update() {
                                  GetPropertyValue((u32)m_active_color_property + 1),
                                  GetPropertyValue((u32)m_active_color_property + 2));
     }
+    UpdateLearningHint();
 }
 
 void CUIWeatherEditor::SendMessage(CUIWindow* pWnd, s16 msg, void* pData) {
@@ -777,6 +833,7 @@ void CUIWeatherEditor::AddPropertyHeader(CUIXml& xml, LPCSTR caption, float x, f
 
         SColorControl control;
         control.first_property_index = (u32)first_color_property;
+        control.header = header;
         control.swatch = swatch;
         m_color_controls.push_back(control);
     }
@@ -803,6 +860,7 @@ void CUIWeatherEditor::AddPropertyControl(CUIXml& xml, u32 property_index, LPCST
 
     SPropertyControl control;
     control.property_index = property_index;
+    control.label = label;
     control.slider = slider;
     control.value = value;
     m_property_controls.push_back(control);
@@ -1070,6 +1128,106 @@ void CUIWeatherEditor::RefreshDefinitionSelection() {
         m_thunderbolt_definition->SetItemIDX(
             (int)std::distance(m_thunderbolt_definitions.begin(), thunderbolt));
     m_synchronizing = false;
+}
+
+void CUIWeatherEditor::ClearLearningHint() {
+    if (g_statHint && m_learning_hint_owner &&
+        g_statHint->Owner() == m_learning_hint_owner)
+        g_statHint->Discard();
+    m_learning_hint_owner = nullptr;
+    m_learning_hint_start = 0;
+}
+
+void CUIWeatherEditor::UpdateLearningHint() {
+    if (!g_statHint || !m_learning_mode || !m_learning_mode_label) {
+        ClearLearningHint();
+        return;
+    }
+
+    CUIWindow* hovered = nullptr;
+    LPCSTR hint_id = nullptr;
+    bool immediate = false;
+    const auto use_hint = [&hovered, &hint_id, &immediate](CUIWindow* window, LPCSTR id,
+                                                          bool show_immediately) {
+        if (!hovered && window && window->CursorOverWindow()) {
+            hovered = window;
+            hint_id = id;
+            immediate = show_immediately;
+        }
+    };
+
+    // The learning-mode control explains itself even while the mode is off.
+    use_hint(m_learning_mode, "ui_weather_editor_hint_learning_mode", true);
+    use_hint(m_learning_mode_label, "ui_weather_editor_hint_learning_mode", true);
+
+    if (!hovered && m_learning_mode->GetCheck()) {
+        if (m_color_picker->IsShown())
+            use_hint(m_color_picker, "ui_weather_editor_hint_color_picker", false);
+        use_hint(m_title, "ui_weather_editor_hint_title", false);
+        use_hint(m_status, "ui_weather_editor_hint_status", false);
+        use_hint(m_weather, "ui_weather_editor_hint_weather", false);
+        use_hint(m_frame, "ui_weather_editor_hint_frame", false);
+        use_hint(m_sky, "ui_weather_editor_hint_sky_texture", false);
+        use_hint(m_clouds, "ui_weather_editor_hint_clouds_texture", false);
+        use_hint(m_ambient_definition, "ui_weather_editor_hint_ambient_definition", false);
+        use_hint(m_sun_definition, "ui_weather_editor_hint_sun_definition", false);
+        use_hint(m_thunderbolt_definition,
+                 "ui_weather_editor_hint_thunderbolt_definition", false);
+        use_hint(m_time_slider, "ui_weather_editor_hint_time", false);
+        use_hint(m_time_value, "ui_weather_editor_hint_time", false);
+        use_hint(m_new_weather_name, "ui_weather_editor_hint_new_file", false);
+        use_hint(m_create_weather, "ui_weather_editor_hint_create_file", false);
+        use_hint(m_add_frame, "ui_weather_editor_hint_add_section", false);
+        use_hint(m_preview, "ui_weather_editor_hint_preview", false);
+        use_hint(m_save, "ui_weather_editor_hint_save", false);
+        use_hint(m_revert, "ui_weather_editor_hint_revert", false);
+        use_hint(m_close, "ui_weather_editor_hint_close", false);
+
+        for (const SColorControl& control : m_color_controls) {
+            use_hint(control.header, property_hint_ids[control.first_property_index], false);
+            use_hint(control.swatch, property_hint_ids[control.first_property_index], false);
+        }
+        for (const SPropertyControl& control : m_property_controls) {
+            use_hint(control.label, property_hint_ids[control.property_index], false);
+            use_hint(control.slider, property_hint_ids[control.property_index], false);
+            use_hint(control.value, property_hint_ids[control.property_index], false);
+        }
+    }
+
+    if (!hovered) {
+        ClearLearningHint();
+        return;
+    }
+
+    if (hovered != m_learning_hint_owner) {
+        ClearLearningHint();
+        m_learning_hint_owner = hovered;
+        m_learning_hint_start = Device.dwTimeGlobal;
+        if (!immediate)
+            return;
+    }
+
+    if (!immediate && Device.dwTimeGlobal < m_learning_hint_start + 350)
+        return;
+
+    if (!g_statHint->Owner()) {
+        g_statHint->SetHintText(hovered, hint_id);
+
+        Fvector2 position = GetUICursor().GetCursorPosition();
+        position.y -= g_statHint->GetHeight() + 8.f;
+        if (position.x + g_statHint->GetWidth() > UI_BASE_WIDTH)
+            position.x = UI_BASE_WIDTH - g_statHint->GetWidth() - 4.f;
+        if (position.x < 4.f)
+            position.x = 4.f;
+        if (position.y < 4.f)
+            position.y = GetUICursor().GetCursorPosition().y + 24.f;
+        if (position.y + g_statHint->GetHeight() > UI_BASE_HEIGHT)
+            position.y = UI_BASE_HEIGHT - g_statHint->GetHeight() - 4.f;
+        g_statHint->SetWndPos(position);
+    }
+
+    if (g_statHint->Owner() == hovered)
+        g_statHint->Draw_();
 }
 
 void CUIWeatherEditor::SetStatus(LPCSTR string_id, ...) {

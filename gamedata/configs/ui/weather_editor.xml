@@ -108,6 +108,13 @@
             <text font="letterica16" r="195" g="210" b="195" align="c" vert_align="c" complex_mode="1"/>
         </status>
 
+        <learning_mode x="8" y="604" width="29" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+        </learning_mode>
+        <learning_mode_label x="43" y="604" width="151" height="29">
+            <text font="letterica16" r="205" g="215" b="205" vert_align="c">ui_weather_editor_learning_mode</text>
+        </learning_mode_label>
+
         <save x="200" y="604" width="180" height="28" stretch="1">
             <texture>ui_inGame2_Mp_bigbuttone</texture>
             <text font="letterica18" align="c">ui_weather_editor_save</text>
