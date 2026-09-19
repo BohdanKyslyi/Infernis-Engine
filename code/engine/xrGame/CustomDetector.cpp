@@ -188,8 +188,8 @@ BOOL CCustomDetector::net_Spawn(CSE_Abstract* DC) {
 void CCustomDetector::Load(LPCSTR section) {
     inherited::Load(section);
 
-    m_fAfDetectRadius = pSettings->r_float(section, "af_radius");
-    m_fAfVisRadius = pSettings->r_float(section, "af_vis_radius");
+    m_fAfDetectRadius = READ_IF_EXISTS(pSettings, r_float, section, "af_radius", 0.f);
+    m_fAfVisRadius = READ_IF_EXISTS(pSettings, r_float, section, "af_vis_radius", 0.f);
     m_artefacts.load(section, "af");
 
     m_sounds.LoadSound(section, "snd_draw", "sndShow");
@@ -199,7 +199,7 @@ void CCustomDetector::Load(LPCSTR section) {
 void CCustomDetector::shedule_Update(u32 dt) {
     inherited::shedule_Update(dt);
 
-    if (!IsWorking())
+    if (!IsWorking() || m_fAfDetectRadius <= 0.f)
         return;
 
     Position().set(H_Parent()->Position());
