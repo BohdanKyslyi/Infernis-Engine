@@ -18,6 +18,9 @@ public:
     // animation is disabled or invalid, the loot is collected immediately.
     bool StartMutantLoot(CCustomMonster* monster);
     bool StartQuickKnife(CWeaponKnife* knife);
+    // Delays the real ownership event until a left-hand HUD animation reaches
+    // its configured action_timing. The active weapon stays attached.
+    bool StartPickup(CInventoryItem* item);
 
     // Persistent controller-owned HUD lifecycle used by interfaces such as
     // PDA and backpack. Connecting those interfaces is intentionally kept
@@ -54,6 +57,7 @@ private:
         eControllerModeHudAnimationOneShot,
         eControllerModeMutantLoot,
         eControllerModeQuickKnife,
+        eControllerModePickup,
     };
 
     enum EHudAnimationPhase {
@@ -84,6 +88,7 @@ private:
     void UpdateHudAnimation();
     void UpdateMutantLootAnimation();
     void UpdateQuickKnifeAnimation();
+    void UpdatePickupAnimation();
 
     CCustomMonster* MutantLootTarget() const;
     bool ApplyMutantLootEffect();
@@ -91,8 +96,11 @@ private:
     void ReleaseMutantLootReservation();
     bool CompleteMutantLootImmediately(CCustomMonster* monster);
     bool ApplyQuickKnifeEffect();
+    bool ApplyPickupEffect();
+    bool CanStartPickupAnimation();
+    void RestorePickupDetector(u16 detector_id, bool restore_detector);
 
-    void LockActor();
+    void LockActor(bool hide_weapon = true);
     void UnlockActor();
 
     void LoadControllerEffects();
@@ -146,6 +154,9 @@ private:
     bool m_hud_animation_allow_inventory;
     u16 m_mutant_loot_target_id;
     u16 m_quick_knife_id;
+    u16 m_pickup_target_id;
+    u16 m_pickup_detector_id;
+    bool m_restore_pickup_detector;
     u32 m_mutant_loot_particle_time;
     bool m_mutant_loot_particle_enabled;
     bool m_mutant_loot_particle_started;
@@ -175,6 +186,7 @@ private:
     //
     bool m_waiting_for_weapon_hide;
     bool m_actor_locked;
+    bool m_weapon_hide_locked;
 
     //
     // Не хочемо випадково розблокувати inventory,

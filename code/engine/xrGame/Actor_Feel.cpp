@@ -17,6 +17,7 @@
 #include "Level.h"
 #include "clsid_game.h"
 #include "hudmanager.h"
+#include "ItemUseController.h"
 
 #define PICKUP_INFO_COLOR 0xFFDDDDDD
 
@@ -114,8 +115,12 @@ void CActor::PickupModeUpdate() {
         m_pObjectWeLookingAt->cast_inventory_item()->Useful() && m_pUsableObject &&
         !m_pUsableObject->nonscript_usable() &&
         !Level().m_feel_deny.is_object_denied(m_pObjectWeLookingAt)) {
-        m_pUsableObject->use(this);
-        Game().SendPickUpEvent(ID(), m_pObjectWeLookingAt->ID());
+        if (!m_item_use || !m_item_use->IsBusy()) {
+            CInventoryItem* item = m_pObjectWeLookingAt->cast_inventory_item();
+            m_pUsableObject->use(this);
+            if (!m_item_use || !m_item_use->StartPickup(item))
+                Game().SendPickUpEvent(ID(), m_pObjectWeLookingAt->ID());
+        }
     }
 
     feel_touch_update(Position(), m_fPickupInfoRadius);
@@ -206,12 +211,15 @@ void CActor::PickupModeUpdate_COD() {
     CurrentGameUI()->UIMainIngameWnd->SetPickUpItem(pNearestItem);
 
     if (pNearestItem && m_bPickupMode) {
-        CUsableScriptObject* pUsableObject = smart_cast<CUsableScriptObject*>(pNearestItem);
-        if (pUsableObject && (!m_pUsableObject))
-            pUsableObject->use(this);
+        if (!m_item_use || !m_item_use->IsBusy()) {
+            CUsableScriptObject* pUsableObject = smart_cast<CUsableScriptObject*>(pNearestItem);
+            if (pUsableObject && (!m_pUsableObject))
+                pUsableObject->use(this);
 
-        //подбирание объекта
-        Game().SendPickUpEvent(ID(), pNearestItem->object().ID());
+            //подбирание объекта
+            if (!m_item_use || !m_item_use->StartPickup(pNearestItem))
+                Game().SendPickUpEvent(ID(), pNearestItem->object().ID());
+        }
     }
 };
 

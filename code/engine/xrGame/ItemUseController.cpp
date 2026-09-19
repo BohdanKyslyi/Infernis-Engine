@@ -16,6 +16,7 @@
 #include "player_hud.h"
 #include "inventory.h"
 #include "level.h"
+#include "game_cl_base.h"
 
 #include "CustomDetector.h"
 #include "CustomOutfit.h"
@@ -63,6 +64,24 @@ static bool MutantLootAnimationsEnabled() {
         }
 
         Msg("* Mutant loot animations: [%s]", enabled ? "enabled" : "disabled");
+    }
+
+    return enabled;
+}
+
+static bool PickupAnimationsEnabled() {
+    static bool initialized = false;
+    static bool enabled = true;
+
+    if (!initialized) {
+        initialized = true;
+
+        if (pSettings->section_exist("items_animations") &&
+            pSettings->line_exist("items_animations", "enable_pickup_animations")) {
+            enabled = !!pSettings->r_bool("items_animations", "enable_pickup_animations");
+        }
+
+        Msg("* Pickup animations: [%s]", enabled ? "enabled" : "disabled");
     }
 
     return enabled;
@@ -122,6 +141,9 @@ CItemUseController::CItemUseController(CActor* actor)
       m_hud_animation_allow_inventory(false),
       m_mutant_loot_target_id(u16(-1)),
       m_quick_knife_id(u16(-1)),
+      m_pickup_target_id(u16(-1)),
+      m_pickup_detector_id(u16(-1)),
+      m_restore_pickup_detector(false),
       m_mutant_loot_particle_time(0),
       m_mutant_loot_particle_enabled(false),
       m_mutant_loot_particle_started(false),
@@ -139,6 +161,7 @@ CItemUseController::CItemUseController(CActor* actor)
       m_ppe_effect_started(false),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
+      m_weapon_hide_locked(false),
       m_prev_inventory_disabled(false),
 
       m_trash_count(0), m_trash_spawned(false),
@@ -379,6 +402,78 @@ bool CItemUseController::StartQuickKnife(CWeaponKnife* knife) {
         Reset();
         return false;
     }
+    return true;
+}
+
+bool CItemUseController::StartPickup(CInventoryItem* item) {
+    if (!item || !m_actor || IsBusy() || !g_player_hud ||
+        !PickupAnimationsEnabled() || !pSettings->section_exist("items_animations") ||
+        !pSettings->line_exist("items_animations", "pickup_hud")) {
+        return false;
+    }
+
+    LPCSTR configured_hud = pSettings->r_string("items_animations", "pickup_hud");
+    if (!configured_hud || !configured_hud[0] || !xr_strcmp(configured_hud, "none"))
+        return false;
+
+    shared_str hud_section = configured_hud;
+    if (!pSettings->section_exist(hud_section.c_str()) ||
+        !pSettings->line_exist(hud_section.c_str(), "anm_show") ||
+        !g_player_hud->can_attach_controller_item(hud_section)) {
+        return false;
+    }
+
+    // Do not replace a weapon transition with a partial-hand motion. Normal
+    // pickup remains available through the caller's immediate fallback.
+    CHudItem* active_hud_item = NULL;
+    CInventoryItem* active_item = m_actor->inventory().ActiveItem();
+    if (active_item)
+        active_hud_item = active_item->cast_hud_item();
+    if (active_hud_item && active_hud_item->IsPending())
+        return false;
+
+    m_item = NULL;
+    m_item_section = item->object().cNameSect();
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+
+    m_start_time = 0;
+    m_action_time = pSettings->line_exist(hud_section.c_str(), "action_timing")
+        ? pSettings->r_u32(hud_section.c_str(), "action_timing")
+        : u32(-1);
+    m_animation_duration = 0;
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModePickup;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_pickup_target_id = item->object().ID();
+    m_pickup_detector_id = u16(-1);
+    m_restore_pickup_detector = false;
+    m_waiting_for_weapon_hide = true;
+
+    CCustomDetector* detector =
+        smart_cast<CCustomDetector*>(m_actor->inventory().ItemFromSlot(DETECTOR_SLOT));
+    if (detector && !detector->IsHidden()) {
+        m_pickup_detector_id = detector->ID();
+        m_restore_pickup_detector = true;
+        detector->HideDetector(true);
+    }
+
+    // Pickup owns the controls and the left hand, but never holsters slot 0.
+    LockActor(false);
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+
+    Msg("* Pickup: waiting for left hand, item [%u][%s], HUD [%s], detector [%s]",
+        (u32)m_pickup_target_id, m_item_section.c_str(), m_hud_section.c_str(),
+        m_restore_pickup_detector ? "hide/restore" : "none");
     return true;
 }
 
@@ -666,7 +761,7 @@ bool CItemUseController::TryQueueHudAnimationOnce(const shared_str& hud_section)
     return true;
 }
 
-void CItemUseController::LockActor()
+void CItemUseController::LockActor(bool hide_weapon)
 {
     if (!m_actor || m_actor_locked)
         return;
@@ -691,10 +786,9 @@ void CItemUseController::LockActor()
     //
     LockActorLadder();
 
-    m_actor->SetWeaponHideState(
-        INV_STATE_BLOCK_ALL,
-        true
-    );
+    m_weapon_hide_locked = hide_weapon;
+    if (m_weapon_hide_locked)
+        m_actor->SetWeaponHideState(INV_STATE_BLOCK_ALL, true);
 
     m_actor_locked = true;
 
@@ -710,10 +804,8 @@ void CItemUseController::UnlockActor()
 
     if (m_actor)
     {
-        m_actor->SetWeaponHideState(
-            INV_STATE_BLOCK_ALL,
-            false
-        );
+        if (m_weapon_hide_locked)
+            m_actor->SetWeaponHideState(INV_STATE_BLOCK_ALL, false);
 
         m_actor->set_inventory_disabled(
             m_prev_inventory_disabled
@@ -728,6 +820,7 @@ void CItemUseController::UnlockActor()
     RestoreUiVisibility();
 
     m_actor_locked = false;
+    m_weapon_hide_locked = false;
     m_prev_inventory_disabled = false;
 
     Msg("* ItemUse actor unlocked");
@@ -768,6 +861,29 @@ bool CItemUseController::CanStartAnimation()
     return true;
 }
 
+bool CItemUseController::CanStartPickupAnimation() {
+    if (!m_actor)
+        return false;
+
+    if (!m_restore_pickup_detector)
+        return true;
+
+    CInventoryItem* item = m_actor->inventory().get_object_by_id(m_pickup_detector_id);
+    CCustomDetector* detector = item ? smart_cast<CCustomDetector*>(item) : NULL;
+    if (!detector || m_actor->inventory().ItemFromSlot(DETECTOR_SLOT) != detector) {
+        m_restore_pickup_detector = false;
+        m_pickup_detector_id = u16(-1);
+        return true;
+    }
+
+    if (!detector->IsHidden()) {
+        detector->HideDetector(true);
+        return false;
+    }
+
+    return true;
+}
+
 void CItemUseController::BeginAnimation()
 {
     if (!m_active)
@@ -793,6 +909,26 @@ void CItemUseController::BeginAnimation()
 
     m_waiting_for_weapon_hide = false;
     m_controller_animation_start_time = Device.dwTimeGlobal;
+
+    if (m_controller_mode == eControllerModePickup) {
+        shared_str played_motion_name;
+        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
+                                    &played_motion_name)) {
+            Cancel();
+            return;
+        }
+
+        if (m_action_time == u32(-1) || m_action_time > m_animation_duration)
+            m_action_time = m_animation_duration;
+
+        PlayHudAnimationSound("snd_show");
+        StartCameraEffector(played_motion_name);
+        UpdatePPEffect();
+
+        Msg("* Pickup: left-hand animation started, item [%u], duration [%u], action [%u]",
+            (u32)m_pickup_target_id, m_animation_duration, m_action_time);
+        return;
+    }
 
     if (m_controller_mode == eControllerModeQuickKnife) {
         shared_str played_motion_name;
@@ -1141,6 +1277,34 @@ void CItemUseController::UpdateQuickKnifeAnimation() {
         Finish();
 }
 
+bool CItemUseController::ApplyPickupEffect() {
+    if (!m_actor || !g_pGameLevel || m_pickup_target_id == u16(-1))
+        return false;
+
+    CObject* object = Level().Objects.net_Find(m_pickup_target_id);
+    CInventoryItem* item = object ? smart_cast<CInventoryItem*>(object) : NULL;
+    if (!item || item->object().H_Parent() || !item->Useful())
+        return false;
+
+    Game().SendPickUpEvent(m_actor->ID(), m_pickup_target_id);
+    m_effect_applied = true;
+    return true;
+}
+
+void CItemUseController::UpdatePickupAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+    if (!m_effect_applied && elapsed >= m_action_time && !ApplyPickupEffect()) {
+        Cancel();
+        return;
+    }
+
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
 void CItemUseController::Update(float dt)
 {
     (void)dt;
@@ -1203,7 +1367,10 @@ void CItemUseController::Update(float dt)
     // чекаємо weapon + detector hide.
     //
     if (m_waiting_for_weapon_hide) {
-        if (CanStartAnimation())
+        if (m_controller_mode == eControllerModePickup) {
+            if (CanStartPickupAnimation())
+                BeginAnimation();
+        } else if (CanStartAnimation())
             BeginAnimation();
 
         return;
@@ -1224,6 +1391,11 @@ void CItemUseController::Update(float dt)
 
     if (m_controller_mode == eControllerModeQuickKnife) {
         UpdateQuickKnifeAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModePickup) {
+        UpdatePickupAnimation();
         return;
     }
 
@@ -1290,6 +1462,8 @@ void CItemUseController::Cancel() {
         return;
 
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
+    const u16 pickup_detector_id = m_pickup_detector_id;
+    const bool restore_pickup_detector = m_restore_pickup_detector;
 
     if (m_controller_mode == eControllerModeMutantLoot && !m_effect_applied)
         ReleaseMutantLootReservation();
@@ -1321,10 +1495,14 @@ void CItemUseController::Cancel() {
             (u32)m_mutant_loot_target_id);
     else if (m_controller_mode == eControllerModeQuickKnife)
         Msg("* QuickKnife: HUD animation cancelled for knife [%u]", (u32)m_quick_knife_id);
+    else if (m_controller_mode == eControllerModePickup)
+        Msg("* Pickup: left-hand animation cancelled for item [%u]", (u32)m_pickup_target_id);
     else
         Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
     Reset();
+
+    RestorePickupDetector(pickup_detector_id, restore_pickup_detector);
 
     if (refresh_outfit_hud) {
         m_outfit_hud_refresh_pending = true;
@@ -1361,6 +1539,8 @@ void CItemUseController::Finish() {
     const shared_str queued_hud_animation_section = m_queued_hud_animation_section;
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
     const shared_str function_on_stop = m_function_on_stop;
+    const u16 pickup_detector_id = m_pickup_detector_id;
+    const bool restore_pickup_detector = m_restore_pickup_detector;
 
     //
     // Normal physical trash moment:
@@ -1391,10 +1571,14 @@ void CItemUseController::Finish() {
             (u32)m_mutant_loot_target_id);
     else if (m_controller_mode == eControllerModeQuickKnife)
         Msg("* QuickKnife: HUD animation finished for knife [%u]", (u32)m_quick_knife_id);
+    else if (m_controller_mode == eControllerModePickup)
+        Msg("* Pickup: left-hand animation finished for item [%u]", (u32)m_pickup_target_id);
     else
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
     Reset();
+
+    RestorePickupDetector(pickup_detector_id, restore_pickup_detector);
 
     if (refresh_outfit_hud) {
         m_outfit_hud_refresh_pending = true;
@@ -1463,6 +1647,9 @@ void CItemUseController::Reset()
     m_hud_animation_allow_inventory = false;
     m_mutant_loot_target_id = u16(-1);
     m_quick_knife_id = u16(-1);
+    m_pickup_target_id = u16(-1);
+    m_pickup_detector_id = u16(-1);
+    m_restore_pickup_detector = false;
     m_mutant_loot_particle_time = 0;
     m_mutant_loot_particle_enabled = false;
     m_mutant_loot_particle_started = false;
@@ -1485,6 +1672,7 @@ void CItemUseController::Reset()
 
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;
+    m_weapon_hide_locked = false;
     m_prev_inventory_disabled = false;
 
     m_trash_section = NULL;
@@ -1501,6 +1689,16 @@ void CItemUseController::Reset()
     m_use_particles_stop_time = u32(-1);
     m_use_particles = NULL;
     m_use_particles_started = false;
+}
+
+void CItemUseController::RestorePickupDetector(u16 detector_id, bool restore_detector) {
+    if (!restore_detector || !m_actor || detector_id == u16(-1))
+        return;
+
+    CInventoryItem* item = m_actor->inventory().get_object_by_id(detector_id);
+    CCustomDetector* detector = item ? smart_cast<CCustomDetector*>(item) : NULL;
+    if (detector && m_actor->inventory().ItemFromSlot(DETECTOR_SLOT) == detector)
+        detector->ShowDetector(true);
 }
 
 void CItemUseController::LoadControllerEffects() {

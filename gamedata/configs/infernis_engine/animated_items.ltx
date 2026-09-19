@@ -109,3 +109,14 @@ item_visual                 = dynamics\weapons\wpn_knife\wpn_knife_hud.ogf
 block_movement              = false
 anm_show                    = knife_kick_1
 action_timing               = 250
+
+; Controller-owned left-hand HUD used while picking up world items. Replace
+; the motion name with the animation exported to the external hands OMF.
+[item_pickup_hud]:animated_item_hud
+attach_place_idx            = 1
+item_visual                 = dynamics\fake_object.ogf
+block_movement              = true
+disable_ui                  = false
+anm_show                    = item_pickup
+anm_show_16x9               = item_pickup
+action_timing               = 750
