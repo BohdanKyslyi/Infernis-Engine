@@ -234,6 +234,7 @@ protected:
 
     bool m_bAlternativeAimActive;
     bool m_bAlternativeAimOwnsZoom;
+    float m_fAlternativeAimFactor;
     float m_fZoomFactorBeforeAlternativeAim;
 
     float m_fRTZoomFactor; // run-time zoom factor

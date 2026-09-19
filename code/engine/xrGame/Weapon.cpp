@@ -56,6 +56,7 @@ CWeapon::CWeapon() {
     m_zoom_params.m_pNight_vision = NULL;
     m_bAlternativeAimActive = false;
     m_bAlternativeAimOwnsZoom = false;
+    m_fAlternativeAimFactor = 0.f;
     m_fZoomFactorBeforeAlternativeAim = g_fov;
 
     m_pCurrentAmmo = NULL;
@@ -830,6 +831,7 @@ void CWeapon::SetDefaults() {
     m_zoom_params.m_bIsZoomModeNow = false;
     m_bAlternativeAimActive = false;
     m_bAlternativeAimOwnsZoom = false;
+    m_fAlternativeAimFactor = 0.f;
     m_fZoomFactorBeforeAlternativeAim = g_fov;
 }
 
@@ -912,6 +914,12 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
             m_fZoomFactorBeforeAlternativeAim = GetZoomFactor();
             m_bAlternativeAimActive = true;
             m_bAlternativeAimOwnsZoom = !was_zoomed;
+
+            // Entering alternative aim from hip already has the regular ADS
+            // transition available. Blend only when switching between two
+            // fully aimed positions.
+            if (!was_zoomed)
+                m_fAlternativeAimFactor = 1.f;
 
             if (!was_zoomed) {
                 if (GetState() != eIdle)
@@ -1189,7 +1197,7 @@ bool CWeapon::IsAlternativeAimAllowed() const {
 }
 
 float CWeapon::AlternativeHudFovFactor() const {
-    if (!m_bAlternativeAimActive)
+    if (m_fAlternativeAimFactor <= EPS_S)
         return 1.f;
 
     const shared_str section =
@@ -1201,7 +1209,7 @@ float CWeapon::AlternativeHudFovFactor() const {
     if (factor <= EPS_S)
         return 1.f;
 
-    return 1.f + (factor - 1.f) * m_zoom_params.m_fZoomRotationFactor;
+    return 1.f + (factor - 1.f) * m_fAlternativeAimFactor;
 }
 
 bool CWeapon::Is3DScopeEnabled() const {
@@ -1544,6 +1552,8 @@ void CWeapon::OnZoomOut() {
         m_fRTZoomFactor = GetZoomFactor(); // store current dynamic scope zoom
     if (!was_alternative_aim || fis_zero(m_zoom_params.m_fZoomRotationFactor))
         m_bAlternativeAimActive = false;
+    if (fis_zero(m_zoom_params.m_fZoomRotationFactor))
+        m_fAlternativeAimFactor = 0.f;
     m_bAlternativeAimOwnsZoom = false;
     m_zoom_params.m_fCurrentZoomFactor = g_fov;
     EnableHudInertion(TRUE);
@@ -1769,6 +1779,14 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
     if (!pActor)
         return;
 
+    const float alternative_step =
+        Device.fTimeDelta / std::max(m_zoom_params.m_fZoomRotateTime, EPS_S);
+    if (m_bAlternativeAimActive)
+        m_fAlternativeAimFactor += alternative_step;
+    else
+        m_fAlternativeAimFactor -= alternative_step;
+    clamp(m_fAlternativeAimFactor, 0.f, 1.f);
+
     if ((IsZoomed() && m_zoom_params.m_fZoomRotationFactor <= 1.f) ||
         (!IsZoomed() && m_zoom_params.m_fZoomRotationFactor > 0.f)) {
         u8 idx = GetCurrentHudOffsetIdx();
@@ -1779,7 +1797,36 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
         Fvector curr_offs, curr_rot;
         curr_offs = hi->m_measures.m_hands_offset[0][idx]; // pos,aim
         curr_rot = hi->m_measures.m_hands_offset[1][idx];  // rot,aim
-        if (idx == 1 && m_bAlternativeAimActive) {
+
+        if (idx == 1 && IsScopeAttached() &&
+            m_eScopeStatus == ALife::eAddonAttachable) {
+            const bool widescreen =
+                hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
+            LPCSTR pos_key = widescreen ? "aim_hud_offset_pos_16x9"
+                                        : "aim_hud_offset_pos";
+            LPCSTR rot_key = widescreen ? "aim_hud_offset_rot_16x9"
+                                        : "aim_hud_offset_rot";
+            if (pSettings->line_exist(ScopeSettingSection(pos_key), pos_key))
+                curr_offs = pSettings->r_fvector3(ScopeSettingSection(pos_key), pos_key);
+            else if (widescreen && pSettings->line_exist(
+                         ScopeSettingSection("aim_hud_offset_pos"),
+                         "aim_hud_offset_pos"))
+                curr_offs = pSettings->r_fvector3(
+                    ScopeSettingSection("aim_hud_offset_pos"), "aim_hud_offset_pos");
+            if (pSettings->line_exist(ScopeSettingSection(rot_key), rot_key))
+                curr_rot = pSettings->r_fvector3(ScopeSettingSection(rot_key), rot_key);
+            else if (widescreen && pSettings->line_exist(
+                         ScopeSettingSection("aim_hud_offset_rot"),
+                         "aim_hud_offset_rot"))
+                curr_rot = pSettings->r_fvector3(
+                    ScopeSettingSection("aim_hud_offset_rot"), "aim_hud_offset_rot");
+        }
+
+        if (idx == 1 && m_fAlternativeAimFactor > EPS_S) {
+            const Fvector primary_offs = curr_offs;
+            const Fvector primary_rot = curr_rot;
+            Fvector alternative_offs = primary_offs;
+            Fvector alternative_rot = primary_rot;
             const bool widescreen =
                 hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
             LPCSTR pos_key = widescreen ? "alter_aim_hud_offset_pos_16x9"
@@ -1799,22 +1846,12 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
             }
 
             if (pos_section.size())
-                curr_offs = pSettings->r_fvector3(pos_section, pos_key);
+                alternative_offs = pSettings->r_fvector3(pos_section, pos_key);
             if (rot_section.size())
-                curr_rot = pSettings->r_fvector3(rot_section, rot_key);
-        } else if (idx == 1 && IsScopeAttached() &&
-                   m_eScopeStatus == ALife::eAddonAttachable) {
-            const bool widescreen = hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
-            LPCSTR pos_key = widescreen ? "aim_hud_offset_pos_16x9" : "aim_hud_offset_pos";
-            LPCSTR rot_key = widescreen ? "aim_hud_offset_rot_16x9" : "aim_hud_offset_rot";
-            if (pSettings->line_exist(ScopeSettingSection(pos_key), pos_key))
-                curr_offs = pSettings->r_fvector3(ScopeSettingSection(pos_key), pos_key);
-            else if (widescreen && pSettings->line_exist(ScopeSettingSection("aim_hud_offset_pos"), "aim_hud_offset_pos"))
-                curr_offs = pSettings->r_fvector3(ScopeSettingSection("aim_hud_offset_pos"), "aim_hud_offset_pos");
-            if (pSettings->line_exist(ScopeSettingSection(rot_key), rot_key))
-                curr_rot = pSettings->r_fvector3(ScopeSettingSection(rot_key), rot_key);
-            else if (widescreen && pSettings->line_exist(ScopeSettingSection("aim_hud_offset_rot"), "aim_hud_offset_rot"))
-                curr_rot = pSettings->r_fvector3(ScopeSettingSection("aim_hud_offset_rot"), "aim_hud_offset_rot");
+                alternative_rot = pSettings->r_fvector3(rot_section, rot_key);
+
+            curr_offs.lerp(primary_offs, alternative_offs, m_fAlternativeAimFactor);
+            curr_rot.lerp(primary_rot, alternative_rot, m_fAlternativeAimFactor);
         }
         curr_offs.mul(m_zoom_params.m_fZoomRotationFactor);
         curr_rot.mul(m_zoom_params.m_fZoomRotationFactor);
@@ -1847,6 +1884,7 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
         if (!IsZoomed() && fis_zero(m_zoom_params.m_fZoomRotationFactor) &&
             m_bAlternativeAimActive && !m_bAlternativeAimOwnsZoom) {
             m_bAlternativeAimActive = false;
+            m_fAlternativeAimFactor = 0.f;
         }
     }
 }
