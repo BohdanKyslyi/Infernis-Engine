@@ -120,3 +120,14 @@ disable_ui                  = false
 anm_show                    = item_pickup
 anm_show_16x9               = item_pickup
 action_timing               = 750
+
+; Optional left-hand visor wipe. If this HUD or its motion is unavailable,
+; the wipe_visor action still clears raindrops immediately.
+[raindrops_wiping_hud]:animated_item_hud
+attach_place_idx            = 1
+item_visual                 = dynamics\fake_object.ogf
+block_movement              = false
+disable_ui                  = false
+anm_show                    = visor_wipe
+anm_show_16x9               = visor_wipe
+action_timing               = 550

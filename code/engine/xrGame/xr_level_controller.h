@@ -83,6 +83,7 @@ enum EGameActions {
     kQUICK_GRENADE,
     kWPN_INSPECT,
     kWPN_ZOOM_ALTER,
+    kWIPE_VISOR,
 
     kLASTACTION,
     kNOTBINDED,

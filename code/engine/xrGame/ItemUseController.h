@@ -21,6 +21,9 @@ public:
     // Delays the real ownership event until a left-hand HUD animation reaches
     // its configured action_timing. The active weapon stays attached.
     bool StartPickup(CInventoryItem* item);
+    // Cleans the accumulated screen raindrops at the configured point of an
+    // optional left-hand HUD animation. The active weapon stays attached.
+    bool StartRainWipe();
 
     // Persistent controller-owned HUD lifecycle used by interfaces such as
     // PDA and backpack. Connecting those interfaces is intentionally kept
@@ -58,6 +61,7 @@ private:
         eControllerModeMutantLoot,
         eControllerModeQuickKnife,
         eControllerModePickup,
+        eControllerModeRainWipe,
     };
 
     enum EHudAnimationPhase {
@@ -89,6 +93,7 @@ private:
     void UpdateMutantLootAnimation();
     void UpdateQuickKnifeAnimation();
     void UpdatePickupAnimation();
+    void UpdateRainWipeAnimation();
 
     CCustomMonster* MutantLootTarget() const;
     bool ApplyMutantLootEffect();
@@ -97,8 +102,10 @@ private:
     bool CompleteMutantLootImmediately(CCustomMonster* monster);
     bool ApplyQuickKnifeEffect();
     bool ApplyPickupEffect();
-    bool CanStartPickupAnimation();
-    void RestorePickupDetector(u16 detector_id, bool restore_detector);
+    bool ApplyRainWipeEffect();
+    bool CanStartLeftHandAnimation();
+    void RestoreLeftHandDetector(u16 detector_id, bool restore_detector);
+    void PrepareLeftHandDetector();
 
     void LockActor(bool hide_weapon = true);
     void UnlockActor();
@@ -155,8 +162,8 @@ private:
     u16 m_mutant_loot_target_id;
     u16 m_quick_knife_id;
     u16 m_pickup_target_id;
-    u16 m_pickup_detector_id;
-    bool m_restore_pickup_detector;
+    u16 m_left_hand_detector_id;
+    bool m_restore_left_hand_detector;
     u32 m_mutant_loot_particle_time;
     bool m_mutant_loot_particle_enabled;
     bool m_mutant_loot_particle_started;

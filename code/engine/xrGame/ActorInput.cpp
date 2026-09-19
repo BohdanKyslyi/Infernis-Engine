@@ -62,6 +62,7 @@ static bool ItemUseBlocksAction(int cmd) {
     case kWPN_INSPECT:
     case kQUICK_KICK:
     case kQUICK_GRENADE:
+    case kWIPE_VISOR:
     case kWPN_FUNC:
     case kWPN_FIREMODE_PREV:
     case kWPN_FIREMODE_NEXT:
@@ -231,6 +232,10 @@ void CActor::IR_OnKeyboardPress(int cmd) {
             if (inventory().GetNextActiveSlot() == GRENADE_SLOT)
                 grenade->PrepareQuickThrow(return_slot);
         }
+    } break;
+    case kWIPE_VISOR: {
+        if (!hud_adj_mode && m_item_use && !m_item_use->IsBusy())
+            m_item_use->StartRainWipe();
     } break;
     /*
             case kFLARE:{

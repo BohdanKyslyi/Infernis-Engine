@@ -11,12 +11,14 @@
 
 #include "Actor.h"
 #include "CustomMonster.h"
+#include "Weapon.h"
 #include "WeaponKnife.h"
 #include "HudItem.h"
 #include "player_hud.h"
 #include "inventory.h"
 #include "level.h"
 #include "game_cl_base.h"
+#include "../xrEngine/Render.h"
 
 #include "CustomDetector.h"
 #include "CustomOutfit.h"
@@ -87,6 +89,15 @@ static bool PickupAnimationsEnabled() {
     return enabled;
 }
 
+static bool RainWipingEnabled() {
+    if (!pSettings->section_exist("items_animations") ||
+        !pSettings->line_exist("items_animations", "enable_raindrops_wiping")) {
+        return true;
+    }
+
+    return !!pSettings->r_bool("items_animations", "enable_raindrops_wiping");
+}
+
 static bool MutantLootParticlesEnabled() {
     static bool initialized = false;
     static bool enabled = false;
@@ -142,8 +153,8 @@ CItemUseController::CItemUseController(CActor* actor)
       m_mutant_loot_target_id(u16(-1)),
       m_quick_knife_id(u16(-1)),
       m_pickup_target_id(u16(-1)),
-      m_pickup_detector_id(u16(-1)),
-      m_restore_pickup_detector(false),
+      m_left_hand_detector_id(u16(-1)),
+      m_restore_left_hand_detector(false),
       m_mutant_loot_particle_time(0),
       m_mutant_loot_particle_enabled(false),
       m_mutant_loot_particle_started(false),
@@ -452,17 +463,9 @@ bool CItemUseController::StartPickup(CInventoryItem* item) {
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;
     m_pickup_target_id = item->object().ID();
-    m_pickup_detector_id = u16(-1);
-    m_restore_pickup_detector = false;
     m_waiting_for_weapon_hide = true;
 
-    CCustomDetector* detector =
-        smart_cast<CCustomDetector*>(m_actor->inventory().ItemFromSlot(DETECTOR_SLOT));
-    if (detector && !detector->IsHidden()) {
-        m_pickup_detector_id = detector->ID();
-        m_restore_pickup_detector = true;
-        detector->HideDetector(true);
-    }
+    PrepareLeftHandDetector();
 
     // Pickup owns the controls and the left hand, but never holsters slot 0.
     LockActor(false);
@@ -473,7 +476,82 @@ bool CItemUseController::StartPickup(CInventoryItem* item) {
 
     Msg("* Pickup: waiting for left hand, item [%u][%s], HUD [%s], detector [%s]",
         (u32)m_pickup_target_id, m_item_section.c_str(), m_hud_section.c_str(),
-        m_restore_pickup_detector ? "hide/restore" : "none");
+        m_restore_left_hand_detector ? "hide/restore" : "none");
+    return true;
+}
+
+bool CItemUseController::StartRainWipe() {
+    if (!m_actor || IsBusy() || !RainWipingEnabled() || !::Render ||
+        ::Render->GetRainDropsFactor() <= EPS_L) {
+        return false;
+    }
+
+    CInventoryItem* active_item = m_actor->inventory().ActiveItem();
+    CWeapon* active_weapon = smart_cast<CWeapon*>(active_item);
+    CHudItem* active_hud_item = active_item ? active_item->cast_hud_item() : NULL;
+    if ((active_weapon && active_weapon->IsZoomed()) ||
+        (active_hud_item && active_hud_item->IsPending())) {
+        return false;
+    }
+
+    shared_str hud_section;
+    bool use_animation = g_player_hud && pSettings->section_exist("items_animations") &&
+        pSettings->line_exist("items_animations", "raindrops_wiping_hud");
+
+    if (use_animation) {
+        LPCSTR configured_hud =
+            pSettings->r_string("items_animations", "raindrops_wiping_hud");
+        if (!configured_hud || !configured_hud[0] || !xr_strcmp(configured_hud, "none")) {
+            use_animation = false;
+        } else {
+            hud_section = configured_hud;
+            use_animation = pSettings->section_exist(hud_section.c_str()) &&
+                pSettings->line_exist(hud_section.c_str(), "anm_show") &&
+                g_player_hud->can_attach_controller_item(hud_section);
+        }
+    }
+
+    // The renderer action remains usable before the optional hand motion is
+    // exported or when a mod deliberately sets the HUD entry to "none".
+    if (!use_animation) {
+        ::Render->ResetRainDrops();
+        Msg("* RainWipe: raindrops cleared without HUD animation");
+        return true;
+    }
+
+    m_item = NULL;
+    m_item_section = NULL;
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+
+    m_start_time = 0;
+    m_action_time = pSettings->line_exist(hud_section.c_str(), "action_timing")
+        ? pSettings->r_u32(hud_section.c_str(), "action_timing")
+        : u32(-1);
+    m_animation_duration = 0;
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModeRainWipe;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_waiting_for_weapon_hide = true;
+
+    PrepareLeftHandDetector();
+
+    // The controller blocks weapon input but keeps slot 0 on screen.
+    LockActor(false);
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+
+    Msg("* RainWipe: waiting for left hand, HUD [%s], detector [%s]",
+        m_hud_section.c_str(),
+        m_restore_left_hand_detector ? "hide/restore" : "none");
     return true;
 }
 
@@ -861,18 +939,34 @@ bool CItemUseController::CanStartAnimation()
     return true;
 }
 
-bool CItemUseController::CanStartPickupAnimation() {
+void CItemUseController::PrepareLeftHandDetector() {
+    m_left_hand_detector_id = u16(-1);
+    m_restore_left_hand_detector = false;
+
+    if (!m_actor)
+        return;
+
+    CCustomDetector* detector =
+        smart_cast<CCustomDetector*>(m_actor->inventory().ItemFromSlot(DETECTOR_SLOT));
+    if (detector && !detector->IsHidden()) {
+        m_left_hand_detector_id = detector->ID();
+        m_restore_left_hand_detector = true;
+        detector->HideDetector(true);
+    }
+}
+
+bool CItemUseController::CanStartLeftHandAnimation() {
     if (!m_actor)
         return false;
 
-    if (!m_restore_pickup_detector)
+    if (!m_restore_left_hand_detector)
         return true;
 
-    CInventoryItem* item = m_actor->inventory().get_object_by_id(m_pickup_detector_id);
+    CInventoryItem* item = m_actor->inventory().get_object_by_id(m_left_hand_detector_id);
     CCustomDetector* detector = item ? smart_cast<CCustomDetector*>(item) : NULL;
     if (!detector || m_actor->inventory().ItemFromSlot(DETECTOR_SLOT) != detector) {
-        m_restore_pickup_detector = false;
-        m_pickup_detector_id = u16(-1);
+        m_restore_left_hand_detector = false;
+        m_left_hand_detector_id = u16(-1);
         return true;
     }
 
@@ -910,7 +1004,8 @@ void CItemUseController::BeginAnimation()
     m_waiting_for_weapon_hide = false;
     m_controller_animation_start_time = Device.dwTimeGlobal;
 
-    if (m_controller_mode == eControllerModePickup) {
+    if (m_controller_mode == eControllerModePickup ||
+        m_controller_mode == eControllerModeRainWipe) {
         shared_str played_motion_name;
         if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
                                     &played_motion_name)) {
@@ -925,8 +1020,13 @@ void CItemUseController::BeginAnimation()
         StartCameraEffector(played_motion_name);
         UpdatePPEffect();
 
-        Msg("* Pickup: left-hand animation started, item [%u], duration [%u], action [%u]",
-            (u32)m_pickup_target_id, m_animation_duration, m_action_time);
+        if (m_controller_mode == eControllerModePickup) {
+            Msg("* Pickup: left-hand animation started, item [%u], duration [%u], action [%u]",
+                (u32)m_pickup_target_id, m_animation_duration, m_action_time);
+        } else {
+            Msg("* RainWipe: left-hand animation started, duration [%u], action [%u]",
+                m_animation_duration, m_action_time);
+        }
         return;
     }
 
@@ -1305,6 +1405,30 @@ void CItemUseController::UpdatePickupAnimation() {
         Finish();
 }
 
+bool CItemUseController::ApplyRainWipeEffect() {
+    if (!::Render)
+        return false;
+
+    ::Render->ResetRainDrops();
+    m_effect_applied = true;
+    Msg("* RainWipe: accumulated raindrops cleared");
+    return true;
+}
+
+void CItemUseController::UpdateRainWipeAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+    if (!m_effect_applied && elapsed >= m_action_time && !ApplyRainWipeEffect()) {
+        Cancel();
+        return;
+    }
+
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
 void CItemUseController::Update(float dt)
 {
     (void)dt;
@@ -1367,8 +1491,9 @@ void CItemUseController::Update(float dt)
     // чекаємо weapon + detector hide.
     //
     if (m_waiting_for_weapon_hide) {
-        if (m_controller_mode == eControllerModePickup) {
-            if (CanStartPickupAnimation())
+        if (m_controller_mode == eControllerModePickup ||
+            m_controller_mode == eControllerModeRainWipe) {
+            if (CanStartLeftHandAnimation())
                 BeginAnimation();
         } else if (CanStartAnimation())
             BeginAnimation();
@@ -1396,6 +1521,11 @@ void CItemUseController::Update(float dt)
 
     if (m_controller_mode == eControllerModePickup) {
         UpdatePickupAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeRainWipe) {
+        UpdateRainWipeAnimation();
         return;
     }
 
@@ -1462,8 +1592,8 @@ void CItemUseController::Cancel() {
         return;
 
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
-    const u16 pickup_detector_id = m_pickup_detector_id;
-    const bool restore_pickup_detector = m_restore_pickup_detector;
+    const u16 left_hand_detector_id = m_left_hand_detector_id;
+    const bool restore_left_hand_detector = m_restore_left_hand_detector;
 
     if (m_controller_mode == eControllerModeMutantLoot && !m_effect_applied)
         ReleaseMutantLootReservation();
@@ -1497,12 +1627,14 @@ void CItemUseController::Cancel() {
         Msg("* QuickKnife: HUD animation cancelled for knife [%u]", (u32)m_quick_knife_id);
     else if (m_controller_mode == eControllerModePickup)
         Msg("* Pickup: left-hand animation cancelled for item [%u]", (u32)m_pickup_target_id);
+    else if (m_controller_mode == eControllerModeRainWipe)
+        Msg("* RainWipe: left-hand animation cancelled");
     else
         Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
     Reset();
 
-    RestorePickupDetector(pickup_detector_id, restore_pickup_detector);
+    RestoreLeftHandDetector(left_hand_detector_id, restore_left_hand_detector);
 
     if (refresh_outfit_hud) {
         m_outfit_hud_refresh_pending = true;
@@ -1539,8 +1671,8 @@ void CItemUseController::Finish() {
     const shared_str queued_hud_animation_section = m_queued_hud_animation_section;
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
     const shared_str function_on_stop = m_function_on_stop;
-    const u16 pickup_detector_id = m_pickup_detector_id;
-    const bool restore_pickup_detector = m_restore_pickup_detector;
+    const u16 left_hand_detector_id = m_left_hand_detector_id;
+    const bool restore_left_hand_detector = m_restore_left_hand_detector;
 
     //
     // Normal physical trash moment:
@@ -1573,12 +1705,14 @@ void CItemUseController::Finish() {
         Msg("* QuickKnife: HUD animation finished for knife [%u]", (u32)m_quick_knife_id);
     else if (m_controller_mode == eControllerModePickup)
         Msg("* Pickup: left-hand animation finished for item [%u]", (u32)m_pickup_target_id);
+    else if (m_controller_mode == eControllerModeRainWipe)
+        Msg("* RainWipe: left-hand animation finished");
     else
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
     Reset();
 
-    RestorePickupDetector(pickup_detector_id, restore_pickup_detector);
+    RestoreLeftHandDetector(left_hand_detector_id, restore_left_hand_detector);
 
     if (refresh_outfit_hud) {
         m_outfit_hud_refresh_pending = true;
@@ -1648,8 +1782,8 @@ void CItemUseController::Reset()
     m_mutant_loot_target_id = u16(-1);
     m_quick_knife_id = u16(-1);
     m_pickup_target_id = u16(-1);
-    m_pickup_detector_id = u16(-1);
-    m_restore_pickup_detector = false;
+    m_left_hand_detector_id = u16(-1);
+    m_restore_left_hand_detector = false;
     m_mutant_loot_particle_time = 0;
     m_mutant_loot_particle_enabled = false;
     m_mutant_loot_particle_started = false;
@@ -1691,7 +1825,7 @@ void CItemUseController::Reset()
     m_use_particles_started = false;
 }
 
-void CItemUseController::RestorePickupDetector(u16 detector_id, bool restore_detector) {
+void CItemUseController::RestoreLeftHandDetector(u16 detector_id, bool restore_detector) {
     if (!restore_detector || !m_actor || detector_id == u16(-1))
         return;
 

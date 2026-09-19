@@ -33,6 +33,7 @@ void key_binding_registrator::script_register(lua_State* L) {
                     value("kQUICK_GRENADE", int(kQUICK_GRENADE)),
                     value("kWPN_ZOOM_ALTER", int(kWPN_ZOOM_ALTER)),
                     value("kWPN_INSPECT", int(kWPN_INSPECT)),
+                    value("kWIPE_VISOR", int(kWIPE_VISOR)),
                     value("kUSE", int(kUSE)), value("kDROP", int(kDROP)),
                     value("kSCORES", int(kSCORES)), value("kCHAT", int(kCHAT)),
                     value("kSCREENSHOT", int(kSCREENSHOT)), value("kQUIT", int(kQUIT)),

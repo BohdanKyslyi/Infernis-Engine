@@ -94,6 +94,7 @@ _action actions[] = {
     { "quick_grenade", kQUICK_GRENADE, _sp },
     { "wpn_inspect", kWPN_INSPECT, _sp },
     { "wpn_zoom_alter", kWPN_ZOOM_ALTER, _sp },
+    { "wipe_visor", kWIPE_VISOR, _sp },
     { NULL, kLASTACTION, _both }
 };
 static_assert(sizeof(actions) / sizeof(actions[0]) == bindings_count + 1,
