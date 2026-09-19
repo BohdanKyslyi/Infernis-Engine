@@ -53,6 +53,7 @@ static bool ItemUseBlocksAction(int cmd) {
     case kWPN_NEXT:
     case kWPN_FIRE:
     case kWPN_ZOOM:
+    case kWPN_ZOOM_ALTER:
     case kWPN_ZOOM_INC:
     case kWPN_ZOOM_DEC:
     case kWPN_RELOAD:

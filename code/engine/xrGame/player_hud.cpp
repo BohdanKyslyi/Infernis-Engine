@@ -2,6 +2,7 @@
 #include "player_hud.h"
 #include "player_hud_legs.h"
 #include "HudItem.h"
+#include "Weapon.h"
 #include "ui_base.h"
 #include "actor.h"
 #include "physic_item.h"
@@ -1067,16 +1068,31 @@ void player_hud::UpdateHudProjection() {
         source = m_attached_items[1];
     }
 
-    const bool uses_degrees = source && source->m_hud_fov_degrees > 0.f;
-    const float override_hud_fov =
-        uses_degrees
-            ? source->m_hud_fov_degrees / std::max(Device.fFOV, EPS_S)
-            : (source ? source->m_hud_fov : 0.f);
-
     // Preserve a console change made while an override is active. Normally
     // psHUD_FOV equals m_applied_hud_fov until this method restores it.
     if (m_hud_fov_override_active && !fsimilar(psHUD_FOV, m_applied_hud_fov))
         m_default_hud_fov = psHUD_FOV;
+
+    const bool uses_degrees = source && source->m_hud_fov_degrees > 0.f;
+    float override_hud_fov =
+        uses_degrees
+            ? source->m_hud_fov_degrees / std::max(Device.fFOV, EPS_S)
+            : (source ? source->m_hud_fov : 0.f);
+
+    float item_fov_factor = 1.f;
+    if (source && source->m_parent_hud_item) {
+        CWeapon* weapon = smart_cast<CWeapon*>(source->m_parent_hud_item);
+        if (weapon)
+            item_fov_factor = weapon->AlternativeHudFovFactor();
+    }
+
+    if (!fsimilar(item_fov_factor, 1.f)) {
+        const float base_hud_fov = override_hud_fov > 0.f
+            ? override_hud_fov
+            : (m_hud_fov_override_active ? m_default_hud_fov : psHUD_FOV);
+        override_hud_fov = base_hud_fov * item_fov_factor;
+        clamp(override_hud_fov, HUD_FOV_MIN, HUD_FOV_MAX);
+    }
 
     if (override_hud_fov > 0.f) {
         if (!m_hud_fov_override_active)

@@ -54,6 +54,9 @@ CWeapon::CWeapon() {
     m_zoom_params.m_fZoomRotationFactor = 0.f;
     m_zoom_params.m_pVision = NULL;
     m_zoom_params.m_pNight_vision = NULL;
+    m_bAlternativeAimActive = false;
+    m_bAlternativeAimOwnsZoom = false;
+    m_fZoomFactorBeforeAlternativeAim = g_fov;
 
     m_pCurrentAmmo = NULL;
 
@@ -825,6 +828,9 @@ void CWeapon::SetDefaults() {
     bMisfire = false;
     m_flagsAddOnState = 0;
     m_zoom_params.m_bIsZoomModeNow = false;
+    m_bAlternativeAimActive = false;
+    m_bAlternativeAimOwnsZoom = false;
+    m_fZoomFactorBeforeAlternativeAim = g_fov;
 }
 
 void CWeapon::UpdatePosition(const Fmatrix& trans) {
@@ -866,6 +872,9 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
 
     case kWPN_ZOOM:
         if (IsZoomEnabled()) {
+            if (m_bAlternativeAimActive)
+                return true;
+
             if (b_toggle_weapon_aim) {
                 if (flags & CMD_START) {
                     if (!IsZoomed()) {
@@ -890,6 +899,48 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
             return true;
         } else
             return false;
+
+    case kWPN_ZOOM_ALTER:
+        if (!IsZoomEnabled() || !IsAlternativeAimAllowed())
+            return false;
+
+        if (flags & CMD_START) {
+            if (IsPending())
+                return true;
+
+            const bool was_zoomed = IsZoomed();
+            m_fZoomFactorBeforeAlternativeAim = GetZoomFactor();
+            m_bAlternativeAimActive = true;
+            m_bAlternativeAimOwnsZoom = !was_zoomed;
+
+            if (!was_zoomed) {
+                if (GetState() != eIdle)
+                    SwitchState(eIdle);
+                OnZoomIn();
+            } else {
+                xr_delete(m_zoom_params.m_pVision);
+                if (m_zoom_params.m_pNight_vision) {
+                    m_zoom_params.m_pNight_vision->Stop(100000.0f, false);
+                    xr_delete(m_zoom_params.m_pNight_vision);
+                }
+                m_zoom_params.m_fCurrentZoomFactor = CurrentZoomFactor();
+            }
+        } else if (m_bAlternativeAimActive) {
+            const bool owns_zoom = m_bAlternativeAimOwnsZoom;
+
+            if (owns_zoom && IsZoomed()) {
+                OnZoomOut();
+            } else {
+                m_bAlternativeAimActive = false;
+                m_bAlternativeAimOwnsZoom = false;
+                if (IsZoomed()) {
+                    OnZoomIn();
+                    m_zoom_params.m_fCurrentZoomFactor =
+                        m_fZoomFactorBeforeAlternativeAim;
+                }
+            }
+        }
+        return true;
 
     case kWPN_ZOOM_INC:
     case kWPN_ZOOM_DEC:
@@ -1108,6 +1159,51 @@ shared_str CWeapon::ScopeSettingSection(LPCSTR key) const {
     return cNameSect();
 }
 
+shared_str CWeapon::AlternativeAimSettingSection(LPCSTR key) const {
+    if (IsScopeAttached() && m_eScopeStatus == ALife::eAddonAttachable &&
+        m_cur_scope < m_scopes.size()) {
+        const shared_str& wrapper = m_scopes[m_cur_scope];
+        if (pSettings->line_exist(wrapper, key))
+            return wrapper;
+
+        const shared_str optic = GetScopeName();
+        if (pSettings->line_exist(optic, key))
+            return optic;
+    }
+
+    const shared_str hud_section = HudSection();
+    if (pSettings->line_exist(hud_section, key))
+        return hud_section;
+
+    // Permanent optics can keep their alternative-aim settings in the
+    // weapon section because they do not have an attachable scope wrapper.
+    if (pSettings->line_exist(cNameSect(), key))
+        return cNameSect();
+
+    return shared_str();
+}
+
+bool CWeapon::IsAlternativeAimAllowed() const {
+    const shared_str section = AlternativeAimSettingSection("alter_zoom_allowed");
+    return section.size() && pSettings->r_bool(section, "alter_zoom_allowed");
+}
+
+float CWeapon::AlternativeHudFovFactor() const {
+    if (!m_bAlternativeAimActive)
+        return 1.f;
+
+    const shared_str section =
+        AlternativeAimSettingSection("hud_fov_alter_zoom_factor");
+    if (!section.size())
+        return 1.f;
+
+    const float factor = pSettings->r_float(section, "hud_fov_alter_zoom_factor");
+    if (factor <= EPS_S)
+        return 1.f;
+
+    return 1.f + (factor - 1.f) * m_zoom_params.m_fZoomRotationFactor;
+}
+
 bool CWeapon::Is3DScopeEnabled() const {
     if (!IsScopeAttached() || !(psDeviceFlags.test(rsR4) || psDeviceFlags.test(rsR3) || psDeviceFlags.test(rsR2)) ||
         !pSettings->section_exist("weapon_scopes") ||
@@ -1136,7 +1232,7 @@ float CWeapon::ScopeLensFov() const {
 }
 
 bool CWeapon::ScopeLensShouldRender() const {
-    if (!Is3DScopeEnabled())
+    if (!Is3DScopeEnabled() || m_bAlternativeAimActive)
         return false;
 
     const LPCSTR setting = READ_IF_EXISTS(pSettings, r_string,
@@ -1195,7 +1291,8 @@ void CWeapon::ScopeLensGlass(float* params) const {
 }
 
 bool CWeapon::HasScopeDetector() const {
-    return IsZoomed() && Is3DScopeEnabled() && m_zoom_params.m_sUseBinocularVision.size();
+    return IsZoomed() && !m_bAlternativeAimActive && Is3DScopeEnabled() &&
+           m_zoom_params.m_sUseBinocularVision.size();
 }
 
 bool CWeapon::IsSilencerAttached() const {
@@ -1384,8 +1481,9 @@ void CWeapon::UpdateAddonsVisibility() {
 void CWeapon::InitAddons() {}
 
 float CWeapon::CurrentZoomFactor() {
-    return IsScopeAttached() ? m_zoom_params.m_fScopeZoomFactor
-                             : m_zoom_params.m_fIronSightZoomFactor;
+    return IsScopeAttached() && !m_bAlternativeAimActive
+        ? m_zoom_params.m_fScopeZoomFactor
+        : m_zoom_params.m_fIronSightZoomFactor;
 };
 void GetZoomData(const float scope_factor, float& delta, float& min_zoom_factor);
 void CWeapon::OnZoomIn() {
@@ -1408,7 +1506,7 @@ void CWeapon::OnZoomIn() {
                 ? m_zoom_params.m_sUseZoomPostprocess.c_str() : "none",
             (u32)ScopeLensMode());
     }
-    if (m_zoom_params.m_bUseDynamicZoom)
+    if (m_zoom_params.m_bUseDynamicZoom && !m_bAlternativeAimActive)
         SetZoomFactor(m_fRTZoomFactor);
     else
         m_zoom_params.m_fCurrentZoomFactor = CurrentZoomFactor();
@@ -1421,12 +1519,14 @@ void CWeapon::OnZoomIn() {
     if (GetHUDmode())
         GamePersistent().SetPickableEffectorDOF(true);
 
-    if (m_zoom_params.m_sUseBinocularVision.size() && IsScopeAttached() &&
+    if (!m_bAlternativeAimActive && m_zoom_params.m_sUseBinocularVision.size() &&
+        IsScopeAttached() &&
         NULL == m_zoom_params.m_pVision)
         m_zoom_params.m_pVision =
             xr_new<CBinocularsVision>(m_zoom_params.m_sUseBinocularVision /*"wpn_binoc"*/);
 
-    if (m_zoom_params.m_sUseZoomPostprocess.size() && IsScopeAttached()) {
+    if (!m_bAlternativeAimActive && m_zoom_params.m_sUseZoomPostprocess.size() &&
+        IsScopeAttached()) {
         CActor* pA = smart_cast<CActor*>(H_Parent());
         if (pA) {
             if (NULL == m_zoom_params.m_pNight_vision) {
@@ -1438,8 +1538,13 @@ void CWeapon::OnZoomIn() {
 }
 
 void CWeapon::OnZoomOut() {
+    const bool was_alternative_aim = m_bAlternativeAimActive;
     m_zoom_params.m_bIsZoomModeNow = false;
-    m_fRTZoomFactor = GetZoomFactor(); // store current
+    if (!was_alternative_aim)
+        m_fRTZoomFactor = GetZoomFactor(); // store current dynamic scope zoom
+    if (!was_alternative_aim || fis_zero(m_zoom_params.m_fZoomRotationFactor))
+        m_bAlternativeAimActive = false;
+    m_bAlternativeAimOwnsZoom = false;
     m_zoom_params.m_fCurrentZoomFactor = g_fov;
     EnableHudInertion(TRUE);
 
@@ -1458,7 +1563,7 @@ void CWeapon::OnZoomOut() {
 }
 
 CUIWindow* CWeapon::ZoomTexture() {
-    if (UseScopeTexture())
+    if (UseScopeTexture() && !m_bAlternativeAimActive)
         return m_UIScope;
     else
         return NULL;
@@ -1674,7 +1779,31 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
         Fvector curr_offs, curr_rot;
         curr_offs = hi->m_measures.m_hands_offset[0][idx]; // pos,aim
         curr_rot = hi->m_measures.m_hands_offset[1][idx];  // rot,aim
-        if (idx == 1 && IsScopeAttached() && m_eScopeStatus == ALife::eAddonAttachable) {
+        if (idx == 1 && m_bAlternativeAimActive) {
+            const bool widescreen =
+                hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
+            LPCSTR pos_key = widescreen ? "alter_aim_hud_offset_pos_16x9"
+                                        : "alter_aim_hud_offset_pos";
+            LPCSTR rot_key = widescreen ? "alter_aim_hud_offset_rot_16x9"
+                                        : "alter_aim_hud_offset_rot";
+            shared_str pos_section = AlternativeAimSettingSection(pos_key);
+            shared_str rot_section = AlternativeAimSettingSection(rot_key);
+
+            if (!pos_section.size() && widescreen) {
+                pos_key = "alter_aim_hud_offset_pos";
+                pos_section = AlternativeAimSettingSection(pos_key);
+            }
+            if (!rot_section.size() && widescreen) {
+                rot_key = "alter_aim_hud_offset_rot";
+                rot_section = AlternativeAimSettingSection(rot_key);
+            }
+
+            if (pos_section.size())
+                curr_offs = pSettings->r_fvector3(pos_section, pos_key);
+            if (rot_section.size())
+                curr_rot = pSettings->r_fvector3(rot_section, rot_key);
+        } else if (idx == 1 && IsScopeAttached() &&
+                   m_eScopeStatus == ALife::eAddonAttachable) {
             const bool widescreen = hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
             LPCSTR pos_key = widescreen ? "aim_hud_offset_pos_16x9" : "aim_hud_offset_pos";
             LPCSTR rot_key = widescreen ? "aim_hud_offset_rot_16x9" : "aim_hud_offset_rot";
@@ -1714,6 +1843,11 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
                 Device.fTimeDelta / m_zoom_params.m_fZoomRotateTime;
 
         clamp(m_zoom_params.m_fZoomRotationFactor, 0.f, 1.f);
+
+        if (!IsZoomed() && fis_zero(m_zoom_params.m_fZoomRotationFactor) &&
+            m_bAlternativeAimActive && !m_bAlternativeAimOwnsZoom) {
+            m_bAlternativeAimActive = false;
+        }
     }
 }
 
@@ -1914,7 +2048,7 @@ bool CWeapon::MovingAnimAllowedNow() { return !IsZoomed(); }
 bool CWeapon::IsHudModeNow() { return (HudItemData() != NULL); }
 
 void CWeapon::ZoomInc() {
-    if (!IsScopeAttached())
+    if (!IsScopeAttached() || m_bAlternativeAimActive)
         return;
     if (!m_zoom_params.m_bUseDynamicZoom)
         return;
@@ -1927,7 +2061,7 @@ void CWeapon::ZoomInc() {
 }
 
 void CWeapon::ZoomDec() {
-    if (!IsScopeAttached())
+    if (!IsScopeAttached() || m_bAlternativeAimActive)
         return;
     if (!m_zoom_params.m_bUseDynamicZoom)
         return;

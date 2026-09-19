@@ -80,6 +80,7 @@ enum EGameActions {
     kQUICK_LOAD,
     kALIFE_CMD,
     kWPN_INSPECT,
+    kWPN_ZOOM_ALTER,
 
     kLASTACTION,
     kNOTBINDED,

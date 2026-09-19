@@ -146,6 +146,10 @@ public:
     void ScopeLensGlass(float* params) const;
     bool HasScopeDetector() const;
     shared_str ScopeSettingSection(LPCSTR key) const;
+    shared_str AlternativeAimSettingSection(LPCSTR key) const;
+    bool IsAlternativeAimAllowed() const;
+    bool IsAlternativeAimActive() const { return m_bAlternativeAimActive; }
+    float AlternativeHudFovFactor() const;
     bool IsSilencerAttached() const;
 
     virtual bool GrenadeLauncherAttachable();
@@ -227,6 +231,10 @@ protected:
         CNightVisionEffector* m_pNight_vision;
 
     } m_zoom_params;
+
+    bool m_bAlternativeAimActive;
+    bool m_bAlternativeAimOwnsZoom;
+    float m_fZoomFactorBeforeAlternativeAim;
 
     float m_fRTZoomFactor; // run-time zoom factor
     CUIWindow* m_UIScope;

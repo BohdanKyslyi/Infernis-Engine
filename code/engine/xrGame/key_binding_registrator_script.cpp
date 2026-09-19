@@ -29,6 +29,7 @@ void key_binding_registrator::script_register(lua_State* L) {
                     value("kWPN_6", int(kWPN_6)), value("kWPN_NEXT", int(kWPN_NEXT)),
                     value("kWPN_FIRE", int(kWPN_FIRE)), value("kWPN_RELOAD", int(kWPN_RELOAD)),
                     value("kWPN_ZOOM", int(kWPN_ZOOM)), value("kWPN_FUNC", int(kWPN_FUNC)),
+                    value("kWPN_ZOOM_ALTER", int(kWPN_ZOOM_ALTER)),
                     value("kWPN_INSPECT", int(kWPN_INSPECT)),
                     value("kUSE", int(kUSE)), value("kDROP", int(kDROP)),
                     value("kSCORES", int(kSCORES)), value("kCHAT", int(kCHAT)),
