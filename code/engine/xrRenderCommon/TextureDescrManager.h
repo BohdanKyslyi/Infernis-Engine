@@ -30,11 +30,14 @@ class CTextureDescrMngr {
 
     using map_TD = xr_map<shared_str, texture_desc>;
     using map_CS = xr_map<shared_str, cl_dt_scaler*>;
+    using map_TP = xr_map<shared_str, STextureParams>;
 
     map_TD m_texture_details;
     map_CS m_detail_scalers;
 
-    void LoadTHM(LPCSTR initial);
+    void LoadTHM(LPCSTR initial, map_TP& texture_params);
+    void LoadLTX(LPCSTR initial, map_TP& texture_params);
+    void ApplyTextureParams(const map_TP& texture_params);
 
 public:
     CTextureDescrMngr() = default;
