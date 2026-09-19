@@ -112,7 +112,9 @@ void CGrenade::State(u32 state) {
         };
     } break;
     case eThrowQuick: {
-        if (m_sounds.FindSoundItem("sndThrowQuick", false)) {
+        // The sound collection keeps alias lookup private. The config line is
+        // also the condition under which Load() registered this optional alias.
+        if (pSettings->line_exist(cNameSect().c_str(), "snd_throw_quick")) {
             Fvector C;
             Center(C);
             PlaySound("sndThrowQuick", C);
