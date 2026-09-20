@@ -135,3 +135,26 @@ disable_ui                  = false
 anm_show                    = visor_wipe
 anm_show_16x9               = visor_wipe
 action_timing               = 550
+
+; Left-hand headgear controls. The real headlamp/NVG state changes exactly at
+; action_timing. Both generic entries can be replaced by state-specific HUDs
+; in [items_animations] when separate on/off motions are available.
+[headlamp_toggle_hud]:animated_item_hud
+attach_place_idx            = 1
+item_visual                 = dynamics\fake_object.ogf
+preserve_other_hand         = true
+block_movement              = false
+disable_ui                  = false
+anm_show                    = headgear_toggle
+anm_show_16x9               = headgear_toggle
+action_timing               = 500
+
+[night_vision_toggle_hud]:animated_item_hud
+attach_place_idx            = 1
+item_visual                 = dynamics\fake_object.ogf
+preserve_other_hand         = true
+block_movement              = false
+disable_ui                  = false
+anm_show                    = headgear_toggle
+anm_show_16x9               = headgear_toggle
+action_timing               = 500

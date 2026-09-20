@@ -13,6 +13,7 @@
 #include "CustomMonster.h"
 #include "Weapon.h"
 #include "WeaponKnife.h"
+#include "Torch.h"
 #include "HudItem.h"
 #include "player_hud.h"
 #include "inventory.h"
@@ -98,6 +99,63 @@ static bool RainWipingEnabled() {
     return !!pSettings->r_bool("items_animations", "enable_raindrops_wiping");
 }
 
+static bool EquipmentToggleAnimationsEnabled(bool night_vision) {
+    if (!pSettings->section_exist("items_animations"))
+        return false;
+
+    LPCSTR line = night_vision ? "enable_night_vision_animation"
+                               : "enable_headlamp_animation";
+    return !pSettings->line_exist("items_animations", line) ||
+        !!pSettings->r_bool("items_animations", line);
+}
+
+static bool ResolveEquipmentToggleHud(bool night_vision, bool switch_on,
+                                      shared_str& hud_section) {
+    if (!g_player_hud || !pSettings->section_exist("items_animations"))
+        return false;
+
+    LPCSTR state_line = NULL;
+    LPCSTR common_line = NULL;
+    if (night_vision) {
+        state_line = switch_on ? "night_vision_on_hud" : "night_vision_off_hud";
+        common_line = "night_vision_hud";
+    } else {
+        state_line = switch_on ? "headlamp_on_hud" : "headlamp_off_hud";
+        common_line = "headlamp_hud";
+    }
+
+    LPCSTR line = pSettings->line_exist("items_animations", state_line)
+        ? state_line : common_line;
+    if (!pSettings->line_exist("items_animations", line))
+        return false;
+
+    LPCSTR configured_huds = pSettings->r_string("items_animations", line);
+    if (!configured_huds || !configured_huds[0] || !xr_strcmp(configured_huds, "none"))
+        return false;
+
+    xr_vector<shared_str> valid_huds;
+    const u32 hud_count = _GetItemCount(configured_huds);
+    for (u32 index = 0; index < hud_count; ++index) {
+        string256 candidate;
+        _GetItem(configured_huds, index, candidate);
+        if (!candidate[0] || !xr_strcmp(candidate, "none") ||
+            !pSettings->section_exist(candidate) ||
+            !pSettings->line_exist(candidate, "anm_show")) {
+            continue;
+        }
+
+        const shared_str candidate_section = candidate;
+        if (g_player_hud->can_attach_controller_item(candidate_section))
+            valid_huds.push_back(candidate_section);
+    }
+
+    if (valid_huds.empty())
+        return false;
+
+    hud_section = valid_huds[Random.randI(valid_huds.size())];
+    return true;
+}
+
 static bool MutantLootParticlesEnabled() {
     static bool initialized = false;
     static bool enabled = false;
@@ -153,6 +211,9 @@ CItemUseController::CItemUseController(CActor* actor)
       m_mutant_loot_target_id(u16(-1)),
       m_quick_knife_id(u16(-1)),
       m_pickup_target_id(u16(-1)),
+      m_equipment_toggle_target_id(u16(-1)),
+      m_equipment_toggle_night_vision(false),
+      m_equipment_toggle_state(false),
       m_left_hand_detector_id(u16(-1)),
       m_restore_left_hand_detector(false),
       m_mutant_loot_particle_time(0),
@@ -575,6 +636,62 @@ bool CItemUseController::StartRainWipe() {
     Msg("* RainWipe: waiting for left hand, HUD [%s], detector [%s]",
         m_hud_section.c_str(),
         m_restore_left_hand_detector ? "hide/restore" : "none");
+    return true;
+}
+
+bool CItemUseController::StartEquipmentToggle(CTorch* torch, bool night_vision) {
+    if (!torch || !m_actor || IsBusy() || !EquipmentToggleAnimationsEnabled(night_vision))
+        return false;
+
+    CInventoryItem* active_item = m_actor->inventory().ActiveItem();
+    CWeapon* active_weapon = smart_cast<CWeapon*>(active_item);
+    CHudItem* active_hud_item = active_item ? active_item->cast_hud_item() : NULL;
+    if ((active_weapon && active_weapon->IsZoomed()) ||
+        (active_hud_item && active_hud_item->IsPending())) {
+        return false;
+    }
+
+    const bool switch_on = night_vision ? !torch->GetNightVisionStatus()
+                                        : !torch->torch_active();
+    shared_str hud_section;
+    if (!ResolveEquipmentToggleHud(night_vision, switch_on, hud_section))
+        return false;
+
+    m_item = NULL;
+    m_item_section = torch->cNameSect();
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+
+    m_start_time = 0;
+    m_action_time = pSettings->line_exist(hud_section.c_str(), "action_timing")
+        ? pSettings->r_u32(hud_section.c_str(), "action_timing")
+        : u32(-1);
+    m_animation_duration = 0;
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModeEquipmentToggle;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_equipment_toggle_target_id = torch->ID();
+    m_equipment_toggle_night_vision = night_vision;
+    m_equipment_toggle_state = switch_on;
+    m_waiting_for_weapon_hide = true;
+
+    PrepareLeftHandDetector();
+    LockActor(false);
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+
+    Msg("* EquipmentToggle: waiting for left hand, target [%u][%s], state [%s], HUD [%s]",
+        (u32)m_equipment_toggle_target_id,
+        night_vision ? "night_vision" : "headlamp",
+        switch_on ? "on" : "off", m_hud_section.c_str());
     return true;
 }
 
@@ -1028,7 +1145,8 @@ void CItemUseController::BeginAnimation()
     m_controller_animation_start_time = Device.dwTimeGlobal;
 
     if (m_controller_mode == eControllerModePickup ||
-        m_controller_mode == eControllerModeRainWipe) {
+        m_controller_mode == eControllerModeRainWipe ||
+        m_controller_mode == eControllerModeEquipmentToggle) {
         shared_str played_motion_name;
         if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
                                     &played_motion_name)) {
@@ -1036,8 +1154,12 @@ void CItemUseController::BeginAnimation()
             return;
         }
 
-        if (m_action_time == u32(-1) || m_action_time > m_animation_duration)
+        if (m_action_time == u32(-1) &&
+            m_controller_mode == eControllerModeEquipmentToggle) {
+            m_action_time = m_animation_duration / 2;
+        } else if (m_action_time == u32(-1) || m_action_time > m_animation_duration) {
             m_action_time = m_animation_duration;
+        }
 
         PlayHudAnimationSound("snd_show");
         StartCameraEffector(played_motion_name);
@@ -1046,8 +1168,14 @@ void CItemUseController::BeginAnimation()
         if (m_controller_mode == eControllerModePickup) {
             Msg("* Pickup: left-hand animation started, item [%u], duration [%u], action [%u]",
                 (u32)m_pickup_target_id, m_animation_duration, m_action_time);
-        } else {
+        } else if (m_controller_mode == eControllerModeRainWipe) {
             Msg("* RainWipe: left-hand animation started, duration [%u], action [%u]",
+                m_animation_duration, m_action_time);
+        } else {
+            Msg("* EquipmentToggle: left-hand animation started, target [%s], state [%s], "
+                "duration [%u], action [%u]",
+                m_equipment_toggle_night_vision ? "night_vision" : "headlamp",
+                m_equipment_toggle_state ? "on" : "off",
                 m_animation_duration, m_action_time);
         }
         return;
@@ -1452,6 +1580,45 @@ void CItemUseController::UpdateRainWipeAnimation() {
         Finish();
 }
 
+bool CItemUseController::ApplyEquipmentToggleEffect() {
+    if (m_effect_applied)
+        return true;
+    if (!m_actor || m_equipment_toggle_target_id == u16(-1))
+        return false;
+
+    CInventoryItem* item =
+        m_actor->inventory().get_object_by_id(m_equipment_toggle_target_id);
+    CTorch* torch = item ? smart_cast<CTorch*>(item) : NULL;
+    if (!torch || torch->H_Parent() != m_actor)
+        return false;
+
+    if (m_equipment_toggle_night_vision)
+        torch->SwitchNightVision(m_equipment_toggle_state);
+    else
+        torch->Switch(m_equipment_toggle_state);
+
+    m_effect_applied = true;
+    Msg("* EquipmentToggle: [%s] switched [%s]",
+        m_equipment_toggle_night_vision ? "night_vision" : "headlamp",
+        m_equipment_toggle_state ? "on" : "off");
+    return true;
+}
+
+void CItemUseController::UpdateEquipmentToggleAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+    if (!m_effect_applied && elapsed >= m_action_time &&
+        !ApplyEquipmentToggleEffect()) {
+        Cancel();
+        return;
+    }
+
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
 void CItemUseController::Update(float dt)
 {
     (void)dt;
@@ -1515,7 +1682,8 @@ void CItemUseController::Update(float dt)
     //
     if (m_waiting_for_weapon_hide) {
         if (m_controller_mode == eControllerModePickup ||
-            m_controller_mode == eControllerModeRainWipe) {
+            m_controller_mode == eControllerModeRainWipe ||
+            m_controller_mode == eControllerModeEquipmentToggle) {
             if (CanStartLeftHandAnimation())
                 BeginAnimation();
         } else if (CanStartAnimation())
@@ -1549,6 +1717,11 @@ void CItemUseController::Update(float dt)
 
     if (m_controller_mode == eControllerModeRainWipe) {
         UpdateRainWipeAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeEquipmentToggle) {
+        UpdateEquipmentToggleAnimation();
         return;
     }
 
@@ -1652,6 +1825,9 @@ void CItemUseController::Cancel() {
         Msg("* Pickup: left-hand animation cancelled for item [%u]", (u32)m_pickup_target_id);
     else if (m_controller_mode == eControllerModeRainWipe)
         Msg("* RainWipe: left-hand animation cancelled");
+    else if (m_controller_mode == eControllerModeEquipmentToggle)
+        Msg("* EquipmentToggle: left-hand animation cancelled for [%s]",
+            m_equipment_toggle_night_vision ? "night_vision" : "headlamp");
     else
         Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
@@ -1680,6 +1856,12 @@ void CItemUseController::Finish() {
 
     if (m_controller_mode == eControllerModeQuickKnife && !m_effect_applied &&
         !ApplyQuickKnifeEffect()) {
+        Cancel();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeEquipmentToggle && !m_effect_applied &&
+        !ApplyEquipmentToggleEffect()) {
         Cancel();
         return;
     }
@@ -1730,6 +1912,9 @@ void CItemUseController::Finish() {
         Msg("* Pickup: left-hand animation finished for item [%u]", (u32)m_pickup_target_id);
     else if (m_controller_mode == eControllerModeRainWipe)
         Msg("* RainWipe: left-hand animation finished");
+    else if (m_controller_mode == eControllerModeEquipmentToggle)
+        Msg("* EquipmentToggle: left-hand animation finished for [%s]",
+            m_equipment_toggle_night_vision ? "night_vision" : "headlamp");
     else
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
@@ -1805,6 +1990,9 @@ void CItemUseController::Reset()
     m_mutant_loot_target_id = u16(-1);
     m_quick_knife_id = u16(-1);
     m_pickup_target_id = u16(-1);
+    m_equipment_toggle_target_id = u16(-1);
+    m_equipment_toggle_night_vision = false;
+    m_equipment_toggle_state = false;
     m_left_hand_detector_id = u16(-1);
     m_restore_left_hand_detector = false;
     m_mutant_loot_particle_time = 0;

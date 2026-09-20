@@ -7,6 +7,7 @@ class CInventoryItem;
 class CParticlesObject;
 class CCustomMonster;
 class CWeaponKnife;
+class CTorch;
 
 class CItemUseController {
 public:
@@ -24,6 +25,10 @@ public:
     // Cleans the accumulated screen raindrops at the configured point of an
     // optional left-hand HUD animation. The active weapon stays attached.
     bool StartRainWipe();
+    // Delays a headlamp or night-vision toggle until the left hand reaches the
+    // configured action_timing. Returning false keeps the vanilla immediate
+    // toggle available as a fallback.
+    bool StartEquipmentToggle(CTorch* torch, bool night_vision);
 
     // Persistent controller-owned HUD lifecycle used by interfaces such as
     // PDA and backpack. Connecting those interfaces is intentionally kept
@@ -62,6 +67,7 @@ private:
         eControllerModeQuickKnife,
         eControllerModePickup,
         eControllerModeRainWipe,
+        eControllerModeEquipmentToggle,
     };
 
     enum EHudAnimationPhase {
@@ -94,6 +100,7 @@ private:
     void UpdateQuickKnifeAnimation();
     void UpdatePickupAnimation();
     void UpdateRainWipeAnimation();
+    void UpdateEquipmentToggleAnimation();
 
     CCustomMonster* MutantLootTarget() const;
     bool ApplyMutantLootEffect();
@@ -103,6 +110,7 @@ private:
     bool ApplyQuickKnifeEffect();
     bool ApplyPickupEffect();
     bool ApplyRainWipeEffect();
+    bool ApplyEquipmentToggleEffect();
     bool CanStartLeftHandAnimation();
     void RestoreLeftHandDetector(u16 detector_id, bool restore_detector);
     void PrepareLeftHandDetector();
@@ -162,6 +170,9 @@ private:
     u16 m_mutant_loot_target_id;
     u16 m_quick_knife_id;
     u16 m_pickup_target_id;
+    u16 m_equipment_toggle_target_id;
+    bool m_equipment_toggle_night_vision;
+    bool m_equipment_toggle_state;
     u16 m_left_hand_detector_id;
     bool m_restore_left_hand_detector;
     u32 m_mutant_loot_particle_time;

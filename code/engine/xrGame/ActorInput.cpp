@@ -742,6 +742,9 @@ void CActor::SwitchNightVision() {
             if (wpn_extra && wpn_extra->IsZoomed())
                 return;
 
+            if (m_item_use && m_item_use->StartEquipmentToggle(torch, true))
+                return;
+
             torch->SwitchNightVision();
             return;
         }
@@ -755,6 +758,9 @@ void CActor::SwitchTorch() {
     for (; it != it_e; ++it) {
         CTorch* torch = smart_cast<CTorch*>(*it);
         if (torch) {
+            if (m_item_use && m_item_use->StartEquipmentToggle(torch, false))
+                return;
+
             torch->Switch();
             return;
         }
