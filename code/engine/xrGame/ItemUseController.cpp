@@ -418,21 +418,43 @@ bool CItemUseController::StartQuickKnife(CWeaponKnife* knife) {
 
 bool CItemUseController::StartPickup(CInventoryItem* item) {
     if (!item || !m_actor || IsBusy() || !g_player_hud ||
-        !PickupAnimationsEnabled() || !pSettings->section_exist("items_animations") ||
-        !pSettings->line_exist("items_animations", "pickup_hud")) {
+        !PickupAnimationsEnabled() || !pSettings->section_exist("items_animations")) {
         return false;
     }
 
-    LPCSTR configured_hud = pSettings->r_string("items_animations", "pickup_hud");
-    if (!configured_hud || !configured_hud[0] || !xr_strcmp(configured_hud, "none"))
+    const shared_str item_section = item->object().cNameSect();
+    LPCSTR pickup_config_section = item_section.c_str();
+    if (!pSettings->line_exist(pickup_config_section, "pickup_hud"))
+        pickup_config_section = "items_animations";
+
+    if (!pSettings->line_exist(pickup_config_section, "pickup_hud"))
         return false;
 
-    shared_str hud_section = configured_hud;
-    if (!pSettings->section_exist(hud_section.c_str()) ||
-        !pSettings->line_exist(hud_section.c_str(), "anm_show") ||
-        !g_player_hud->can_attach_controller_item(hud_section)) {
+    LPCSTR configured_huds = pSettings->r_string(pickup_config_section, "pickup_hud");
+    if (!configured_huds || !configured_huds[0] || !xr_strcmp(configured_huds, "none"))
         return false;
+
+    xr_vector<shared_str> valid_huds;
+    const u32 hud_count = _GetItemCount(configured_huds);
+    for (u32 index = 0; index < hud_count; ++index) {
+        string256 candidate;
+        _GetItem(configured_huds, index, candidate);
+
+        if (!candidate[0] || !xr_strcmp(candidate, "none") ||
+            !pSettings->section_exist(candidate) ||
+            !pSettings->line_exist(candidate, "anm_show")) {
+            continue;
+        }
+
+        const shared_str candidate_section = candidate;
+        if (g_player_hud->can_attach_controller_item(candidate_section))
+            valid_huds.push_back(candidate_section);
     }
+
+    if (valid_huds.empty())
+        return false;
+
+    const shared_str hud_section = valid_huds[Random.randI(valid_huds.size())];
 
     // Do not replace a weapon transition with a partial-hand motion. Normal
     // pickup remains available through the caller's immediate fallback.
@@ -444,7 +466,7 @@ bool CItemUseController::StartPickup(CInventoryItem* item) {
         return false;
 
     m_item = NULL;
-    m_item_section = item->object().cNameSect();
+    m_item_section = item_section;
     m_use_section = NULL;
     m_state_section = NULL;
     m_hud_section = hud_section;
@@ -474,8 +496,9 @@ bool CItemUseController::StartPickup(CInventoryItem* item) {
         return false;
     }
 
-    Msg("* Pickup: waiting for left hand, item [%u][%s], HUD [%s], detector [%s]",
+    Msg("* Pickup: waiting for left hand, item [%u][%s], HUD [%s] from [%s], detector [%s]",
         (u32)m_pickup_target_id, m_item_section.c_str(), m_hud_section.c_str(),
+        pickup_config_section,
         m_restore_left_hand_detector ? "hide/restore" : "none");
     return true;
 }

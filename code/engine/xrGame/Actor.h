@@ -377,6 +377,10 @@ protected:
     shared_str m_sInventoryBoxUseAction;
 
     bool m_bPickupMode = false;
+    // Targeted pickup uses the key press edge instead of repeating while kUSE
+    // remains held.
+    bool m_bPickupPressed = false;
+    bool m_bPickupKeyDown = false;
     float m_fFeelGrenadeRadius = 10.0f;
     float m_fFeelGrenadeTime = 1.0f; 
     float m_fPickupInfoRadius = 0.0f;

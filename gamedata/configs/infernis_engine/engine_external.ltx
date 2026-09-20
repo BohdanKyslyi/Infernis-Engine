@@ -48,6 +48,7 @@ enable_mutant_looting_particles			= true ; ефекти партиклів пі�
 enable_quick_kick					= true ; швидкий удар ножем без перемикання активної зброї
 enable_quick_throw_grenades			= true ; швидкий кидок гранати з поверненням попередньої зброї
 enable_pickup_animations			= true ; підбирання предметів лівою рукою
+pickup_targeted_only				= true ; один натиск F підбирає лише предмет, показаний на HUD
 ; input action: wipe_visor (bind wipe_visor <key>)
 enable_raindrops_wiping				= true ; ручне очищення крапель з екрана
 mutant_looting_particle_timing			= 1300
@@ -58,6 +59,9 @@ helmet_dressing_hud						= helm_respirator_hud
 backpack_dressing_hud					= outfit_animation_hud
 mutant_looting_hud						= mutant_looting_hud
 quick_kick_hud							= quick_kick_hud
+; Можна вказати кілька HUD-секцій через кому — одна валідна секція
+; випадково обиратиметься для кожного підбирання. Окремий предмет може
+; перевизначити цей список власним параметром pickup_hud у своїй секції.
 pickup_hud								= item_pickup_hud
 raindrops_wiping_hud					= raindrops_wiping_hud
 

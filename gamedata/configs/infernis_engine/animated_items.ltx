@@ -112,6 +112,8 @@ action_timing               = 250
 
 ; Controller-owned left-hand HUD used while picking up world items. Replace
 ; the motion name with the animation exported to the external hands OMF.
+; action_timing is the exact millisecond at which the world item is transferred
+; to the actor inventory. Each pickup HUD variant can use its own value.
 [item_pickup_hud]:animated_item_hud
 attach_place_idx            = 1
 item_visual                 = dynamics\fake_object.ogf
