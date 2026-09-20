@@ -61,6 +61,19 @@
             <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
         </thunderbolt_definition>
 
+        <auto_static x="336" y="88" width="154" height="18">
+            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_new_weather</text>
+        </auto_static>
+        <new_weather_name x="494" y="84" width="278" height="23" max_symb_count="63" file_name_mode="1">
+            <texture>ui_inGame2_edit_box_1</texture>
+            <text x="3" font="letterica16" r="220" g="220" b="220" vert_align="c"/>
+        </new_weather_name>
+        <create_weather x="782" y="82" width="194" height="25" stretch="1">
+            <texture>ui_inGame2_Mp_bigbuttone</texture>
+            <text font="letterica16" align="c">ui_weather_editor_create_weather</text>
+            <text_color><e r="185" g="220" b="175"/></text_color>
+        </create_weather>
+
         <auto_static x="8" y="116" width="46" height="18">
             <text font="letterica16" r="190" g="190" b="190">ui_weather_editor_time</text>
         </auto_static>
@@ -94,6 +107,13 @@
         <status x="8" y="548" width="968" height="34">
             <text font="letterica16" r="195" g="210" b="195" align="c" vert_align="c" complex_mode="1"/>
         </status>
+
+        <learning_mode x="8" y="604" width="29" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+        </learning_mode>
+        <learning_mode_label x="43" y="604" width="151" height="29">
+            <text font="letterica16" r="205" g="215" b="205" vert_align="c">ui_weather_editor_learning_mode</text>
+        </learning_mode_label>
 
         <save x="200" y="604" width="180" height="28" stretch="1">
             <texture>ui_inGame2_Mp_bigbuttone</texture>

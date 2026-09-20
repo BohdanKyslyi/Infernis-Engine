@@ -717,11 +717,16 @@ void CEnvironment::load_weathers() {
     file_list_type::const_iterator e = file_list->end();
     for (; i != e; ++i) {
         u32 length = xr_strlen(*i);
-        VERIFY(length >= 4);
-        VERIFY((*i)[length - 4] == '.');
-        VERIFY((*i)[length - 3] == 'l');
-        VERIFY((*i)[length - 2] == 't');
-        VERIFY((*i)[length - 1] == 'x');
+        // $game_weathers$ can also contain editor backups and an unfinished
+        // atomic-save file. Never interpret *.weather_editor.bak/tmp as a
+        // weather cycle merely because they live next to the real configs.
+        if (length < 5 || (*i)[length - 4] != '.' ||
+            ((*i)[length - 3] != 'l' && (*i)[length - 3] != 'L') ||
+            ((*i)[length - 2] != 't' && (*i)[length - 2] != 'T') ||
+            ((*i)[length - 1] != 'x' && (*i)[length - 1] != 'X')) {
+            Msg("* Weather loader: skipping non-LTX file [%s]", *i);
+            continue;
+        }
         u32 new_length = length - 4;
         LPSTR identifier = (LPSTR)_alloca((new_length + 1) * sizeof(char));
         std::memcpy(identifier, *i, new_length * sizeof(char));
@@ -751,10 +756,17 @@ void CEnvironment::load_weathers() {
 
     // sorting weather envs
     auto _I = WeatherCycles.begin();
-    auto _E = WeatherCycles.end();
-    for (; _I != _E; _I++) {
-        R_ASSERT3(_I->second.size() > 1, "Environment in weather must >=2", _I->first.c_str());
+    while (_I != WeatherCycles.end()) {
+        if (_I->second.size() < 2) {
+            Msg("! Weather loader: ignoring invalid weather [%s]: at least two sections are required",
+                _I->first.c_str());
+            for (CEnvDescriptor* descriptor : _I->second)
+                xr_delete(descriptor);
+            _I = WeatherCycles.erase(_I);
+            continue;
+        }
         std::sort(_I->second.begin(), _I->second.end(), sort_env_etl_pred);
+        ++_I;
     }
     R_ASSERT2(!WeatherCycles.empty(), "Empty weathers.");
     SetWeather((*WeatherCycles.begin()).first);
@@ -808,6 +820,52 @@ bool CEnvironment::SaveWeather(const std::string& name, bool make_backup,
     if (saved_path)
         *saved_path = file_name;
     Msg("* Weather editor: saved [%s]", file_name);
+    return true;
+}
+
+bool CEnvironment::CreateWeather(const std::string& name, const CEnvDescriptor& source,
+                                 std::string* saved_path) {
+    if (name.empty() || name.size() >= sizeof(string_path) - 5) {
+        Msg("! Weather editor: invalid empty or overlong weather name [%s]", name.c_str());
+        return false;
+    }
+
+    for (const char character : name) {
+        const bool valid = (character >= 'a' && character <= 'z') ||
+                           (character >= 'A' && character <= 'Z') ||
+                           (character >= '0' && character <= '9') ||
+                           character == '_' || character == '-';
+        if (!valid) {
+            Msg("! Weather editor: invalid character in weather name [%s]", name.c_str());
+            return false;
+        }
+    }
+
+    string_path file_name;
+    FS.update_path(file_name, "$game_weathers$", name.c_str());
+    xr_strcat(file_name, ".ltx");
+    if (WeatherCycles.find(name) != WeatherCycles.end() || FS.exist(file_name)) {
+        Msg("! Weather editor: weather [%s] already exists", name.c_str());
+        return false;
+    }
+
+    // A valid cycle always has at least two descriptors. Start with two
+    // identical keyframes so the new file can be selected immediately and is
+    // also valid on the next engine launch.
+    WeatherCycles[name] = EnvVec();
+    if (!AddWeatherFrame(name, 0.f, source) ||
+        !AddWeatherFrame(name, DAY_LENGTH / 2.f, source) ||
+        !SaveWeather(name, false, saved_path)) {
+        EnvVec& descriptors = WeatherCycles[name];
+        for (CEnvDescriptor* descriptor : descriptors)
+            xr_delete(descriptor);
+        WeatherCycles.erase(name);
+        Invalidate();
+        Msg("! Weather editor: failed to create weather [%s]", name.c_str());
+        return false;
+    }
+
+    Msg("* Weather editor: created weather [%s]", name.c_str());
     return true;
 }
 
