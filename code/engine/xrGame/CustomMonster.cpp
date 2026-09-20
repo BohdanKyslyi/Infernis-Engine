@@ -106,6 +106,7 @@ CCustomMonster::CCustomMonster()
     m_moving_object = 0;
     m_mutant_loot_state = eMutantLootUnavailable;
     m_mutant_loot_actor_id = u16(-1);
+    m_mutant_loot_particle_offset.set(0.f, 0.f, 0.f);
 }
 
 CCustomMonster::~CCustomMonster() {
@@ -202,6 +203,7 @@ void CCustomMonster::LoadMutantLoot(LPCSTR section) {
     m_mutant_loot_tip = NULL;
     m_mutant_loot_particle = NULL;
     m_mutant_loot_particle_bone = NULL;
+    m_mutant_loot_particle_offset.set(0.f, 0.f, 0.f);
     m_mutant_loot_state = eMutantLootUnavailable;
     m_mutant_loot_actor_id = u16(-1);
 
@@ -240,6 +242,10 @@ void CCustomMonster::LoadMutantLoot(LPCSTR section) {
     else if (pSettings->line_exist(section, "bone_impuls_abscission"))
         m_mutant_loot_particle_bone =
             pSettings->r_string(section, "bone_impuls_abscission");
+
+    if (pSettings->line_exist(loot_section, "particle_offset"))
+        m_mutant_loot_particle_offset =
+            pSettings->r_fvector3(loot_section, "particle_offset");
 
     CInifile::Sect& recipe = pSettings->r_section(loot_section);
 
@@ -445,6 +451,10 @@ void CCustomMonster::PlayMutantLootParticle() {
             (u32)ID(), cNameSect().c_str());
     }
 
+    Fvector particle_position;
+    particle_transform.transform_tiny(particle_position, m_mutant_loot_particle_offset);
+    particle_transform.c.set(particle_position);
+
     CParticlesObject* particle =
         CParticlesObject::Create(m_mutant_loot_particle.c_str(), TRUE);
 
@@ -456,8 +466,11 @@ void CCustomMonster::PlayMutantLootParticle() {
     particle->UpdateParent(particle_transform, zero_vel);
     GamePersistent().ps_needtoplay.push_back(particle);
 
-    Msg("* MutantLoot: particle [%s] started on bone [%s]", m_mutant_loot_particle.c_str(),
-        m_mutant_loot_particle_bone.size() ? m_mutant_loot_particle_bone.c_str() : "root");
+    Msg("* MutantLoot: particle [%s] started on bone [%s], offset [%g, %g, %g]",
+        m_mutant_loot_particle.c_str(),
+        m_mutant_loot_particle_bone.size() ? m_mutant_loot_particle_bone.c_str() : "root",
+        m_mutant_loot_particle_offset.x, m_mutant_loot_particle_offset.y,
+        m_mutant_loot_particle_offset.z);
 }
 
 void CCustomMonster::reinit() {
