@@ -691,6 +691,10 @@ void player_hud::update(const Fmatrix& cam_trans) {
 
     Fmatrix trans = cam_trans;
     update_inertion(trans);
+
+    // A controller-owned hand must use the transform it would have had while
+    // attached alone. Weapon-specific offsets are applied only afterwards.
+    const Fmatrix controller_trans = trans;
     update_additional(trans);
 
     Fvector ypr = attach_rot();
@@ -704,11 +708,57 @@ void player_hud::update(const Fmatrix& cam_trans) {
     m_model->dcast_PKinematics()->CalculateBones_Invalidate();
     m_model->dcast_PKinematics()->CalculateBones(TRUE);
 
+    ApplyControllerHandTransform(controller_trans);
+
     if (m_attached_items[0])
         m_attached_items[0]->update(true);
 
     if (m_attached_items[1])
         m_attached_items[1]->update(true);
+}
+
+void player_hud::ApplyControllerHandTransform(const Fmatrix& controller_trans) {
+    if (!m_controller_item || !m_controller_item->m_controller_owned ||
+        !m_controller_item->m_preserve_other_hand ||
+        m_controller_item->m_attach_place_idx != 1 ||
+        m_attached_items[1] != m_controller_item || !m_attached_items[0]) {
+        return;
+    }
+
+    const u16 part_id = m_model->partitions().part_id("left_hand");
+    if (part_id == u16(-1))
+        return;
+
+    Fvector controller_ypr = m_controller_item->hands_attach_rot();
+    controller_ypr.mul(PI / 180.f);
+
+    Fmatrix controller_attach;
+    controller_attach.setHPB(controller_ypr.x, controller_ypr.y, controller_ypr.z);
+    controller_attach.translate_over(m_controller_item->hands_attach_pos());
+
+    Fmatrix desired_transform;
+    desired_transform.mul(controller_trans, controller_attach);
+
+    Fmatrix current_inverse;
+    current_inverse.invert(m_transform);
+
+    // Bone transforms are model-local. This correction makes the left-hand
+    // partition render as desired_transform while the shared HUD model and
+    // right-hand partition continue using m_transform from slot 0.
+    Fmatrix correction;
+    correction.mul_43(current_inverse, desired_transform);
+
+    IKinematics* kinematics = m_model->dcast_PKinematics();
+    const CPartDef& left_hand = m_model->partitions().part(part_id);
+    for (u32 bone_id : left_hand.bones) {
+        if (bone_id >= kinematics->LL_BoneCount())
+            continue;
+
+        CBoneInstance& bone = kinematics->LL_GetBoneInstance((u16)bone_id);
+        bone.mTransform.mulA_43(correction);
+        bone.mRenderTransform.mul_43(
+            bone.mTransform, kinematics->LL_GetData((u16)bone_id).m2b_transform);
+    }
 }
 
 u32 player_hud::anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md,

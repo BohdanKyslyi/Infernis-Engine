@@ -162,6 +162,7 @@ private:
     CActorLegsController* m_legs_controller;
 
     void UpdateHudProjection();
+    void ApplyControllerHandTransform(const Fmatrix& controller_trans);
 
     void update_inertion(Fmatrix& trans);
     void update_additional(Fmatrix& trans);
