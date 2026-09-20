@@ -19,6 +19,7 @@ struct player_hud_motion {
     shared_str m_alias_name;
     shared_str m_base_name;
     shared_str m_additional_name;
+    float m_anim_speed = 1.f;
     xr_vector<motion_descr> m_animations;
 };
 
@@ -108,6 +109,10 @@ struct attachable_hud_item {
     u32 m_upd_firedeps_frame;
     void tune(Ivector values);
     u32 anim_play(const shared_str& anim_name, BOOL bMixIn, const CMotionDef*& md, u8& rnd);
+    float last_anim_speed() const { return m_last_anim_speed; }
+
+private:
+    float m_last_anim_speed = 1.f;
 };
 
 class player_hud {
@@ -137,6 +142,7 @@ public:
     bool has_controller_motion(const shared_str& motion_name);
     u32 play_controller_motion(const shared_str& motion_name, BOOL bMixIn = TRUE,
                                shared_str* played_motion_name = NULL);
+    float controller_motion_speed() const;
     bool controller_item_transform(Fmatrix& result, LPCSTR bone_name, const Fvector& offset,
                                    const Fvector& orientation);
     const shared_str& section_name() const { return m_sect_name; }

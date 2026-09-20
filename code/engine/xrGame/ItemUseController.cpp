@@ -2243,7 +2243,8 @@ void CItemUseController::PlayAnimSound() {
 
     HUD_SOUND_ITEM::PlaySound(m_anim_sound, m_actor->Position(), m_actor,
                               true, // HUD mode -> sm_2D
-                              false // not looped
+                              false, // not looped
+                              u8(-1), g_player_hud ? g_player_hud->controller_motion_speed() : 1.f
     );
 }
 

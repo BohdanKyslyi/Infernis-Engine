@@ -98,6 +98,34 @@ float CalcMotionSpeed(const shared_str& anim_name) {
         return 1.0f;
 }
 
+static bool ParseMotionSpeed(LPCSTR value, float& result) {
+    if (!value || !value[0])
+        return false;
+
+    char* end = NULL;
+    const float parsed = strtof(value, &end);
+    if (end == value)
+        return false;
+
+    while (*end && isspace(static_cast<unsigned char>(*end)))
+        ++end;
+
+    if (*end)
+        return false;
+
+    result = parsed;
+    return true;
+}
+
+static float ValidateMotionSpeed(float speed, LPCSTR section, LPCSTR alias) {
+    if (speed > EPS_S && std::isfinite(speed))
+        return speed;
+
+    Msg("! HUD animation speed: invalid multiplier [%g] for [%s]:[%s], using 1.0",
+        speed, section, alias);
+    return 1.f;
+}
+
 player_hud_motion* player_hud_motion_container::find_motion(const shared_str& name) {
     xr_vector<player_hud_motion>::iterator it = m_anims.begin();
     xr_vector<player_hud_motion>::iterator it_e = m_anims.end();
@@ -126,17 +154,34 @@ void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_
             // base and alias name
             pm->m_alias_name = _b->first;
 
-            if (_GetItemCount(anm.c_str()) == 1) {
-                pm->m_base_name = anm;
-                pm->m_additional_name = anm;
-            } else {
-                R_ASSERT2(_GetItemCount(anm.c_str()) == 2, anm.c_str());
-                string512 str_item;
-                _GetItem(anm.c_str(), 0, str_item);
-                pm->m_base_name = str_item;
+            const u32 item_count = _GetItemCount(anm.c_str());
+            R_ASSERT2(item_count >= 1 && item_count <= 3, anm.c_str());
 
+            string512 str_item;
+            _GetItem(anm.c_str(), 0, str_item);
+            pm->m_base_name = str_item;
+            pm->m_additional_name = str_item;
+
+            if (item_count == 2) {
+                _GetItem(anm.c_str(), 1, str_item);
+
+                float configured_speed = 1.f;
+                if (ParseMotionSpeed(str_item, configured_speed)) {
+                    pm->m_anim_speed = ValidateMotionSpeed(
+                        configured_speed, sect.c_str(), pm->m_alias_name.c_str());
+                } else {
+                    pm->m_additional_name = str_item;
+                }
+            } else if (item_count == 3) {
                 _GetItem(anm.c_str(), 1, str_item);
                 pm->m_additional_name = str_item;
+
+                _GetItem(anm.c_str(), 2, str_item);
+                float configured_speed = 1.f;
+                R_ASSERT3(ParseMotionSpeed(str_item, configured_speed),
+                          "invalid HUD animation speed multiplier", anm.c_str());
+                pm->m_anim_speed = ValidateMotionSpeed(
+                    configured_speed, sect.c_str(), pm->m_alias_name.c_str());
             }
 
             // and load all motions for it
@@ -429,8 +474,6 @@ void attachable_hud_item::load(const shared_str& sect_name) {
 
 u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, const CMotionDef*& md,
                                    u8& rnd_idx) {
-    float speed = CalcMotionSpeed(anm_name_b);
-
     R_ASSERT(strstr(anm_name_b.c_str(), "anm_") == anm_name_b.c_str());
     string256 anim_name_r;
     bool is_16x9 = UI().is_widescreen();
@@ -445,6 +488,9 @@ u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, co
               make_string("model [%s] has no motion defined in motion_alias [%s]",
                           pSettings->r_string(m_sect_name, "item_visual"), anim_name_r)
                   .c_str());
+
+    const float speed = CalcMotionSpeed(anm_name_b) * anm->m_anim_speed;
+    m_last_anim_speed = speed;
 
     rnd_idx = (u8)Random.randI(anm->m_animations.size());
     const motion_descr& M = anm->m_animations[rnd_idx];
@@ -714,7 +760,6 @@ void player_hud::render_hud() {
 
 u32 player_hud::motion_length(const shared_str& anim_name, const shared_str& hud_name,
                               const CMotionDef*& md) {
-    float speed = CalcMotionSpeed(anim_name);
     attachable_hud_item* pi = create_hud_item(hud_name);
     player_hud_motion* pm = pi->m_hand_motions.find_motion(anim_name);
     if (!pm)
@@ -722,6 +767,7 @@ u32 player_hud::motion_length(const shared_str& anim_name, const shared_str& hud
     R_ASSERT2(pm, make_string("hudItem model [%s] has no motion with alias [%s]", hud_name.c_str(),
                               anim_name.c_str())
                       .c_str());
+    const float speed = CalcMotionSpeed(anim_name) * pm->m_anim_speed;
     return motion_length(pm->m_animations[0].mid, md, speed);
 }
 
@@ -941,6 +987,10 @@ u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixI
     return duration;
 }
 
+float player_hud::controller_motion_speed() const {
+    return m_controller_item ? m_controller_item->last_anim_speed() : 1.f;
+}
+
 bool player_hud::has_hud_motion(const shared_str& hud_section,
                                 const shared_str& motion_name) {
     if (!m_model || !hud_section.size() || !motion_name.size() ||
@@ -952,7 +1002,7 @@ bool player_hud::has_hud_motion(const shared_str& hud_section,
     LPCSTR motion_config = pSettings->r_string(hud_section.c_str(), motion_name.c_str());
     const u32 item_count = _GetItemCount(motion_config);
 
-    if (item_count != 1 && item_count != 2)
+    if (item_count < 1 || item_count > 3)
         return false;
 
     string512 base_motion;

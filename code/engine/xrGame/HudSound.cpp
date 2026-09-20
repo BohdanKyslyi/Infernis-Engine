@@ -65,7 +65,8 @@ void HUD_SOUND_ITEM::DestroySound(HUD_SOUND_ITEM& hud_snd) {
 }
 
 void HUD_SOUND_ITEM::PlaySound(HUD_SOUND_ITEM& hud_snd, const Fvector& position,
-                               const CObject* parent, bool b_hud_mode, bool looped, u8 index) {
+                               const CObject* parent, bool b_hud_mode, bool looped, u8 index,
+                               float frequency) {
     if (hud_snd.sounds.empty())
         return;
 
@@ -87,6 +88,12 @@ void HUD_SOUND_ITEM::PlaySound(HUD_SOUND_ITEM& hud_snd, const Fvector& position,
 
     hud_snd.m_activeSnd->snd.set_volume(hud_snd.m_activeSnd->volume * b_hud_mode ? psHUDSoundVolume
                                                                                  : 1.0f);
+    SetFrequency(hud_snd, frequency);
+}
+
+void HUD_SOUND_ITEM::SetFrequency(HUD_SOUND_ITEM& hud_snd, float frequency) {
+    if (hud_snd.m_activeSnd && hud_snd.m_activeSnd->snd._feedback())
+        hud_snd.m_activeSnd->snd.set_frequency(frequency);
 }
 
 void HUD_SOUND_ITEM::StopSound(HUD_SOUND_ITEM& hud_snd) {
@@ -122,7 +129,7 @@ HUD_SOUND_ITEM* HUD_SOUND_COLLECTION::FindSoundItem(LPCSTR alias, bool b_assert)
 }
 
 void HUD_SOUND_COLLECTION::PlaySound(LPCSTR alias, const Fvector& position, const CObject* parent,
-                                     bool hud_mode, bool looped, u8 index) {
+                                     bool hud_mode, bool looped, u8 index, float frequency) {
     xr_vector<HUD_SOUND_ITEM>::iterator it = m_sound_items.begin();
     xr_vector<HUD_SOUND_ITEM>::iterator it_e = m_sound_items.end();
     for (; it != it_e; ++it) {
@@ -131,7 +138,14 @@ void HUD_SOUND_COLLECTION::PlaySound(LPCSTR alias, const Fvector& position, cons
     }
 
     HUD_SOUND_ITEM* snd_item = FindSoundItem(alias, true);
-    HUD_SOUND_ITEM::PlaySound(*snd_item, position, parent, hud_mode, looped, index);
+    HUD_SOUND_ITEM::PlaySound(*snd_item, position, parent, hud_mode, looped, index, frequency);
+    m_last_played_sound = snd_item;
+    m_last_played_frame = Device.dwFrame;
+}
+
+void HUD_SOUND_COLLECTION::SetLastPlayedSoundFrequency(float frequency) {
+    if (m_last_played_frame == Device.dwFrame && m_last_played_sound)
+        HUD_SOUND_ITEM::SetFrequency(*m_last_played_sound, frequency);
 }
 
 void HUD_SOUND_COLLECTION::StopSound(LPCSTR alias) {
@@ -152,6 +166,8 @@ void HUD_SOUND_COLLECTION::StopAllSounds() {
     for (; it != it_e; ++it) {
         HUD_SOUND_ITEM::StopSound(*it);
     }
+    m_last_played_sound = NULL;
+    m_last_played_frame = u32(-1);
 }
 
 void HUD_SOUND_COLLECTION::LoadSound(LPCSTR section, LPCSTR line, LPCSTR alias, bool exclusive,
