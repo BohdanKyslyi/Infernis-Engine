@@ -31,6 +31,7 @@
 
 #include "../xrPhysics/ElevatorState.h"
 #include "eatable_item.h"
+#include "RepairKit.h"
 #include "ai_space.h"
 #include "script_engine.h"
 #include <luabind/functor.hpp>
@@ -207,7 +208,8 @@ static bool TryResolveConsumableHud(LPCSTR config_section, LPCSTR hud_line,
     LPCSTR candidate = pSettings->r_string(config_section, hud_line);
     if (candidate && candidate[0] && xr_strcmp(candidate, "none") &&
         pSettings->section_exist(candidate) &&
-        pSettings->line_exist(candidate, "anm_show")) {
+        (pSettings->line_exist(candidate, "anm_show") ||
+         pSettings->line_exist(candidate, "anm_use"))) {
         hud_section = candidate;
         return true;
     }
@@ -732,6 +734,25 @@ bool CItemUseController::ResolveConsumableAnimation(CInventoryItem* item,
     state_section = NULL;
     hud_section = NULL;
 
+    // Advanced X-Ray / Gunslinger-compatible consumable declaration:
+    // has_anim = true
+    // hud_section = hud_complect
+    // The HUD itself commonly uses anm_use/snd_using/anim_timing aliases.
+    if (pSettings->line_exist(item_section.c_str(), "hud_section")) {
+        if (pSettings->line_exist(item_section.c_str(), "has_anim") &&
+            !pSettings->r_bool(item_section.c_str(), "has_anim")) {
+            return false;
+        }
+
+        use_section = item_section;
+        LPCSTR hud_line = UsesExoItemAnimations() &&
+                                 pSettings->line_exist(item_section.c_str(), "hud_section_exo")
+            ? "hud_section_exo"
+            : "hud_section";
+
+        return TryResolveConsumableHud(item_section.c_str(), hud_line, hud_section, true);
+    }
+
     // 1. The physical item points to its use-section.
     if (!pSettings->line_exist(item_section, "hud"))
         return false;
@@ -784,6 +805,8 @@ u32 CItemUseController::ResolveConsumableActionTime() const {
             return pSettings->r_u32(m_hud_section.c_str(), "action_timing");
         if (pSettings->line_exist(m_hud_section.c_str(), "timing"))
             return pSettings->r_u32(m_hud_section.c_str(), "timing");
+        if (pSettings->line_exist(m_hud_section.c_str(), "anim_timing"))
+            return pSettings->r_u32(m_hud_section.c_str(), "anim_timing");
     }
 
     if (UsesExoItemAnimations()) {
@@ -802,7 +825,16 @@ u32 CItemUseController::ResolveConsumableActionTime() const {
         }
     }
 
-    return pSettings->r_u32(m_use_section.c_str(), "timing");
+    if (m_use_section.size() && pSettings->section_exist(m_use_section.c_str())) {
+        if (pSettings->line_exist(m_use_section.c_str(), "timing"))
+            return pSettings->r_u32(m_use_section.c_str(), "timing");
+        if (pSettings->line_exist(m_use_section.c_str(), "item_used_timing"))
+            return pSettings->r_u32(m_use_section.c_str(), "item_used_timing");
+    }
+
+    // No explicit timing means "apply at the animation end". BeginAnimation
+    // clamps this sentinel to the real motion duration.
+    return u32(-1);
 }
 
 bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
@@ -1337,8 +1369,11 @@ void CItemUseController::BeginAnimation()
     // "руки прилітають з іншого виміру".
     //
     shared_str played_motion_name;
+    LPCSTR use_motion = pSettings->line_exist(m_hud_section.c_str(), "anm_show")
+        ? "anm_show"
+        : "anm_use";
     m_animation_duration =
-        g_player_hud->play_controller_motion("anm_show", FALSE, &played_motion_name);
+        g_player_hud->play_controller_motion(use_motion, FALSE, &played_motion_name);
 
     if (m_animation_duration == 0) {
         Msg("! ItemUse: failed to play animation [%s]", m_hud_section.c_str());
@@ -2037,6 +2072,12 @@ void CItemUseController::Finish() {
 
 void CItemUseController::Reset()
 {
+    if (m_item) {
+        CRepairKit* repair_kit = m_item->cast_repair_kit();
+        if (repair_kit)
+            repair_kit->SetRepairTarget(NULL);
+    }
+
     m_item = NULL;
 
     m_item_section = NULL;
@@ -2296,6 +2337,12 @@ void CItemUseController::LoadAnimSound() {
     if (!sound_section.size())
         sound_section = FindConfigSection("snd_using_anim");
 
+    if (!sound_section.size()) {
+        sound_section = FindConfigSection("snd_using");
+        if (sound_section.size())
+            sound_line = "snd_using";
+    }
+
     if (!sound_section.size())
         return;
 
@@ -2384,17 +2431,26 @@ void CItemUseController::StartCameraEffector(const shared_str& played_motion_nam
     string_path effector_name;
     effector_name[0] = 0;
 
-    const shared_str config_section = FindConfigSection("cam_eff_name");
+    shared_str config_section = FindConfigSection("cam_eff_name");
+    bool legacy_effector = false;
+    if (!config_section.size()) {
+        config_section = FindConfigSection("use_cam_effector");
+        legacy_effector = config_section.size() != 0;
+    }
     const bool explicitly_configured = config_section.size() != 0;
 
     if (explicitly_configured) {
-        LPCSTR configured_name = pSettings->r_string(config_section.c_str(), "cam_eff_name");
+        LPCSTR configured_name = pSettings->r_string(
+            config_section.c_str(), legacy_effector ? "use_cam_effector" : "cam_eff_name");
 
         // Explicit "none" also disables the automatic motion-name fallback.
         if (!configured_name || !configured_name[0] || !xr_strcmp(configured_name, "none"))
             return;
 
-        xr_strcpy(effector_name, configured_name);
+        if (legacy_effector && !strchr(configured_name, '\\') && !strchr(configured_name, '/'))
+            strconcat(sizeof(effector_name), effector_name, "camera_effects\\", configured_name);
+        else
+            xr_strcpy(effector_name, configured_name);
     } else if (played_motion_name.size()) {
         // Controller HUD items have no CHudItem parent, so the legacy camera
         // lookup in attachable_hud_item::anim_play() cannot run for them.
@@ -2415,9 +2471,13 @@ void CItemUseController::StartCameraEffector(const shared_str& played_motion_nam
     // A randomized HUD motion can be named motion1..motion8. If there is no
     // matching camera file, also try the base motion from the anm_show alias.
     if (!effector_exists && !explicitly_configured && m_hud_section.size() &&
-        pSettings->line_exist(m_hud_section.c_str(), "anm_show")) {
+        (pSettings->line_exist(m_hud_section.c_str(), "anm_show") ||
+         pSettings->line_exist(m_hud_section.c_str(), "anm_use"))) {
         string256 base_motion_name;
-        _GetItem(pSettings->r_string(m_hud_section.c_str(), "anm_show"), 0,
+        LPCSTR motion_line = pSettings->line_exist(m_hud_section.c_str(), "anm_show")
+            ? "anm_show"
+            : "anm_use";
+        _GetItem(pSettings->r_string(m_hud_section.c_str(), motion_line), 0,
                  base_motion_name);
 
         if (base_motion_name[0]) {

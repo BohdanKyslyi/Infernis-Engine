@@ -116,6 +116,101 @@ void CInventoryItem::Load(LPCSTR section) {
     }
     m_icon_name = READ_IF_EXISTS(pSettings, r_string, section, "icon_name", NULL);
 
+    m_suitable_repair_kits.clear();
+    if (pSettings->line_exist(section, "suitable_repair_kits")) {
+        LPCSTR kits = pSettings->r_string(section, "suitable_repair_kits");
+        const u32 kit_count = _GetItemCount(kits);
+        for (u32 index = 0; index < kit_count; ++index) {
+            string256 kit_section;
+            _GetItem(kits, index, kit_section);
+            if (kit_section[0])
+                m_suitable_repair_kits.push_back(kit_section);
+        }
+    }
+
+    m_repair_materials.clear();
+    if (pSettings->line_exist(section, "items_for_repair")) {
+        LPCSTR materials = pSettings->r_string(section, "items_for_repair");
+        const u32 value_count = _GetItemCount(materials);
+
+        if ((value_count % 2) != 0) {
+            Msg("! Repair: invalid [%s]:items_for_repair - expected section,count pairs",
+                section);
+        } else {
+            for (u32 index = 0; index < value_count; index += 2) {
+                string256 material_section;
+                string64 material_count;
+                _GetItem(materials, index, material_section);
+                _GetItem(materials, index + 1, material_count);
+
+                const int parsed_count = atoi(material_count);
+                if (!material_section[0] || parsed_count <= 0 ||
+                    !pSettings->section_exist(material_section)) {
+                    Msg("! Repair: invalid material [%s] x[%s] for [%s]",
+                        material_section, material_count, section);
+                    continue;
+                }
+
+                SRepairMaterial material;
+                material.section = material_section;
+                material.count = static_cast<u32>(parsed_count);
+                m_repair_materials.push_back(material);
+            }
+        }
+    }
+
+}
+
+bool CInventoryItem::IsRepairableBy(LPCSTR repair_kit_section) const {
+    if (!repair_kit_section || !repair_kit_section[0])
+        return false;
+
+    for (const shared_str& kit : m_suitable_repair_kits) {
+        if (!xr_strcmp(kit.c_str(), repair_kit_section))
+            return true;
+    }
+
+    return false;
+}
+
+bool CInventoryItem::HasRepairMaterials() const {
+    if (m_repair_materials.empty())
+        return true;
+
+    if (!m_pInventory)
+        return false;
+
+    for (const SRepairMaterial& material : m_repair_materials) {
+        u32 available = 0;
+        for (PIItem item : m_pInventory->m_all) {
+            if (item && !xr_strcmp(item->object().cNameSect().c_str(), material.section.c_str()))
+                ++available;
+        }
+
+        if (available < material.count)
+            return false;
+    }
+
+    return true;
+}
+
+void CInventoryItem::ConsumeRepairMaterials() {
+    if (!m_pInventory)
+        return;
+
+    for (const SRepairMaterial& material : m_repair_materials) {
+        u32 remaining = material.count;
+        for (PIItem item : m_pInventory->m_all) {
+            if (!remaining)
+                break;
+
+            if (!item || xr_strcmp(item->object().cNameSect().c_str(), material.section.c_str()))
+                continue;
+
+            item->object().DestroyObject();
+            --remaining;
+        }
+    }
 }
 
 void CInventoryItem::ChangeCondition(float fDeltaCondition) {

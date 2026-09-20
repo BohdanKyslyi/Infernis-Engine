@@ -106,6 +106,7 @@
 #include "fooditem.h"
 #include "bottleitem.h"
 #include "explosiveitem.h"
+#include "RepairKit.h"
 
 #include "infodocument.h"
 #include "attachable_item.h"
@@ -292,6 +293,7 @@ void CObjectFactory::register_classes() {
     ADD(CFoodItem, CSE_ALifeItem, CLSID_IITEM_FOOD, "obj_food");
     ADD(CBottleItem, CSE_ALifeItem, CLSID_IITEM_BOTTLE, "obj_bottle");
     ADD(CExplosiveItem, CSE_ALifeItemExplosive, CLSID_IITEM_EXPLOSIVE, "obj_explosive");
+    ADD(CRepairKit, CSE_ALifeItem, CLSID_IITEM_DREPKIT, "obj_repair_kit");
 
     // Info Document
     ADD(CInfoDocument, CSE_ALifeItemDocument, CLSID_IITEM_DOCUMENT, "obj_document");
