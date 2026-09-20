@@ -138,6 +138,10 @@ player_hud_motion* player_hud_motion_container::find_motion(const shared_str& na
 }
 
 void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_str& sect) {
+    // MotionID is local to a concrete hands model. Outfit changes replace that
+    // model, so cached IDs must be rebuilt instead of appended to the old set.
+    m_anims.clear();
+
     CInifile::Sect& _sect = pSettings->r_section(sect);
     auto _b = _sect.Data.cbegin();
     auto _e = _sect.Data.cend();
@@ -690,6 +694,13 @@ void player_hud::load(const shared_str& player_hud_sect) {
         }
     }
 
+    // Every pooled HUD section stores MotionIDs resolved against m_model.
+    // Rebind them before an attached weapon or a queued controller animation
+    // is restarted on the newly selected outfit hands.
+    for (attachable_hud_item* item : m_pool)
+        item->m_hand_motions.load(m_model, item->m_sect_name);
+
+    m_ancors.clear();
     CInifile::Sect& _sect = pSettings->r_section(player_hud_sect);
     auto _b = _sect.Data.cbegin();
     auto _e = _sect.Data.cend();
