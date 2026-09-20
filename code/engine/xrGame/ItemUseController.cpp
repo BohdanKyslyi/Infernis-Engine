@@ -196,6 +196,30 @@ static bool HudBlocksMovement(const shared_str& hud_section) {
            !!pSettings->r_bool(hud_section.c_str(), "block_move");
 }
 
+static bool TryResolveConsumableHud(LPCSTR config_section, LPCSTR hud_line,
+                                    shared_str& hud_section, bool report_invalid) {
+    if (!config_section || !config_section[0] ||
+        !pSettings->section_exist(config_section) ||
+        !pSettings->line_exist(config_section, hud_line)) {
+        return false;
+    }
+
+    LPCSTR candidate = pSettings->r_string(config_section, hud_line);
+    if (candidate && candidate[0] && xr_strcmp(candidate, "none") &&
+        pSettings->section_exist(candidate) &&
+        pSettings->line_exist(candidate, "anm_show")) {
+        hud_section = candidate;
+        return true;
+    }
+
+    if (report_invalid) {
+        Msg("! ItemUse: invalid [%s]:[%s] HUD override [%s]; trying fallback",
+            config_section, hud_line, candidate && candidate[0] ? candidate : "<empty>");
+    }
+
+    return false;
+}
+
 CItemUseController::CItemUseController(CActor* actor)
     : m_actor(actor),
       m_item(NULL),
@@ -301,7 +325,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
                                                   : "default");
     }
 
-    m_action_time = pSettings->r_u32(m_use_section, "timing");
+    m_action_time = ResolveConsumableActionTime();
 
     if (!g_player_hud) {
         Reset();
@@ -719,22 +743,66 @@ bool CItemUseController::ResolveConsumableAnimation(CInventoryItem* item,
         return false;
     }
 
-    // 2. A portion-specific HUD has priority over the legacy use-section HUD.
+    // 2. Exoskeleton HUD overrides are optional and never disable the normal
+    // animation. The most specific section wins: portion state, physical
+    // item, then common use-section.
     CEatableItem* eatable = smart_cast<CEatableItem*>(item);
 
-    if (eatable) {
+    if (eatable)
         state_section = eatable->PortionStateSection();
 
-        if (state_section.size() && pSettings->line_exist(state_section.c_str(), "hud"))
-            hud_section = pSettings->r_string(state_section.c_str(), "hud");
+    if (UsesExoItemAnimations()) {
+        if ((state_section.size() &&
+             TryResolveConsumableHud(state_section.c_str(), "hud_exo", hud_section, true)) ||
+            TryResolveConsumableHud(item_section.c_str(), "hud_exo", hud_section, true) ||
+            TryResolveConsumableHud(use_section.c_str(), "hud_exo", hud_section, true)) {
+            Msg("* ItemUse: exoskeleton HUD [%s] selected for [%s]",
+                hud_section.c_str(), item_section.c_str());
+            return true;
+        }
     }
 
-    if (!hud_section.size() && pSettings->line_exist(use_section, "hud"))
-        hud_section = pSettings->r_string(use_section, "hud");
+    // 3. A portion-specific normal HUD has priority over the common one.
+    if (state_section.size() &&
+        TryResolveConsumableHud(state_section.c_str(), "hud", hud_section, false))
+        return true;
 
-    // 3. The resolved HUD section must provide the consumable entry motion.
-    return hud_section.size() && pSettings->section_exist(hud_section) &&
-           pSettings->line_exist(hud_section, "anm_show");
+    return TryResolveConsumableHud(use_section.c_str(), "hud", hud_section, false);
+}
+
+bool CItemUseController::UsesExoItemAnimations() const {
+    if (!m_actor)
+        return false;
+
+    const CCustomOutfit* outfit = m_actor->GetOutfit();
+    return outfit && outfit->UseExoItemAnimations();
+}
+
+u32 CItemUseController::ResolveConsumableActionTime() const {
+    if (m_hud_section.size() && pSettings->section_exist(m_hud_section.c_str())) {
+        if (pSettings->line_exist(m_hud_section.c_str(), "action_timing"))
+            return pSettings->r_u32(m_hud_section.c_str(), "action_timing");
+        if (pSettings->line_exist(m_hud_section.c_str(), "timing"))
+            return pSettings->r_u32(m_hud_section.c_str(), "timing");
+    }
+
+    if (UsesExoItemAnimations()) {
+        const shared_str* sections[] = {&m_state_section, &m_item_section, &m_use_section};
+        LPCSTR lines[] = {"timing_exo", "item_used_timing_exo"};
+
+        for (u32 section_index = 0;
+             section_index < sizeof(sections) / sizeof(sections[0]); ++section_index) {
+            for (u32 line_index = 0; line_index < sizeof(lines) / sizeof(lines[0]); ++line_index) {
+                const shared_str& section = *sections[section_index];
+                if (section.size() && pSettings->section_exist(section.c_str()) &&
+                    pSettings->line_exist(section.c_str(), lines[line_index])) {
+                    return pSettings->r_u32(section.c_str(), lines[line_index]);
+                }
+            }
+        }
+    }
+
+    return pSettings->r_u32(m_use_section.c_str(), "timing");
 }
 
 bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
@@ -2211,10 +2279,27 @@ void CItemUseController::CallStopFunction(const shared_str& function_name) {
 void CItemUseController::LoadAnimSound() {
     DestroyAnimSound();
 
-    if (!pSettings->line_exist(m_use_section, "snd_using_anim"))
+    shared_str sound_section;
+    LPCSTR sound_line = "snd_using_anim";
+
+    if (UsesExoItemAnimations()) {
+        sound_section = FindConfigSection("snd_using_anim_exo");
+        if (sound_section.size()) {
+            sound_line = "snd_using_anim_exo";
+        } else {
+            sound_section = FindConfigSection("snd_use_exo_anm");
+            if (sound_section.size())
+                sound_line = "snd_use_exo_anm";
+        }
+    }
+
+    if (!sound_section.size())
+        sound_section = FindConfigSection("snd_using_anim");
+
+    if (!sound_section.size())
         return;
 
-    HUD_SOUND_ITEM::LoadSound(m_use_section.c_str(), "snd_using_anim", m_anim_sound, sg_SourceType);
+    HUD_SOUND_ITEM::LoadSound(sound_section.c_str(), sound_line, m_anim_sound, sg_SourceType);
 
     m_anim_sound_loaded = true;
 }

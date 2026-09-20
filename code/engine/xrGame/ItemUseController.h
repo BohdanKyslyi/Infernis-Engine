@@ -87,6 +87,8 @@ private:
     bool ResolveConsumableAnimation(CInventoryItem* item, shared_str& item_section,
                                     shared_str& use_section, shared_str& state_section,
                                     shared_str& hud_section) const;
+    bool UsesExoItemAnimations() const;
+    u32 ResolveConsumableActionTime() const;
 
     bool CanStartAnimation();
     void BeginAnimation();

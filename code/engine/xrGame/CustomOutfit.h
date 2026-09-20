@@ -58,6 +58,11 @@ public:
 
     bool bIsHelmetAvaliable;
     bool bIsBackpackAvaliable;
+    bool bIsExoskeleton;
+    bool bIsExoskeletonPrototype;
+    bool bUseExoItemAnimations;
+
+    bool UseExoItemAnimations() const { return bUseExoItemAnimations; }
 
     virtual u32 ef_equipment_type() const;
     virtual BOOL BonePassBullet(int boneID);
