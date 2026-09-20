@@ -1416,7 +1416,11 @@ void CItemUseController::BeginHudAnimationIdle() {
 
     // anm_idle is optional. Without it, the show cycle remains on the model
     // while the controller still exposes the logical idle/ready state.
-    if (!PlayHudAnimationMotion("anm_idle", eHudAnimationIdle, TRUE)) {
+    // HUD hand motions can carry different root/bind transforms. Blending the
+    // finished show motion into a cyclic idle interpolates those transforms
+    // and may stretch the hands/outfit mesh across the screen. Replace the
+    // controller cycle atomically, just as we do when starting anm_show.
+    if (!PlayHudAnimationMotion("anm_idle", eHudAnimationIdle, FALSE)) {
         m_start_time = Device.dwTimeGlobal;
         m_animation_duration = 0;
         m_hud_animation_phase = eHudAnimationIdle;
@@ -1440,7 +1444,9 @@ void CItemUseController::BeginHudAnimationHide() {
 
     // anm_hide is optional. If it is absent, closing remains instant and the
     // caller does not need a special fallback path.
-    if (!PlayHudAnimationMotion("anm_hide", eHudAnimationHide, TRUE)) {
+    // Keep the inverse transition on the same non-mixed path. Otherwise the
+    // malformed show -> idle blend can return while closing the persistent HUD.
+    if (!PlayHudAnimationMotion("anm_hide", eHudAnimationHide, FALSE)) {
         Finish();
         return;
     }
