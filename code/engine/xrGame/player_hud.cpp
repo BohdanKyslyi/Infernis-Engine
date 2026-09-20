@@ -306,6 +306,8 @@ attachable_hud_item::~attachable_hud_item() {
 void attachable_hud_item::load(const shared_str& sect_name) {
     m_sect_name = sect_name;
 
+    m_preserve_other_hand =
+        !!READ_IF_EXISTS(pSettings, r_bool, sect_name, "preserve_other_hand", false);
     m_hud_fov = 0.f;
     m_hud_fov_degrees = 0.f;
     m_viewport_near = 0.f;
@@ -382,7 +384,9 @@ u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, co
     rnd_idx = (u8)Random.randI(anm->m_animations.size());
     const motion_descr& M = anm->m_animations[rnd_idx];
 
-    u32 ret = g_player_hud->anim_play(m_attach_place_idx, M.mid, bMixIn, md, speed);
+    const bool preserve_other_hand = m_controller_owned && m_preserve_other_hand;
+    u32 ret = g_player_hud->anim_play(m_attach_place_idx, M.mid, bMixIn, md, speed,
+                                      preserve_other_hand);
 
     if (m_model->dcast_PKinematicsAnimated()) {
         IKinematicsAnimated* ka = m_model->dcast_PKinematicsAnimated();
@@ -708,7 +712,7 @@ void player_hud::update(const Fmatrix& cam_trans) {
 }
 
 u32 player_hud::anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md,
-                          float speed) {
+                          float speed, bool preserve_other_hand) {
 
     u16 part_id = u16(-1);
     if (attached_item(0) && attached_item(1))
@@ -716,7 +720,10 @@ u32 player_hud::anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotio
 
     u16 pc = m_model->partitions().count();
     for (u16 pid = 0; pid < pc; ++pid) {
-        if (pid == 0 || pid == part_id || part_id == u16(-1)) {
+        const bool play_partition =
+            part_id == u16(-1) || pid == part_id || (!preserve_other_hand && pid == 0);
+
+        if (play_partition) {
             CBlend* B = m_model->PlayCycle(pid, M, bMixIn);
             R_ASSERT(B);
             B->speed *= speed;

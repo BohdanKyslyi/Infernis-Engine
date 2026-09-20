@@ -57,6 +57,9 @@ struct attachable_hud_item {
     player_hud* m_parent;
     CHudItem* m_parent_hud_item;
     bool m_controller_owned;
+    // Keep the opposite hand on its current motion when a controller-owned
+    // HUD item is animated alongside another attached item.
+    bool m_preserve_other_hand;
     shared_str m_sect_name;
     IKinematics* m_model;
     u16 m_attach_place_idx;
@@ -78,7 +81,8 @@ struct attachable_hud_item {
 
     attachable_hud_item(player_hud* pparent)
         : m_parent(pparent), m_parent_hud_item(NULL), m_controller_owned(false),
-          m_hud_fov(0.f), m_hud_fov_degrees(0.f), m_viewport_near(0.f),
+          m_preserve_other_hand(false), m_hud_fov(0.f), m_hud_fov_degrees(0.f),
+          m_viewport_near(0.f),
           m_upd_firedeps_frame(u32(-1)) {}
     ~attachable_hud_item();
     void load(const shared_str& sect_name);
@@ -126,7 +130,8 @@ public:
     void render_hud();
     void render_item_ui();
     bool render_item_ui_query();
-    u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed);
+    u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed,
+                  bool preserve_other_hand = false);
     bool can_attach_controller_item(const shared_str& hud_section);
     bool has_hud_motion(const shared_str& hud_section, const shared_str& motion_name);
     bool has_controller_motion(const shared_str& motion_name);
