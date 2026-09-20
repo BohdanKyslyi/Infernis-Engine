@@ -12,6 +12,27 @@ IC bool pred_sp_sort(ISpatial* _1, ISpatial* _2) {
     return d1 < d2;
 }
 
+// Only the centre of the second view can be seen through an aimed scope.
+// Narrow visibility queries without changing the actual rendering projection:
+// screen-space sampling and the weapon's point of aim stay exactly the same.
+static Fmatrix scope_visibility_transform() {
+    if (!Device.scopeLensPass || !pSettings ||
+        !pSettings->section_exist("weapon_scopes") ||
+        !pSettings->line_exist("weapon_scopes", "scope_world_cull_scale"))
+        return Device.mFullTransform;
+
+    const float scale = pSettings->r_float("weapon_scopes", "scope_world_cull_scale");
+    if (!(scale >= 0.5f && scale < 1.f))
+        return Device.mFullTransform;
+
+    const float half_fov = atanf(tanf(deg2rad(Device.fFOV * 0.5f)) * scale);
+    Fmatrix projection, transform;
+    projection.build_projection(2.f * half_fov, Device.fASPECT, VIEWPORT_NEAR,
+                                g_pGamePersistent->Environment().CurrentEnv->far_plane);
+    transform.mul(projection, Device.mView);
+    return transform;
+}
+
 void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
     PIX_EVENT(render_main);
     //	Msg						("---begin");
@@ -131,11 +152,11 @@ void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
                 break; // exit loop on frustums
             }
         }
-        if (g_pGameLevel && (phase == PHASE_NORMAL))
+        if (g_pGameLevel && (phase == PHASE_NORMAL) && !Device.scopeLensPass)
             g_hud->Render_Last(); // HUD
     } else {
         set_Object(0);
-        if (g_pGameLevel && (phase == PHASE_NORMAL))
+        if (g_pGameLevel && (phase == PHASE_NORMAL) && !Device.scopeLensPass)
             g_hud->Render_Last(); // HUD
     }
 }
@@ -192,6 +213,8 @@ void CRender::render_menu() {
 extern u32 g_r;
 void CRender::Render() {
     PIX_EVENT(CRender_Render);
+    if (Device.scopeLensPass)
+        m_bScopeLensRendered = false;
 
     g_r = 1;
     VERIFY(0 == mapDistort.size());
@@ -230,11 +253,14 @@ void CRender::Render() {
     // bSUN?"true":"false");
 
     // HOM
-    ViewBase.CreateFromMatrix(Device.mFullTransform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
+    Fmatrix visibility_transform = scope_visibility_transform();
+    ViewBase.CreateFromMatrix(visibility_transform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
     View = 0;
-    if (!ps_r2_ls_flags.test(R2FLAG_EXP_MT_CALC)) {
+    if (!Device.scopeLensPass && !ps_r2_ls_flags.test(R2FLAG_EXP_MT_CALC)) {
         HOM.Enable();
         HOM.Render(ViewBase);
+    } else if (Device.scopeLensPass) {
+        HOM.Disable();
     }
 
     //******* Z-prefill calc - DEFERRER RENDERER
@@ -297,7 +323,7 @@ void CRender::Render() {
     else
         set_Recorder(NULL);
     phase = PHASE_NORMAL;
-    render_main(Device.mFullTransform, true);
+    render_main(visibility_transform, true);
     set_Recorder(NULL);
     r_pmask(true, false); // disable priority "1"
     Device.Statistic->RenderCALC.End();
@@ -311,7 +337,8 @@ void CRender::Render() {
         PIX_EVENT(DEFER_PART0_NO_SPLIT);
         // level, DO NOT SPLIT
         Target->phase_scene_begin();
-        r_dsgraph_render_hud();
+        if (!Device.scopeLensPass)
+            r_dsgraph_render_hud();
         r_dsgraph_render_graph(0);
         r_dsgraph_render_lods(true, true);
         if (Details)
@@ -402,14 +429,15 @@ void CRender::Render() {
 
         // level
         Target->phase_scene_begin();
-        r_dsgraph_render_hud();
+        if (!Device.scopeLensPass)
+            r_dsgraph_render_hud();
         r_dsgraph_render_lods(true, true);
         if (Details)
             Details->Render();
         Target->phase_scene_end();
     }
 
-    if (g_hud && g_hud->RenderActiveItemUIQuery()) {
+    if (!Device.scopeLensPass && g_hud && g_hud->RenderActiveItemUIQuery()) {
         Target->phase_wallmarks();
         r_dsgraph_render_hud_ui();
     }
@@ -504,7 +532,28 @@ void CRender::Render() {
         Target->phase_combine();
     }
 
+    if (Device.scopeLensPass)
+        m_bScopeLensRendered = true;
     VERIFY(0 == mapDistort.size());
+}
+
+bool CRender::CaptureScopeLens() {
+    if (!Device.scopeLensPass || !Target)
+        return false;
+
+    // A second Calculate() in the same frame must be able to discover these lights again.
+    // Render marks each light with Device.dwFrame to avoid duplicates within one view.
+    for (light* L : Lights.package.v_point)
+        L->frame_render = 0;
+    for (light* L : Lights.package.v_spot)
+        L->frame_render = 0;
+    for (light* L : Lights.package.v_shadowed)
+        L->frame_render = 0;
+
+    if (!m_bScopeLensRendered)
+        return false;
+    Target->CaptureScopeLens();
+    return true;
 }
 
 void CRender::render_forward() {
@@ -517,12 +566,13 @@ void CRender::render_forward() {
         // level
         r_pmask(false, true); // enable priority "1"
         phase = PHASE_NORMAL;
-        render_main(Device.mFullTransform, false); //
+        Fmatrix visibility_transform = scope_visibility_transform();
+        render_main(visibility_transform, false); //
         //	Igor: we don't want to render old lods on next frame.
         mapLOD.clear();
         r_dsgraph_render_graph(1);                     // normal level, secondary priority
         PortalTraverser.fade_render();                 // faded-portals
-        r_dsgraph_render_sorted();                     // strict-sorted geoms
+        r_dsgraph_render_sorted(!Device.scopeLensActive || Device.scopeLensPass);                     // strict-sorted geoms
         g_pGamePersistent->Environment().RenderLast(); // rain/thunder-bolts
     }
 

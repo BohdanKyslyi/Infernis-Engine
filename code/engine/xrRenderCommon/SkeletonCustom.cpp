@@ -469,7 +469,7 @@ void CKinematics::LL_SetBonesVisible(u64 mask) {
 void CKinematics::Visibility_Update() {
     Update_Visibility = FALSE;
     // check visible
-    for (u32 c_it = 0; c_it < children.size(); c_it++) {
+    for (u32 c_it = 0; c_it < children.size();) {
         CSkeletonX* _c = dynamic_cast<CSkeletonX*>(children[c_it]);
         VERIFY(_c);
         if (!_c->has_visible_bones()) {
@@ -477,11 +477,12 @@ void CKinematics::Visibility_Update() {
             children_invisible.push_back(children[c_it]);
             swap(children[c_it], children.back());
             children.pop_back();
-        }
+        } else
+            ++c_it;
     }
 
     // check invisible
-    for (u32 _it = 0; _it < children_invisible.size(); _it++) {
+    for (u32 _it = 0; _it < children_invisible.size();) {
         CSkeletonX* _c = dynamic_cast<CSkeletonX*>(children_invisible[_it]);
         VERIFY(_c);
         if (_c->has_visible_bones()) {
@@ -489,7 +490,8 @@ void CKinematics::Visibility_Update() {
             children.push_back(children_invisible[_it]);
             swap(children_invisible[_it], children_invisible.back());
             children_invisible.pop_back();
-        }
+        } else
+            ++_it;
     }
 }
 

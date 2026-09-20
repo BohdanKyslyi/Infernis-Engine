@@ -45,6 +45,14 @@ enable_pda_animations					= true ; анімації ПДА
 enable_dressing_animations				= true ; анімації вдягання броні / шоломів / рюкзаків
 enable_mutant_looting_animations		= true ; анімації зрізання частин тіл мутантів
 enable_mutant_looting_particles			= true ; ефекти партиклів під час зрізання частин тіл мутантів
+enable_quick_kick					= true ; швидкий удар ножем без перемикання активної зброї
+enable_quick_throw_grenades			= true ; швидкий кидок гранати з поверненням попередньої зброї
+enable_pickup_animations			= true ; підбирання предметів лівою рукою
+pickup_targeted_only				= true ; один натиск F підбирає лише предмет, показаний на HUD
+; input action: wipe_visor (bind wipe_visor <key>)
+enable_raindrops_wiping				= true ; ручне очищення крапель з екрана
+enable_headlamp_animation			= true ; ліва рука перемикає налобний ліхтар у момент action_timing
+enable_night_vision_animation		= true ; ліва рука перемикає ПНБ у момент action_timing
 mutant_looting_particle_timing			= 1300
 backpack_hud							= backpack_stalker_hud
 pda_hud               					= device_pda_hud
@@ -52,6 +60,17 @@ outfit_dressing_hud						= outfit_animation_hud
 helmet_dressing_hud						= helm_respirator_hud
 backpack_dressing_hud					= outfit_animation_hud
 mutant_looting_hud						= mutant_looting_hud
+quick_kick_hud							= quick_kick_hud
+; Можна вказати кілька HUD-секцій через кому — одна валідна секція
+; випадково обиратиметься для кожного підбирання. Окремий предмет може
+; перевизначити цей список власним параметром pickup_hud у своїй секції.
+pickup_hud								= item_pickup_hud
+raindrops_wiping_hud					= raindrops_wiping_hud
+; Кожен параметр підтримує список HUD-секцій через кому з випадковим вибором.
+; Необов'язкові headlamp_on_hud/headlamp_off_hud та
+; night_vision_on_hud/night_vision_off_hud мають пріоритет над спільними.
+headlamp_hud							= headlamp_toggle_hud
+night_vision_hud						= night_vision_toggle_hud
 
 ; =======================================================
 ; Discord Rich Presence
@@ -84,3 +103,18 @@ renderer_dx11_image	= renderer_dx11
 enable_pbr_rendering	= false ; увімкнення PBR-рендерингу
 sslr_mode				= off ; performance / balanced / quality / reference / off
 allow_bloodmarks_on_npc	= true; відображення кривавих слідів у сталкерів і мутантів
+
+; R4 and R3 draw the scoped world with glass effects; R2 uses a basic DX9 lens.
+; R1 retains the lens material fallback and the ordinary 2D scope overlay.
+; Disabling this switch restores the 2D overlay on every renderer.
+[weapon_scopes]
+enable_3d_scopes		= false
+; Fraction of screen width/height included in second-view visibility queries (0.5-1.0).
+; 1.0 renders the whole world view; 0.8 saves scene traversal outside the lens.
+; Increase this if a very large or off-centre lens clips world objects.
+scope_world_cull_scale	= 0.8
+; performance = after aiming finishes, balanced = when aiming begins,
+; quality = from the moment an equipped scoped weapon becomes active.
+scope_render_mode		= balanced
+; Red/blue separation in screen pixels near the lens rim (0 = off, 0.0-10.0).
+scope_lens_chromatic_aberration = 0.8

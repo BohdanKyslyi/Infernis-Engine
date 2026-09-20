@@ -288,6 +288,15 @@ public:
     // Main
     virtual void Calculate() = 0;
     virtual void Render() = 0;
+    // Only renderers that support a separate lens image override this hook.
+    virtual bool CaptureScopeLens() { return false; }
+
+    // Screen raindrops are accumulated by R2+ render targets. Keeping the
+    // factor on the common interface lets gameplay actions clean the view
+    // without toggling the renderer effect itself. R1 simply leaves it at 0.
+    float GetRainDropsFactor() const { return m_rain_drops_factor; }
+    void ResetRainDrops() { m_rain_drops_factor = 0.f; }
+    float& RainDropsFactorForUpdate() { return m_rain_drops_factor; }
 
     virtual void Screenshot(ScreenshotMode mode = SM_NORMAL, LPCSTR name = 0) = 0;
     virtual void Screenshot(ScreenshotMode mode, CMemoryWriter& memory_writer) = 0;
@@ -304,6 +313,7 @@ public:
     virtual ~IRender_interface();
 
 protected:
+    float m_rain_drops_factor = 0.f;
     virtual void ScreenshotImpl(ScreenshotMode mode, LPCSTR name, CMemoryWriter* memory_writer) = 0;
 };
 

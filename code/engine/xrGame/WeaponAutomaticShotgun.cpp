@@ -27,6 +27,12 @@ void CWeaponAutomaticShotgun::Load(LPCSTR section) {
                            m_eSoundAddCartridge);
 
         m_sounds.LoadSound(section, "snd_close_weapon", "sndClose", false, m_eSoundClose);
+        if (pSettings->line_exist(section, "snd_add_cartridge_empty"))
+            m_sounds.LoadSound(section, "snd_add_cartridge_empty", "sndChamber", false,
+                               m_eSoundAddCartridge);
+        if (pSettings->line_exist(section, "snd_open_weapon_empty"))
+            m_sounds.LoadSound(section, "snd_open_weapon_empty", "sndOpenEmpty", false,
+                               m_eSoundOpen);
     };
 }
 
@@ -49,6 +55,11 @@ void CWeaponAutomaticShotgun::OnAnimationEnd(u32 state) {
         return inherited::OnAnimationEnd(state);
 
     switch (m_sub_state) {
+    case eSubstateReloadChamber: {
+        AddCartridge(1);
+        m_sub_state = eSubstateReloadBegin;
+        SwitchState(eReload);
+    } break;
     case eSubstateReloadBegin: {
         m_sub_state = eSubstateReloadInProcess;
         SwitchState(eReload);
@@ -79,7 +90,9 @@ void CWeaponAutomaticShotgun::TriStateReload() {
     if (m_magazine.size() == (u32)iMagazineSize || !HaveCartridgeInInventory(1))
         return;
     CWeapon::Reload();
-    m_sub_state = eSubstateReloadBegin;
+    m_sub_state = iAmmoElapsed == 0 &&
+                  pSettings->line_exist(HudSection().c_str(), "anm_add_cartridge_empty")
+                      ? eSubstateReloadChamber : eSubstateReloadBegin;
     SwitchState(eReload);
 }
 
@@ -98,6 +111,14 @@ void CWeaponAutomaticShotgun::OnStateSwitch(u32 S) {
     };
 
     switch (m_sub_state) {
+    case eSubstateReloadChamber:
+        if (pSettings->line_exist(cNameSect().c_str(), "snd_add_cartridge_empty"))
+            PlaySound("sndChamber", get_LastFP());
+        else
+            PlaySound("sndAddCartridge", get_LastFP());
+        PlayHUDMotion("anm_add_cartridge_empty", FALSE, this, GetState());
+        SetPending(TRUE);
+        break;
     case eSubstateReloadBegin:
         if (HaveCartridgeInInventory(1))
             switch2_StartReload();
@@ -113,7 +134,10 @@ void CWeaponAutomaticShotgun::OnStateSwitch(u32 S) {
 }
 
 void CWeaponAutomaticShotgun::switch2_StartReload() {
-    PlaySound("sndOpen", get_LastFP());
+    if (!iAmmoElapsed && pSettings->line_exist(cNameSect().c_str(), "snd_open_weapon_empty"))
+        PlaySound("sndOpenEmpty", get_LastFP());
+    else
+        PlaySound("sndOpen", get_LastFP());
     PlayAnimOpenWeapon();
     SetPending(TRUE);
 }
@@ -132,7 +156,9 @@ void CWeaponAutomaticShotgun::switch2_EndReload() {
 
 void CWeaponAutomaticShotgun::PlayAnimOpenWeapon() {
     VERIFY(GetState() == eReload);
-    PlayHUDMotion("anm_open", FALSE, this, GetState());
+    LPCSTR key = !iAmmoElapsed && pSettings->line_exist(HudSection().c_str(), "anm_open_empty")
+                     ? "anm_open_empty" : "anm_open";
+    PlayHUDMotion(key, FALSE, this, GetState());
 }
 void CWeaponAutomaticShotgun::PlayAnimAddOneCartridgeWeapon() {
     VERIFY(GetState() == eReload);

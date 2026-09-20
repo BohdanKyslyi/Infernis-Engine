@@ -163,6 +163,8 @@ CActor::CActor() : CEntityAlive(), current_ik_cam_shift(0) {
     m_pVehicleWeLookingAt = nullptr;
     m_pObjectWeLookingAt = nullptr;
     m_bPickupMode = false;
+    m_bPickupPressed = false;
+    m_bPickupKeyDown = false;
 
     pStatGraph = nullptr;
 
@@ -748,6 +750,9 @@ float CActor::currentFOV() {
 
     if (eacFirstEye == cam_active && pWeapon && pWeapon->IsZoomed() &&
         (!pWeapon->ZoomTexture() || (!pWeapon->IsRotatingToZoom() && pWeapon->ZoomTexture()))) {
+        // Only the optic magnifies the world; the first-person camera stays at its normal FOV.
+        if (pWeapon->Is3DScopeEnabled())
+            return g_fov;
         return pWeapon->GetZoomFactor() * (0.75f);
     } else {
         return g_fov;
@@ -758,17 +763,25 @@ void CActor::UpdateCL() {
     if (m_item_use)
         m_item_use->Update(Device.fTimeDelta);
 
+    bool pickup_key_down = false;
     if (g_Alive() && Level().CurrentViewEntity() == this) {
         if (CurrentGameUI() && nullptr == CurrentGameUI()->TopInputReceiver()) {
             int dik = get_action_dik(kUSE, 0);
-            if (dik && pInput->iGetAsyncKeyState(dik))
+            if (dik && pInput->iGetAsyncKeyState(dik)) {
                 m_bPickupMode = true;
+                pickup_key_down = true;
+            }
 
             dik = get_action_dik(kUSE, 1);
-            if (dik && pInput->iGetAsyncKeyState(dik))
+            if (dik && pInput->iGetAsyncKeyState(dik)) {
                 m_bPickupMode = true;
+                pickup_key_down = true;
+            }
         }
     }
+
+    m_bPickupPressed = pickup_key_down && !m_bPickupKeyDown;
+    m_bPickupKeyDown = pickup_key_down;
 
     UpdateInventoryOwner(Device.dwTimeDelta);
 	
@@ -898,6 +911,7 @@ void CActor::UpdateCL() {
         g_player_hud->update(trans);
 
     m_bPickupMode = false;
+    m_bPickupPressed = false;
 }
 
 float NET_Jump = 0;

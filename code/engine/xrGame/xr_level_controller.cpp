@@ -88,10 +88,17 @@ _action actions[] = {
 
     { "quick_save", kQUICK_SAVE, _sp },
     { "quick_load", kQUICK_LOAD, _sp },
-    //	{ "alife_command",		kALIFE_CMD				,_sp},
+    { "alife_command", kALIFE_CMD, _sp },
 
+    { "quick_kick", kQUICK_KICK, _sp },
+    { "quick_grenade", kQUICK_GRENADE, _sp },
+    { "wpn_inspect", kWPN_INSPECT, _sp },
+    { "wpn_zoom_alter", kWPN_ZOOM_ALTER, _sp },
+    { "wipe_visor", kWIPE_VISOR, _sp },
     { NULL, kLASTACTION, _both }
 };
+static_assert(sizeof(actions) / sizeof(actions[0]) == bindings_count + 1,
+              "Action table must match EGameActions");
 
 _keyboard keyboards[] = { { "kESCAPE", DIK_ESCAPE },
                           { "k1", DIK_1 },
@@ -536,6 +543,7 @@ public:
 
     virtual void Execute(LPCSTR args) {
         CCC_UnBindAll::Execute(args);
+        Console->Execute("bind wpn_zoom_alter mouse3");
         string_path _cfg;
         string_path cmd;
         FS.update_path(_cfg, "$game_config$", "default_controls.ltx");

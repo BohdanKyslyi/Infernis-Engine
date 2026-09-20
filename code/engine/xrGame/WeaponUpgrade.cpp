@@ -25,6 +25,18 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
     result |= install_upgrade_disp(section, test);
     result |= install_upgrade_hit(section, test);
     result |= install_upgrade_addon(section, test);
+    if (pSettings->line_exist(section, "show_bones") ||
+        pSettings->line_exist(section, "hide_bones")) {
+        result = true;
+        if (!test && std::find(m_bone_upgrade_sections.begin(), m_bone_upgrade_sections.end(),
+                               shared_str(section)) == m_bone_upgrade_sections.end()) {
+            m_bone_upgrade_sections.push_back(section);
+            if (Visual())
+                UpdateAddonsVisibility();
+            else
+                UpdateHUDAddonsVisibility();
+        }
+    }
     return result;
 }
 

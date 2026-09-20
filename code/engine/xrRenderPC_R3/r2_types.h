@@ -21,6 +21,7 @@
 #define r2_RT_ssao_temp "$user$ssao_temp"   // temporary rt for ssao calculation
 #define r2_RT_half_depth "$user$half_depth" // temporary rt for ssao calculation
 
+#define r2_RT_scope_lens "$user$scope_lens"
 #define r2_RT_generic0 "$user$generic0"     // ---
 #define r2_RT_generic0_r "$user$generic0_r" // ---
 #define r2_RT_generic1 "$user$generic1"     // ---

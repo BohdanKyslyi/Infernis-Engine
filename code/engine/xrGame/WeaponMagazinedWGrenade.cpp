@@ -493,11 +493,15 @@ void CWeaponMagazinedWGrenade::InitAddons() {
     }
 }
 
+bool CWeaponMagazinedWGrenade::Is3DScopeEnabled() const {
+    return !(IsGrenadeLauncherAttached() && m_bGrenadeMode) && inherited::Is3DScopeEnabled();
+}
+
 bool CWeaponMagazinedWGrenade::UseScopeTexture() {
     if (IsGrenadeLauncherAttached() && m_bGrenadeMode)
         return false;
 
-    return true;
+    return inherited::UseScopeTexture();
 };
 
 float CWeaponMagazinedWGrenade::CurrentZoomFactor() {
@@ -535,7 +539,7 @@ void CWeaponMagazinedWGrenade::PlayAnimReload() {
     VERIFY(GetState() == eReload);
 
     if (IsGrenadeLauncherAttached())
-        PlayHUDMotion("anm_reload_w_gl", TRUE, this, GetState());
+        PlayHUDMotion(ReloadMotion(true), TRUE, this, GetState());
     else
         inherited::PlayAnimReload();
 }

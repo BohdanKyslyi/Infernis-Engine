@@ -9,6 +9,7 @@
 #include "gamefont.h"
 #include "xrLevel.h"
 #include "CameraManager.h"
+#include "environment.h"
 #include "xr_object.h"
 #include "feel_sound.h"
 
@@ -140,8 +141,37 @@ void IGame_Level::OnRender() {
 #endif // _GPA_ENABLED
 
     // Level render, only when no client output required
+    // Render the optic before the main HUD so its texture belongs to this frame.
+    // Keep the render targets at screen size until the separate-resolution path is ready.
+    const float lens_fov = ScopeLensFov();
+    Device.scopeLensActive = false;
+    if (lens_fov >= 5.f && lens_fov <= 90.f) {
+        const float main_fov = Device.fFOV;
+        const Fmatrix main_project = Device.mProject;
+        const Fmatrix main_full = Device.mFullTransform;
+        const Fmatrix main_inverse = Device.mInvFullTransform;
+
+        Device.scopeLensPass = true;
+        Device.fFOV = lens_fov;
+        Device.mProject.build_projection(deg2rad(lens_fov), Device.fASPECT, VIEWPORT_NEAR,
+            g_pGamePersistent->Environment().CurrentEnv->far_plane);
+        Device.mFullTransform.mul(Device.mProject, Device.mView);
+        Device.mInvFullTransform.invert(Device.mFullTransform);
+        Device.m_pRender->SetCacheXform(Device.mView, Device.mProject);
+        Render->Calculate();
+        Render->Render();
+        Device.scopeLensActive = Render->CaptureScopeLens();
+
+        Device.scopeLensPass = false;
+        Device.fFOV = main_fov;
+        Device.mProject = main_project;
+        Device.mFullTransform = main_full;
+        Device.mInvFullTransform = main_inverse;
+        Device.m_pRender->SetCacheXform(Device.mView, Device.mProject);
+    }
     Render->Calculate();
     Render->Render();
+    Device.scopeLensActive = false;
 
 #ifdef _GPA_ENABLED
     TAL_RetireID(rtID);

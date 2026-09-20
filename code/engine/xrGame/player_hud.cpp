@@ -2,6 +2,7 @@
 #include "player_hud.h"
 #include "player_hud_legs.h"
 #include "HudItem.h"
+#include "Weapon.h"
 #include "ui_base.h"
 #include "actor.h"
 #include "physic_item.h"
@@ -22,6 +23,71 @@ constexpr float HUD_FOV_DEGREES_MIN = 5.f;
 constexpr float HUD_FOV_DEGREES_MAX = 179.f;
 constexpr float HUD_VIEWPORT_NEAR_MIN = 0.001f;
 constexpr float HUD_VIEWPORT_NEAR_MAX = 1.f;
+
+void DecodeControllerRotation(const CKeyQR& source, Fquaternion& result) {
+    result.x = float(source.x) * KEY_QuantI;
+    result.y = float(source.y) * KEY_QuantI;
+    result.z = float(source.z) * KEY_QuantI;
+    result.w = float(source.w) * KEY_QuantI;
+}
+
+void DecodeControllerTranslation(const CKeyQT8& source, const CMotion& motion,
+                                 Fvector& result) {
+    result.x = float(source.x1) * motion._sizeT.x + motion._initT.x;
+    result.y = float(source.y1) * motion._sizeT.y + motion._initT.y;
+    result.z = float(source.z1) * motion._sizeT.z + motion._initT.z;
+}
+
+void DecodeControllerTranslation(const CKeyQT16& source, const CMotion& motion,
+                                 Fvector& result) {
+    result.x = float(source.x1) * motion._sizeT.x + motion._initT.x;
+    result.y = float(source.y1) * motion._sizeT.y + motion._initT.y;
+    result.z = float(source.z1) * motion._sizeT.z + motion._initT.z;
+}
+
+bool SampleControllerMotion(CKey& result, const CBlend& blend, const CMotion& motion) {
+    const u32 key_count = motion.get_count();
+    if (!key_count)
+        return false;
+
+    const float key_time = std::max(blend.timeCurrent, 0.f) * SAMPLE_FPS;
+    const u32 frame = iFloor(key_time);
+    const float delta = clampr(key_time - float(frame), 0.f, 1.f);
+    const u32 first_key = frame % key_count;
+    const u32 second_key = (frame + 1) % key_count;
+
+    if (motion.test_flag(flRKeyAbsent)) {
+        DecodeControllerRotation(motion._keysR[0], result.Q);
+    } else {
+        Fquaternion first_rotation;
+        Fquaternion second_rotation;
+        DecodeControllerRotation(motion._keysR[first_key], first_rotation);
+        DecodeControllerRotation(motion._keysR[second_key], second_rotation);
+        result.Q.slerp(first_rotation, second_rotation, delta);
+    }
+
+    if (!motion.test_flag(flTKeyPresent)) {
+        result.T.set(motion._initT);
+        return true;
+    }
+
+    Fvector first_translation;
+    Fvector second_translation;
+    if (motion.test_flag(flTKey16IsBit)) {
+        DecodeControllerTranslation(motion._keysT16[first_key], motion,
+                                    first_translation);
+        DecodeControllerTranslation(motion._keysT16[second_key], motion,
+                                    second_translation);
+    } else {
+        DecodeControllerTranslation(motion._keysT8[first_key], motion,
+                                    first_translation);
+        DecodeControllerTranslation(motion._keysT8[second_key], motion,
+                                    second_translation);
+    }
+
+    result.T.lerp(first_translation, second_translation, delta);
+    return true;
+}
 } // namespace
 
 float CalcMotionSpeed(const shared_str& anim_name) {
@@ -30,6 +96,34 @@ float CalcMotionSpeed(const shared_str& anim_name) {
         return 2.0f;
     else
         return 1.0f;
+}
+
+static bool ParseMotionSpeed(LPCSTR value, float& result) {
+    if (!value || !value[0])
+        return false;
+
+    char* end = NULL;
+    const float parsed = strtof(value, &end);
+    if (end == value)
+        return false;
+
+    while (*end && isspace(static_cast<unsigned char>(*end)))
+        ++end;
+
+    if (*end)
+        return false;
+
+    result = parsed;
+    return true;
+}
+
+static float ValidateMotionSpeed(float speed, LPCSTR section, LPCSTR alias) {
+    if (speed > EPS_S && std::isfinite(speed))
+        return speed;
+
+    Msg("! HUD animation speed: invalid multiplier [%g] for [%s]:[%s], using 1.0",
+        speed, section, alias);
+    return 1.f;
 }
 
 player_hud_motion* player_hud_motion_container::find_motion(const shared_str& name) {
@@ -44,6 +138,10 @@ player_hud_motion* player_hud_motion_container::find_motion(const shared_str& na
 }
 
 void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_str& sect) {
+    // MotionID is local to a concrete hands model. Outfit changes replace that
+    // model, so cached IDs must be rebuilt instead of appended to the old set.
+    m_anims.clear();
+
     CInifile::Sect& _sect = pSettings->r_section(sect);
     auto _b = _sect.Data.cbegin();
     auto _e = _sect.Data.cend();
@@ -60,17 +158,34 @@ void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_
             // base and alias name
             pm->m_alias_name = _b->first;
 
-            if (_GetItemCount(anm.c_str()) == 1) {
-                pm->m_base_name = anm;
-                pm->m_additional_name = anm;
-            } else {
-                R_ASSERT2(_GetItemCount(anm.c_str()) == 2, anm.c_str());
-                string512 str_item;
-                _GetItem(anm.c_str(), 0, str_item);
-                pm->m_base_name = str_item;
+            const u32 item_count = _GetItemCount(anm.c_str());
+            R_ASSERT2(item_count >= 1 && item_count <= 3, anm.c_str());
 
+            string512 str_item;
+            _GetItem(anm.c_str(), 0, str_item);
+            pm->m_base_name = str_item;
+            pm->m_additional_name = str_item;
+
+            if (item_count == 2) {
+                _GetItem(anm.c_str(), 1, str_item);
+
+                float configured_speed = 1.f;
+                if (ParseMotionSpeed(str_item, configured_speed)) {
+                    pm->m_anim_speed = ValidateMotionSpeed(
+                        configured_speed, sect.c_str(), pm->m_alias_name.c_str());
+                } else {
+                    pm->m_additional_name = str_item;
+                }
+            } else if (item_count == 3) {
                 _GetItem(anm.c_str(), 1, str_item);
                 pm->m_additional_name = str_item;
+
+                _GetItem(anm.c_str(), 2, str_item);
+                float configured_speed = 1.f;
+                R_ASSERT3(ParseMotionSpeed(str_item, configured_speed),
+                          "invalid HUD animation speed multiplier", anm.c_str());
+                pm->m_anim_speed = ValidateMotionSpeed(
+                    configured_speed, sect.c_str(), pm->m_alias_name.c_str());
             }
 
             // and load all motions for it
@@ -305,6 +420,8 @@ attachable_hud_item::~attachable_hud_item() {
 void attachable_hud_item::load(const shared_str& sect_name) {
     m_sect_name = sect_name;
 
+    m_preserve_other_hand =
+        !!READ_IF_EXISTS(pSettings, r_bool, sect_name, "preserve_other_hand", false);
     m_hud_fov = 0.f;
     m_hud_fov_degrees = 0.f;
     m_viewport_near = 0.f;
@@ -361,8 +478,6 @@ void attachable_hud_item::load(const shared_str& sect_name) {
 
 u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, const CMotionDef*& md,
                                    u8& rnd_idx) {
-    float speed = CalcMotionSpeed(anm_name_b);
-
     R_ASSERT(strstr(anm_name_b.c_str(), "anm_") == anm_name_b.c_str());
     string256 anim_name_r;
     bool is_16x9 = UI().is_widescreen();
@@ -378,10 +493,15 @@ u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, co
                           pSettings->r_string(m_sect_name, "item_visual"), anim_name_r)
                   .c_str());
 
+    const float speed = CalcMotionSpeed(anm_name_b) * anm->m_anim_speed;
+    m_last_anim_speed = speed;
+
     rnd_idx = (u8)Random.randI(anm->m_animations.size());
     const motion_descr& M = anm->m_animations[rnd_idx];
 
-    u32 ret = g_player_hud->anim_play(m_attach_place_idx, M.mid, bMixIn, md, speed);
+    const bool preserve_other_hand = m_controller_owned && m_preserve_other_hand;
+    u32 ret = g_player_hud->anim_play(m_attach_place_idx, M.mid, bMixIn, md, speed,
+                                      preserve_other_hand);
 
     if (m_model->dcast_PKinematicsAnimated()) {
         IKinematicsAnimated* ka = m_model->dcast_PKinematicsAnimated();
@@ -452,6 +572,8 @@ player_hud::player_hud() {
     m_attached_items[0] = NULL;
     m_attached_items[1] = NULL;
     m_controller_item = NULL;
+    m_controller_motion.invalidate();
+    m_controller_motion_alias = NULL;
     m_legs_controller = xr_new<CActorLegsController>();
     m_default_hud_fov = 0.f;
     m_applied_hud_fov = 0.f;
@@ -518,6 +640,8 @@ attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_se
     pi->m_controller_owned = true;
 
     m_controller_item = pi;
+    m_controller_motion.invalidate();
+    m_controller_motion_alias = NULL;
 
     UpdateHudProjection();
 
@@ -541,6 +665,8 @@ void player_hud::detach_controller_item() {
     Msg("* ItemUse: detached HUD section [%s]", m_controller_item->m_sect_name.c_str());
 
     m_controller_item = NULL;
+    m_controller_motion.invalidate();
+    m_controller_motion_alias = NULL;
 
     UpdateHudProjection();
 
@@ -550,6 +676,8 @@ void player_hud::detach_controller_item() {
 void player_hud::load(const shared_str& player_hud_sect) {
     if (player_hud_sect == m_sect_name)
         return;
+    const bool restart_controller_idle =
+        m_controller_item && m_controller_motion_alias == "anm_idle";
     bool b_reload = (m_model != NULL);
     if (m_model) {
         IRenderVisual* v = m_model->dcast_RenderVisual();
@@ -559,6 +687,7 @@ void player_hud::load(const shared_str& player_hud_sect) {
     m_sect_name = player_hud_sect;
     const shared_str& model_name = pSettings->r_string(player_hud_sect, "visual");
     m_model = smart_cast<IKinematicsAnimated*>(::Render->model_Create(model_name.c_str()));
+    m_controller_motion.invalidate();
 
     if (pSettings->line_exist("hud_extensions", "hands_animations_path")) {
         LPCSTR hand_animations = pSettings->r_string("hud_extensions", "hands_animations_path");
@@ -570,6 +699,13 @@ void player_hud::load(const shared_str& player_hud_sect) {
         }
     }
 
+    // Every pooled HUD section stores MotionIDs resolved against m_model.
+    // Rebind them before an attached weapon or a queued controller animation
+    // is restarted on the newly selected outfit hands.
+    for (attachable_hud_item* item : m_pool)
+        item->m_hand_motions.load(m_model, item->m_sect_name);
+
+    m_ancors.clear();
     CInifile::Sect& _sect = pSettings->r_section(player_hud_sect);
     auto _b = _sect.Data.cbegin();
     auto _e = _sect.Data.cend();
@@ -593,6 +729,17 @@ void player_hud::load(const shared_str& player_hud_sect) {
         if (m_attached_items[0] && m_attached_items[0]->m_parent_hud_item)
             m_attached_items[0]->m_parent_hud_item->on_a_hud_attach();
     }
+
+    // Replacing the hands model destroys all of its active blends. A persistent
+    // controller can remain logically in the idle phase while the inventory is
+    // open, so start that cycle again on the new outfit hands. Show/hide are
+    // deliberately not restored because their controller timers are finite.
+    if (restart_controller_idle && m_controller_item &&
+        has_controller_motion("anm_idle")) {
+        play_controller_motion("anm_idle", FALSE);
+        Msg("* ItemUse: controller idle restored after hands HUD reload");
+    }
+
     m_model->dcast_PKinematics()->CalculateBones_Invalidate();
     m_model->dcast_PKinematics()->CalculateBones(TRUE);
 
@@ -640,7 +787,6 @@ void player_hud::render_hud() {
 
 u32 player_hud::motion_length(const shared_str& anim_name, const shared_str& hud_name,
                               const CMotionDef*& md) {
-    float speed = CalcMotionSpeed(anim_name);
     attachable_hud_item* pi = create_hud_item(hud_name);
     player_hud_motion* pm = pi->m_hand_motions.find_motion(anim_name);
     if (!pm)
@@ -648,6 +794,7 @@ u32 player_hud::motion_length(const shared_str& anim_name, const shared_str& hud
     R_ASSERT2(pm, make_string("hudItem model [%s] has no motion with alias [%s]", hud_name.c_str(),
                               anim_name.c_str())
                       .c_str());
+    const float speed = CalcMotionSpeed(anim_name) * pm->m_anim_speed;
     return motion_length(pm->m_animations[0].mid, md, speed);
 }
 
@@ -686,6 +833,10 @@ void player_hud::update(const Fmatrix& cam_trans) {
 
     Fmatrix trans = cam_trans;
     update_inertion(trans);
+
+    // A controller-owned hand must use the transform it would have had while
+    // attached alone. Weapon-specific offsets are applied only afterwards.
+    const Fmatrix controller_trans = trans;
     update_additional(trans);
 
     Fvector ypr = attach_rot();
@@ -699,6 +850,8 @@ void player_hud::update(const Fmatrix& cam_trans) {
     m_model->dcast_PKinematics()->CalculateBones_Invalidate();
     m_model->dcast_PKinematics()->CalculateBones(TRUE);
 
+    ApplyControllerHandTransform(controller_trans);
+
     if (m_attached_items[0])
         m_attached_items[0]->update(true);
 
@@ -706,16 +859,113 @@ void player_hud::update(const Fmatrix& cam_trans) {
         m_attached_items[1]->update(true);
 }
 
+void player_hud::ApplyControllerHandTransform(const Fmatrix& controller_trans) {
+    if (!m_controller_item || !m_controller_item->m_controller_owned ||
+        !m_controller_item->m_preserve_other_hand ||
+        m_controller_item->m_attach_place_idx != 1 ||
+        m_attached_items[1] != m_controller_item || !m_attached_items[0]) {
+        return;
+    }
+
+    const u16 part_id = m_model->partitions().part_id("left_hand");
+    if (part_id == u16(-1))
+        return;
+
+    Fvector controller_ypr = m_controller_item->hands_attach_rot();
+    controller_ypr.mul(PI / 180.f);
+
+    Fmatrix controller_attach;
+    controller_attach.setHPB(controller_ypr.x, controller_ypr.y, controller_ypr.z);
+    controller_attach.translate_over(m_controller_item->hands_attach_pos());
+
+    Fmatrix desired_transform;
+    desired_transform.mul(controller_trans, controller_attach);
+
+    Fmatrix current_inverse;
+    current_inverse.invert(m_transform);
+
+    // Bone transforms are model-local. This correction makes the left-hand
+    // partition render as desired_transform while the shared HUD model and
+    // right-hand partition continue using m_transform from slot 0.
+    Fmatrix correction;
+    correction.mul_43(current_inverse, desired_transform);
+
+    IKinematics* kinematics = m_model->dcast_PKinematics();
+
+    // With two attached items, preserve_other_hand deliberately keeps the
+    // controller motion off the shared root partition so the weapon does not
+    // inherit the left-hand animation. Reconstruct that omitted root pose and
+    // apply it only to left-hand bones. Without this step, root translation in
+    // the exported motion remains replaced by the weapon pose, which shows up
+    // as a horizontal offset even after the HUD-section transform is isolated.
+    if (m_controller_motion.valid()) {
+        CBlend* controller_blend = NULL;
+        const u32 blend_count = m_model->LL_PartBlendsCount(part_id);
+        for (u32 blend_idx = 0; blend_idx < blend_count; ++blend_idx) {
+            CBlend* blend = m_model->LL_PartBlend(part_id, blend_idx);
+            if (blend && blend->blend_state() != CBlend::eFREE_SLOT &&
+                blend->motionID == m_controller_motion) {
+                controller_blend = blend;
+            }
+        }
+
+        if (controller_blend) {
+            CMotion* controller_root_motion =
+                m_model->LL_GetRootMotion(m_controller_motion);
+            CKey controller_root_key;
+            if (!controller_root_motion ||
+                !SampleControllerMotion(controller_root_key, *controller_blend,
+                                        *controller_root_motion)) {
+                controller_blend = NULL;
+            }
+
+            if (controller_blend) {
+                Fmatrix controller_root;
+                controller_root.mk_xform(controller_root_key.Q, controller_root_key.T);
+
+                const u16 root_id = kinematics->LL_GetBoneRoot();
+                Fmatrix current_root_inverse;
+                current_root_inverse.invert(
+                    kinematics->LL_GetBoneInstance(root_id).mTransform);
+
+                Fmatrix root_correction;
+                root_correction.mul_43(controller_root, current_root_inverse);
+
+                Fmatrix combined_correction;
+                combined_correction.mul_43(correction, root_correction);
+                correction.set(combined_correction);
+            }
+        }
+    }
+
+    const CPartDef& left_hand = m_model->partitions().part(part_id);
+    for (u32 bone_id : left_hand.bones) {
+        if (bone_id >= kinematics->LL_BoneCount())
+            continue;
+
+        CBoneInstance& bone = kinematics->LL_GetBoneInstance((u16)bone_id);
+        bone.mTransform.mulA_43(correction);
+        bone.mRenderTransform.mul_43(
+            bone.mTransform, kinematics->LL_GetData((u16)bone_id).m2b_transform);
+    }
+}
+
 u32 player_hud::anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md,
-                          float speed) {
+                          float speed, bool preserve_other_hand) {
 
     u16 part_id = u16(-1);
     if (attached_item(0) && attached_item(1))
         part_id = m_model->partitions().part_id((part == 0) ? "right_hand" : "left_hand");
 
+    if (preserve_other_hand && part == 1)
+        m_controller_motion = M;
+
     u16 pc = m_model->partitions().count();
     for (u16 pid = 0; pid < pc; ++pid) {
-        if (pid == 0 || pid == part_id || part_id == u16(-1)) {
+        const bool play_partition =
+            part_id == u16(-1) || pid == part_id || (!preserve_other_hand && pid == 0);
+
+        if (play_partition) {
             CBlend* B = m_model->PlayCycle(pid, M, bMixIn);
             R_ASSERT(B);
             B->speed *= speed;
@@ -746,6 +996,7 @@ u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixI
     u8 rnd = 0;
 
     const u32 duration = m_controller_item->anim_play(motion_name, bMixIn, md, rnd);
+    m_controller_motion_alias = motion_name;
 
     if (played_motion_name) {
         string256 resolved_motion_name;
@@ -764,6 +1015,10 @@ u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixI
     return duration;
 }
 
+float player_hud::controller_motion_speed() const {
+    return m_controller_item ? m_controller_item->last_anim_speed() : 1.f;
+}
+
 bool player_hud::has_hud_motion(const shared_str& hud_section,
                                 const shared_str& motion_name) {
     if (!m_model || !hud_section.size() || !motion_name.size() ||
@@ -775,7 +1030,7 @@ bool player_hud::has_hud_motion(const shared_str& hud_section,
     LPCSTR motion_config = pSettings->r_string(hud_section.c_str(), motion_name.c_str());
     const u32 item_count = _GetItemCount(motion_config);
 
-    if (item_count != 1 && item_count != 2)
+    if (item_count < 1 || item_count > 3)
         return false;
 
     string512 base_motion;
@@ -1067,16 +1322,31 @@ void player_hud::UpdateHudProjection() {
         source = m_attached_items[1];
     }
 
-    const bool uses_degrees = source && source->m_hud_fov_degrees > 0.f;
-    const float override_hud_fov =
-        uses_degrees
-            ? source->m_hud_fov_degrees / std::max(Device.fFOV, EPS_S)
-            : (source ? source->m_hud_fov : 0.f);
-
     // Preserve a console change made while an override is active. Normally
     // psHUD_FOV equals m_applied_hud_fov until this method restores it.
     if (m_hud_fov_override_active && !fsimilar(psHUD_FOV, m_applied_hud_fov))
         m_default_hud_fov = psHUD_FOV;
+
+    const bool uses_degrees = source && source->m_hud_fov_degrees > 0.f;
+    float override_hud_fov =
+        uses_degrees
+            ? source->m_hud_fov_degrees / std::max(Device.fFOV, EPS_S)
+            : (source ? source->m_hud_fov : 0.f);
+
+    float item_fov_factor = 1.f;
+    if (source && source->m_parent_hud_item) {
+        CWeapon* weapon = smart_cast<CWeapon*>(source->m_parent_hud_item);
+        if (weapon)
+            item_fov_factor = weapon->AlternativeHudFovFactor();
+    }
+
+    if (!fsimilar(item_fov_factor, 1.f)) {
+        const float base_hud_fov = override_hud_fov > 0.f
+            ? override_hud_fov
+            : (m_hud_fov_override_active ? m_default_hud_fov : psHUD_FOV);
+        override_hud_fov = base_hud_fov * item_fov_factor;
+        clamp(override_hud_fov, HUD_FOV_MIN, HUD_FOV_MAX);
+    }
 
     if (override_hud_fov > 0.f) {
         if (!m_hud_fov_override_active)

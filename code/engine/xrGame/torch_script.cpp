@@ -4,6 +4,7 @@
 #include "SimpleDetector.h"
 #include "EliteDetector.h"
 #include "AdvancedDetector.h"
+#include "Flashlight.h"
 
 using namespace luabind;
 
@@ -14,5 +15,6 @@ void CTorch::script_register(lua_State* L) {
               class_<CScientificDetector, CGameObject>("CScientificDetector").def(constructor<>()),
               class_<CEliteDetector, CGameObject>("CEliteDetector").def(constructor<>()),
               class_<CAdvancedDetector, CGameObject>("CAdvancedDetector").def(constructor<>()),
-              class_<CSimpleDetector, CGameObject>("CSimpleDetector").def(constructor<>())];
+              class_<CSimpleDetector, CGameObject>("CSimpleDetector").def(constructor<>()),
+              class_<CFlashlight, CGameObject>("CFlashlight").def(constructor<>())];
 }

@@ -230,6 +230,11 @@ public:
     virtual void OnEvent(EVENT E, u64 P1, u64 P2) override;
     virtual void OnFrame() override;
     virtual void OnRender() override;
+    float ScopeLensFov() const override;
+    u8 ScopeLensMode() const override;
+    void ScopeLensGlass(float* params) const override;
+    bool ScopeLensHasDetector() const override;
+    u32 ScopeLensTargets(float* targets, u32 capacity) const override;
 
     virtual shared_str OpenDemoFile(LPCSTR demo_file_name) override;
     virtual void net_StartPlayDemo() override;

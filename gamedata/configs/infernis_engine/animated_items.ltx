@@ -103,3 +103,58 @@ cam_eff_name       = ie\mutant_looting.anm
 cam_eff_cyclic     = false
 cam_eff_hud_affect = false
 hud_fov_degrees = 51.5
+
+[quick_kick_hud]:animated_item_hud
+item_visual                 = dynamics\weapons\wpn_knife\wpn_knife_hud.ogf
+block_movement              = false
+anm_show                    = knife_kick_1
+action_timing               = 250
+
+; Controller-owned left-hand HUD used while picking up world items. Replace
+; the motion name with the animation exported to the external hands OMF.
+; action_timing is the exact millisecond at which the world item is transferred
+; to the actor inventory. Each pickup HUD variant can use its own value.
+[item_pickup_hud]:animated_item_hud
+attach_place_idx            = 1
+item_visual                 = dynamics\fake_object.ogf
+preserve_other_hand         = true
+block_movement              = true
+disable_ui                  = false
+anm_show                    = item_pickup
+anm_show_16x9               = item_pickup
+action_timing               = 750
+
+; Optional left-hand visor wipe. If this HUD or its motion is unavailable,
+; the wipe_visor action still clears raindrops immediately.
+[raindrops_wiping_hud]:animated_item_hud
+attach_place_idx            = 1
+item_visual                 = dynamics\fake_object.ogf
+preserve_other_hand         = true
+block_movement              = false
+disable_ui                  = false
+anm_show                    = visor_wipe
+anm_show_16x9               = visor_wipe
+action_timing               = 550
+
+; Left-hand headgear controls. The real headlamp/NVG state changes exactly at
+; action_timing. Both generic entries can be replaced by state-specific HUDs
+; in [items_animations] when separate on/off motions are available.
+[headlamp_toggle_hud]:animated_item_hud
+attach_place_idx            = 1
+item_visual                 = dynamics\fake_object.ogf
+preserve_other_hand         = true
+block_movement              = false
+disable_ui                  = false
+anm_show                    = headgear_toggle
+anm_show_16x9               = headgear_toggle
+action_timing               = 500
+
+[night_vision_toggle_hud]:animated_item_hud
+attach_place_idx            = 1
+item_visual                 = dynamics\fake_object.ogf
+preserve_other_hand         = true
+block_movement              = false
+disable_ui                  = false
+anm_show                    = headgear_toggle
+anm_show_16x9               = headgear_toggle
+action_timing               = 500
