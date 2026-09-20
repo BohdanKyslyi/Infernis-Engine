@@ -573,6 +573,7 @@ player_hud::player_hud() {
     m_attached_items[1] = NULL;
     m_controller_item = NULL;
     m_controller_motion.invalidate();
+    m_controller_motion_alias = NULL;
     m_legs_controller = xr_new<CActorLegsController>();
     m_default_hud_fov = 0.f;
     m_applied_hud_fov = 0.f;
@@ -640,6 +641,7 @@ attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_se
 
     m_controller_item = pi;
     m_controller_motion.invalidate();
+    m_controller_motion_alias = NULL;
 
     UpdateHudProjection();
 
@@ -664,6 +666,7 @@ void player_hud::detach_controller_item() {
 
     m_controller_item = NULL;
     m_controller_motion.invalidate();
+    m_controller_motion_alias = NULL;
 
     UpdateHudProjection();
 
@@ -673,6 +676,8 @@ void player_hud::detach_controller_item() {
 void player_hud::load(const shared_str& player_hud_sect) {
     if (player_hud_sect == m_sect_name)
         return;
+    const bool restart_controller_idle =
+        m_controller_item && m_controller_motion_alias == "anm_idle";
     bool b_reload = (m_model != NULL);
     if (m_model) {
         IRenderVisual* v = m_model->dcast_RenderVisual();
@@ -724,6 +729,17 @@ void player_hud::load(const shared_str& player_hud_sect) {
         if (m_attached_items[0] && m_attached_items[0]->m_parent_hud_item)
             m_attached_items[0]->m_parent_hud_item->on_a_hud_attach();
     }
+
+    // Replacing the hands model destroys all of its active blends. A persistent
+    // controller can remain logically in the idle phase while the inventory is
+    // open, so start that cycle again on the new outfit hands. Show/hide are
+    // deliberately not restored because their controller timers are finite.
+    if (restart_controller_idle && m_controller_item &&
+        has_controller_motion("anm_idle")) {
+        play_controller_motion("anm_idle", FALSE);
+        Msg("* ItemUse: controller idle restored after hands HUD reload");
+    }
+
     m_model->dcast_PKinematics()->CalculateBones_Invalidate();
     m_model->dcast_PKinematics()->CalculateBones(TRUE);
 
@@ -980,6 +996,7 @@ u32 player_hud::play_controller_motion(const shared_str& motion_name, BOOL bMixI
     u8 rnd = 0;
 
     const u32 duration = m_controller_item->anim_play(motion_name, bMixIn, md, rnd);
+    m_controller_motion_alias = motion_name;
 
     if (played_motion_name) {
         string256 resolved_motion_name;

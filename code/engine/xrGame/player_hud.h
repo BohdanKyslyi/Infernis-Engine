@@ -185,6 +185,7 @@ private:
     Fmatrix m_transform;
     IKinematicsAnimated* m_model;
     MotionID m_controller_motion;
+    shared_str m_controller_motion_alias;
     xr_vector<u16> m_ancors;
     attachable_hud_item* m_attached_items[2];
     xr_vector<attachable_hud_item*> m_pool;
