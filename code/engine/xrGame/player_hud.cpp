@@ -9,6 +9,7 @@
 #include "static_cast_checked.hpp"
 #include "actoreffector.h"
 #include "../xrEngine/IGame_Persistent.h"
+#include "../xrRenderCommon/AnimationKeyCalculate.h"
 
 player_hud* g_player_hud = NULL;
 extern ENGINE_API float psHUD_FOV;
@@ -457,6 +458,7 @@ player_hud::player_hud() {
     m_attached_items[0] = NULL;
     m_attached_items[1] = NULL;
     m_controller_item = NULL;
+    m_controller_motion.invalidate();
     m_legs_controller = xr_new<CActorLegsController>();
     m_default_hud_fov = 0.f;
     m_applied_hud_fov = 0.f;
@@ -523,6 +525,7 @@ attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_se
     pi->m_controller_owned = true;
 
     m_controller_item = pi;
+    m_controller_motion.invalidate();
 
     UpdateHudProjection();
 
@@ -546,6 +549,7 @@ void player_hud::detach_controller_item() {
     Msg("* ItemUse: detached HUD section [%s]", m_controller_item->m_sect_name.c_str());
 
     m_controller_item = NULL;
+    m_controller_motion.invalidate();
 
     UpdateHudProjection();
 
@@ -564,6 +568,7 @@ void player_hud::load(const shared_str& player_hud_sect) {
     m_sect_name = player_hud_sect;
     const shared_str& model_name = pSettings->r_string(player_hud_sect, "visual");
     m_model = smart_cast<IKinematicsAnimated*>(::Render->model_Create(model_name.c_str()));
+    m_controller_motion.invalidate();
 
     if (pSettings->line_exist("hud_extensions", "hands_animations_path")) {
         LPCSTR hand_animations = pSettings->r_string("hud_extensions", "hands_animations_path");
@@ -749,6 +754,47 @@ void player_hud::ApplyControllerHandTransform(const Fmatrix& controller_trans) {
     correction.mul_43(current_inverse, desired_transform);
 
     IKinematics* kinematics = m_model->dcast_PKinematics();
+
+    // With two attached items, preserve_other_hand deliberately keeps the
+    // controller motion off the shared root partition so the weapon does not
+    // inherit the left-hand animation. Reconstruct that omitted root pose and
+    // apply it only to left-hand bones. Without this step, root translation in
+    // the exported motion remains replaced by the weapon pose, which shows up
+    // as a horizontal offset even after the HUD-section transform is isolated.
+    if (m_controller_motion.valid()) {
+        CBlend* controller_blend = NULL;
+        const u32 blend_count = m_model->LL_PartBlendsCount(part_id);
+        for (u32 blend_idx = 0; blend_idx < blend_count; ++blend_idx) {
+            CBlend* blend = m_model->LL_PartBlend(part_id, blend_idx);
+            if (blend && blend->blend_state() != CBlend::eFREE_SLOT &&
+                blend->motionID == m_controller_motion) {
+                controller_blend = blend;
+            }
+        }
+
+        if (controller_blend) {
+            CKey controller_root_key;
+            CMotion* controller_root_motion =
+                m_model->LL_GetRootMotion(m_controller_motion);
+            Dequantize(controller_root_key, *controller_blend, *controller_root_motion);
+
+            Fmatrix controller_root;
+            controller_root.mk_xform(controller_root_key.Q, controller_root_key.T);
+
+            const u16 root_id = kinematics->LL_GetBoneRoot();
+            Fmatrix current_root_inverse;
+            current_root_inverse.invert(
+                kinematics->LL_GetBoneInstance(root_id).mTransform);
+
+            Fmatrix root_correction;
+            root_correction.mul_43(controller_root, current_root_inverse);
+
+            Fmatrix combined_correction;
+            combined_correction.mul_43(correction, root_correction);
+            correction.set(combined_correction);
+        }
+    }
+
     const CPartDef& left_hand = m_model->partitions().part(part_id);
     for (u32 bone_id : left_hand.bones) {
         if (bone_id >= kinematics->LL_BoneCount())
@@ -767,6 +813,9 @@ u32 player_hud::anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotio
     u16 part_id = u16(-1);
     if (attached_item(0) && attached_item(1))
         part_id = m_model->partitions().part_id((part == 0) ? "right_hand" : "left_hand");
+
+    if (preserve_other_hand && part == 1)
+        m_controller_motion = M;
 
     u16 pc = m_model->partitions().count();
     for (u16 pid = 0; pid < pc; ++pid) {
