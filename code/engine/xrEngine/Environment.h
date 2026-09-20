@@ -329,6 +329,8 @@ public:
     const std::string& GetWeather() const { return CurrentWeatherName; }
     float GetGameTime() const { return fGameTime; }
     bool SaveWeather(const std::string& name, bool make_backup, std::string* saved_path = nullptr);
+    bool CreateWeather(const std::string& name, const CEnvDescriptor& source,
+                       std::string* saved_path = nullptr);
     bool AddWeatherFrame(const std::string& name, float game_time,
                          const CEnvDescriptor& source, CEnvDescriptor** created = nullptr);
     void BeginWeatherEditorSession(const std::string& weather, float game_time);
