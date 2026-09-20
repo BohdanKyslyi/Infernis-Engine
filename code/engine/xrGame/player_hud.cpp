@@ -9,7 +9,6 @@
 #include "static_cast_checked.hpp"
 #include "actoreffector.h"
 #include "../xrEngine/IGame_Persistent.h"
-#include "../xrRenderCommon/AnimationKeyCalculate.h"
 
 player_hud* g_player_hud = NULL;
 extern ENGINE_API float psHUD_FOV;
@@ -24,6 +23,71 @@ constexpr float HUD_FOV_DEGREES_MIN = 5.f;
 constexpr float HUD_FOV_DEGREES_MAX = 179.f;
 constexpr float HUD_VIEWPORT_NEAR_MIN = 0.001f;
 constexpr float HUD_VIEWPORT_NEAR_MAX = 1.f;
+
+void DecodeControllerRotation(const CKeyQR& source, Fquaternion& result) {
+    result.x = float(source.x) * KEY_QuantI;
+    result.y = float(source.y) * KEY_QuantI;
+    result.z = float(source.z) * KEY_QuantI;
+    result.w = float(source.w) * KEY_QuantI;
+}
+
+void DecodeControllerTranslation(const CKeyQT8& source, const CMotion& motion,
+                                 Fvector& result) {
+    result.x = float(source.x1) * motion._sizeT.x + motion._initT.x;
+    result.y = float(source.y1) * motion._sizeT.y + motion._initT.y;
+    result.z = float(source.z1) * motion._sizeT.z + motion._initT.z;
+}
+
+void DecodeControllerTranslation(const CKeyQT16& source, const CMotion& motion,
+                                 Fvector& result) {
+    result.x = float(source.x1) * motion._sizeT.x + motion._initT.x;
+    result.y = float(source.y1) * motion._sizeT.y + motion._initT.y;
+    result.z = float(source.z1) * motion._sizeT.z + motion._initT.z;
+}
+
+bool SampleControllerMotion(CKey& result, const CBlend& blend, const CMotion& motion) {
+    const u32 key_count = motion.get_count();
+    if (!key_count)
+        return false;
+
+    const float key_time = std::max(blend.timeCurrent, 0.f) * SAMPLE_FPS;
+    const u32 frame = iFloor(key_time);
+    const float delta = clampr(key_time - float(frame), 0.f, 1.f);
+    const u32 first_key = frame % key_count;
+    const u32 second_key = (frame + 1) % key_count;
+
+    if (motion.test_flag(flRKeyAbsent)) {
+        DecodeControllerRotation(motion._keysR[0], result.Q);
+    } else {
+        Fquaternion first_rotation;
+        Fquaternion second_rotation;
+        DecodeControllerRotation(motion._keysR[first_key], first_rotation);
+        DecodeControllerRotation(motion._keysR[second_key], second_rotation);
+        result.Q.slerp(first_rotation, second_rotation, delta);
+    }
+
+    if (!motion.test_flag(flTKeyPresent)) {
+        result.T.set(motion._initT);
+        return true;
+    }
+
+    Fvector first_translation;
+    Fvector second_translation;
+    if (motion.test_flag(flTKey16IsBit)) {
+        DecodeControllerTranslation(motion._keysT16[first_key], motion,
+                                    first_translation);
+        DecodeControllerTranslation(motion._keysT16[second_key], motion,
+                                    second_translation);
+    } else {
+        DecodeControllerTranslation(motion._keysT8[first_key], motion,
+                                    first_translation);
+        DecodeControllerTranslation(motion._keysT8[second_key], motion,
+                                    second_translation);
+    }
+
+    result.T.lerp(first_translation, second_translation, delta);
+    return true;
+}
 } // namespace
 
 float CalcMotionSpeed(const shared_str& anim_name) {
@@ -773,25 +837,31 @@ void player_hud::ApplyControllerHandTransform(const Fmatrix& controller_trans) {
         }
 
         if (controller_blend) {
-            CKey controller_root_key;
             CMotion* controller_root_motion =
                 m_model->LL_GetRootMotion(m_controller_motion);
-            Dequantize(controller_root_key, *controller_blend, *controller_root_motion);
+            CKey controller_root_key;
+            if (!controller_root_motion ||
+                !SampleControllerMotion(controller_root_key, *controller_blend,
+                                        *controller_root_motion)) {
+                controller_blend = NULL;
+            }
 
-            Fmatrix controller_root;
-            controller_root.mk_xform(controller_root_key.Q, controller_root_key.T);
+            if (controller_blend) {
+                Fmatrix controller_root;
+                controller_root.mk_xform(controller_root_key.Q, controller_root_key.T);
 
-            const u16 root_id = kinematics->LL_GetBoneRoot();
-            Fmatrix current_root_inverse;
-            current_root_inverse.invert(
-                kinematics->LL_GetBoneInstance(root_id).mTransform);
+                const u16 root_id = kinematics->LL_GetBoneRoot();
+                Fmatrix current_root_inverse;
+                current_root_inverse.invert(
+                    kinematics->LL_GetBoneInstance(root_id).mTransform);
 
-            Fmatrix root_correction;
-            root_correction.mul_43(controller_root, current_root_inverse);
+                Fmatrix root_correction;
+                root_correction.mul_43(controller_root, current_root_inverse);
 
-            Fmatrix combined_correction;
-            combined_correction.mul_43(correction, root_correction);
-            correction.set(combined_correction);
+                Fmatrix combined_correction;
+                combined_correction.mul_43(correction, root_correction);
+                correction.set(combined_correction);
+            }
         }
     }
 
