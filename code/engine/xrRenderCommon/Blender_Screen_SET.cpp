@@ -116,11 +116,6 @@ void CBlender_Screen_SET::Compile(CBlender_Compile& C) {
     IBlender::Compile(C);
     // C.r_Pass			("stub_notransform_t", "Blender_Screen_SET", false);
 
-    // Dynamic wallmarks keep complete skinned triangles, so their projected UVs may extend
-    // outside [0, 1].  Blend mode 6 is the wallmark pass and must never wrap those UVs,
-    // regardless of the value stored in an old or custom shaders.xr.
-    const bool clamp_texture = oClamp.value || oBlend.IDselected == 6;
-
     if (oBlend.IDselected == 6) {
         // Usually for wallmarks
         C.r_Pass("stub_notransform_t", "stub_default_ma", false);
@@ -128,7 +123,7 @@ void CBlender_Screen_SET::Compile(CBlender_Compile& C) {
         VERIFY(C.L_textures.size() > 0);
         C.r_dx10Texture("s_base", C.L_textures[0]);
         int iSmp = C.r_dx10Sampler("smp_base");
-        if (clamp_texture)
+        if (oClamp.value)
             C.i_dx10Address(iSmp, D3DTADDRESS_CLAMP);
 
     } else {
@@ -158,7 +153,7 @@ void CBlender_Screen_SET::Compile(CBlender_Compile& C) {
         VERIFY(C.L_textures.size() > 0);
         C.r_dx10Texture("s_base", C.L_textures[0]);
         int iSmp = C.r_dx10Sampler("smp_base");
-        if (clamp_texture && (iSmp != u32(-1)))
+        if ((oClamp.value) && (iSmp != u32(-1)))
             C.i_dx10Address(iSmp, D3DTADDRESS_CLAMP);
     }
 
@@ -205,8 +200,6 @@ void CBlender_Screen_SET::Compile(CBlender_Compile& C) {
 
 void CBlender_Screen_SET::Compile(CBlender_Compile& C) {
     IBlender::Compile(C);
-    // See the programmed-renderer path above. Wallmark UVs outside [0, 1] must be clamped.
-    const bool clamp_texture = oClamp.value || oBlend.IDselected == 6;
     C.PassBegin();
     {
         C.PassSET_ZB(oZTest.value, oZWrite.value);
@@ -248,7 +241,7 @@ void CBlender_Screen_SET::Compile(CBlender_Compile& C) {
         if (oBlend.IDselected == 6) {
             // Usually for wallmarks
             C.StageBegin();
-            C.StageSET_Address(clamp_texture ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
+            C.StageSET_Address(oClamp.value ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
             C.StageSET_Color(D3DTA_TEXTURE, D3DTOP_SELECTARG1, D3DTA_DIFFUSE);
             C.StageSET_Alpha(D3DTA_TEXTURE, D3DTOP_SELECTARG1, D3DTA_DIFFUSE);
             C.Stage_Texture(oT_Name);
@@ -257,7 +250,7 @@ void CBlender_Screen_SET::Compile(CBlender_Compile& C) {
             C.StageEnd();
 
             C.StageBegin();
-            C.StageSET_Address(clamp_texture ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
+            C.StageSET_Address(oClamp.value ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
             C.StageSET_Color(D3DTA_DIFFUSE, D3DTOP_BLENDDIFFUSEALPHA, D3DTA_CURRENT);
             C.StageSET_Alpha(D3DTA_DIFFUSE, D3DTOP_MODULATE, D3DTA_CURRENT);
             C.Stage_Texture("$null");
@@ -266,7 +259,7 @@ void CBlender_Screen_SET::Compile(CBlender_Compile& C) {
             C.StageEnd();
         } else {
             C.StageBegin();
-            C.StageSET_Address(clamp_texture ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
+            C.StageSET_Address(oClamp.value ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
             if (9 == oBlend.IDselected) {
                 // 4x R
                 C.StageSET_Color(D3DTA_TEXTURE, D3DTOP_MODULATE4X, D3DTA_DIFFUSE);
