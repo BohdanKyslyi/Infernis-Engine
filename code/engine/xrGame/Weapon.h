@@ -62,6 +62,7 @@ public:
     virtual void OnH_A_Chield();
     virtual void OnH_B_Independent(bool just_before_destroy);
     virtual void OnH_A_Independent();
+    virtual void on_a_hud_attach() override;
     virtual void OnEvent(NET_Packet& P, u16 type); // {inherited::OnEvent(P,type);}
 
     virtual void Hit(SHit* pHDS);
@@ -105,11 +106,13 @@ public:
         eMisfire,
         eMagEmpty,
         eSwitch,
+        eInspect,
     };
     enum EWeaponSubStates {
         eSubstateReloadBegin = 0,
         eSubstateReloadInProcess,
         eSubstateReloadEnd,
+        eSubstateReloadChamber,
     };
     enum { undefined_ammo_type = u8(-1) };
 
@@ -143,6 +146,10 @@ public:
     void ScopeLensGlass(float* params) const;
     bool HasScopeDetector() const;
     shared_str ScopeSettingSection(LPCSTR key) const;
+    shared_str AlternativeAimSettingSection(LPCSTR key) const;
+    bool IsAlternativeAimAllowed() const;
+    bool IsAlternativeAimActive() const { return m_bAlternativeAimActive; }
+    float AlternativeHudFovFactor() const;
     bool IsSilencerAttached() const;
 
     virtual bool GrenadeLauncherAttachable();
@@ -158,6 +165,7 @@ public:
     //обновление видимости для косточек аддонов
     void UpdateAddonsVisibility();
     void UpdateHUDAddonsVisibility();
+    void ApplyConfiguredBoneVisibility(IKinematics* model) const;
     //инициализация свойств присоединенных аддонов
     virtual void InitAddons();
 
@@ -187,6 +195,7 @@ protected:
     ALife::EWeaponAddonStatus m_eScopeStatus;
     ALife::EWeaponAddonStatus m_eSilencerStatus;
     ALife::EWeaponAddonStatus m_eGrenadeLauncherStatus;
+    xr_vector<shared_str> m_bone_upgrade_sections;
 
     //названия секций подключаемых аддонов
     shared_str m_sScopeName;
@@ -222,6 +231,11 @@ protected:
         CNightVisionEffector* m_pNight_vision;
 
     } m_zoom_params;
+
+    bool m_bAlternativeAimActive;
+    bool m_bAlternativeAimOwnsZoom;
+    float m_fAlternativeAimFactor;
+    float m_fZoomFactorBeforeAlternativeAim;
 
     float m_fRTZoomFactor; // run-time zoom factor
     CUIWindow* m_UIScope;
@@ -418,7 +432,7 @@ protected:
 
 public:
     IC int GetAmmoElapsed() const { return /*int(m_magazine.size())*/ iAmmoElapsed; }
-    IC int GetAmmoMagSize() const { return iMagazineSize; }
+    virtual int GetAmmoMagSize() const { return iMagazineSize; }
     int GetSuitableAmmoTotal(bool use_item_to_spawn = false) const;
 
     void SetAmmoElapsed(int ammo_count);

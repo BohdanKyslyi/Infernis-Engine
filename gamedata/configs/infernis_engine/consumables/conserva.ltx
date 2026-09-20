@@ -22,6 +22,7 @@ use_sound			= interface\inv_food
 
 eat_portions_num = 2 ; Кількість порцій предмету
 hud = conserva_hud_model ; Підключення системи hud і анімацій використання
+; hud_exo = anm_conserva_exo_hud ; Необов'язковий HUD для екзоскелета
 
 portion_state   = conserva_state_1 ; Стан предмету, в якому можна робити йому унікальний HUD, анімацію та в цілому зовнішній вигляд
 portion_state_2 = conserva_state_2 ; Незалежно від кількості порцій, останні перехоплюватимуть останній portion_state_N
@@ -40,9 +41,12 @@ visual				= dynamics\devices\dev_conserv\dev_conserv.ogf
 
 [conserva_hud_model]:animated_item
 timing						= 4700
+; timing_exo               = 5200 ; Необов'язковий таймінг для екзоскелета
 main_sect					= conserva
 hud	                    	= anm_conserva_hud
+; hud_exo                  = anm_conserva_exo_hud
 snd_using_anim	 			= interface\conserva
+; snd_using_anim_exo       = interface\conserva_exo
 cam_eff_name       = ifad\conserva.anm
 cam_eff_cyclic     = false
 cam_eff_hud_affect = false
@@ -56,5 +60,4 @@ hands_orientation			= 0,13,0
 hands_orientation_16x9		= 0,13,0
 hud_fov_degrees = 27.5
 viewport_near = 0.2
-
 

@@ -132,7 +132,9 @@ set(AI_AMONSTERS_HUMANS_STALKER_DECISIONMAKER_ACTIONS_DANGER_ACTIONS_BY_SOUND st
 set(CORE_CLIENT_OBJECTS_ITEMS__AND__WEAPONS_DEVICES_DETECTORS ui/ArtefactDetectorUI.h
                                                               CustomDetector.h
                                                               ui/ArtefactDetectorUI.cpp
-                                                              CustomDetector.cpp)
+                                                              CustomDetector.cpp
+                                                              Flashlight.h
+                                                              Flashlight.cpp)
 
 set(CORE_CLIENT_OBJECTS_ITEMS__AND__WEAPONS_WEAPONS_CUSTOM_WEAPON_AUTOMATIC WeaponMagazined.h
                                                                             WeaponMagazinedWGrenade.h

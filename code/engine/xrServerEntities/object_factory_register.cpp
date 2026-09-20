@@ -138,6 +138,7 @@
 #include "simpledetector.h"
 #include "elitedetector.h"
 #include "advanceddetector.h"
+#include "Flashlight.h"
 #include "zonecampfire.h"
 
 #include "torch.h"
@@ -341,6 +342,7 @@ void CObjectFactory::register_classes() {
     ADD(CEliteDetector, CSE_ALifeItemDetector, CLSID_DETECTOR_ELITE, "device_detector_elite");
     ADD(CScientificDetector, CSE_ALifeItemDetector, CLSID_DETECTOR_SCIENTIFIC,
         "device_detector_scientific");
+    ADD(CFlashlight, CSE_ALifeItemDetector, CLSID_DEVICE_FLASHLIGHT, "device_flashlight");
 
     // Devices
     ADD(CTorch, CSE_ALifeItemTorch, CLSID_DEVICE_TORCH, "device_torch");

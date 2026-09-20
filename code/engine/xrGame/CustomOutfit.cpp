@@ -25,6 +25,9 @@ CCustomOutfit::CCustomOutfit() {
     m_boneProtection = xr_new<SBoneProtections>();
     m_artefact_count = 0;
     m_BonesProtectionSect = NULL;
+    bIsExoskeleton = false;
+    bIsExoskeletonPrototype = false;
+    bUseExoItemAnimations = false;
 }
 
 CCustomOutfit::~CCustomOutfit() { xr_delete(m_boneProtection); }
@@ -112,6 +115,15 @@ void CCustomOutfit::Load(LPCSTR section) {
         READ_IF_EXISTS(pSettings, r_string, section, "bones_koeff_protection", "");
     bIsHelmetAvaliable = !!READ_IF_EXISTS(pSettings, r_bool, section, "helmet_avaliable", true);
     bIsBackpackAvaliable = !!READ_IF_EXISTS(pSettings, r_bool, section, "backpack_avaliable", true);
+
+    // IX-Ray/Gunslinger compatibility. The explicit animation switch lets a
+    // custom suit opt in or out without depending on its section name.
+    bIsExoskeleton = !!READ_IF_EXISTS(pSettings, r_bool, section, "is_exo", false);
+    bIsExoskeletonPrototype =
+        !!READ_IF_EXISTS(pSettings, r_bool, section, "is_exo_proto", false);
+    bUseExoItemAnimations = !!READ_IF_EXISTS(
+        pSettings, r_bool, section, "use_exo_item_animations",
+        bIsExoskeleton || bIsExoskeletonPrototype);
 }
 
 void CCustomOutfit::ReloadBonesProtection() {

@@ -284,7 +284,10 @@ void CUITacticalCompass::UpdateMarkers(float heading) {
         icon->Show(true);
 
         const float absolute_angle = fabsf(angle);
-        if (absolute_angle <= deg2rad(m_focus_angle) &&
+        // Show labels only while the marker itself overlaps the compass center.
+        // focus_angle remains an upper bound for unusually wide icons.
+        const float center_offset = fabsf(x - STRIP_WIDTH * 0.5f);
+        if (absolute_angle <= deg2rad(m_focus_angle) && center_offset <= width * 0.5f &&
             (!focused || (marker.active_task && !focused->active_task) ||
              (marker.active_task == focused->active_task && absolute_angle < focused_angle))) {
             focused = &marker;

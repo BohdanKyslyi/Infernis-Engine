@@ -33,6 +33,8 @@
 #include "clsid_game.h"
 #include "hudmanager.h"
 #include "Weapon.h"
+#include "WeaponKnife.h"
+#include "Grenade.h"
 #include "ItemUseController.h"
 #include "CustomMonster.h"
 
@@ -53,9 +55,14 @@ static bool ItemUseBlocksAction(int cmd) {
     case kWPN_NEXT:
     case kWPN_FIRE:
     case kWPN_ZOOM:
+    case kWPN_ZOOM_ALTER:
     case kWPN_ZOOM_INC:
     case kWPN_ZOOM_DEC:
     case kWPN_RELOAD:
+    case kWPN_INSPECT:
+    case kQUICK_KICK:
+    case kQUICK_GRENADE:
+    case kWIPE_VISOR:
     case kWPN_FUNC:
     case kWPN_FIREMODE_PREV:
     case kWPN_FIREMODE_NEXT:
@@ -186,6 +193,49 @@ void CActor::IR_OnKeyboardPress(int cmd) {
             det->ToggleDetector(g_player_hud->attached_item(0) != NULL);
             return;
         }
+    } break;
+    case kQUICK_KICK: {
+        if (hud_adj_mode || !m_item_use || m_item_use->IsBusy())
+            break;
+
+        CWeapon* active_weapon = smart_cast<CWeapon*>(inventory().ActiveItem());
+        CCustomDetector* detector =
+            smart_cast<CCustomDetector*>(inventory().ItemFromSlot(DETECTOR_SLOT));
+        if ((active_weapon && (active_weapon->IsZoomed() || active_weapon->IsPending())) ||
+            (detector && !detector->IsHidden()))
+            break;
+
+        CWeaponKnife* knife = smart_cast<CWeaponKnife*>(inventory().ItemFromSlot(KNIFE_SLOT));
+        if (knife && inventory().ActiveItem() != knife)
+            m_item_use->StartQuickKnife(knife);
+    } break;
+    case kQUICK_GRENADE: {
+        if (hud_adj_mode || (m_item_use && m_item_use->IsBusy()) ||
+            inventory().GetActiveSlot() == GRENADE_SLOT)
+            break;
+        if (pSettings->section_exist("items_animations") &&
+            pSettings->line_exist("items_animations", "enable_quick_throw_grenades") &&
+            !pSettings->r_bool("items_animations", "enable_quick_throw_grenades"))
+            break;
+
+        CWeapon* active_weapon = smart_cast<CWeapon*>(inventory().ActiveItem());
+        CCustomDetector* detector =
+            smart_cast<CCustomDetector*>(inventory().ItemFromSlot(DETECTOR_SLOT));
+        if ((active_weapon && (active_weapon->IsZoomed() || active_weapon->IsPending())) ||
+            (detector && !detector->IsHidden()))
+            break;
+
+        CGrenade* grenade = smart_cast<CGrenade*>(inventory().ItemFromSlot(GRENADE_SLOT));
+        if (grenade) {
+            const u16 return_slot = inventory().GetActiveSlot();
+            inventory().Activate(GRENADE_SLOT, true);
+            if (inventory().GetNextActiveSlot() == GRENADE_SLOT)
+                grenade->PrepareQuickThrow(return_slot);
+        }
+    } break;
+    case kWIPE_VISOR: {
+        if (!hud_adj_mode && m_item_use && !m_item_use->IsBusy())
+            m_item_use->StartRainWipe();
     } break;
     /*
             case kFLARE:{
@@ -692,6 +742,9 @@ void CActor::SwitchNightVision() {
             if (wpn_extra && wpn_extra->IsZoomed())
                 return;
 
+            if (m_item_use && m_item_use->StartEquipmentToggle(torch, true))
+                return;
+
             torch->SwitchNightVision();
             return;
         }
@@ -705,6 +758,9 @@ void CActor::SwitchTorch() {
     for (; it != it_e; ++it) {
         CTorch* torch = smart_cast<CTorch*>(*it);
         if (torch) {
+            if (m_item_use && m_item_use->StartEquipmentToggle(torch, false))
+                return;
+
             torch->Switch();
             return;
         }

@@ -539,7 +539,7 @@ void CWeaponMagazinedWGrenade::PlayAnimReload() {
     VERIFY(GetState() == eReload);
 
     if (IsGrenadeLauncherAttached())
-        PlayHUDMotion("anm_reload_w_gl", TRUE, this, GetState());
+        PlayHUDMotion(ReloadMotion(true), TRUE, this, GetState());
     else
         inherited::PlayAnimReload();
 }

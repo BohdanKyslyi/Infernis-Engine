@@ -13,6 +13,7 @@ public:
         eReady,
         eThrow,
         eThrowEnd,
+        eThrowQuick,
     };
     CMissile();
     virtual ~CMissile();
@@ -80,6 +81,8 @@ protected:
     // private:
     bool m_constpower;
     float m_fThrowForce;
+    bool m_bQuickThrowActive;
+    u16 m_quick_throw_return_slot;
 
 protected:
     //относительная точка и направление вылета гранаты
@@ -98,6 +101,7 @@ public:
         m_dwDestroyTime = delta_destroy_time + Device.dwTimeGlobal;
     }
     virtual void PH_A_CrPr();
+    void PrepareQuickThrow(u16 return_slot);
 
 protected:
     u32 m_ef_weapon_type;

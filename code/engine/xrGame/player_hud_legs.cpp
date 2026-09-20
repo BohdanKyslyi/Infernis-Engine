@@ -216,6 +216,17 @@ void CActorLegsController::Render() {
     if (m_attach_to_camera) {
         m_transform.c.x = Device.vCameraPosition.x;
         m_transform.c.z = Device.vCameraPosition.z;
+
+        // The actor's body yaw eases toward the camera while standing still.
+        // Keep first-person legs facing the current view so a quick turn does
+        // not expose the old body orientation. Ignore pitch to keep them upright.
+        Fvector view_forward = Device.vCameraDirection;
+        view_forward.y = 0.f;
+        if (view_forward.square_magnitude() > EPS_S) {
+            m_transform.k.normalize(view_forward);
+            m_transform.j.set(0.f, 1.f, 0.f);
+            m_transform.i.crossproduct(m_transform.j, m_transform.k);
+        }
     }
 
     if (!fis_zero(m_forward_offset)) {

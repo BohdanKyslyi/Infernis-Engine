@@ -11,10 +11,15 @@
 
 #include "Actor.h"
 #include "CustomMonster.h"
+#include "Weapon.h"
+#include "WeaponKnife.h"
+#include "Torch.h"
 #include "HudItem.h"
 #include "player_hud.h"
 #include "inventory.h"
 #include "level.h"
+#include "game_cl_base.h"
+#include "../xrEngine/Render.h"
 
 #include "CustomDetector.h"
 #include "CustomOutfit.h"
@@ -67,6 +72,90 @@ static bool MutantLootAnimationsEnabled() {
     return enabled;
 }
 
+static bool PickupAnimationsEnabled() {
+    static bool initialized = false;
+    static bool enabled = true;
+
+    if (!initialized) {
+        initialized = true;
+
+        if (pSettings->section_exist("items_animations") &&
+            pSettings->line_exist("items_animations", "enable_pickup_animations")) {
+            enabled = !!pSettings->r_bool("items_animations", "enable_pickup_animations");
+        }
+
+        Msg("* Pickup animations: [%s]", enabled ? "enabled" : "disabled");
+    }
+
+    return enabled;
+}
+
+static bool RainWipingEnabled() {
+    if (!pSettings->section_exist("items_animations") ||
+        !pSettings->line_exist("items_animations", "enable_raindrops_wiping")) {
+        return true;
+    }
+
+    return !!pSettings->r_bool("items_animations", "enable_raindrops_wiping");
+}
+
+static bool EquipmentToggleAnimationsEnabled(bool night_vision) {
+    if (!pSettings->section_exist("items_animations"))
+        return false;
+
+    LPCSTR line = night_vision ? "enable_night_vision_animation"
+                               : "enable_headlamp_animation";
+    return !pSettings->line_exist("items_animations", line) ||
+        !!pSettings->r_bool("items_animations", line);
+}
+
+static bool ResolveEquipmentToggleHud(bool night_vision, bool switch_on,
+                                      shared_str& hud_section) {
+    if (!g_player_hud || !pSettings->section_exist("items_animations"))
+        return false;
+
+    LPCSTR state_line = NULL;
+    LPCSTR common_line = NULL;
+    if (night_vision) {
+        state_line = switch_on ? "night_vision_on_hud" : "night_vision_off_hud";
+        common_line = "night_vision_hud";
+    } else {
+        state_line = switch_on ? "headlamp_on_hud" : "headlamp_off_hud";
+        common_line = "headlamp_hud";
+    }
+
+    LPCSTR line = pSettings->line_exist("items_animations", state_line)
+        ? state_line : common_line;
+    if (!pSettings->line_exist("items_animations", line))
+        return false;
+
+    LPCSTR configured_huds = pSettings->r_string("items_animations", line);
+    if (!configured_huds || !configured_huds[0] || !xr_strcmp(configured_huds, "none"))
+        return false;
+
+    xr_vector<shared_str> valid_huds;
+    const u32 hud_count = _GetItemCount(configured_huds);
+    for (u32 index = 0; index < hud_count; ++index) {
+        string256 candidate;
+        _GetItem(configured_huds, index, candidate);
+        if (!candidate[0] || !xr_strcmp(candidate, "none") ||
+            !pSettings->section_exist(candidate) ||
+            !pSettings->line_exist(candidate, "anm_show")) {
+            continue;
+        }
+
+        const shared_str candidate_section = candidate;
+        if (g_player_hud->can_attach_controller_item(candidate_section))
+            valid_huds.push_back(candidate_section);
+    }
+
+    if (valid_huds.empty())
+        return false;
+
+    hud_section = valid_huds[Random.randI(valid_huds.size())];
+    return true;
+}
+
 static bool MutantLootParticlesEnabled() {
     static bool initialized = false;
     static bool enabled = false;
@@ -107,6 +196,30 @@ static bool HudBlocksMovement(const shared_str& hud_section) {
            !!pSettings->r_bool(hud_section.c_str(), "block_move");
 }
 
+static bool TryResolveConsumableHud(LPCSTR config_section, LPCSTR hud_line,
+                                    shared_str& hud_section, bool report_invalid) {
+    if (!config_section || !config_section[0] ||
+        !pSettings->section_exist(config_section) ||
+        !pSettings->line_exist(config_section, hud_line)) {
+        return false;
+    }
+
+    LPCSTR candidate = pSettings->r_string(config_section, hud_line);
+    if (candidate && candidate[0] && xr_strcmp(candidate, "none") &&
+        pSettings->section_exist(candidate) &&
+        pSettings->line_exist(candidate, "anm_show")) {
+        hud_section = candidate;
+        return true;
+    }
+
+    if (report_invalid) {
+        Msg("! ItemUse: invalid [%s]:[%s] HUD override [%s]; trying fallback",
+            config_section, hud_line, candidate && candidate[0] ? candidate : "<empty>");
+    }
+
+    return false;
+}
+
 CItemUseController::CItemUseController(CActor* actor)
     : m_actor(actor),
       m_item(NULL),
@@ -120,6 +233,13 @@ CItemUseController::CItemUseController(CActor* actor)
       m_hud_animation_hide_requested(false),
       m_hud_animation_allow_inventory(false),
       m_mutant_loot_target_id(u16(-1)),
+      m_quick_knife_id(u16(-1)),
+      m_pickup_target_id(u16(-1)),
+      m_equipment_toggle_target_id(u16(-1)),
+      m_equipment_toggle_night_vision(false),
+      m_equipment_toggle_state(false),
+      m_left_hand_detector_id(u16(-1)),
+      m_restore_left_hand_detector(false),
       m_mutant_loot_particle_time(0),
       m_mutant_loot_particle_enabled(false),
       m_mutant_loot_particle_started(false),
@@ -137,6 +257,7 @@ CItemUseController::CItemUseController(CActor* actor)
       m_ppe_effect_started(false),
       m_waiting_for_weapon_hide(false),
       m_actor_locked(false),
+      m_weapon_hide_locked(false),
       m_prev_inventory_disabled(false),
 
       m_trash_count(0), m_trash_spawned(false),
@@ -204,7 +325,7 @@ bool CItemUseController::Start(CInventoryItem* item) {
                                                   : "default");
     }
 
-    m_action_time = pSettings->r_u32(m_use_section, "timing");
+    m_action_time = ResolveConsumableActionTime();
 
     if (!g_player_hud) {
         Reset();
@@ -326,6 +447,278 @@ bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
     return true;
 }
 
+bool CItemUseController::StartQuickKnife(CWeaponKnife* knife) {
+    if (!knife || !m_actor || IsBusy() || !g_player_hud ||
+        !pSettings->section_exist("items_animations"))
+        return false;
+    if (pSettings->line_exist("items_animations", "enable_quick_kick") &&
+        !pSettings->r_bool("items_animations", "enable_quick_kick"))
+        return false;
+
+    LPCSTR hud_line = pSettings->line_exist("items_animations", "quick_kick_hud")
+        ? "quick_kick_hud" : "quick_knife_hud";
+    if (!pSettings->line_exist("items_animations", hud_line))
+        return false;
+    LPCSTR configured_hud = pSettings->r_string("items_animations", hud_line);
+    if (!configured_hud || !configured_hud[0] || !xr_strcmp(configured_hud, "none"))
+        return false;
+
+    shared_str hud_section = configured_hud;
+    if (!pSettings->section_exist(hud_section.c_str()) ||
+        !pSettings->line_exist(hud_section.c_str(), "anm_show") ||
+        !g_player_hud->can_attach_controller_item(hud_section))
+        return false;
+
+    m_item = NULL;
+    m_item_section = knife->cNameSect();
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+    if (pSettings->line_exist(hud_section.c_str(), "action_timing"))
+        m_action_time = pSettings->r_u32(hud_section.c_str(), "action_timing");
+    else if (pSettings->line_exist(hud_section.c_str(), "timing"))
+        m_action_time = pSettings->r_u32(hud_section.c_str(), "timing");
+    else
+        m_action_time = u32(-1);
+
+    m_start_time = 0;
+    m_animation_duration = 0;
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModeQuickKnife;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_quick_knife_id = knife->ID();
+    m_waiting_for_weapon_hide = true;
+    LockActor();
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+    return true;
+}
+
+bool CItemUseController::StartPickup(CInventoryItem* item) {
+    if (!item || !m_actor || IsBusy() || !g_player_hud ||
+        !PickupAnimationsEnabled() || !pSettings->section_exist("items_animations")) {
+        return false;
+    }
+
+    const shared_str item_section = item->object().cNameSect();
+    LPCSTR pickup_config_section = item_section.c_str();
+    if (!pSettings->line_exist(pickup_config_section, "pickup_hud"))
+        pickup_config_section = "items_animations";
+
+    if (!pSettings->line_exist(pickup_config_section, "pickup_hud"))
+        return false;
+
+    LPCSTR configured_huds = pSettings->r_string(pickup_config_section, "pickup_hud");
+    if (!configured_huds || !configured_huds[0] || !xr_strcmp(configured_huds, "none"))
+        return false;
+
+    xr_vector<shared_str> valid_huds;
+    const u32 hud_count = _GetItemCount(configured_huds);
+    for (u32 index = 0; index < hud_count; ++index) {
+        string256 candidate;
+        _GetItem(configured_huds, index, candidate);
+
+        if (!candidate[0] || !xr_strcmp(candidate, "none") ||
+            !pSettings->section_exist(candidate) ||
+            !pSettings->line_exist(candidate, "anm_show")) {
+            continue;
+        }
+
+        const shared_str candidate_section = candidate;
+        if (g_player_hud->can_attach_controller_item(candidate_section))
+            valid_huds.push_back(candidate_section);
+    }
+
+    if (valid_huds.empty())
+        return false;
+
+    const shared_str hud_section = valid_huds[Random.randI(valid_huds.size())];
+
+    // Do not replace a weapon transition with a partial-hand motion. Normal
+    // pickup remains available through the caller's immediate fallback.
+    CHudItem* active_hud_item = NULL;
+    CInventoryItem* active_item = m_actor->inventory().ActiveItem();
+    if (active_item)
+        active_hud_item = active_item->cast_hud_item();
+    if (active_hud_item && active_hud_item->IsPending())
+        return false;
+
+    m_item = NULL;
+    m_item_section = item_section;
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+
+    m_start_time = 0;
+    m_action_time = pSettings->line_exist(hud_section.c_str(), "action_timing")
+        ? pSettings->r_u32(hud_section.c_str(), "action_timing")
+        : u32(-1);
+    m_animation_duration = 0;
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModePickup;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_pickup_target_id = item->object().ID();
+    m_waiting_for_weapon_hide = true;
+
+    PrepareLeftHandDetector();
+
+    // Pickup owns the controls and the left hand, but never holsters slot 0.
+    LockActor(false);
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+
+    Msg("* Pickup: waiting for left hand, item [%u][%s], HUD [%s] from [%s], detector [%s]",
+        (u32)m_pickup_target_id, m_item_section.c_str(), m_hud_section.c_str(),
+        pickup_config_section,
+        m_restore_left_hand_detector ? "hide/restore" : "none");
+    return true;
+}
+
+bool CItemUseController::StartRainWipe() {
+    if (!m_actor || IsBusy() || !RainWipingEnabled() || !::Render ||
+        ::Render->GetRainDropsFactor() <= EPS_L) {
+        return false;
+    }
+
+    CInventoryItem* active_item = m_actor->inventory().ActiveItem();
+    CWeapon* active_weapon = smart_cast<CWeapon*>(active_item);
+    CHudItem* active_hud_item = active_item ? active_item->cast_hud_item() : NULL;
+    if ((active_weapon && active_weapon->IsZoomed()) ||
+        (active_hud_item && active_hud_item->IsPending())) {
+        return false;
+    }
+
+    shared_str hud_section;
+    bool use_animation = g_player_hud && pSettings->section_exist("items_animations") &&
+        pSettings->line_exist("items_animations", "raindrops_wiping_hud");
+
+    if (use_animation) {
+        LPCSTR configured_hud =
+            pSettings->r_string("items_animations", "raindrops_wiping_hud");
+        if (!configured_hud || !configured_hud[0] || !xr_strcmp(configured_hud, "none")) {
+            use_animation = false;
+        } else {
+            hud_section = configured_hud;
+            use_animation = pSettings->section_exist(hud_section.c_str()) &&
+                pSettings->line_exist(hud_section.c_str(), "anm_show") &&
+                g_player_hud->can_attach_controller_item(hud_section);
+        }
+    }
+
+    // The renderer action remains usable before the optional hand motion is
+    // exported or when a mod deliberately sets the HUD entry to "none".
+    if (!use_animation) {
+        ::Render->ResetRainDrops();
+        Msg("* RainWipe: raindrops cleared without HUD animation");
+        return true;
+    }
+
+    m_item = NULL;
+    m_item_section = NULL;
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+
+    m_start_time = 0;
+    m_action_time = pSettings->line_exist(hud_section.c_str(), "action_timing")
+        ? pSettings->r_u32(hud_section.c_str(), "action_timing")
+        : u32(-1);
+    m_animation_duration = 0;
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModeRainWipe;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_waiting_for_weapon_hide = true;
+
+    PrepareLeftHandDetector();
+
+    // The controller blocks weapon input but keeps slot 0 on screen.
+    LockActor(false);
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+
+    Msg("* RainWipe: waiting for left hand, HUD [%s], detector [%s]",
+        m_hud_section.c_str(),
+        m_restore_left_hand_detector ? "hide/restore" : "none");
+    return true;
+}
+
+bool CItemUseController::StartEquipmentToggle(CTorch* torch, bool night_vision) {
+    if (!torch || !m_actor || IsBusy() || !EquipmentToggleAnimationsEnabled(night_vision))
+        return false;
+
+    CInventoryItem* active_item = m_actor->inventory().ActiveItem();
+    CWeapon* active_weapon = smart_cast<CWeapon*>(active_item);
+    CHudItem* active_hud_item = active_item ? active_item->cast_hud_item() : NULL;
+    if ((active_weapon && active_weapon->IsZoomed()) ||
+        (active_hud_item && active_hud_item->IsPending())) {
+        return false;
+    }
+
+    const bool switch_on = night_vision ? !torch->GetNightVisionStatus()
+                                        : !torch->torch_active();
+    shared_str hud_section;
+    if (!ResolveEquipmentToggleHud(night_vision, switch_on, hud_section))
+        return false;
+
+    m_item = NULL;
+    m_item_section = torch->cNameSect();
+    m_use_section = NULL;
+    m_state_section = NULL;
+    m_hud_section = hud_section;
+    LoadStopFunction();
+    LoadControllerEffects();
+
+    m_start_time = 0;
+    m_action_time = pSettings->line_exist(hud_section.c_str(), "action_timing")
+        ? pSettings->r_u32(hud_section.c_str(), "action_timing")
+        : u32(-1);
+    m_animation_duration = 0;
+    m_active = true;
+    m_effect_applied = false;
+    m_controller_mode = eControllerModeEquipmentToggle;
+    m_hud_animation_phase = eHudAnimationNone;
+    m_hud_animation_hide_requested = false;
+    m_hud_animation_allow_inventory = false;
+    m_equipment_toggle_target_id = torch->ID();
+    m_equipment_toggle_night_vision = night_vision;
+    m_equipment_toggle_state = switch_on;
+    m_waiting_for_weapon_hide = true;
+
+    PrepareLeftHandDetector();
+    LockActor(false);
+    if (!m_actor_locked) {
+        Reset();
+        return false;
+    }
+
+    Msg("* EquipmentToggle: waiting for left hand, target [%u][%s], state [%s], HUD [%s]",
+        (u32)m_equipment_toggle_target_id,
+        night_vision ? "night_vision" : "headlamp",
+        switch_on ? "on" : "off", m_hud_section.c_str());
+    return true;
+}
+
 bool CItemUseController::ResolveConsumableAnimation(CInventoryItem* item,
                                                     shared_str& item_section,
                                                     shared_str& use_section,
@@ -350,22 +743,66 @@ bool CItemUseController::ResolveConsumableAnimation(CInventoryItem* item,
         return false;
     }
 
-    // 2. A portion-specific HUD has priority over the legacy use-section HUD.
+    // 2. Exoskeleton HUD overrides are optional and never disable the normal
+    // animation. The most specific section wins: portion state, physical
+    // item, then common use-section.
     CEatableItem* eatable = smart_cast<CEatableItem*>(item);
 
-    if (eatable) {
+    if (eatable)
         state_section = eatable->PortionStateSection();
 
-        if (state_section.size() && pSettings->line_exist(state_section.c_str(), "hud"))
-            hud_section = pSettings->r_string(state_section.c_str(), "hud");
+    if (UsesExoItemAnimations()) {
+        if ((state_section.size() &&
+             TryResolveConsumableHud(state_section.c_str(), "hud_exo", hud_section, true)) ||
+            TryResolveConsumableHud(item_section.c_str(), "hud_exo", hud_section, true) ||
+            TryResolveConsumableHud(use_section.c_str(), "hud_exo", hud_section, true)) {
+            Msg("* ItemUse: exoskeleton HUD [%s] selected for [%s]",
+                hud_section.c_str(), item_section.c_str());
+            return true;
+        }
     }
 
-    if (!hud_section.size() && pSettings->line_exist(use_section, "hud"))
-        hud_section = pSettings->r_string(use_section, "hud");
+    // 3. A portion-specific normal HUD has priority over the common one.
+    if (state_section.size() &&
+        TryResolveConsumableHud(state_section.c_str(), "hud", hud_section, false))
+        return true;
 
-    // 3. The resolved HUD section must provide the consumable entry motion.
-    return hud_section.size() && pSettings->section_exist(hud_section) &&
-           pSettings->line_exist(hud_section, "anm_show");
+    return TryResolveConsumableHud(use_section.c_str(), "hud", hud_section, false);
+}
+
+bool CItemUseController::UsesExoItemAnimations() const {
+    if (!m_actor)
+        return false;
+
+    const CCustomOutfit* outfit = m_actor->GetOutfit();
+    return outfit && outfit->UseExoItemAnimations();
+}
+
+u32 CItemUseController::ResolveConsumableActionTime() const {
+    if (m_hud_section.size() && pSettings->section_exist(m_hud_section.c_str())) {
+        if (pSettings->line_exist(m_hud_section.c_str(), "action_timing"))
+            return pSettings->r_u32(m_hud_section.c_str(), "action_timing");
+        if (pSettings->line_exist(m_hud_section.c_str(), "timing"))
+            return pSettings->r_u32(m_hud_section.c_str(), "timing");
+    }
+
+    if (UsesExoItemAnimations()) {
+        const shared_str* sections[] = {&m_state_section, &m_item_section, &m_use_section};
+        LPCSTR lines[] = {"timing_exo", "item_used_timing_exo"};
+
+        for (u32 section_index = 0;
+             section_index < sizeof(sections) / sizeof(sections[0]); ++section_index) {
+            for (u32 line_index = 0; line_index < sizeof(lines) / sizeof(lines[0]); ++line_index) {
+                const shared_str& section = *sections[section_index];
+                if (section.size() && pSettings->section_exist(section.c_str()) &&
+                    pSettings->line_exist(section.c_str(), lines[line_index])) {
+                    return pSettings->r_u32(section.c_str(), lines[line_index]);
+                }
+            }
+        }
+    }
+
+    return pSettings->r_u32(m_use_section.c_str(), "timing");
 }
 
 bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
@@ -610,7 +1047,7 @@ bool CItemUseController::TryQueueHudAnimationOnce(const shared_str& hud_section)
     return true;
 }
 
-void CItemUseController::LockActor()
+void CItemUseController::LockActor(bool hide_weapon)
 {
     if (!m_actor || m_actor_locked)
         return;
@@ -635,10 +1072,9 @@ void CItemUseController::LockActor()
     //
     LockActorLadder();
 
-    m_actor->SetWeaponHideState(
-        INV_STATE_BLOCK_ALL,
-        true
-    );
+    m_weapon_hide_locked = hide_weapon;
+    if (m_weapon_hide_locked)
+        m_actor->SetWeaponHideState(INV_STATE_BLOCK_ALL, true);
 
     m_actor_locked = true;
 
@@ -654,10 +1090,8 @@ void CItemUseController::UnlockActor()
 
     if (m_actor)
     {
-        m_actor->SetWeaponHideState(
-            INV_STATE_BLOCK_ALL,
-            false
-        );
+        if (m_weapon_hide_locked)
+            m_actor->SetWeaponHideState(INV_STATE_BLOCK_ALL, false);
 
         m_actor->set_inventory_disabled(
             m_prev_inventory_disabled
@@ -672,6 +1106,7 @@ void CItemUseController::UnlockActor()
     RestoreUiVisibility();
 
     m_actor_locked = false;
+    m_weapon_hide_locked = false;
     m_prev_inventory_disabled = false;
 
     Msg("* ItemUse actor unlocked");
@@ -712,6 +1147,45 @@ bool CItemUseController::CanStartAnimation()
     return true;
 }
 
+void CItemUseController::PrepareLeftHandDetector() {
+    m_left_hand_detector_id = u16(-1);
+    m_restore_left_hand_detector = false;
+
+    if (!m_actor)
+        return;
+
+    CCustomDetector* detector =
+        smart_cast<CCustomDetector*>(m_actor->inventory().ItemFromSlot(DETECTOR_SLOT));
+    if (detector && !detector->IsHidden()) {
+        m_left_hand_detector_id = detector->ID();
+        m_restore_left_hand_detector = true;
+        detector->HideDetector(true);
+    }
+}
+
+bool CItemUseController::CanStartLeftHandAnimation() {
+    if (!m_actor)
+        return false;
+
+    if (!m_restore_left_hand_detector)
+        return true;
+
+    CInventoryItem* item = m_actor->inventory().get_object_by_id(m_left_hand_detector_id);
+    CCustomDetector* detector = item ? smart_cast<CCustomDetector*>(item) : NULL;
+    if (!detector || m_actor->inventory().ItemFromSlot(DETECTOR_SLOT) != detector) {
+        m_restore_left_hand_detector = false;
+        m_left_hand_detector_id = u16(-1);
+        return true;
+    }
+
+    if (!detector->IsHidden()) {
+        detector->HideDetector(true);
+        return false;
+    }
+
+    return true;
+}
+
 void CItemUseController::BeginAnimation()
 {
     if (!m_active)
@@ -737,6 +1211,60 @@ void CItemUseController::BeginAnimation()
 
     m_waiting_for_weapon_hide = false;
     m_controller_animation_start_time = Device.dwTimeGlobal;
+
+    if (m_controller_mode == eControllerModePickup ||
+        m_controller_mode == eControllerModeRainWipe ||
+        m_controller_mode == eControllerModeEquipmentToggle) {
+        shared_str played_motion_name;
+        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
+                                    &played_motion_name)) {
+            Cancel();
+            return;
+        }
+
+        if (m_action_time == u32(-1) &&
+            m_controller_mode == eControllerModeEquipmentToggle) {
+            m_action_time = m_animation_duration / 2;
+        } else if (m_action_time == u32(-1) || m_action_time > m_animation_duration) {
+            m_action_time = m_animation_duration;
+        }
+
+        PlayHudAnimationSound("snd_show");
+        StartCameraEffector(played_motion_name);
+        UpdatePPEffect();
+
+        if (m_controller_mode == eControllerModePickup) {
+            Msg("* Pickup: left-hand animation started, item [%u], duration [%u], action [%u]",
+                (u32)m_pickup_target_id, m_animation_duration, m_action_time);
+        } else if (m_controller_mode == eControllerModeRainWipe) {
+            Msg("* RainWipe: left-hand animation started, duration [%u], action [%u]",
+                m_animation_duration, m_action_time);
+        } else {
+            Msg("* EquipmentToggle: left-hand animation started, target [%s], state [%s], "
+                "duration [%u], action [%u]",
+                m_equipment_toggle_night_vision ? "night_vision" : "headlamp",
+                m_equipment_toggle_state ? "on" : "off",
+                m_animation_duration, m_action_time);
+        }
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeQuickKnife) {
+        shared_str played_motion_name;
+        if (!PlayHudAnimationMotion("anm_show", eHudAnimationShow, FALSE,
+                                    &played_motion_name)) {
+            Cancel();
+            return;
+        }
+        if (m_action_time == u32(-1))
+            m_action_time = m_animation_duration / 2;
+        else if (m_action_time > m_animation_duration)
+            m_action_time = m_animation_duration;
+        PlayHudAnimationSound("snd_show");
+        StartCameraEffector(played_motion_name);
+        UpdatePPEffect();
+        return;
+    }
 
     if (m_controller_mode == eControllerModeMutantLoot) {
         shared_str played_motion_name;
@@ -1042,6 +1570,123 @@ void CItemUseController::UpdateMutantLootAnimation() {
         Finish();
 }
 
+bool CItemUseController::ApplyQuickKnifeEffect() {
+    if (m_effect_applied)
+        return true;
+    if (!m_actor || !m_actor->g_Alive())
+        return false;
+    CWeaponKnife* knife = smart_cast<CWeaponKnife*>(
+        m_actor->inventory().get_object_by_id(m_quick_knife_id));
+    if (!knife || m_actor->inventory().ItemFromSlot(KNIFE_SLOT) != knife)
+        return false;
+    knife->FastStrike(0);
+    m_effect_applied = true;
+    return true;
+}
+
+void CItemUseController::UpdateQuickKnifeAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+    if (!m_effect_applied && elapsed >= m_action_time && !ApplyQuickKnifeEffect()) {
+        Cancel();
+        return;
+    }
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
+bool CItemUseController::ApplyPickupEffect() {
+    if (!m_actor || !g_pGameLevel || m_pickup_target_id == u16(-1))
+        return false;
+
+    CObject* object = Level().Objects.net_Find(m_pickup_target_id);
+    CInventoryItem* item = object ? smart_cast<CInventoryItem*>(object) : NULL;
+    if (!item || item->object().H_Parent() || !item->Useful())
+        return false;
+
+    Game().SendPickUpEvent(m_actor->ID(), m_pickup_target_id);
+    m_effect_applied = true;
+    return true;
+}
+
+void CItemUseController::UpdatePickupAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+    if (!m_effect_applied && elapsed >= m_action_time && !ApplyPickupEffect()) {
+        Cancel();
+        return;
+    }
+
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
+bool CItemUseController::ApplyRainWipeEffect() {
+    if (!::Render)
+        return false;
+
+    ::Render->ResetRainDrops();
+    m_effect_applied = true;
+    Msg("* RainWipe: accumulated raindrops cleared");
+    return true;
+}
+
+void CItemUseController::UpdateRainWipeAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+    if (!m_effect_applied && elapsed >= m_action_time && !ApplyRainWipeEffect()) {
+        Cancel();
+        return;
+    }
+
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
+bool CItemUseController::ApplyEquipmentToggleEffect() {
+    if (m_effect_applied)
+        return true;
+    if (!m_actor || m_equipment_toggle_target_id == u16(-1))
+        return false;
+
+    CInventoryItem* item =
+        m_actor->inventory().get_object_by_id(m_equipment_toggle_target_id);
+    CTorch* torch = item ? smart_cast<CTorch*>(item) : NULL;
+    if (!torch || torch->H_Parent() != m_actor)
+        return false;
+
+    if (m_equipment_toggle_night_vision)
+        torch->SwitchNightVision(m_equipment_toggle_state);
+    else
+        torch->Switch(m_equipment_toggle_state);
+
+    m_effect_applied = true;
+    Msg("* EquipmentToggle: [%s] switched [%s]",
+        m_equipment_toggle_night_vision ? "night_vision" : "headlamp",
+        m_equipment_toggle_state ? "on" : "off");
+    return true;
+}
+
+void CItemUseController::UpdateEquipmentToggleAnimation() {
+    if (m_hud_animation_phase != eHudAnimationShow)
+        return;
+
+    const u32 elapsed = Device.dwTimeGlobal - m_start_time;
+    if (!m_effect_applied && elapsed >= m_action_time &&
+        !ApplyEquipmentToggleEffect()) {
+        Cancel();
+        return;
+    }
+
+    if (m_animation_duration > 0 && elapsed >= m_animation_duration)
+        Finish();
+}
+
 void CItemUseController::Update(float dt)
 {
     (void)dt;
@@ -1104,7 +1749,12 @@ void CItemUseController::Update(float dt)
     // чекаємо weapon + detector hide.
     //
     if (m_waiting_for_weapon_hide) {
-        if (CanStartAnimation())
+        if (m_controller_mode == eControllerModePickup ||
+            m_controller_mode == eControllerModeRainWipe ||
+            m_controller_mode == eControllerModeEquipmentToggle) {
+            if (CanStartLeftHandAnimation())
+                BeginAnimation();
+        } else if (CanStartAnimation())
             BeginAnimation();
 
         return;
@@ -1120,6 +1770,26 @@ void CItemUseController::Update(float dt)
 
     if (m_controller_mode == eControllerModeMutantLoot) {
         UpdateMutantLootAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeQuickKnife) {
+        UpdateQuickKnifeAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModePickup) {
+        UpdatePickupAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeRainWipe) {
+        UpdateRainWipeAnimation();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeEquipmentToggle) {
+        UpdateEquipmentToggleAnimation();
         return;
     }
 
@@ -1186,6 +1856,8 @@ void CItemUseController::Cancel() {
         return;
 
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
+    const u16 left_hand_detector_id = m_left_hand_detector_id;
+    const bool restore_left_hand_detector = m_restore_left_hand_detector;
 
     if (m_controller_mode == eControllerModeMutantLoot && !m_effect_applied)
         ReleaseMutantLootReservation();
@@ -1215,10 +1887,21 @@ void CItemUseController::Cancel() {
     else if (m_controller_mode == eControllerModeMutantLoot)
         Msg("* MutantLoot: HUD animation cancelled for corpse [%u]",
             (u32)m_mutant_loot_target_id);
+    else if (m_controller_mode == eControllerModeQuickKnife)
+        Msg("* QuickKnife: HUD animation cancelled for knife [%u]", (u32)m_quick_knife_id);
+    else if (m_controller_mode == eControllerModePickup)
+        Msg("* Pickup: left-hand animation cancelled for item [%u]", (u32)m_pickup_target_id);
+    else if (m_controller_mode == eControllerModeRainWipe)
+        Msg("* RainWipe: left-hand animation cancelled");
+    else if (m_controller_mode == eControllerModeEquipmentToggle)
+        Msg("* EquipmentToggle: left-hand animation cancelled for [%s]",
+            m_equipment_toggle_night_vision ? "night_vision" : "headlamp");
     else
         Msg("* ItemUse cancelled: [%s]", m_item_section.c_str());
 
     Reset();
+
+    RestoreLeftHandDetector(left_hand_detector_id, restore_left_hand_detector);
 
     if (refresh_outfit_hud) {
         m_outfit_hud_refresh_pending = true;
@@ -1239,6 +1922,18 @@ void CItemUseController::Finish() {
         }
     }
 
+    if (m_controller_mode == eControllerModeQuickKnife && !m_effect_applied &&
+        !ApplyQuickKnifeEffect()) {
+        Cancel();
+        return;
+    }
+
+    if (m_controller_mode == eControllerModeEquipmentToggle && !m_effect_applied &&
+        !ApplyEquipmentToggleEffect()) {
+        Cancel();
+        return;
+    }
+
     const bool start_queued_consumable =
         m_controller_mode == eControllerModeHudAnimation &&
         m_queued_consumable_id != u16(-1);
@@ -1249,6 +1944,8 @@ void CItemUseController::Finish() {
     const shared_str queued_hud_animation_section = m_queued_hud_animation_section;
     const bool refresh_outfit_hud = m_outfit_hud_refresh_pending;
     const shared_str function_on_stop = m_function_on_stop;
+    const u16 left_hand_detector_id = m_left_hand_detector_id;
+    const bool restore_left_hand_detector = m_restore_left_hand_detector;
 
     //
     // Normal physical trash moment:
@@ -1277,10 +1974,21 @@ void CItemUseController::Finish() {
     else if (m_controller_mode == eControllerModeMutantLoot)
         Msg("* MutantLoot: HUD animation finished for corpse [%u]",
             (u32)m_mutant_loot_target_id);
+    else if (m_controller_mode == eControllerModeQuickKnife)
+        Msg("* QuickKnife: HUD animation finished for knife [%u]", (u32)m_quick_knife_id);
+    else if (m_controller_mode == eControllerModePickup)
+        Msg("* Pickup: left-hand animation finished for item [%u]", (u32)m_pickup_target_id);
+    else if (m_controller_mode == eControllerModeRainWipe)
+        Msg("* RainWipe: left-hand animation finished");
+    else if (m_controller_mode == eControllerModeEquipmentToggle)
+        Msg("* EquipmentToggle: left-hand animation finished for [%s]",
+            m_equipment_toggle_night_vision ? "night_vision" : "headlamp");
     else
         Msg("* ItemUse finished: [%s]", m_item_section.c_str());
 
     Reset();
+
+    RestoreLeftHandDetector(left_hand_detector_id, restore_left_hand_detector);
 
     if (refresh_outfit_hud) {
         m_outfit_hud_refresh_pending = true;
@@ -1348,6 +2056,13 @@ void CItemUseController::Reset()
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;
     m_mutant_loot_target_id = u16(-1);
+    m_quick_knife_id = u16(-1);
+    m_pickup_target_id = u16(-1);
+    m_equipment_toggle_target_id = u16(-1);
+    m_equipment_toggle_night_vision = false;
+    m_equipment_toggle_state = false;
+    m_left_hand_detector_id = u16(-1);
+    m_restore_left_hand_detector = false;
     m_mutant_loot_particle_time = 0;
     m_mutant_loot_particle_enabled = false;
     m_mutant_loot_particle_started = false;
@@ -1370,6 +2085,7 @@ void CItemUseController::Reset()
 
     m_waiting_for_weapon_hide = false;
     m_actor_locked = false;
+    m_weapon_hide_locked = false;
     m_prev_inventory_disabled = false;
 
     m_trash_section = NULL;
@@ -1386,6 +2102,16 @@ void CItemUseController::Reset()
     m_use_particles_stop_time = u32(-1);
     m_use_particles = NULL;
     m_use_particles_started = false;
+}
+
+void CItemUseController::RestoreLeftHandDetector(u16 detector_id, bool restore_detector) {
+    if (!restore_detector || !m_actor || detector_id == u16(-1))
+        return;
+
+    CInventoryItem* item = m_actor->inventory().get_object_by_id(detector_id);
+    CCustomDetector* detector = item ? smart_cast<CCustomDetector*>(item) : NULL;
+    if (detector && m_actor->inventory().ItemFromSlot(DETECTOR_SLOT) == detector)
+        detector->ShowDetector(true);
 }
 
 void CItemUseController::LoadControllerEffects() {
@@ -1553,10 +2279,27 @@ void CItemUseController::CallStopFunction(const shared_str& function_name) {
 void CItemUseController::LoadAnimSound() {
     DestroyAnimSound();
 
-    if (!pSettings->line_exist(m_use_section, "snd_using_anim"))
+    shared_str sound_section;
+    LPCSTR sound_line = "snd_using_anim";
+
+    if (UsesExoItemAnimations()) {
+        sound_section = FindConfigSection("snd_using_anim_exo");
+        if (sound_section.size()) {
+            sound_line = "snd_using_anim_exo";
+        } else {
+            sound_section = FindConfigSection("snd_use_exo_anm");
+            if (sound_section.size())
+                sound_line = "snd_use_exo_anm";
+        }
+    }
+
+    if (!sound_section.size())
+        sound_section = FindConfigSection("snd_using_anim");
+
+    if (!sound_section.size())
         return;
 
-    HUD_SOUND_ITEM::LoadSound(m_use_section.c_str(), "snd_using_anim", m_anim_sound, sg_SourceType);
+    HUD_SOUND_ITEM::LoadSound(sound_section.c_str(), sound_line, m_anim_sound, sg_SourceType);
 
     m_anim_sound_loaded = true;
 }
@@ -1585,7 +2328,8 @@ void CItemUseController::PlayAnimSound() {
 
     HUD_SOUND_ITEM::PlaySound(m_anim_sound, m_actor->Position(), m_actor,
                               true, // HUD mode -> sm_2D
-                              false // not looped
+                              false, // not looped
+                              u8(-1), g_player_hud ? g_player_hud->controller_motion_speed() : 1.f
     );
 }
 

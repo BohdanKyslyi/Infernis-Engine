@@ -146,7 +146,7 @@ public:
 
 protected:
     bool CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate);
-    void TurnDetectorInternal(bool b);
+    virtual void TurnDetectorInternal(bool b);
     void UpdateNightVisionMode(bool b_off);
     void UpdateVisibility();
     virtual void UpfateWork();
