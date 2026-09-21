@@ -28,6 +28,67 @@
 #include "UIMessageBoxEx.h"
 #include "UIPropertiesBox.h"
 #include "UIMainIngameWnd.h"
+#include "xrServer_Objects_ALife_Items.h"
+#include "ai_space.h"
+#include "alife_simulator.h"
+#include "inventory_upgrade_manager.h"
+#include "inventory_upgrade_root.h"
+
+namespace {
+bool ApplySectionChanger(CInventoryItem* tool, CInventoryItem* target, u16 actor_id) {
+    if (!IsGameTypeSingle() || !tool || !target || tool == target || tool->IsQuestItem() ||
+        tool->parent_id() != actor_id ||
+        target->parent_id() != actor_id || target->IsQuestItem())
+        return false;
+
+    LPCSTR tool_section = tool->object().cNameSect().c_str();
+    if (!pSettings->line_exist(tool_section, "base_section") ||
+        !pSettings->line_exist(tool_section, "section_to_change"))
+        return false;
+
+    LPCSTR base = pSettings->r_string(tool_section, "base_section");
+    LPCSTR replacement = pSettings->r_string(tool_section, "section_to_change");
+    if (!base || !replacement || !base[0] || !replacement[0] ||
+        xr_strcmp(target->object().cNameSect().c_str(), base) ||
+        !xr_strcmp(base, replacement) || !pSettings->section_exist(replacement))
+        return false;
+
+    // The section determines the item's runtime class; prepare the replacement
+    // server entity before sending its spawn packet.
+    CSE_Abstract* entity = Level().spawn_item(replacement, target->object().Position(),
+        target->object().ai_location().level_vertex_id(), actor_id, true);
+    CSE_ALifeInventoryItem* new_item = smart_cast<CSE_ALifeInventoryItem*>(entity);
+    if (!new_item) {
+        F_entity_Destroy(entity);
+        return false;
+    }
+
+    new_item->m_fCondition = target->GetCondition();
+    const bool copy_upgrades = READ_IF_EXISTS(pSettings, r_bool, tool_section,
+        "save_upgrades_from_old_section", false);
+    if (copy_upgrades && pSettings->line_exist(base, "upgrade_scheme") &&
+        pSettings->line_exist(replacement, "upgrade_scheme") &&
+        !xr_strcmp(pSettings->r_string(base, "upgrade_scheme"),
+                   pSettings->r_string(replacement, "upgrade_scheme")) && ai().get_alife()) {
+        inventory::upgrade::Root* root = ai().alife().inventory_upgrade_manager().get_root(replacement);
+        if (root) {
+            for (const shared_str& upgrade : target->upgardes()) {
+                if (root->contain_upgrade(upgrade))
+                    new_item->m_upgrades.push_back(upgrade);
+            }
+        }
+    }
+
+    NET_Packet packet;
+    entity->Spawn_Write(packet, TRUE);
+    Level().Send(packet, net_flags(TRUE));
+    F_entity_Destroy(entity);
+
+    target->object().DestroyObject();
+    tool->object().DestroyObject();
+    return true;
+}
+} // namespace
 
 bool CUIActorMenu::AllowItemDrops(EDDListType from, EDDListType to) {
     xr_vector<EDDListType>& v = m_allowed_drops[to];
@@ -69,6 +130,22 @@ bool CUIActorMenu::OnItemDrop(CUICellItem* itm) {
     InfoCurItem(NULL);
     CUIDragDropListEx* old_owner = itm->OwnerList();
     CUIDragDropListEx* new_owner = CUIDragDropListEx::m_drag_item->BackList();
+    if (m_currMenuMode == mmInventory && old_owner == m_pInventoryBagList &&
+        new_owner && new_owner != m_pQuickSlot && new_owner != m_pTrashList) {
+        CInventoryItem* tool = static_cast<CInventoryItem*>(itm->m_pData);
+        if (tool && pSettings->line_exist(tool->object().cNameSect(), "base_section") &&
+            pSettings->line_exist(tool->object().cNameSect(), "section_to_change")) {
+            const Ivector2 cell = new_owner->PickCell(GetUICursor().GetCursorPosition());
+            if (cell.x >= 0 && cell.y >= 0) {
+                CUICellItem* destination = new_owner->GetCellAt(cell).m_item;
+                if (destination && destination != itm) {
+                    CInventoryItem* target = static_cast<CInventoryItem*>(destination->m_pData);
+                    ApplySectionChanger(tool, target, m_pActorInvOwner->object_id());
+                    return true; // An invalid target must not move the tool to another list.
+                }
+            }
+        }
+    }
     if (old_owner == new_owner || !old_owner || !new_owner) {
         return false;
     }
