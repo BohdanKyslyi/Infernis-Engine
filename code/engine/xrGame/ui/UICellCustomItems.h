@@ -6,6 +6,9 @@
 class CUIInventoryCellItem : public CUICellItem {
     typedef CUICellItem inherited;
 
+    float m_last_condition;
+    int m_last_portions;
+
 public:
     CUIInventoryCellItem(CInventoryItem* itm);
     virtual bool EqualTo(CUICellItem* itm);
