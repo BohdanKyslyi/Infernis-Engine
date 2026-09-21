@@ -1415,6 +1415,7 @@ void CActor::UpdateArtefactsOnBeltAndOutfit() {
             conditions().ChangeHealth(artefact->m_fHealthRestoreSpeed * f_update_time);
             conditions().ChangePower(artefact->m_fPowerRestoreSpeed * f_update_time);
             conditions().ChangeSatiety(artefact->m_fSatietyRestoreSpeed * f_update_time);
+            conditions().ChangeThirst(artefact->m_fThirstRestoreSpeed * f_update_time);
             
             if (artefact->m_fRadiationRestoreSpeed > 0.0f) {
                 float val = artefact->m_fRadiationRestoreSpeed - conditions().GetBoostRadiationImmunity();
@@ -1431,6 +1432,7 @@ void CActor::UpdateArtefactsOnBeltAndOutfit() {
         conditions().ChangeHealth(outfit->m_fHealthRestoreSpeed * f_update_time);
         conditions().ChangePower(outfit->m_fPowerRestoreSpeed * f_update_time);
         conditions().ChangeSatiety(outfit->m_fSatietyRestoreSpeed * f_update_time);
+        conditions().ChangeThirst(outfit->m_fThirstRestoreSpeed * f_update_time);
         conditions().ChangeRadiation(outfit->m_fRadiationRestoreSpeed * f_update_time);
     } else {
         if (CHelmet* pHelmet = smart_cast<CHelmet*>(inventory().ItemFromSlot(HELMET_SLOT)); !pHelmet) {
@@ -1596,6 +1598,16 @@ float CActor::GetRestoreSpeed(ALife::EConditionRestoreType const& type) {
         if (CCustomOutfit* outfit = GetOutfit()) {
             res += outfit->m_fSatietyRestoreSpeed;
         }
+        break;
+    }
+    case ALife::eThirstRestoreSpeed: {
+        res = -conditions().V_Thirst();
+        for (auto* item : inventory().m_belt) {
+            if (CArtefact* artefact = smart_cast<CArtefact*>(item))
+                res += artefact->m_fThirstRestoreSpeed;
+        }
+        if (CCustomOutfit* outfit = GetOutfit())
+            res += outfit->m_fThirstRestoreSpeed;
         break;
     }
     case ALife::ePowerRestoreSpeed: {

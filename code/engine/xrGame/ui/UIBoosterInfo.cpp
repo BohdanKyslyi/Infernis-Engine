@@ -14,6 +14,7 @@ CUIBoosterInfo::CUIBoosterInfo() {
         m_booster_items[i] = NULL;
     }
     m_booster_satiety = NULL;
+    m_booster_thirst = NULL;
     m_booster_anabiotic = NULL;
     m_booster_time = NULL;
 }
@@ -21,6 +22,7 @@ CUIBoosterInfo::CUIBoosterInfo() {
 CUIBoosterInfo::~CUIBoosterInfo() {
     delete_data(m_booster_items);
     xr_delete(m_booster_satiety);
+    xr_delete(m_booster_thirst);
     xr_delete(m_booster_anabiotic);
     xr_delete(m_booster_time);
     xr_delete(m_Prop_line);
@@ -71,6 +73,12 @@ void CUIBoosterInfo::InitFromXml(CUIXml& xml) {
     m_booster_satiety->SetAutoDelete(false);
     LPCSTR name = CStringTable().translate("ui_inv_satiety").c_str();
     m_booster_satiety->SetCaption(name);
+    xml.SetLocalRoot(base_node);
+
+    m_booster_thirst = xr_new<UIBoosterInfoItem>();
+    m_booster_thirst->Init(xml, "boost_satiety");
+    m_booster_thirst->SetAutoDelete(false);
+    m_booster_thirst->SetCaption(CStringTable().translate("ui_inv_thirst").c_str());
     xml.SetLocalRoot(base_node);
 
     m_booster_anabiotic = xr_new<UIBoosterInfoItem>();
@@ -162,6 +170,18 @@ void CUIBoosterInfo::SetInfo(shared_str const& section) {
 
             h += m_booster_satiety->GetWndSize().y;
             AttachChild(m_booster_satiety);
+        }
+    }
+
+    if (pSettings->line_exist(section.c_str(), "eat_thirst")) {
+        val = pSettings->r_float(section, "eat_thirst");
+        if (!fis_zero(val)) {
+            m_booster_thirst->SetValue(val);
+            pos.set(m_booster_thirst->GetWndPos());
+            pos.y = h;
+            m_booster_thirst->SetWndPos(pos);
+            h += m_booster_thirst->GetWndSize().y;
+            AttachChild(m_booster_thirst);
         }
     }
 

@@ -160,6 +160,7 @@ void CUIMainIngameWnd::Init() {
     m_ind_bleeding = UIHelper::CreateStatic(uiXml, "indicator_bleeding", this);
     m_ind_radiation = UIHelper::CreateStatic(uiXml, "indicator_radiation", this);
     m_ind_starvation = UIHelper::CreateStatic(uiXml, "indicator_starvation", this);
+    m_ind_thirst = UIHelper::CreateStatic(uiXml, "indicator_thirst", this);
     m_ind_weapon_broken = UIHelper::CreateStatic(uiXml, "indicator_weapon_broken", this);
     m_ind_helmet_broken = UIHelper::CreateStatic(uiXml, "indicator_helmet_broken", this);
     m_ind_backpack_broken = UIHelper::CreateStatic(uiXml, "indicator_backpack_broken", this);
@@ -646,6 +647,18 @@ void CUIMainIngameWnd::UpdateMainIndicators() {
             m_ind_starvation->InitTexture("ui_inGame2_circle_hunger_yellow");
         else
             m_ind_starvation->InitTexture("ui_inGame2_circle_hunger_red");
+    }
+    // An independent thirst warning, shown above the hunger icon.
+    const float thirst = pActor->conditions().GetThirst();
+    const float thirst_critical = pActor->conditions().ThirstCritical();
+    const float thirst_koef = (thirst - thirst_critical) /
+        (thirst >= thirst_critical ? 1.0f - thirst_critical : thirst_critical);
+    m_ind_thirst->Show(thirst_koef <= 0.5f);
+    if (thirst_koef <= 0.5f) {
+        const u32 color = thirst_koef > 0.0f ? color_argb(255, 130, 210, 255) :
+            thirst_koef > -0.5f ? color_argb(255, 255, 210, 60) :
+                                  color_argb(255, 255, 75, 65);
+        m_ind_thirst->TextItemControl()->SetTextColor(color);
     }
     // Armor broken icon
     CCustomOutfit* outfit =
