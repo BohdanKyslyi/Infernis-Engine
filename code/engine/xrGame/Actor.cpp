@@ -65,6 +65,7 @@
 #include "InventoryBox.h"
 #include "location_manager.h"
 #include "player_hud.h"
+#include "ui/UIHudEditor.h"
 #include "ItemUseController.h"
 #include "ai/monsters/basemonster/base_monster.h"
 
@@ -871,7 +872,11 @@ void CActor::UpdateCL() {
 
             psHUD_Flags.set(HUD_WEAPON_RT, B);
 
-            B = B && pWeapon->show_crosshair();
+            bool editor_crosshair_visible = false;
+            if (HudEditorCrosshairOverride(pWeapon, editor_crosshair_visible))
+                B = B && editor_crosshair_visible;
+            else
+                B = B && pWeapon->show_crosshair();
 
             psHUD_Flags.set(HUD_CROSSHAIR_RT2, B);
 

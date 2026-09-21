@@ -13,6 +13,7 @@
 #include "ui/UIMessagesWindow.h"
 #include "ui/UIHudStatesWnd.h"
 #include "ui/UIWeatherEditor.h"
+#include "ui/UIHudEditor.h"
 #include "actor.h"
 #include "inventory.h"
 #include "ItemUseController.h"
@@ -48,6 +49,7 @@ CUIGameCustom::CUIGameCustom()
 bool g_b_ClearGameCaptions = false;
 
 CUIGameCustom::~CUIGameCustom() {
+    DestroyHudEditor();
     DestroyWeatherEditor();
     delete_data(m_custom_statics);
     g_b_ClearGameCaptions = false;

@@ -48,6 +48,7 @@
 #include "character_hit_animations_params.h"
 #include "inventory_upgrade_manager.h"
 #include "ui/UIWeatherEditor.h"
+#include "ui/UIHudEditor.h"
 
 #include "ai_debug_variables.h"
 #include "../xrphysics/console_vars.h"
@@ -215,6 +216,43 @@ public:
 
     virtual void Status(TStatus& status) {
         xr_strcpy(status, WeatherEditorShown() ? "on" : "off");
+    }
+
+    virtual void Info(TInfo& info) { xr_strcpy(info, "[on|off|preview|toggle]"); }
+};
+
+class CCC_HudEditor : public IConsole_Command {
+public:
+    CCC_HudEditor(LPCSTR name) : IConsole_Command(name) { bEmptyArgsHandled = true; }
+
+    virtual void Execute(LPCSTR args) {
+        if (!is_dev_mode()) {
+            Msg("! HUD editor is available only in -dev_mode");
+            return;
+        }
+        if (!g_pGameLevel || !CurrentGameUI()) {
+            Msg("! HUD editor requires a loaded level");
+            return;
+        }
+        if (!IsGameTypeSingle()) {
+            Msg("! HUD editor is available only in single-player");
+            return;
+        }
+
+        if (!args || !args[0] || !_stricmp(args, "toggle"))
+            ToggleHudEditor();
+        else if (!_stricmp(args, "on") || !_stricmp(args, "1"))
+            ToggleHudEditor(true, false);
+        else if (!_stricmp(args, "off") || !_stricmp(args, "0"))
+            ToggleHudEditor(false, true);
+        else if (!_stricmp(args, "preview"))
+            PreviewHudEditor();
+        else
+            Msg("! Usage: hud_editor [on|off|preview|toggle]");
+    }
+
+    virtual void Status(TStatus& status) {
+        xr_strcpy(status, HudEditorShown() ? "on" : "off");
     }
 
     virtual void Info(TInfo& info) { xr_strcpy(info, "[on|off|preview|toggle]"); }
@@ -2047,6 +2085,7 @@ void CCC_RegisterCommands() {
     CMD3(CCC_Mask_Dev, "g_unlimitedammo", &psActorFlags, AF_UNLIMITEDAMMO);
     CMD1(CCC_FovDev, "fov");
     CMD1(CCC_WeatherEditor, "weather_editor");
+    CMD1(CCC_HudEditor, "hud_editor");
 
 #ifdef DEBUG_CAPS
     CMD1(CCC_GreedIsGood, "g_greedisgood");

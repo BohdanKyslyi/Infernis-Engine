@@ -419,11 +419,13 @@ set(AI_ACOVER_SMART_COVER_STORAGE_DESCRIPTION smart_cover_description.h
                                               smart_cover_description.cpp)
 
 set(AI_ASCRIPT_SCRIPTCLASSES_UI_UIWINDOWS_WINDOWS ui/UIDialogWnd.h
+                                                  ui/UIHudEditor.h
                                                   ui/UIWeatherEditor.h
                                                   ui/UIFrameLineWnd.h
                                                   ui/UIFrameWindow.h
                                                   ui/UIWindow.h
                                                   ui/UIDialogWnd.cpp
+                                                  ui/UIHudEditor.cpp
                                                   ui/UIWeatherEditor.cpp
                                                   ui/UIFrameLineWnd.cpp
                                                   ui/UIFrameWindow.cpp

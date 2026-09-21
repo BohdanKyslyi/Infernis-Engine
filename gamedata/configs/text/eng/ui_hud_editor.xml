@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<string_table>
+    <string id="ui_hud_editor_title"><text>WEAPON HUD POSITION EDITOR</text></string>
+    <string id="ui_hud_editor_weapon"><text>Weapon</text></string>
+    <string id="ui_hud_editor_section"><text>HUD section</text></string>
+    <string id="ui_hud_editor_profile"><text>Profile</text></string>
+    <string id="ui_hud_editor_profile_standard"><text>Standard (4:3)</text></string>
+    <string id="ui_hud_editor_profile_wide"><text>Widescreen (16:9)</text></string>
+    <string id="ui_hud_editor_force_aim"><text>Force weapon aim</text></string>
+    <string id="ui_hud_editor_hide_crosshair"><text>Hide crosshair</text></string>
+    <string id="ui_hud_editor_learning_mode"><text>Learning mode</text></string>
+    <string id="ui_hud_editor_preview"><text>PREVIEW [F7]</text></string>
+    <string id="ui_hud_editor_fire"><text>FIRE [F8]</text></string>
+    <string id="ui_hud_editor_save"><text>SAVE [F6]</text></string>
+    <string id="ui_hud_editor_revert"><text>REVERT [F5]</text></string>
+    <string id="ui_hud_editor_close"><text>CLOSE</text></string>
+    <string id="ui_hud_editor_footer"><text>F8: fire | Enter: apply number | hud_editor: return from preview</text></string>
+
+    <string id="ui_hud_editor_status_ready"><text>Changes are applied immediately. The screen center remains clear for the sight picture.</text></string>
+    <string id="ui_hud_editor_status_no_weapon"><text>Draw a weapon in first person; the editor will read its HUD section automatically.</text></string>
+    <string id="ui_hud_editor_status_profile_standard"><text>Editing the standard profile: parameters without the _16x9 suffix.</text></string>
+    <string id="ui_hud_editor_status_profile_wide"><text>Editing the widescreen profile: parameters with the _16x9 suffix.</text></string>
+    <string id="ui_hud_editor_status_saved"><text>Saved to %s. The original version is kept alongside it as .hud_editor.bak.</text></string>
+    <string id="ui_hud_editor_status_save_error"><text>Could not locate or update the HUD section source .ltx. Check the game log.</text></string>
+    <string id="ui_hud_editor_status_reverted"><text>Unsaved changes were restored to their original values.</text></string>
+    <string id="ui_hud_editor_status_preview"><text>Preview mode. Enter hud_editor in the console to restore this session without losing changes.</text></string>
+    <string id="ui_hud_editor_status_fired"><text>A single fire-button press was issued.</text></string>
+    <string id="ui_hud_editor_status_invalid_number"><text>Invalid number. Use a dot as the decimal separator.</text></string>
+    <string id="ui_hud_editor_status_number_applied"><text>The exact numeric value was applied.</text></string>
+
+    <string id="ui_hud_editor_hint_learning_mode"><text>Learning mode explains the editor controls. This hint is always available; other field hints appear only after the checkbox is enabled.</text></string>
+    <string id="ui_hud_editor_hint_title"><text>In-game editor for hand placement and weapon offsets while aiming.</text></string>
+    <string id="ui_hud_editor_hint_weapon"><text>The active weapon section held by the actor. Changing weapons is detected automatically.</text></string>
+    <string id="ui_hud_editor_hint_section"><text>The HUD section containing hand position, orientation and aiming offsets.</text></string>
+    <string id="ui_hud_editor_hint_profile"><text>Switches between standard values and their _16x9 variants. The selected profile is previewed immediately.</text></string>
+    <string id="ui_hud_editor_hint_force_aim"><text>Keeps the weapon aimed while the mouse cursor is being used by the editor.</text></string>
+    <string id="ui_hud_editor_hint_hide_crosshair"><text>The zoom_hide_crosshair value. Disable it to align the weapon sights precisely with the crosshair.</text></string>
+    <string id="ui_hud_editor_hint_hands_position"><text>Hand and weapon position: X is left/right, Y is down/up, and Z is closer/farther from the camera.</text></string>
+    <string id="ui_hud_editor_hint_hands_orientation"><text>Base HUD hand rotation around X, Y and Z. These values are specified in degrees.</text></string>
+    <string id="ui_hud_editor_hint_aim_position"><text>Linear weapon offset while aiming. Use it to align iron sights or optics with the screen center.</text></string>
+    <string id="ui_hud_editor_hint_aim_rotation"><text>Angular aiming offset around X, Y and Z. The engine uses these values as radians.</text></string>
+    <string id="ui_hud_editor_hint_preview"><text>Hides the interface while preserving all current runtime values. The hud_editor command restores the same session.</text></string>
+    <string id="ui_hud_editor_hint_fire"><text>Simulates a short fire-button press to inspect recoil, muzzle flash, shell ejection and sight recovery.</text></string>
+    <string id="ui_hud_editor_hint_save"><text>Writes both profiles and zoom_hide_crosshair to the source .ltx, creating a first-save backup.</text></string>
+    <string id="ui_hud_editor_hint_revert"><text>Discards unsaved changes and restores values captured when the current session started.</text></string>
+    <string id="ui_hud_editor_hint_close"><text>Ends the editor session, releases forced aim and restores the current screen-aspect profile.</text></string>
+    <string id="ui_hud_editor_hint_status"><text>Reports numeric input, firing, revert and configuration-save results.</text></string>
+</string_table>
