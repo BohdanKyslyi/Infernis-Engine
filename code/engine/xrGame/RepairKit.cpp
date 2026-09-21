@@ -33,8 +33,7 @@ CInventoryItem* CRepairKit::RepairTarget() const {
     if (m_target_id == u16(-1))
         return NULL;
 
-    CGameObject* object = Level().Objects.net_Find(m_target_id);
-    return smart_cast<CInventoryItem*>(object);
+    return smart_cast<CInventoryItem*>(Level().Objects.net_Find(m_target_id));
 }
 
 void CRepairKit::SetRepairTarget(CInventoryItem* target) {
@@ -51,7 +50,7 @@ bool CRepairKit::CanRepair(const CInventoryItem* target) const {
     if (condition < m_min_condition || condition >= m_max_condition)
         return false;
 
-    return target->IsRepairableBy(object().cNameSect().c_str()) &&
+    return target->IsRepairableBy(CInventoryItem::object().cNameSect().c_str()) &&
            target->HasRepairMaterials();
 }
 
