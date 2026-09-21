@@ -37,7 +37,8 @@ struct is_helper_pred {
 
 } // namespace detail
 
-CUIInventoryCellItem::CUIInventoryCellItem(CInventoryItem* itm) {
+CUIInventoryCellItem::CUIInventoryCellItem(CInventoryItem* itm)
+    : m_last_condition(-1.f), m_last_portions(-1) {
     m_pData = (void*)itm;
 
     SetItemIconShader(GetUIStaticItem(), itm->object().cNameSect().c_str());
@@ -119,6 +120,18 @@ void CUIInventoryCellItem::SetIsHelper(bool is_helper) { object()->set_is_helper
 
 void CUIInventoryCellItem::Update() {
     inherited::Update();
+
+    // UseBy() changes the item after its cell has already been placed in a list.
+    // Refresh the existing cell when the condition or remaining portions change.
+    CEatableItem* eatable = smart_cast<CEatableItem*>(object());
+    const float condition = object()->GetCondition();
+    const int portions = eatable ? eatable->PortionsNum() : -1;
+    if (m_last_condition != condition || m_last_portions != portions) {
+        m_last_condition = condition;
+        m_last_portions = portions;
+        UpdateConditionProgressBar();
+    }
+
     UpdateItemText();
 
     u32 color = GetTextureColor();

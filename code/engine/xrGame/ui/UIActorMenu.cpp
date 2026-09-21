@@ -199,6 +199,7 @@ void CUIActorMenu::Update() {
         //			m_clock_value->TextItemControl()->SetText(
         //InventoryUtilities::GetGameTimeAsString( InventoryUtilities::etpTimeToMinutes ).c_str() );
         CurrentGameUI()->UIMainIngameWnd->UpdateZoneMap();
+        UpdateConditionProgressBars();
         break;
     }
     case mmTrade: {

@@ -50,6 +50,7 @@ LPCSTR af_restore_section_names[] = // ALife::EConditionRestoreType
       "power_restore_speed",     // ePowerRestoreSpeed=2
       "bleeding_restore_speed",  // eBleedingRestoreSpeed=3
       "radiation_restore_speed", // eRadiationRestoreSpeed=4
+      "thirst_restore_speed",    // eThirstRestoreSpeed=5
     };
 
 LPCSTR af_immunity_caption[] = // ALife::EInfluenceType
@@ -68,7 +69,7 @@ LPCSTR af_immunity_caption[] = // ALife::EInfluenceType
 
 LPCSTR af_restore_caption[] = // ALife::EConditionRestoreType
     {
-      "ui_inv_health", "ui_inv_satiety", "ui_inv_power", "ui_inv_bleeding", "ui_inv_radiation",
+      "ui_inv_health", "ui_inv_satiety", "ui_inv_power", "ui_inv_bleeding", "ui_inv_radiation", "ui_inv_thirst",
     };
 
 /*
@@ -111,7 +112,9 @@ void CUIArtefactParams::InitFromXml(CUIXml& xml) {
 
     for (u32 i = 0; i < ALife::eRestoreTypeMax; ++i) {
         m_restore_item[i] = xr_new<UIArtefactParamItem>();
-        m_restore_item[i]->Init(xml, af_restore_section_names[i]);
+        // Reuse the satiety row layout for optional thirst properties.
+        m_restore_item[i]->Init(xml, i == ALife::eThirstRestoreSpeed ?
+            "satiety_restore_speed" : af_restore_section_names[i]);
         m_restore_item[i]->SetAutoDelete(false);
 
         LPCSTR name = CStringTable().translate(af_restore_caption[i]).c_str();
@@ -184,7 +187,7 @@ void CUIArtefactParams::SetInfo(shared_str const& af_section) {
     }
 
     for (u32 i = 0; i < ALife::eRestoreTypeMax; ++i) {
-        val = pSettings->r_float(af_section, af_restore_section_names[i]);
+        val = READ_IF_EXISTS(pSettings, r_float, af_section, af_restore_section_names[i], 0.0f);
         if (fis_zero(val)) {
             continue;
         }

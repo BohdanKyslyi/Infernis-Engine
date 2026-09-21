@@ -23,6 +23,7 @@ class CMissile;
 class CHudItem;
 class CWeaponAmmo;
 class CWeapon;
+class CRepairKit;
 class CPhysicsShellHolder;
 class NET_Packet;
 class CEatableItem;
@@ -32,6 +33,13 @@ struct net_update_IItem;
 class CInventoryOwner;
 
 struct SHit;
+
+struct SRepairMaterial {
+    shared_str section;
+    u32 count;
+
+    SRepairMaterial() : count(0) {}
+};
 
 class CSE_ALifeInventoryItem;
 typedef CSE_ALifeInventoryItem::mask_num_items mask_inv_num_items;
@@ -179,11 +187,21 @@ public:
     virtual bool IsNecessaryItem(CInventoryItem* item);
     virtual bool IsNecessaryItem(const shared_str& item_sect) { return false; };
 
+    bool IsRepairableBy(LPCSTR repair_kit_section) const;
+    bool HasRepairMaterials() const;
+    void ConsumeRepairMaterials();
+    const xr_vector<SRepairMaterial>& RepairMaterials() const { return m_repair_materials; }
+
+    virtual CRepairKit* cast_repair_kit() { return NULL; }
+
 protected:
     u32 m_cost;
     float m_weight;
     float m_fCondition;
     shared_str m_Description;
+
+    xr_vector<shared_str> m_suitable_repair_kits;
+    xr_vector<SRepairMaterial> m_repair_materials;
 
 protected:
     ALife::_TIME_ID m_dwItemIndependencyTime;

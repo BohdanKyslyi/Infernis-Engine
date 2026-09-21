@@ -1,5 +1,6 @@
 #include "pch_script.h"
 #include "actor.h"
+#include "ActorCondition.h"
 #include "hudmanager.h"
 #include "Actor_Flags.h"
 #include "inventory.h"
@@ -1332,6 +1333,7 @@ void CActor::save(NET_Packet& output_packet) {
     output_packet.w_stringZ(g_quick_use_slots[1]);
     output_packet.w_stringZ(g_quick_use_slots[2]);
     output_packet.w_stringZ(g_quick_use_slots[3]);
+    conditions().save_thirst(output_packet);
 }
 
 void CActor::load(IReader& input_packet) {
@@ -1349,6 +1351,7 @@ void CActor::load(IReader& input_packet) {
     input_packet.r_stringZ(g_quick_use_slots[1], sizeof(g_quick_use_slots[1]));
     input_packet.r_stringZ(g_quick_use_slots[2], sizeof(g_quick_use_slots[2]));
     input_packet.r_stringZ(g_quick_use_slots[3], sizeof(g_quick_use_slots[3]));
+    conditions().load_thirst(input_packet);
 }
 
 #ifdef DEBUG

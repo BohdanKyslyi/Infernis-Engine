@@ -20,6 +20,7 @@ cost				= 1
 ; consumable item
 eat_health			= 0
 eat_satiety			= 0
+eat_thirst              = 0
 eat_power			= 0
 eat_max_power		= 0
 eat_radiation		= 0
@@ -147,6 +148,7 @@ boost_time				= 5.0
 boost_radiation_restore	= 0.005
 eat_alcohol				= 0.1
 eat_satiety				= -0.2
+eat_thirst              = -0.2 ; vodka increases thirst
 
 use_sound			= interface\inv_vodka
 
@@ -225,6 +227,7 @@ auto_attach       		= false
 ;;	MEDICAL
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 [energy_drink]:vodka
+eat_thirst              = 0.4
 $spawn 				= "food and drugs\energy_drink"
 inv_name			= st_energy_drink
 inv_name_short		= st_energy_drink

@@ -903,10 +903,12 @@ set(CORE_CLIENT_OBJECTS_ITEMS__AND__WEAPONS_FOOD__AND__DRUGS antirad.h
                                                              BottleItem.h
                                                              FoodItem.h
                                                              medkit.h
+                                                             RepairKit.h
                                                              antirad.cpp
                                                              BottleItem.cpp
                                                              FoodItem.cpp
-                                                             medkit.cpp)
+                                                             medkit.cpp
+                                                             RepairKit.cpp)
 
 set(CORE_CLIENT_OBJECTS_BASE_GAMEOBJECT_HOLDER holder_custom.h
                                                holder_custom.cpp

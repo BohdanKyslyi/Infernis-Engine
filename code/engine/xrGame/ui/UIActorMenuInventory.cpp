@@ -26,6 +26,7 @@
 #include "../WeaponMagazined.h"
 #include "../Medkit.h"
 #include "../Antirad.h"
+#include "../RepairKit.h"
 #include "../CustomOutfit.h"
 #include "../ActorHelmet.h"
 #include "../UICursor.h"
@@ -708,11 +709,15 @@ bool CUIActorMenu::TryUseItem(CUICellItem* cell_itm) {
     CMedkit* pMedkit = smart_cast<CMedkit*>(item);
     CAntirad* pAntirad = smart_cast<CAntirad*>(item);
     CEatableItem* pEatableItem = smart_cast<CEatableItem*>(item);
+    CRepairKit* pRepairKit = smart_cast<CRepairKit*>(item);
 
     if (!(pMedkit || pAntirad || pEatableItem || pBottleItem)) {
         return false;
     }
     if (!item->Useful()) {
+        return false;
+    }
+    if (pRepairKit && !pRepairKit->UseAllowed()) {
         return false;
     }
     u16 recipient = m_pActorInvOwner->object_id();
@@ -954,6 +959,28 @@ void CUIActorMenu::PropertiesBoxForUsing(PIItem item, bool& b_show) {
     CAntirad* pAntirad = smart_cast<CAntirad*>(item);
     CEatableItem* pEatableItem = smart_cast<CEatableItem*>(item);
     CBottleItem* pBottleItem = smart_cast<CBottleItem*>(item);
+    CRepairKit* pRepairKit = smart_cast<CRepairKit*>(item);
+
+    if (pRepairKit) {
+        if (!item->Useful())
+            return;
+
+        CInventory& inventory = m_pActorInvOwner->inventory();
+        const u16 repair_slots[] = { OUTFIT_SLOT, HELMET_SLOT, KNIFE_SLOT,
+                                     INV_SLOT_2, INV_SLOT_3, EXTRA_PISTOL_SLOT };
+
+        for (u16 slot : repair_slots) {
+            PIItem target = inventory.ItemFromSlot(slot);
+            if (!pRepairKit->CanRepair(target))
+                continue;
+
+            shared_str text = CStringTable().translate("st_repair");
+            text.printf("%s %s", text.c_str(), target->NameItem());
+            m_UIPropertiesBox->AddItem(text.c_str(), target, INVENTORY_REPAIR_KIT);
+            b_show = true;
+        }
+        return;
+    }
 
     LPCSTR act_str = NULL;
     if (pMedkit || pAntirad) {
@@ -1031,6 +1058,16 @@ void CUIActorMenu::ProcessPropertiesBoxClicked(CUIWindow* w, void* d) {
     case INVENTORY_EAT_ACTION:
         TryUseItem(cell_item);
         break;
+    case INVENTORY_REPAIR_KIT: {
+        CRepairKit* repair_kit = smart_cast<CRepairKit*>(item);
+        CInventoryItem* target =
+            static_cast<CInventoryItem*>(m_UIPropertiesBox->GetClickedItem()->GetData());
+        if (repair_kit && repair_kit->CanRepair(target)) {
+            repair_kit->SetRepairTarget(target);
+            TryUseItem(cell_item);
+        }
+        break;
+    }
     case INVENTORY_DROP_ACTION: {
         void* d = m_UIPropertiesBox->GetClickedItem()->GetData();
         if (d == (void*)33) {

@@ -6,6 +6,7 @@
 #include "FoodItem.h"
 #include "BottleItem.h"
 #include "ExplosiveItem.h"
+#include "RepairKit.h"
 #include "InventoryBox.h"
 
 CF1::CF1(void) {}
@@ -24,5 +25,6 @@ void CF1::script_register(lua_State* L) {
               class_<CFoodItem, CGameObject>("CFoodItem").def(constructor<>()),
               class_<CBottleItem, CGameObject>("CBottleItem").def(constructor<>()),
               class_<CInventoryBox, CGameObject>("CInventoryBox").def(constructor<>()),
+              class_<CRepairKit, CGameObject>("CRepairKit").def(constructor<>()),
               class_<CExplosiveItem, CGameObject>("CExplosiveItem").def(constructor<>())];
 }
