@@ -1,5 +1,6 @@
 #include "pch_script.h"
 #include "actor.h"
+#include "ActorCondition.h"
 #include "hudmanager.h"
 #include "Actor_Flags.h"
 #include "inventory.h"
