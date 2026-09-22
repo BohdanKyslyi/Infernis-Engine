@@ -25,6 +25,9 @@ CCustomOutfit::CCustomOutfit() {
     m_boneProtection = xr_new<SBoneProtections>();
     m_artefact_count = 0;
     m_BonesProtectionSect = NULL;
+    bIsExoskeleton = false;
+    bIsExoskeletonPrototype = false;
+    bUseExoItemAnimations = false;
 }
 
 CCustomOutfit::~CCustomOutfit() { xr_delete(m_boneProtection); }
@@ -100,6 +103,7 @@ void CCustomOutfit::Load(LPCSTR section) {
         READ_IF_EXISTS(pSettings, r_float, section, "radiation_restore_speed", 0.0f);
     m_fSatietyRestoreSpeed =
         READ_IF_EXISTS(pSettings, r_float, section, "satiety_restore_speed", 0.0f);
+    m_fThirstRestoreSpeed = READ_IF_EXISTS(pSettings, r_float, section, "thirst_restore_speed", 0.0f);
     m_fPowerRestoreSpeed = READ_IF_EXISTS(pSettings, r_float, section, "power_restore_speed", 0.0f);
     m_fBleedingRestoreSpeed =
         READ_IF_EXISTS(pSettings, r_float, section, "bleeding_restore_speed", 0.0f);
@@ -112,6 +116,15 @@ void CCustomOutfit::Load(LPCSTR section) {
         READ_IF_EXISTS(pSettings, r_string, section, "bones_koeff_protection", "");
     bIsHelmetAvaliable = !!READ_IF_EXISTS(pSettings, r_bool, section, "helmet_avaliable", true);
     bIsBackpackAvaliable = !!READ_IF_EXISTS(pSettings, r_bool, section, "backpack_avaliable", true);
+
+    // IX-Ray/Gunslinger compatibility. The explicit animation switch lets a
+    // custom suit opt in or out without depending on its section name.
+    bIsExoskeleton = !!READ_IF_EXISTS(pSettings, r_bool, section, "is_exo", false);
+    bIsExoskeletonPrototype =
+        !!READ_IF_EXISTS(pSettings, r_bool, section, "is_exo_proto", false);
+    bUseExoItemAnimations = !!READ_IF_EXISTS(
+        pSettings, r_bool, section, "use_exo_item_animations",
+        bIsExoskeleton || bIsExoskeletonPrototype);
 }
 
 void CCustomOutfit::ReloadBonesProtection() {
@@ -335,6 +348,8 @@ bool CCustomOutfit::install_upgrade_impl(LPCSTR section, bool test) {
                                 m_fRadiationRestoreSpeed, test);
     result |= process_if_exists(section, "satiety_restore_speed", &CInifile::r_float,
                                 m_fSatietyRestoreSpeed, test);
+    result |= process_if_exists(section, "thirst_restore_speed", &CInifile::r_float,
+                                m_fThirstRestoreSpeed, test);
     result |= process_if_exists(section, "power_restore_speed", &CInifile::r_float,
                                 m_fPowerRestoreSpeed, test);
     result |= process_if_exists(section, "bleeding_restore_speed", &CInifile::r_float,

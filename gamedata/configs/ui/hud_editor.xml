@@ -1,0 +1,100 @@
+<w>
+    <!-- The middle 150 pixels stay empty so the sight picture is never covered. -->
+    <main x="0" y="8" width="1024" height="610">
+        <title x="0" y="0" width="1024" height="27">
+            <text font="graffiti22" r="225" g="225" b="225" align="c">ui_hud_editor_title</text>
+        </title>
+
+        <auto_static x="18" y="44" width="68" height="18">
+            <text font="letterica16" r="180" g="180" b="180">ui_hud_editor_weapon</text>
+        </auto_static>
+        <weapon_value x="88" y="44" width="344" height="18">
+            <text font="letterica16" r="225" g="225" b="225"/>
+        </weapon_value>
+        <auto_static x="590" y="44" width="94" height="18">
+            <text font="letterica16" r="180" g="180" b="180">ui_hud_editor_section</text>
+        </auto_static>
+        <section_value x="686" y="44" width="320" height="18">
+            <text font="letterica16" r="225" g="225" b="225"/>
+        </section_value>
+
+        <auto_static x="18" y="83" width="68" height="18">
+            <text font="letterica16" r="180" g="180" b="180">ui_hud_editor_profile</text>
+        </auto_static>
+        <profile x="88" y="79" width="250" height="20" list_length="2">
+            <list_font r="205" g="205" b="205" font="letterica16"/>
+            <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
+        </profile>
+
+        <force_aim x="590" y="73" width="29" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+        </force_aim>
+        <auto_static x="624" y="78" width="174" height="24">
+            <text font="letterica16" r="205" g="215" b="205" vert_align="c">ui_hud_editor_force_aim</text>
+        </auto_static>
+        <hide_crosshair x="812" y="73" width="29" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+        </hide_crosshair>
+        <auto_static x="846" y="78" width="160" height="24">
+            <text font="letterica16" r="205" g="215" b="205" vert_align="c">ui_hud_editor_hide_crosshair</text>
+        </auto_static>
+
+        <group_header_template x="0" y="0" width="414" height="22">
+            <text font="letterica18" r="210" g="220" b="210"/>
+        </group_header_template>
+        <axis_label_template x="0" y="0" width="22" height="20">
+            <text font="letterica16" r="190" g="190" b="190" align="c" vert_align="c"/>
+        </axis_label_template>
+        <value_step_button_template x="0" y="0" width="22" height="22" stretch="1">
+            <texture>ui_inGame2_Mp_bigbuttone</texture>
+            <text font="letterica16" r="220" g="220" b="220" align="c" vert_align="c"/>
+        </value_step_button_template>
+        <value_slider_template x="0" y="0" width="184" height="12" step="0.0001"/>
+        <value_edit_template x="0" y="0" width="92" height="23" max_symb_count="13">
+            <texture>ui_inGame2_edit_box_1</texture>
+            <text x="4" font="letterica16" r="225" g="225" b="225" align="l" vert_align="c"/>
+        </value_edit_template>
+
+        <status x="18" y="450" width="414" height="48">
+            <text font="letterica16" r="195" g="210" b="195" align="c" vert_align="c" complex_mode="1"/>
+        </status>
+
+        <save x="18" y="520" width="198" height="29" stretch="1">
+            <texture>ui_inGame2_Mp_bigbuttone</texture>
+            <text font="letterica18" align="c">ui_hud_editor_save</text>
+            <text_color><e r="190" g="220" b="170"/></text_color>
+        </save>
+        <revert x="234" y="520" width="198" height="29" stretch="1">
+            <texture>ui_inGame2_Mp_bigbuttone</texture>
+            <text font="letterica18" align="c">ui_hud_editor_revert</text>
+            <text_color><e r="220" g="200" b="150"/></text_color>
+        </revert>
+
+        <preview x="590" y="520" width="130" height="29" stretch="1">
+            <texture>ui_inGame2_Mp_bigbuttone</texture>
+            <text font="letterica18" align="c">ui_hud_editor_preview</text>
+            <text_color><e r="190" g="205" b="230"/></text_color>
+        </preview>
+        <fire x="733" y="520" width="130" height="29" stretch="1">
+            <texture>ui_inGame2_Mp_bigbuttone</texture>
+            <text font="letterica18" align="c">ui_hud_editor_fire</text>
+            <text_color><e r="230" g="190" b="160"/></text_color>
+        </fire>
+        <close x="876" y="520" width="130" height="29" stretch="1">
+            <texture>ui_inGame2_Mp_bigbuttone</texture>
+            <text font="letterica18" align="c">ui_hud_editor_close</text>
+            <text_color><e r="205" g="205" b="205"/></text_color>
+        </close>
+
+        <learning_mode x="18" y="116" width="29" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+        </learning_mode>
+        <learning_mode_label x="52" y="116" width="210" height="29">
+            <text font="letterica16" r="205" g="215" b="205" vert_align="c">ui_hud_editor_learning_mode</text>
+        </learning_mode_label>
+
+        <auto_static x="590" y="564" width="416" height="20">
+            <text font="letterica16" r="140" g="140" b="140" align="c">ui_hud_editor_footer</text>
+        </auto_static>
+    </main>
+</w>

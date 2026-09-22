@@ -160,6 +160,7 @@ void CUIMainIngameWnd::Init() {
     m_ind_bleeding = UIHelper::CreateStatic(uiXml, "indicator_bleeding", this);
     m_ind_radiation = UIHelper::CreateStatic(uiXml, "indicator_radiation", this);
     m_ind_starvation = UIHelper::CreateStatic(uiXml, "indicator_starvation", this);
+    m_ind_thirst = UIHelper::CreateStatic(uiXml, "indicator_thirst", this);
     m_ind_weapon_broken = UIHelper::CreateStatic(uiXml, "indicator_weapon_broken", this);
     m_ind_helmet_broken = UIHelper::CreateStatic(uiXml, "indicator_helmet_broken", this);
     m_ind_backpack_broken = UIHelper::CreateStatic(uiXml, "indicator_backpack_broken", this);
@@ -647,6 +648,18 @@ void CUIMainIngameWnd::UpdateMainIndicators() {
         else
             m_ind_starvation->InitTexture("ui_inGame2_circle_hunger_red");
     }
+    // An independent thirst warning, shown above the hunger icon.
+    const float thirst = pActor->conditions().GetThirst();
+    const float thirst_critical = pActor->conditions().ThirstCritical();
+    const float thirst_koef = (thirst - thirst_critical) /
+        (thirst >= thirst_critical ? 1.0f - thirst_critical : thirst_critical);
+    m_ind_thirst->Show(thirst_koef <= 0.5f);
+    if (thirst_koef <= 0.5f) {
+        const u32 color = thirst_koef > 0.0f ? color_argb(255, 130, 210, 255) :
+            thirst_koef > -0.5f ? color_argb(255, 255, 210, 60) :
+                                  color_argb(255, 255, 75, 65);
+        m_ind_thirst->TextItemControl()->SetTextColor(color);
+    }
     // Armor broken icon
     CCustomOutfit* outfit =
         smart_cast<CCustomOutfit*>(pActor->inventory().ItemFromSlot(OUTFIT_SLOT));
@@ -891,6 +904,36 @@ void CUIMainIngameWnd::DrawMainIndicatorsForInventory() {
     m_ui_hud_states->DrawZoneIndicators();
 }
 
+static void UpdateBoosterIndicator(CUIStatic* indicator, float remaining_time,
+                                   LPCSTR animation, u8 flags) {
+    indicator->Show(true);
+
+    if (remaining_time <= 3.0f) {
+        // Start the warning once. Reassigning/restarting it every condition
+        // update makes the alpha jump between the first animation frames.
+        if (!indicator->IsColorAnimationPresent()) {
+            indicator->SetColorAnimation(animation, flags);
+            indicator->ResetColorAnimation();
+        }
+        return;
+    }
+
+    if (indicator->IsColorAnimationPresent())
+        indicator->SetColorAnimation(NULL, 0);
+
+    indicator->SetTextureColor(subst_alpha(indicator->GetTextureColor(), 255));
+}
+
+static void ResetHiddenBoosterIndicator(CUIStatic* indicator) {
+    if (indicator->IsShown())
+        return;
+
+    if (indicator->IsColorAnimationPresent())
+        indicator->SetColorAnimation(NULL, 0);
+
+    indicator->SetTextureColor(subst_alpha(indicator->GetTextureColor(), 255));
+}
+
 void CUIMainIngameWnd::UpdateBoosterIndicators(const xr_map<EBoostParams, SBooster> influences) {
     m_ind_boost_psy->Show(false);
     m_ind_boost_radia->Show(false);
@@ -911,64 +954,41 @@ void CUIMainIngameWnd::UpdateBoosterIndicators(const xr_map<EBoostParams, SBoost
     for (; b != e; b++) {
         switch (b->second.m_type) {
         case eBoostHpRestore: {
-            m_ind_boost_health->Show(true);
-            if (b->second.fBoostTime <= 3.0f)
-                m_ind_boost_health->SetColorAnimation(str_flag, flags);
-            else
-                m_ind_boost_health->ResetColorAnimation();
+            UpdateBoosterIndicator(m_ind_boost_health, b->second.fBoostTime, str_flag, flags);
         } break;
         case eBoostPowerRestore: {
-            m_ind_boost_power->Show(true);
-            if (b->second.fBoostTime <= 3.0f)
-                m_ind_boost_power->SetColorAnimation(str_flag, flags);
-            else
-                m_ind_boost_power->ResetColorAnimation();
+            UpdateBoosterIndicator(m_ind_boost_power, b->second.fBoostTime, str_flag, flags);
         } break;
         case eBoostRadiationRestore: {
-            m_ind_boost_rad->Show(true);
-            if (b->second.fBoostTime <= 3.0f)
-                m_ind_boost_rad->SetColorAnimation(str_flag, flags);
-            else
-                m_ind_boost_rad->ResetColorAnimation();
+            UpdateBoosterIndicator(m_ind_boost_rad, b->second.fBoostTime, str_flag, flags);
         } break;
         case eBoostBleedingRestore: {
-            m_ind_boost_wound->Show(true);
-            if (b->second.fBoostTime <= 3.0f)
-                m_ind_boost_wound->SetColorAnimation(str_flag, flags);
-            else
-                m_ind_boost_wound->ResetColorAnimation();
+            UpdateBoosterIndicator(m_ind_boost_wound, b->second.fBoostTime, str_flag, flags);
         } break;
         case eBoostMaxWeight: {
-            m_ind_boost_weight->Show(true);
-            if (b->second.fBoostTime <= 3.0f)
-                m_ind_boost_weight->SetColorAnimation(str_flag, flags);
-            else
-                m_ind_boost_weight->ResetColorAnimation();
+            UpdateBoosterIndicator(m_ind_boost_weight, b->second.fBoostTime, str_flag, flags);
         } break;
         case eBoostRadiationImmunity:
         case eBoostRadiationProtection: {
-            m_ind_boost_radia->Show(true);
-            if (b->second.fBoostTime <= 3.0f)
-                m_ind_boost_radia->SetColorAnimation(str_flag, flags);
-            else
-                m_ind_boost_radia->ResetColorAnimation();
+            UpdateBoosterIndicator(m_ind_boost_radia, b->second.fBoostTime, str_flag, flags);
         } break;
         case eBoostTelepaticImmunity:
         case eBoostTelepaticProtection: {
-            m_ind_boost_psy->Show(true);
-            if (b->second.fBoostTime <= 3.0f)
-                m_ind_boost_psy->SetColorAnimation(str_flag, flags);
-            else
-                m_ind_boost_psy->ResetColorAnimation();
+            UpdateBoosterIndicator(m_ind_boost_psy, b->second.fBoostTime, str_flag, flags);
         } break;
         case eBoostChemicalBurnImmunity:
         case eBoostChemicalBurnProtection: {
-            m_ind_boost_chem->Show(true);
-            if (b->second.fBoostTime <= 3.0f)
-                m_ind_boost_chem->SetColorAnimation(str_flag, flags);
-            else
-                m_ind_boost_chem->ResetColorAnimation();
+            UpdateBoosterIndicator(m_ind_boost_chem, b->second.fBoostTime, str_flag, flags);
         } break;
         }
     }
+
+    ResetHiddenBoosterIndicator(m_ind_boost_psy);
+    ResetHiddenBoosterIndicator(m_ind_boost_radia);
+    ResetHiddenBoosterIndicator(m_ind_boost_chem);
+    ResetHiddenBoosterIndicator(m_ind_boost_wound);
+    ResetHiddenBoosterIndicator(m_ind_boost_weight);
+    ResetHiddenBoosterIndicator(m_ind_boost_health);
+    ResetHiddenBoosterIndicator(m_ind_boost_power);
+    ResetHiddenBoosterIndicator(m_ind_boost_rad);
 }

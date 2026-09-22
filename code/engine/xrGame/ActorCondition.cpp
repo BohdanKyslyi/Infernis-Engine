@@ -43,6 +43,7 @@ CActorCondition::CActorCondition(CActor* object) : inherited(object) {
     m_fSprintK = 0.f;
     m_fAlcohol = 0.f;
     m_fSatiety = 1.0f;
+    m_fThirst = 1.0f;
 
     //	m_vecBoosts.clear();
 
@@ -114,6 +115,11 @@ void CActorCondition::LoadCondition(LPCSTR entity_section) {
     m_fV_SatietyPower = pSettings->r_float(section, "satiety_power_v");
     m_fV_SatietyHealth = pSettings->r_float(section, "satiety_health_v");
 
+    m_fThirstCritical = READ_IF_EXISTS(pSettings, r_float, section, "thirst_critical", 0.3f);
+    clamp(m_fThirstCritical, 0.01f, 0.99f);
+    m_fV_Thirst = READ_IF_EXISTS(pSettings, r_float, section, "thirst_v", 0.0f);
+    m_fV_ThirstPower = READ_IF_EXISTS(pSettings, r_float, section, "thirst_power_v", 0.0f);
+
     m_MaxWalkWeight = pSettings->r_float(section, "max_walk_weight");
 
     m_zone_max_power[ALife::infl_rad] = pSettings->r_float(section, "radio_zone_max_power");
@@ -183,6 +189,7 @@ float CActorCondition::GetZoneMaxPower(ALife::EHitType hit_type) const {
 void CActorCondition::UpdateCondition() {
     if (psActorFlags.test(AF_GODMODE_RT)) {
         UpdateSatiety();
+        UpdateThirst();
         UpdateBoosters();
 
         m_fAlcohol += m_fV_Alcohol * m_fDeltaTime;
@@ -264,6 +271,7 @@ void CActorCondition::UpdateCondition() {
     };
 
     UpdateSatiety();
+    UpdateThirst();
     UpdateBoosters();
 
     inherited::UpdateCondition();
@@ -415,6 +423,21 @@ void CActorCondition::UpdateSatiety() {
     }
 }
 
+void CActorCondition::UpdateThirst() {
+    if (!IsGameTypeSingle())
+        return;
+
+    if (m_fThirst > 0.0f) {
+        m_fThirst -= m_fV_Thirst * m_fDeltaTime;
+        clamp(m_fThirst, 0.0f, 1.0f);
+    }
+
+    const float thirst_power_koef = (m_fThirst - m_fThirstCritical) /
+        (m_fThirst >= m_fThirstCritical ? 1.0f - m_fThirstCritical : m_fThirstCritical);
+    if (CanBeHarmed() && !psActorFlags.test(AF_GODMODE_RT))
+        m_fDeltaPower += m_fV_ThirstPower * thirst_power_koef * m_fDeltaTime;
+}
+
 CWound* CActorCondition::ConditionHit(SHit* pHDS) {
     if (GodMode())
         return NULL;
@@ -535,13 +558,34 @@ void CActorCondition::load(IReader& input_packet) {
     }
 }
 
+void CActorCondition::save_thirst(NET_Packet& output_packet) const {
+    output_packet.w_float(m_fThirst);
+    output_packet.w_float(m_curr_medicine_influence.fThirst);
+}
+
+void CActorCondition::load_thirst(IReader& input_packet) {
+    // The thirst tail is absent in saves created before this feature.
+    m_fThirst = 1.0f;
+    m_curr_medicine_influence.fThirst = 0.0f;
+    if (input_packet.elapsed() >= 2 * sizeof(float)) {
+        m_fThirst = input_packet.r_float();
+        m_curr_medicine_influence.fThirst = input_packet.r_float();
+        clamp(m_fThirst, 0.0f, 1.0f);
+    }
+}
+
 void CActorCondition::reinit() {
     inherited::reinit();
     m_bLimping = false;
     m_fSatiety = 1.f;
+    m_fThirst = 1.f;
 }
 
 void CActorCondition::ChangeAlcohol(float value) { m_fAlcohol += value; }
+void CActorCondition::ChangeThirst(float value) {
+    m_fThirst += value;
+    clamp(m_fThirst, 0.0f, 1.0f);
+}
 void CActorCondition::ChangeSatiety(float value) {
     m_fSatiety += value;
     clamp(m_fSatiety, 0.0f, 1.0f);

@@ -99,6 +99,16 @@ public:
 
     virtual void OnFrame(void);
     virtual void OnRender(void);
+    virtual float ScopeLensFov() const { return 0.f; }
+    virtual u8 ScopeLensMode() const { return 0; }
+    virtual void ScopeLensGlass(float* params) const {
+        params[0] = 0.12f; // pupil shift
+        params[1] = 0.025f; // reflection strength
+        params[2] = 0.40f; // edge shadow strength
+        params[3] = 0.f; // white-key reticle texture
+    }
+    virtual bool ScopeLensHasDetector() const { return false; }
+    virtual u32 ScopeLensTargets(float*, u32) const { return 0; }
 
     virtual shared_str OpenDemoFile(LPCSTR demo_file_name) = 0;
     virtual void net_StartPlayDemo() = 0;

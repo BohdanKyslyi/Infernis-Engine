@@ -132,7 +132,9 @@ set(AI_AMONSTERS_HUMANS_STALKER_DECISIONMAKER_ACTIONS_DANGER_ACTIONS_BY_SOUND st
 set(CORE_CLIENT_OBJECTS_ITEMS__AND__WEAPONS_DEVICES_DETECTORS ui/ArtefactDetectorUI.h
                                                               CustomDetector.h
                                                               ui/ArtefactDetectorUI.cpp
-                                                              CustomDetector.cpp)
+                                                              CustomDetector.cpp
+                                                              Flashlight.h
+                                                              Flashlight.cpp)
 
 set(CORE_CLIENT_OBJECTS_ITEMS__AND__WEAPONS_WEAPONS_CUSTOM_WEAPON_AUTOMATIC WeaponMagazined.h
                                                                             WeaponMagazinedWGrenade.h
@@ -417,11 +419,13 @@ set(AI_ACOVER_SMART_COVER_STORAGE_DESCRIPTION smart_cover_description.h
                                               smart_cover_description.cpp)
 
 set(AI_ASCRIPT_SCRIPTCLASSES_UI_UIWINDOWS_WINDOWS ui/UIDialogWnd.h
+                                                  ui/UIHudEditor.h
                                                   ui/UIWeatherEditor.h
                                                   ui/UIFrameLineWnd.h
                                                   ui/UIFrameWindow.h
                                                   ui/UIWindow.h
                                                   ui/UIDialogWnd.cpp
+                                                  ui/UIHudEditor.cpp
                                                   ui/UIWeatherEditor.cpp
                                                   ui/UIFrameLineWnd.cpp
                                                   ui/UIFrameWindow.cpp
@@ -899,10 +903,12 @@ set(CORE_CLIENT_OBJECTS_ITEMS__AND__WEAPONS_FOOD__AND__DRUGS antirad.h
                                                              BottleItem.h
                                                              FoodItem.h
                                                              medkit.h
+                                                             RepairKit.h
                                                              antirad.cpp
                                                              BottleItem.cpp
                                                              FoodItem.cpp
-                                                             medkit.cpp)
+                                                             medkit.cpp
+                                                             RepairKit.cpp)
 
 set(CORE_CLIENT_OBJECTS_BASE_GAMEOBJECT_HOLDER holder_custom.h
                                                holder_custom.cpp

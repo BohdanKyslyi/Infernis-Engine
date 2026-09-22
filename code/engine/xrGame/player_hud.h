@@ -19,6 +19,7 @@ struct player_hud_motion {
     shared_str m_alias_name;
     shared_str m_base_name;
     shared_str m_additional_name;
+    float m_anim_speed = 1.f;
     xr_vector<motion_descr> m_animations;
 };
 
@@ -57,6 +58,9 @@ struct attachable_hud_item {
     player_hud* m_parent;
     CHudItem* m_parent_hud_item;
     bool m_controller_owned;
+    // Keep the opposite hand on its current motion when a controller-owned
+    // HUD item is animated alongside another attached item.
+    bool m_preserve_other_hand;
     shared_str m_sect_name;
     IKinematics* m_model;
     u16 m_attach_place_idx;
@@ -78,7 +82,8 @@ struct attachable_hud_item {
 
     attachable_hud_item(player_hud* pparent)
         : m_parent(pparent), m_parent_hud_item(NULL), m_controller_owned(false),
-          m_hud_fov(0.f), m_hud_fov_degrees(0.f), m_viewport_near(0.f),
+          m_preserve_other_hand(false), m_hud_fov(0.f), m_hud_fov_degrees(0.f),
+          m_viewport_near(0.f),
           m_upd_firedeps_frame(u32(-1)) {}
     ~attachable_hud_item();
     void load(const shared_str& sect_name);
@@ -104,6 +109,10 @@ struct attachable_hud_item {
     u32 m_upd_firedeps_frame;
     void tune(Ivector values);
     u32 anim_play(const shared_str& anim_name, BOOL bMixIn, const CMotionDef*& md, u8& rnd);
+    float last_anim_speed() const { return m_last_anim_speed; }
+
+private:
+    float m_last_anim_speed = 1.f;
 };
 
 class player_hud {
@@ -126,12 +135,14 @@ public:
     void render_hud();
     void render_item_ui();
     bool render_item_ui_query();
-    u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed);
+    u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed,
+                  bool preserve_other_hand = false);
     bool can_attach_controller_item(const shared_str& hud_section);
     bool has_hud_motion(const shared_str& hud_section, const shared_str& motion_name);
     bool has_controller_motion(const shared_str& motion_name);
     u32 play_controller_motion(const shared_str& motion_name, BOOL bMixIn = TRUE,
                                shared_str* played_motion_name = NULL);
+    float controller_motion_speed() const;
     bool controller_item_transform(Fmatrix& result, LPCSTR bone_name, const Fvector& offset,
                                    const Fvector& orientation);
     const shared_str& section_name() const { return m_sect_name; }
@@ -157,6 +168,7 @@ private:
     CActorLegsController* m_legs_controller;
 
     void UpdateHudProjection();
+    void ApplyControllerHandTransform(const Fmatrix& controller_trans);
 
     void update_inertion(Fmatrix& trans);
     void update_additional(Fmatrix& trans);
@@ -172,6 +184,8 @@ private:
 
     Fmatrix m_transform;
     IKinematicsAnimated* m_model;
+    MotionID m_controller_motion;
+    shared_str m_controller_motion_alias;
     xr_vector<u16> m_ancors;
     attachable_hud_item* m_attached_items[2];
     xr_vector<attachable_hud_item*> m_pool;

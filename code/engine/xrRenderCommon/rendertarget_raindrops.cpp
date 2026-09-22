@@ -4,7 +4,7 @@
 void CRenderTarget::PhaseRainDrops()
 {
 
-	static float rain_drops_factor = 0.f;
+	float& rain_drops_factor = RImplementation.RainDropsFactorForUpdate();
 
 	// Reset accumulated wetness whenever automatic control is toggled.
 	static bool saved_rain_drops_control = false;

@@ -285,6 +285,7 @@ private:
     shared_str m_mutant_loot_tip;
     shared_str m_mutant_loot_particle;
     shared_str m_mutant_loot_particle_bone;
+    Fvector m_mutant_loot_particle_offset;
     EMutantLootState m_mutant_loot_state;
     u16 m_mutant_loot_actor_id;
 

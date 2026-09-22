@@ -65,6 +65,7 @@
 #include "InventoryBox.h"
 #include "location_manager.h"
 #include "player_hud.h"
+#include "ui/UIHudEditor.h"
 #include "ItemUseController.h"
 #include "ai/monsters/basemonster/base_monster.h"
 
@@ -163,6 +164,8 @@ CActor::CActor() : CEntityAlive(), current_ik_cam_shift(0) {
     m_pVehicleWeLookingAt = nullptr;
     m_pObjectWeLookingAt = nullptr;
     m_bPickupMode = false;
+    m_bPickupPressed = false;
+    m_bPickupKeyDown = false;
 
     pStatGraph = nullptr;
 
@@ -748,6 +751,9 @@ float CActor::currentFOV() {
 
     if (eacFirstEye == cam_active && pWeapon && pWeapon->IsZoomed() &&
         (!pWeapon->ZoomTexture() || (!pWeapon->IsRotatingToZoom() && pWeapon->ZoomTexture()))) {
+        // Only the optic magnifies the world; the first-person camera stays at its normal FOV.
+        if (pWeapon->Is3DScopeEnabled())
+            return g_fov;
         return pWeapon->GetZoomFactor() * (0.75f);
     } else {
         return g_fov;
@@ -758,17 +764,25 @@ void CActor::UpdateCL() {
     if (m_item_use)
         m_item_use->Update(Device.fTimeDelta);
 
+    bool pickup_key_down = false;
     if (g_Alive() && Level().CurrentViewEntity() == this) {
         if (CurrentGameUI() && nullptr == CurrentGameUI()->TopInputReceiver()) {
             int dik = get_action_dik(kUSE, 0);
-            if (dik && pInput->iGetAsyncKeyState(dik))
+            if (dik && pInput->iGetAsyncKeyState(dik)) {
                 m_bPickupMode = true;
+                pickup_key_down = true;
+            }
 
             dik = get_action_dik(kUSE, 1);
-            if (dik && pInput->iGetAsyncKeyState(dik))
+            if (dik && pInput->iGetAsyncKeyState(dik)) {
                 m_bPickupMode = true;
+                pickup_key_down = true;
+            }
         }
     }
+
+    m_bPickupPressed = pickup_key_down && !m_bPickupKeyDown;
+    m_bPickupKeyDown = pickup_key_down;
 
     UpdateInventoryOwner(Device.dwTimeDelta);
 	
@@ -858,7 +872,11 @@ void CActor::UpdateCL() {
 
             psHUD_Flags.set(HUD_WEAPON_RT, B);
 
-            B = B && pWeapon->show_crosshair();
+            bool editor_crosshair_visible = false;
+            if (HudEditorCrosshairOverride(pWeapon, editor_crosshair_visible))
+                B = B && editor_crosshair_visible;
+            else
+                B = B && pWeapon->show_crosshair();
 
             psHUD_Flags.set(HUD_CROSSHAIR_RT2, B);
 
@@ -898,6 +916,7 @@ void CActor::UpdateCL() {
         g_player_hud->update(trans);
 
     m_bPickupMode = false;
+    m_bPickupPressed = false;
 }
 
 float NET_Jump = 0;
@@ -1401,6 +1420,7 @@ void CActor::UpdateArtefactsOnBeltAndOutfit() {
             conditions().ChangeHealth(artefact->m_fHealthRestoreSpeed * f_update_time);
             conditions().ChangePower(artefact->m_fPowerRestoreSpeed * f_update_time);
             conditions().ChangeSatiety(artefact->m_fSatietyRestoreSpeed * f_update_time);
+            conditions().ChangeThirst(artefact->m_fThirstRestoreSpeed * f_update_time);
             
             if (artefact->m_fRadiationRestoreSpeed > 0.0f) {
                 float val = artefact->m_fRadiationRestoreSpeed - conditions().GetBoostRadiationImmunity();
@@ -1417,6 +1437,7 @@ void CActor::UpdateArtefactsOnBeltAndOutfit() {
         conditions().ChangeHealth(outfit->m_fHealthRestoreSpeed * f_update_time);
         conditions().ChangePower(outfit->m_fPowerRestoreSpeed * f_update_time);
         conditions().ChangeSatiety(outfit->m_fSatietyRestoreSpeed * f_update_time);
+        conditions().ChangeThirst(outfit->m_fThirstRestoreSpeed * f_update_time);
         conditions().ChangeRadiation(outfit->m_fRadiationRestoreSpeed * f_update_time);
     } else {
         if (CHelmet* pHelmet = smart_cast<CHelmet*>(inventory().ItemFromSlot(HELMET_SLOT)); !pHelmet) {
@@ -1582,6 +1603,16 @@ float CActor::GetRestoreSpeed(ALife::EConditionRestoreType const& type) {
         if (CCustomOutfit* outfit = GetOutfit()) {
             res += outfit->m_fSatietyRestoreSpeed;
         }
+        break;
+    }
+    case ALife::eThirstRestoreSpeed: {
+        res = -conditions().V_Thirst();
+        for (auto* item : inventory().m_belt) {
+            if (CArtefact* artefact = smart_cast<CArtefact*>(item))
+                res += artefact->m_fThirstRestoreSpeed;
+        }
+        if (CCustomOutfit* outfit = GetOutfit())
+            res += outfit->m_fThirstRestoreSpeed;
         break;
     }
     case ALife::ePowerRestoreSpeed: {

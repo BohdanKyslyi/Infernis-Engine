@@ -6,6 +6,8 @@ class CActor;
 class CInventoryItem;
 class CParticlesObject;
 class CCustomMonster;
+class CWeaponKnife;
+class CTorch;
 
 class CItemUseController {
 public:
@@ -16,6 +18,17 @@ public:
     // Starts native harvesting for a configured mutant corpse. If the global
     // animation is disabled or invalid, the loot is collected immediately.
     bool StartMutantLoot(CCustomMonster* monster);
+    bool StartQuickKnife(CWeaponKnife* knife);
+    // Delays the real ownership event until a left-hand HUD animation reaches
+    // its configured action_timing. The active weapon stays attached.
+    bool StartPickup(CInventoryItem* item);
+    // Cleans the accumulated screen raindrops at the configured point of an
+    // optional left-hand HUD animation. The active weapon stays attached.
+    bool StartRainWipe();
+    // Delays a headlamp or night-vision toggle until the left hand reaches the
+    // configured action_timing. Returning false keeps the vanilla immediate
+    // toggle available as a fallback.
+    bool StartEquipmentToggle(CTorch* torch, bool night_vision);
 
     // Persistent controller-owned HUD lifecycle used by interfaces such as
     // PDA and backpack. Connecting those interfaces is intentionally kept
@@ -51,6 +64,10 @@ private:
         eControllerModeHudAnimation,
         eControllerModeHudAnimationOneShot,
         eControllerModeMutantLoot,
+        eControllerModeQuickKnife,
+        eControllerModePickup,
+        eControllerModeRainWipe,
+        eControllerModeEquipmentToggle,
     };
 
     enum EHudAnimationPhase {
@@ -70,6 +87,8 @@ private:
     bool ResolveConsumableAnimation(CInventoryItem* item, shared_str& item_section,
                                     shared_str& use_section, shared_str& state_section,
                                     shared_str& hud_section) const;
+    bool UsesExoItemAnimations() const;
+    u32 ResolveConsumableActionTime() const;
 
     bool CanStartAnimation();
     void BeginAnimation();
@@ -80,14 +99,25 @@ private:
     void BeginHudAnimationHide();
     void UpdateHudAnimation();
     void UpdateMutantLootAnimation();
+    void UpdateQuickKnifeAnimation();
+    void UpdatePickupAnimation();
+    void UpdateRainWipeAnimation();
+    void UpdateEquipmentToggleAnimation();
 
     CCustomMonster* MutantLootTarget() const;
     bool ApplyMutantLootEffect();
     void ApplyMutantLootParticle();
     void ReleaseMutantLootReservation();
     bool CompleteMutantLootImmediately(CCustomMonster* monster);
+    bool ApplyQuickKnifeEffect();
+    bool ApplyPickupEffect();
+    bool ApplyRainWipeEffect();
+    bool ApplyEquipmentToggleEffect();
+    bool CanStartLeftHandAnimation();
+    void RestoreLeftHandDetector(u16 detector_id, bool restore_detector);
+    void PrepareLeftHandDetector();
 
-    void LockActor();
+    void LockActor(bool hide_weapon = true);
     void UnlockActor();
 
     void LoadControllerEffects();
@@ -140,6 +170,13 @@ private:
     bool m_hud_animation_hide_requested;
     bool m_hud_animation_allow_inventory;
     u16 m_mutant_loot_target_id;
+    u16 m_quick_knife_id;
+    u16 m_pickup_target_id;
+    u16 m_equipment_toggle_target_id;
+    bool m_equipment_toggle_night_vision;
+    bool m_equipment_toggle_state;
+    u16 m_left_hand_detector_id;
+    bool m_restore_left_hand_detector;
     u32 m_mutant_loot_particle_time;
     bool m_mutant_loot_particle_enabled;
     bool m_mutant_loot_particle_started;
@@ -169,6 +206,7 @@ private:
     //
     bool m_waiting_for_weapon_hide;
     bool m_actor_locked;
+    bool m_weapon_hide_locked;
 
     //
     // Не хочемо випадково розблокувати inventory,

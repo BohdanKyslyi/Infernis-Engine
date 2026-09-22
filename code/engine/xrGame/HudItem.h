@@ -71,6 +71,8 @@ protected:
         u32 m_dwMotionEndTm;
         u32 m_startedMotionState;
         u8 m_started_rnd_anim_idx;
+        float m_current_motion_speed;
+        u32 m_motion_play_frame;
         bool m_bStopAtEndAnimIsRunning;
     };
 

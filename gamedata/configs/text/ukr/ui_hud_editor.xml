@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<string_table>
+    <string id="ui_hud_editor_title"><text>РЕДАКТОР HUD-ПОЛОЖЕННЯ ЗБРОЇ</text></string>
+    <string id="ui_hud_editor_weapon"><text>Зброя</text></string>
+    <string id="ui_hud_editor_section"><text>HUD-секція</text></string>
+    <string id="ui_hud_editor_profile"><text>Профіль</text></string>
+    <string id="ui_hud_editor_profile_standard"><text>Звичайний (4:3)</text></string>
+    <string id="ui_hud_editor_profile_wide"><text>Широкий (16:9)</text></string>
+    <string id="ui_hud_editor_force_aim"><text>Примусове прицілювання</text></string>
+    <string id="ui_hud_editor_hide_crosshair"><text>Сховати сітку</text></string>
+    <string id="ui_hud_editor_learning_mode"><text>Режим навчання</text></string>
+    <string id="ui_hud_editor_preview"><text>ПРЕВ’Ю [F7]</text></string>
+    <string id="ui_hud_editor_fire"><text>ПОСТРІЛ [F8]</text></string>
+    <string id="ui_hud_editor_save"><text>ЗБЕРЕГТИ [F6]</text></string>
+    <string id="ui_hud_editor_revert"><text>ВІДКАТ [F5]</text></string>
+    <string id="ui_hud_editor_close"><text>ЗАКРИТИ</text></string>
+    <string id="ui_hud_editor_footer"><text>F8: постріл | Enter: застосувати число | hud_editor: повернутися з прев’ю</text></string>
+
+    <string id="ui_hud_editor_status_ready"><text>Зміни застосовуються одразу. Центр екрана залишено вільним для прицільної сітки.</text></string>
+    <string id="ui_hud_editor_status_no_weapon"><text>Дістаньте зброю від першої особи — редактор автоматично зчитає її HUD-секцію.</text></string>
+    <string id="ui_hud_editor_status_profile_standard"><text>Редагується звичайний профіль: параметри без суфікса _16x9.</text></string>
+    <string id="ui_hud_editor_status_profile_wide"><text>Редагується широкоформатний профіль: параметри із суфіксом _16x9.</text></string>
+    <string id="ui_hud_editor_status_saved"><text>Збережено в %s. Початкову версію залишено поруч як .hud_editor.bak.</text></string>
+    <string id="ui_hud_editor_status_save_error"><text>Не вдалося знайти або оновити вихідний .ltx HUD-секції. Перевірте журнал гри.</text></string>
+    <string id="ui_hud_editor_status_reverted"><text>Незбережені зміни повернуто до початкових значень.</text></string>
+    <string id="ui_hud_editor_status_preview"><text>Режим прев’ю. Введіть hud_editor у консолі, щоб повернути вікно без втрати змін.</text></string>
+    <string id="ui_hud_editor_status_fired"><text>Виконано одиночне натискання кнопки вогню.</text></string>
+    <string id="ui_hud_editor_status_invalid_number"><text>Некоректне число. Використовуйте крапку як десятковий роздільник.</text></string>
+    <string id="ui_hud_editor_status_number_applied"><text>Точне числове значення застосовано.</text></string>
+
+    <string id="ui_hud_editor_hint_learning_mode"><text>Режим навчання показує пояснення елементів редактора. Ця підказка доступна завжди; підказки інших полів з’являються лише після ввімкнення чекбокса.</text></string>
+    <string id="ui_hud_editor_hint_title"><text>Внутрішньоігровий редактор положення рук і зміщення зброї під час прицілювання.</text></string>
+    <string id="ui_hud_editor_hint_weapon"><text>Секція активної зброї в руках актора. Після зміни зброї редактор підхопить нову автоматично.</text></string>
+    <string id="ui_hud_editor_hint_section"><text>HUD-секція, у якій зберігаються положення рук, орієнтація та прицільні зміщення.</text></string>
+    <string id="ui_hud_editor_hint_profile"><text>Перемикає звичайні параметри та їх варіанти із суфіксом _16x9. Обраний профіль одразу показується в грі.</text></string>
+    <string id="ui_hud_editor_hint_force_aim"><text>Утримує зброю в режимі прицілювання, поки курсор використовується для роботи з редактором.</text></string>
+    <string id="ui_hud_editor_hint_hide_crosshair"><text>Значення zoom_hide_crosshair. Вимкніть, щоб бачити сітку та точно сумістити з нею механічний приціл.</text></string>
+    <string id="ui_hud_editor_hint_hands_position"><text>Положення рук і зброї: X — ліворуч/праворуч, Y — вниз/угору, Z — ближче/далі від камери.</text></string>
+    <string id="ui_hud_editor_hint_hands_orientation"><text>Поворот базового HUD-положення рук по осях X, Y і Z. Значення задаються в градусах.</text></string>
+    <string id="ui_hud_editor_hint_aim_position"><text>Лінійне зміщення зброї під час прицілювання. Налаштуйте його так, щоб мушка або оптика збігалася з центром екрана.</text></string>
+    <string id="ui_hud_editor_hint_aim_rotation"><text>Кутове зміщення зброї під час прицілювання по осях X, Y і Z. У рушії ці значення використовуються як радіани.</text></string>
+    <string id="ui_hud_editor_hint_preview"><text>Приховує інтерфейс, але зберігає всі поточні runtime-значення. Команда hud_editor повертає той самий сеанс.</text></string>
+    <string id="ui_hud_editor_hint_fire"><text>Імітує коротке натискання кнопки вогню, щоб перевірити віддачу, спалах, гільзу й повернення зброї до прицілу.</text></string>
+    <string id="ui_hud_editor_hint_save"><text>Записує обидва профілі та zoom_hide_crosshair у вихідний .ltx. Перед першим записом створюється резервна копія.</text></string>
+    <string id="ui_hud_editor_hint_revert"><text>Скасовує незбережені зміни й повертає значення, зчитані на початку поточного сеансу.</text></string>
+    <string id="ui_hud_editor_hint_close"><text>Завершує сеанс редактора, вимикає примусове прицілювання та повертає профіль формату поточного екрана.</text></string>
+    <string id="ui_hud_editor_hint_status"><text>Рядок стану показує результат введення числа, пострілу, відкату або збереження конфігурації.</text></string>
+</string_table>

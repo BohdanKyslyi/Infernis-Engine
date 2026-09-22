@@ -106,6 +106,7 @@
 #include "fooditem.h"
 #include "bottleitem.h"
 #include "explosiveitem.h"
+#include "RepairKit.h"
 
 #include "infodocument.h"
 #include "attachable_item.h"
@@ -138,6 +139,7 @@
 #include "simpledetector.h"
 #include "elitedetector.h"
 #include "advanceddetector.h"
+#include "Flashlight.h"
 #include "zonecampfire.h"
 
 #include "torch.h"
@@ -291,6 +293,7 @@ void CObjectFactory::register_classes() {
     ADD(CFoodItem, CSE_ALifeItem, CLSID_IITEM_FOOD, "obj_food");
     ADD(CBottleItem, CSE_ALifeItem, CLSID_IITEM_BOTTLE, "obj_bottle");
     ADD(CExplosiveItem, CSE_ALifeItemExplosive, CLSID_IITEM_EXPLOSIVE, "obj_explosive");
+    ADD(CRepairKit, CSE_ALifeItem, CLSID_IITEM_DREPKIT, "obj_repair_kit");
 
     // Info Document
     ADD(CInfoDocument, CSE_ALifeItemDocument, CLSID_IITEM_DOCUMENT, "obj_document");
@@ -341,6 +344,7 @@ void CObjectFactory::register_classes() {
     ADD(CEliteDetector, CSE_ALifeItemDetector, CLSID_DETECTOR_ELITE, "device_detector_elite");
     ADD(CScientificDetector, CSE_ALifeItemDetector, CLSID_DETECTOR_SCIENTIFIC,
         "device_detector_scientific");
+    ADD(CFlashlight, CSE_ALifeItemDetector, CLSID_DEVICE_FLASHLIGHT, "device_flashlight");
 
     // Devices
     ADD(CTorch, CSE_ALifeItemTorch, CLSID_DEVICE_TORCH, "device_torch");

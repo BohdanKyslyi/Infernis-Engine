@@ -114,6 +114,7 @@ enum EConditionRestoreType {
     ePowerRestoreSpeed,
     eBleedingRestoreSpeed,
     eRadiationRestoreSpeed,
+    eThirstRestoreSpeed,
     eRestoreTypeMax,
 };
 

@@ -50,6 +50,7 @@ public:
     float m_fHealthRestoreSpeed;
     float m_fRadiationRestoreSpeed;
     float m_fSatietyRestoreSpeed;
+    float m_fThirstRestoreSpeed;
     float m_fPowerRestoreSpeed;
     float m_fBleedingRestoreSpeed;
 
@@ -58,6 +59,11 @@ public:
 
     bool bIsHelmetAvaliable;
     bool bIsBackpackAvaliable;
+    bool bIsExoskeleton;
+    bool bIsExoskeletonPrototype;
+    bool bUseExoItemAnimations;
+
+    bool UseExoItemAnimations() const { return bUseExoItemAnimations; }
 
     virtual u32 ef_equipment_type() const;
     virtual BOOL BonePassBullet(int boneID);

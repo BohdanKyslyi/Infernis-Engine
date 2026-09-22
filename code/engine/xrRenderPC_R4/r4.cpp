@@ -95,6 +95,58 @@ static class cl_ie_pbr_hud_projection_params : public R_constant_setup {
     }
 } binder_ie_pbr_hud_projection_params;
 
+static class cl_scope_lens_state : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        const float active = Device.scopeLensActive && !Device.scopeLensPass ? 1.f : 0.f;
+        const float mode = active && g_pGameLevel ? (float)g_pGameLevel->ScopeLensMode() : 0.f;
+        const float detector = active && g_pGameLevel && g_pGameLevel->ScopeLensHasDetector() ? 1.f : 0.f;
+        static int last_logged_mode = -1;
+        if (active && int(mode) != last_logged_mode) {
+            Msg("* ScopeLensShader: mode=%d detector=%d", int(mode), int(detector));
+            last_logged_mode = int(mode);
+        }
+        RCache.set_c(C, active, mode, detector, 0.f);
+    }
+} binder_scope_lens_state;
+
+static class cl_scope_lens_glass : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[4] = { 0.12f, 0.025f, 0.40f, 0.f };
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->ScopeLensGlass(params);
+        RCache.set_c(C, params[0], params[1], params[2], params[3]);
+    }
+} binder_scope_lens_glass;
+
+static class cl_scope_lens_targets : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float targets[8 * 4];
+        for (u32 i = 0; i < 8 * 4; ++i)
+            targets[i] = -1.f;
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel &&
+            g_pGameLevel->ScopeLensHasDetector())
+            g_pGameLevel->ScopeLensTargets(targets, 8);
+        for (u32 i = 0; i < 8; ++i)
+            RCache.set_ca(C, i, targets[i * 4 + 0], targets[i * 4 + 1],
+                targets[i * 4 + 2], targets[i * 4 + 3]);
+    }
+} binder_scope_lens_targets;
+
+static class cl_scope_lens_size : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float chromatic_pixels = 0.f;
+        if (Device.scopeLensActive && !Device.scopeLensPass && pSettings &&
+            pSettings->section_exist("weapon_scopes")) {
+            chromatic_pixels = 0.8f;
+            if (pSettings->line_exist("weapon_scopes", "scope_lens_chromatic_aberration"))
+                chromatic_pixels = pSettings->r_float("weapon_scopes", "scope_lens_chromatic_aberration");
+            clamp(chromatic_pixels, 0.f, 10.f);
+        }
+        RCache.set_c(C, (float)Device.dwWidth, (float)Device.dwHeight,
+                     chromatic_pixels, 0.f);
+    }
+} binder_scope_lens_size;
+
 static class cl_water_intensity : public R_constant_setup {
     virtual void setup(R_constant* C) {
         CEnvDescriptor& E = *g_pGamePersistent->Environment().CurrentEnv;
@@ -399,6 +451,14 @@ void CRender::create() {
         "pos_decompression_params2", &binder_pos_decompress_params2);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
         "ie_pbr_hud_projection_params", &binder_ie_pbr_hud_projection_params);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "scope_lens_state", &binder_scope_lens_state);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "scope_lens_glass", &binder_scope_lens_glass);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "scope_lens_size", &binder_scope_lens_size);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup(
+        "scope_lens_targets", &binder_scope_lens_targets);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("triLOD", &binder_LOD);
 
     c_lmaterial = "L_material";
@@ -1483,6 +1543,17 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     }
 
     HRESULT _result = E_FAIL;
+    // DX10 appends skinning/MSAA indices (e.g. model_scope_lense_0).
+    // Both stages must be refreshed when their source or vertex layout changes.
+    const LPCSTR lens_shader_name = "model_scope_lense";
+    const u32 lens_shader_name_len = xr_strlen(lens_shader_name);
+    const bool scope_lens_shader = ('p' == pTarget[0] || 'v' == pTarget[0]) &&
+        0 == strncmp(name, lens_shader_name, lens_shader_name_len) &&
+        (name[lens_shader_name_len] == 0 ||
+         (name[lens_shader_name_len] == '_' &&
+          name[lens_shader_name_len + 1] >= '0' && name[lens_shader_name_len + 1] <= '7' &&
+          name[lens_shader_name_len + 2] == 0));
+    bool loaded_from_cache = false;
 
     string_path folder_name, folder;
     xr_strcpy(folder, "r3\\objects\\r4\\");
@@ -1508,6 +1579,14 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         xr_strcat(file, extension);
         xr_strcat(file, "\\");
         xr_strcat(file, sh_name);
+        // The lens shaders are updated alongside gameplay features. Their old
+        // cached bytecode can be valid while ignoring new scope_lens_state modes.
+        // Keep its cache key tied to the source without invalidating other shaders.
+        if (scope_lens_shader) {
+            string16 source_crc;
+            xr_sprintf(source_crc, "_%08x", crc32(pSrcData, SrcDataLen));
+            xr_strcat(file, source_crc);
+        }
         FS.update_path(file_name, "$app_data_root$", file);
     } else {
         xr_strcpy(file_name, folder_name);
@@ -1525,6 +1604,7 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
             if (real_crc == crc) {
                 _result = create_shader(pTarget, (DWORD*)file->pointer(), file->elapsed(),
                                         file_name, result, o.disasm);
+                loaded_from_cache = SUCCEEDED(_result);
             }
         }
         file->close();
@@ -1563,6 +1643,10 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
                 Msg("Can't compile shader hr=0x%08x", _result);
         }
     }
+
+    if (scope_lens_shader && SUCCEEDED(_result))
+        Msg("* ScopeLens%s: %s source_crc=%08x file=%s", pTarget[0] == 'v' ? "VS" : "PS",
+            loaded_from_cache ? "cached" : "compiled", crc32(pSrcData, SrcDataLen), file_name);
 
     return _result;
 }

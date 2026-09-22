@@ -160,6 +160,7 @@
 #define CLSID_DETECTOR_ADVANCED MK_CLSID('D', '_', 'A', 'D', 'V', 'A', 'N', 'C')
 #define CLSID_DETECTOR_ELITE MK_CLSID('D', '_', 'E', 'L', 'I', 'T', 'E', ' ')
 #define CLSID_DETECTOR_SCIENTIFIC MK_CLSID('D', '_', 'S', 'C', 'I', 'E', 'N', 'T')
+#define CLSID_DEVICE_FLASHLIGHT MK_CLSID('D', '_', 'F', 'L', 'A', 'L', 'I', 'T')
 
 // PDA
 #define CLSID_DEVICE_PDA MK_CLSID('D', '_', 'P', 'D', 'A', ' ', ' ', ' ')
@@ -178,6 +179,7 @@
 #define CLSID_IITEM_BOTTLE MK_CLSID('I', 'I', '_', 'B', 'O', 'T', 'T', 'L')
 #define CLSID_IITEM_ANTIRAD MK_CLSID('I', 'I', '_', 'A', 'N', 'T', 'I', 'R')
 #define CLSID_IITEM_EXPLOSIVE MK_CLSID('I', 'I', '_', 'E', 'X', 'P', 'L', 'O')
+#define CLSID_IITEM_DREPKIT MK_CLSID('D', '_', 'R', 'E', 'P', 'K', 'I', 'T')
 
 // Info Document
 #define CLSID_IITEM_DOCUMENT MK_CLSID('I', 'I', '_', 'D', 'O', 'C', ' ', ' ')

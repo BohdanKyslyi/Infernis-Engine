@@ -84,6 +84,10 @@ public:
     float fFOV;
     float fASPECT;
 
+    // The lens pass is a render-only pass; simulation still advances once per frame.
+    bool scopeLensPass = false;
+    bool scopeLensActive = false;
+
 protected:
     u32 Timer_MM_Delta;
     CTimer_paused Timer;

@@ -18,6 +18,8 @@ CHudItem::CHudItem() {
     m_bStopAtEndAnimIsRunning = false;
     m_current_motion_def = NULL;
     m_started_rnd_anim_idx = u8(-1);
+    m_current_motion_speed = 1.f;
+    m_motion_play_frame = u32(-1);
 }
 
 DLL_Pure* CHudItem::_construct() {
@@ -40,7 +42,9 @@ void CHudItem::Load(LPCSTR section) {
 }
 
 void CHudItem::PlaySound(LPCSTR alias, const Fvector& position) {
-    m_sounds.PlaySound(alias, position, object().H_Root(), !!GetHUDmode());
+    const float frequency = m_motion_play_frame == Device.dwFrame ? m_current_motion_speed : 1.f;
+    m_sounds.PlaySound(alias, position, object().H_Root(), !!GetHUDmode(), false, u8(-1),
+                       frequency);
 }
 
 void CHudItem::renderable_Render() {
@@ -101,7 +105,7 @@ void CHudItem::OnStateSwitch(u32 S) {
         if (HudItemData()) {
             Fvector P = HudItemData()->m_item_transform.c;
             m_sounds.PlaySound("sndBore", P, object().H_Root(), !!GetHUDmode(), false,
-                               m_started_rnd_anim_idx);
+                               m_started_rnd_anim_idx, m_current_motion_speed);
         }
 
         break;
@@ -144,9 +148,11 @@ void CHudItem::UpdateCL() {
             const xr_vector<motion_marks>& marks = m_current_motion_def->marks;
             if (!marks.empty()) {
                 float motion_prev_time =
-                    ((float)m_dwMotionCurrTm - (float)m_dwMotionStartTm) / 1000.0f;
+                    ((float)m_dwMotionCurrTm - (float)m_dwMotionStartTm) / 1000.0f *
+                    m_current_motion_speed;
                 float motion_curr_time =
-                    ((float)Device.dwTimeGlobal - (float)m_dwMotionStartTm) / 1000.0f;
+                    ((float)Device.dwTimeGlobal - (float)m_dwMotionStartTm) / 1000.0f *
+                    m_current_motion_speed;
 
                 xr_vector<motion_marks>::const_iterator it = marks.begin();
                 xr_vector<motion_marks>::const_iterator it_e = marks.end();
@@ -250,10 +256,16 @@ u32 CHudItem::PlayHUDMotion_noCB(const shared_str& motion_name, BOOL bMixIn) {
             Device.dwFrame);
     }
     if (HudItemData()) {
-        return HudItemData()->anim_play(motion_name, bMixIn, m_current_motion_def,
-                                        m_started_rnd_anim_idx);
+        const u32 duration = HudItemData()->anim_play(motion_name, bMixIn, m_current_motion_def,
+                                                      m_started_rnd_anim_idx);
+        m_current_motion_speed = HudItemData()->last_anim_speed();
+        m_motion_play_frame = Device.dwFrame;
+        m_sounds.SetLastPlayedSoundFrequency(m_current_motion_speed);
+        return duration;
     } else {
         m_started_rnd_anim_idx = 0;
+        m_current_motion_speed = 1.f;
+        m_motion_play_frame = Device.dwFrame;
         return g_player_hud->motion_length(motion_name, HudSection(), m_current_motion_def);
     }
 }
