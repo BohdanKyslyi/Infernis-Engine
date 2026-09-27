@@ -22,15 +22,24 @@ function opt_sound:InitControls(x, y, xml, handler)
 	xml:InitStatic("tab_sound:cap_check_dynamic_music",	self)
 
 	xml:InitCheck("tab_sound:check_eax",				self)
+    xml:InitStatic("tab_sound:cap_check_acoustics", self)
+    xml:InitCheck("tab_sound:check_acoustics", self)
     xml:InitStatic("tab_sound:cap_check_hrtf", self)
     self.check_hrtf = xml:InitCheck("tab_sound:check_hrtf", self)
     xml:InitStatic("tab_sound:cap_snd_output", self)
     self.list_output = xml:InitComboBox("tab_sound:list_snd_output", self)
     handler:Register(self.list_output, "sound_output")
     handler:AddCallback("sound_output", ui_events.LIST_ITEM_SELECT, self.OnOutputChanged, self)
-    xml:InitStatic("tab_sound:audio_hint", self)
-    self.audio_status = xml:InitStatic("tab_sound:audio_status", self)
 	xml:InitCheck("tab_sound:check_dynamic_music",		self)
+    xml:InitStatic("tab_sound:cap_text_language", self)
+    xml:InitStatic("tab_sound:cap_voice_language", self)
+    self.text_language = xml:InitComboBox("tab_sound:list_text_language", self)
+    self.voice_language = xml:InitComboBox("tab_sound:list_voice_language", self)
+    handler:Register(self.text_language, "text_language_select")
+    handler:Register(self.voice_language, "voice_language_select")
+    handler:AddCallback("text_language_select", ui_events.LIST_ITEM_SELECT, self.OnTextLanguage, self)
+    handler:AddCallback("voice_language_select", ui_events.LIST_ITEM_SELECT, self.OnVoiceLanguage, self)
+
 
 
 	xml:InitTrackBar				("tab_sound:track_musicvolume",	self)
@@ -47,8 +56,61 @@ function opt_sound:OnOutputChanged()
     self.check_hrtf:Enable(self.list_output:CurrentID() < 2)
 end
 
-function opt_sound:RefreshStatus()
+function opt_sound:RefreshOutputControls()
     self:OnOutputChanged()
-    local status = get_console():get_string("snd_status") or ""
-    self.audio_status:TextControl():SetText(status)
+end
+
+-- Discover packs from their files: archived packs may not have folder entries
+-- in the filesystem index. Accept partial packs, but ignore unrelated folders.
+local function language_folders(alias, prefix, extension)
+    local fs = getFS()
+    local result = {}
+    local seen = {}
+    local list = fs:file_list_open_ex(alias, FS.FS_ListFiles, prefix .. "*." .. extension)
+    for i = 0, list:Size() - 1 do
+        local filename = string.lower(list:GetAt(i):NameShort())
+        local code = string.match(filename, "^" .. prefix .. "([a-z0-9_]+)\\.+%." .. extension .. "$")
+        if code and code ~= "map_desc" and not seen[code] then
+            seen[code] = true
+            table.insert(result, code)
+        end
+    end
+    table.sort(result)
+    return result
+end
+
+function opt_sound:RefreshLanguages()
+    local text = get_console():get_string("text_language")
+    local voice = get_console():get_string("snd_language") or ""
+    self.text_language:ClearList()
+    local texts = language_folders("$game_config$", "text\\", "xml")
+    for i, code in ipairs(texts) do
+        self.text_language:AddItem(code, i)
+    end
+    self.text_language:SetText(text)
+
+    self.voice_language:ClearList()
+    self.voice_language:AddItem(game.translate_string("ui_mm_voice_default"), 0)
+    self.voice_codes = language_folders("$game_sounds$", "localization\\", "ogg")
+    for i, code in ipairs(self.voice_codes) do
+        self.voice_language:AddItem(code, i)
+    end
+    self.voice_language:SetText(voice == "default" and game.translate_string("ui_mm_voice_default") or voice)
+end
+
+function opt_sound:OnTextLanguage()
+    local code = self.text_language:GetText()
+    if string.match(code, "^[a-z0-9_]+$") then
+        get_console():execute("text_language " .. code)
+        -- The default voice label is part of the translated interface.
+        self:RefreshLanguages()
+    end
+end
+
+function opt_sound:OnVoiceLanguage()
+    local id = self.voice_language:CurrentID()
+    local code = id == 0 and "default" or self.voice_codes[id]
+    if code then
+        get_console():execute("snd_language " .. code)
+    end
 end

@@ -13,6 +13,7 @@ public:
 
     void SetText(LPCSTR text);
     void SetTextST(LPCSTR text);
+    static void RefreshLocalizedTexts();
     LPCSTR GetText();
     //--
     void SetTextColor(u32 color);
@@ -60,6 +61,7 @@ protected:
     LinesVector m_lines; // parsed text
 
     shared_str m_text;
+    shared_str m_translation_id;
 
     ETextAlignment m_eTextAlign;
     EVTextAlignment m_eVTextAlign;

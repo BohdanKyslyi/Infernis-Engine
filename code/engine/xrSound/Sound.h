@@ -32,10 +32,19 @@ XRSOUND_API extern float psSoundVMusic;
 XRSOUND_API extern float psSoundRolloff;
 XRSOUND_API extern float psSoundOcclusionScale;
 XRSOUND_API extern Flags32 psSoundFlags;
+XRSOUND_API extern char snd_language[32];
+XRSOUND_API bool snd_localized_exists(LPCSTR name);
 XRSOUND_API extern int psSoundTargets;
 XRSOUND_API extern int psSoundCacheSizeMB;
-// ВИДАЛЕНО: extern xr_token* snd_devices_token;
-// ВИДАЛЕНО: extern u32 snd_device_id;
+XRSOUND_API extern int psSoundAcoustics;
+
+// Snapshot of moving obstacles; the sound thread does not dereference objects.
+
+struct SAcousticObstacle {
+    Fvector position;
+    float radius;
+    const CObject* object;
+};
 
 // Flags
 enum {
@@ -67,6 +76,8 @@ public:
     CObject* g_object; 
     CSound_UserDataPtr g_userdata;
     shared_str fn_attached[2];
+    shared_str requested_name;
+    shared_str loaded_language;
 
     u32 dwBytesTotal;
     float fTimeTotal;
@@ -102,6 +113,7 @@ public:
     IC void play_at_pos(CObject* O, const Fvector& pos, u32 flags = 0, float delay = 0.f);
     
     // ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ
+	
     IC void play_with_delay(CObject* O, const Fvector& pos, u32 flags = 0);
 
     IC void play_no_feedback(CObject* O, u32 flags = 0, float delay = 0.f, Fvector* pos = 0, float* vol = 0, float* freq = 0, Fvector2* range = 0);
@@ -215,6 +227,7 @@ public:
     virtual void play_at_pos(ref_sound& S, CObject* O, const Fvector& pos, u32 flags = 0, float delay = 0.f) = 0;
     
     // ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ
+	
     virtual void play_with_delay(ref_sound& S, CObject* O, const Fvector& pos, u32 flags = 0) = 0;
 
     virtual void play_no_feedback(ref_sound& S, CObject* O, u32 flags = 0, float delay = 0.f, Fvector* pos = 0, float* vol = 0, float* freq = 0, Fvector2* range = 0) = 0;
@@ -223,6 +236,7 @@ public:
     virtual void set_geometry_env(IReader* I) = 0;
     virtual void set_geometry_som(IReader* I) = 0;
     virtual void set_geometry_occ(CDB::MODEL* M) = 0;
+    virtual void set_acoustic_obstacles(const SAcousticObstacle* objects, u32 count) = 0;
     virtual void set_handler(sound_event* E) = 0;
 
     virtual void update(const Fvector& P, const Fvector& D, const Fvector& N) = 0;
@@ -234,6 +248,7 @@ public:
     virtual const Fvector& listener_position() = 0;
 	
 	// NOIR ENGINE: Cinematic EFX Control
+	
     virtual void set_efx_override(bool bEnable, float room = -10000.0f, float room_hf = 0.0f, float decay_time = 1.0f, float decay_hf_ratio = 0.5f, float reflections_delay = 0.02f, float reverb_delay = 0.04f, float room_rolloff_factor = 0.0f, float diffusion = 1.0f, float reflections = -2602.0f, float reverb = 200.0f, float air_absorption_hf = -5.0f) = 0;
     virtual void set_efx_override(LPCSTR preset_name) = 0;
 };
@@ -252,6 +267,7 @@ IC void ref_sound::play(CObject* O, u32 flags, float d) { VERIFY(!::Sound->i_loc
 IC void ref_sound::play_at_pos(CObject* O, const Fvector& pos, u32 flags, float d) { VERIFY(!::Sound->i_locked()); ::Sound->play_at_pos(*this, O, pos, flags, d); }
 
 // ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ: Реалізація інлайн-методу
+
 IC void ref_sound::play_with_delay(CObject* O, const Fvector& pos, u32 flags) {
     VERIFY(!::Sound->i_locked());
     ::Sound->play_with_delay(*this, O, pos, flags);

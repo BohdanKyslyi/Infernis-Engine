@@ -493,12 +493,25 @@
                 <d r="70" g="70" b="70"/>
             </text_color>
         </list_snd_output>
-        <audio_hint x="15" y="222" width="395" height="60">
-            <text r="150" g="150" b="150" font="letterica16" complex_mode="1">ui_mm_audio_hint</text>
-        </audio_hint>
-        <audio_status x="15" y="288" width="395" height="50">
-            <text r="170" g="170" b="170" font="letterica16" complex_mode="1"/>
-        </audio_status>
+        <cap_check_acoustics x="15" y="213" width="135" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_audio_acoustics</text>
+        </cap_check_acoustics>
+        <check_acoustics x="162" y="210" width="44" height="29" stretch="1">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="snd_acoustics" group="mm_opt_sound" depend="snd"/>
+        </check_acoustics>
+        <cap_text_language x="15" y="243" width="135" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_text_language</text>
+        </cap_text_language>
+        <list_text_language x="175" y="245" width="235" height="20" always_show_scroll="1">
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+        </list_text_language>
+        <cap_voice_language x="15" y="273" width="135" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_voice_language</text>
+        </cap_voice_language>
+        <list_voice_language x="175" y="275" width="235" height="20" always_show_scroll="1">
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+        </list_voice_language>
     </tab_sound>
     <tab_gameplay>
         <cap_difficulty x="15" y="3" width="135" height="24">

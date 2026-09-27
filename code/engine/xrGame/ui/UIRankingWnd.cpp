@@ -40,6 +40,13 @@ CUIRankingWnd::CUIRankingWnd() {
     m_last_weapon_icon = "";
 }
 
+void CUIRankingWnd::RefreshLocalization() {
+    string256 buf;
+    xr_strcpy(buf, sizeof(buf), CStringTable().translate(m_center_caption_id).c_str());
+    xr_strcat(buf, sizeof(buf), CStringTable().translate("ui_ranking_center_caption").c_str());
+    m_center_caption->SetText(buf);
+}
+
 CUIRankingWnd::~CUIRankingWnd() {
     auto b = m_achieves_vec.begin(), e = m_achieves_vec.end();
     for (; b != e; b++)
@@ -124,10 +131,9 @@ void CUIRankingWnd::Init() {
     }
     xml.SetLocalRoot(stored_root);
 
-    string256 buf;
-    xr_strcpy(buf, sizeof(buf), m_center_caption->GetText());
-    xr_strcat(buf, sizeof(buf), CStringTable().translate("ui_ranking_center_caption").c_str());
-    m_center_caption->SetText(buf);
+    m_center_caption_id = xml.Read("center_caption:text", 0, "");
+    if (!m_center_caption_id.size()) m_center_caption_id = m_center_caption->GetText();
+    RefreshLocalization();
 
     m_monster_icon_back = UIHelper::CreateStatic(xml, "monster_icon_back", this);
     m_monster_icon = UIHelper::CreateStatic(xml, "monster_icon", this);

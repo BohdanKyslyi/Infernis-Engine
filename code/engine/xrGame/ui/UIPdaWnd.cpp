@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "UIPdaWnd.h"
 #include "../Pda.h"
+#include "../string_table.h"
 
 #include "xrUIXmlParser.h"
 #include "UIXmlInit.h"
@@ -63,6 +64,9 @@ void CUIPdaWnd::Init() {
     UIMainPdaFrame = UIHelper::CreateStatic(uiXml, "background_static", this);
     m_caption = UIHelper::CreateTextWnd(uiXml, "caption_static", this);
     m_caption_const = (m_caption->GetText());
+    m_caption_id = uiXml.Read("caption_static:text", 0, "");
+    if (!m_caption_id.size()) m_caption_id = m_caption->GetText();
+    m_caption_language = CStringTable::Language();
     m_clock = UIHelper::CreateTextWnd(uiXml, "clock_wnd", this);
     /*
             m_anim_static			= xr_new<CUIAnimatedStatic>();
@@ -126,6 +130,7 @@ void CUIPdaWnd::SendMessage(CUIWindow* pWnd, s16 msg, void* pData) {
 void CUIPdaWnd::Show(bool status) {
     inherited::Show(status);
     if (status) {
+        RefreshLocalization();
         InventoryUtilities::SendInfoToActor("ui_pda");
 
         if (!m_pActiveDialog) {
@@ -143,6 +148,7 @@ void CUIPdaWnd::Show(bool status) {
 
 void CUIPdaWnd::Update() {
     inherited::Update();
+    RefreshLocalization();
     m_pActiveDialog->Update();
     m_clock->TextItemControl().SetText(
         InventoryUtilities::GetGameTimeAsString(InventoryUtilities::etpTimeToMinutes).c_str());
@@ -181,6 +187,16 @@ void CUIPdaWnd::SetActiveSubdialog(const shared_str& section) {
         UITabControl->SetActiveTab(section);
     }
     m_sActiveSection = section;
+    SetActiveCaption();
+}
+
+void CUIPdaWnd::RefreshLocalization() {
+    if (m_caption_language == CStringTable::Language()) return;
+    m_caption_language = CStringTable::Language();
+    if (m_caption_id.size())
+        m_caption_const = CStringTable().translate(m_caption_id);
+    if (pUILogsWnd) pUILogsWnd->RefreshLocalization();
+    if (pUIRankingWnd) pUIRankingWnd->RefreshLocalization();
     SetActiveCaption();
 }
 

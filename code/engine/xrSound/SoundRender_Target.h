@@ -15,13 +15,14 @@ public:
 protected:
     OggVorbis_File ovf;
     IReader* wave;
-    void attach();
+    bool warned_missing_wave;
+    bool attach();
     void dettach();
 
 public:
     OggVorbis_File* get_data() {
         if (!wave)
-            attach();
+            if (!attach()) return nullptr;
         return &ovf;
     }
 

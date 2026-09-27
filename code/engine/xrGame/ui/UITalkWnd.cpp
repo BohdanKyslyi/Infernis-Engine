@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "UITalkWnd.h"
+#include "../../xrSound/Sound.h"
 
 #include "UITalkDialogWnd.h"
 
@@ -376,7 +377,7 @@ void CUITalkWnd::PlaySnd(LPCSTR text) {
     strncat_s(fn, sizeof(fn), ext, xr_strlen(ext));
 
     StopSnd();
-    if (FS.exist("$game_sounds$", fn)) {
+    if (snd_localized_exists(fn)) {
         VERIFY(m_pActor);
         if (!m_pActor->OnDialogSoundHandlerStart(m_pOthersInvOwner, fn)) {
             CGameObject* pOtherGO = smart_cast<CGameObject*>(m_pOthersInvOwner);

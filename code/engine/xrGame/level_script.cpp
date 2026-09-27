@@ -328,6 +328,7 @@ void hide_indicators_safe() {
 // ==============================================================================
 
 // --- Depth of Field (DoF) Control ---
+
 void set_dof_params_script(float near_blur, float focus_dist, float far_blur) {
     if (g_pGamePersistent) {
         Fvector dof;
@@ -351,6 +352,7 @@ void set_dof_on_object_script(u16 id, float near_offset, float far_offset) {
 }
 
 // --- Standalone FOV Effector ---
+
 class CScriptFovEffector : public CEffectorCam {
     float m_fStartFov;
     float m_fTargetFov;
@@ -390,6 +392,7 @@ void restore_camera_fov_script() {
 }
 
 // --- Unified Cinematic Effector (Look + Dolly + FOV) ---
+
 class CScriptCinematicEffector : public CEffectorCam {
     Fvector m_vStartPos;
     Fvector m_vStartDir;
@@ -427,6 +430,7 @@ public:
             CGameObject* target_obj = smart_cast<CGameObject*>(Level().Objects.net_Find(m_target_id));
             if (target_obj) {
                 // Smart focus: entity head/chest level vs geometric center for props
+				
                 if (smart_cast<CEntityAlive*>(target_obj)) {
                     target_world = target_obj->Position();
                     target_world.y += 1.2f; 
@@ -442,6 +446,7 @@ public:
         float smooth_t = t * t * (3.0f - 2.0f * t);
 
         // Rotation (Look at)
+		
         Fvector target_dir;
         target_dir.sub(target_world, info.p).normalize_safe();
         if (m_fTransitionTime <= 0.001f) {
@@ -453,6 +458,7 @@ public:
         }
 
         // Dolly (Approach distance)
+		
         if (m_fApproachDist > 0.01f) {
             Fvector dir_to_target;
             dir_to_target.sub(target_world, m_vStartPos).normalize_safe();
@@ -463,11 +469,12 @@ public:
         }
 
         // Zoom (FOV change)
+		
         if (m_bChangeFov) {
             info.fFov = m_fStartFov + (m_fTargetFov - m_fStartFov) * smooth_t;
         }
 
-        info.n.set(0.f, 1.f, 0.f); // Lock camera roll
+        info.n.set(0.f, 1.f, 0.f); 
         return TRUE;
     }
 };
@@ -498,14 +505,16 @@ void restore_camera_look_script(bool bMaintainOrientation) {
 }
 
 // --- Cinematic Spline Flight Effector (Catmull-Rom) ---
+
 static xr_vector<Fvector> g_flight_path; 
 
 // Режими напрямку погляду камери
+
 enum EFlightLookMode {
-    flmForward  = 0, // Вперед по сплайну
-    flmBackward = 1, // Назад
-    flmObject   = 2, // На Story ID / Object ID
-    flmCoords   = 3  // На статичні координати
+    flmForward  = 0, 
+    flmBackward = 1, 
+    flmObject   = 2, 
+    flmCoords   = 3 
 };
 
 class CScriptFlightEffector : public CEffectorCam {
@@ -618,10 +627,12 @@ virtual BOOL ProcessCam(SCamEffectorInfo& info) {
 
         // Захоплюємо справжню камеру актора з усіма ефектами дихання/розгойдування, 
         // щоб на фініші злитися з нею ідеально, без мікро-стрибків.
+		
         Fvector base_p = info.p;
         Fvector base_d = info.d;
 
         // АНТИ-СТАТТЕР СИСТЕМА
+		
         float dt = Device.fTimeDelta;
         if (m_bFirstUpdate) {
             dt = 0.0f; 
@@ -635,6 +646,7 @@ virtual BOOL ProcessCam(SCamEffectorInfo& info) {
         // ==========================================
         // ФАЗА 1: ПЛАВНИЙ ВХІД
         // ==========================================
+		
         if (m_fCurrentTime <= m_fEntryTime && m_fEntryTime > 0.001f) {
             float t = m_fCurrentTime / m_fEntryTime;
             clamp(t, 0.0f, 1.0f);
@@ -651,6 +663,7 @@ virtual BOOL ProcessCam(SCamEffectorInfo& info) {
         // ==========================================
         // ФАЗА 2: ПОЛІТ ПО СПЛАЙНУ
         // ==========================================
+		
         if (m_fCurrentTime <= m_fEntryTime + m_fFlightTime) {
             float flight_time_elapsed = m_fCurrentTime - m_fEntryTime;
             float t = (m_fFlightTime > 0.001f) ? (flight_time_elapsed / m_fFlightTime) : 1.0f;
@@ -665,6 +678,7 @@ virtual BOOL ProcessCam(SCamEffectorInfo& info) {
         // ==========================================
         // ФАЗА 3: ПЛАВНИЙ ВИХІД ДО ТІЛА АКТОРA
         // ==========================================
+		
         if (m_fCurrentTime <= m_fEntryTime + m_fFlightTime + m_fExitTime && m_fExitTime > 0.001f) {
             if (!m_bExitCaptured) {
                 m_vExitStartPos = GetSplinePoint(1.0f); 
@@ -678,6 +692,7 @@ virtual BOOL ProcessCam(SCamEffectorInfo& info) {
             float smooth_t = t * t * (3.0f - 2.0f * t);
 
             // М'яко зливаємося з реальною камерою (base_p), а не статичною точкою
+			
             info.p.lerp(m_vExitStartPos, base_p, smooth_t);
             info.d.lerp(m_vExitStartDir, base_d, smooth_t).normalize_safe();
             info.n.set(0.f, 1.f, 0.f);
@@ -689,6 +704,7 @@ virtual BOOL ProcessCam(SCamEffectorInfo& info) {
 };
 
 // --- Оновлена обгортка для Lua ---
+
 void flight_path_clear_script() { g_flight_path.clear(); }
 void flight_path_add_point_script(Fvector pos) { g_flight_path.push_back(pos); }
 
@@ -698,6 +714,7 @@ void flight_start_script(float entry, float flight, float exit, int mode, u16 id
     Actor()->Cameras().AddCamEffector(xr_new<CScriptFlightEffector>(entry, flight, exit, (EFlightLookMode)mode, id, pos, start_pos, start_dir));
 }
 // --- HUD Animations & Weapon Fire ---
+
 void force_play_hud_anim_script(LPCSTR anim_name) {
     if (!Actor()) return;
     CInventoryItem* active_item = Actor()->inventory().ActiveItem();
@@ -723,6 +740,7 @@ void actor_fire_stop_script() {
 }
 
 // --- 3D Sound Pool ---
+
 static xr_vector<ref_sound*> g_script_sounds;
 
 void play_sound_3d_script(LPCSTR path, Fvector pos, float vol, float pitch) {
@@ -752,6 +770,7 @@ void stop_all_custom_sounds_script() {
 }
 
 // === NOIR ENGINE: Cinematic EFX Control ===
+
 void set_efx_override_script(float room, float room_hf, float decay_time, float decay_hf_ratio, float reflections_delay, float reverb_delay, float room_rolloff_factor, float diffusion, float reflections, float reverb, float air_absorption_hf) {
     if (Sound) {
         Sound->set_efx_override(true, room, room_hf, decay_time, decay_hf_ratio, reflections_delay, reverb_delay, room_rolloff_factor, diffusion, reflections, reverb, air_absorption_hf);
@@ -772,6 +791,7 @@ void disable_efx_override_script() {
 // ==========================================
 
 // Статичний вказівник, який гарантує, що об'єкт існує і ним не керує збирач сміття Lua
+
 static CCinematicBorders* g_cinematic_borders = nullptr;
 
 void show_cinematic_borders_script(int appear_type, u32 duration_ms) {
@@ -781,6 +801,7 @@ void show_cinematic_borders_script(int appear_type, u32 duration_ms) {
     
     if (CurrentGameUI()) {
         // Запобігаємо дублюванню у списку рендера
+		
         CurrentGameUI()->RemoveDialogToRender(g_cinematic_borders);
         CurrentGameUI()->AddDialogToRender(g_cinematic_borders);
     }
@@ -895,13 +916,15 @@ void iterate_sounds(LPCSTR prefix, u32 max_count, const CScriptCallbackEx<void>&
         string_path fn, s;
         LPSTR S = (LPSTR)&s;
         _GetItem(prefix, j, s);
-        if (FS.exist(fn, "$game_sounds$", S, ".ogg"))
+        if (FS.exist(fn, "$game_sounds$", S, ".ogg") ||
+            snd_localized_exists(strconcat(sizeof(fn), fn, S, ".ogg")))
             callback(prefix);
 
         for (u32 i = 0; i < max_count; ++i) {
             string_path name;
             xr_sprintf(name, "%s%d", S, i);
-            if (FS.exist(fn, "$game_sounds$", name, ".ogg"))
+            if (FS.exist(fn, "$game_sounds$", name, ".ogg") ||
+                snd_localized_exists(strconcat(sizeof(fn), fn, name, ".ogg")))
                 callback(name);
         }
     }
@@ -1143,6 +1166,7 @@ void CLevel::script_register(lua_State* L) {
         def("is_hud_controller_active", &is_hud_controller_active_script),
 		
 		// Cinematic Toolset Bindings
+		
         def("set_dof_script", &set_dof_params_script),
         def("restore_dof_script", &restore_dof_script),
         def("set_dof_obj_script", &set_dof_on_object_script),
@@ -1167,6 +1191,7 @@ void CLevel::script_register(lua_State* L) {
         def("stop_custom_sounds", &stop_all_custom_sounds_script),
 		
 		// === NOIR ENGINE: Cinematic EFX Control ===
+		
         def("set_efx_override", &set_efx_override_script),
         def("set_efx_preset", &set_efx_preset_script),
         def("disable_efx_override", &disable_efx_override_script),

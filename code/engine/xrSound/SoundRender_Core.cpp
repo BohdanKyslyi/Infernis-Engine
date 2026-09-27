@@ -6,6 +6,7 @@
 #include "soundrender_source.h"
 #include "soundrender_emitter.h"
 
+char snd_language[32] = "default";
 int psSoundTargets = 32;
 Flags32 psSoundFlags = { ss_Hardware | ss_EFX };
 float psSoundOcclusionScale = 0.5f;
@@ -17,6 +18,7 @@ float psSoundVFactor = 1.0f;
 
 float psSoundVMusic = 1.f;
 int psSoundCacheSizeMB = 32;
+int psSoundAcoustics = 0;
 
 CSoundRender_Core* SoundRender = 0;
 CSound_manager_interface* Sound = 0;
@@ -29,6 +31,9 @@ CSoundRender_Core::CSoundRender_Core() {
     geom_MODEL = NULL;
     geom_ENV = NULL;
     geom_SOM = NULL;
+    room_probe_time = -1.f;
+    room_openness = 1.f;
+    room_extent = 18.f;
     s_environment = NULL;
     Handler = NULL;
     s_targets_pu = 0;
@@ -76,6 +81,7 @@ void CSoundRender_Core::_clear() {
     s_emitters.clear();
     
     // Очищуємо чергу відкладених звуків
+	
     m_delayed_sounds.clear();
     g_target_temp_data.clear();
 }
@@ -112,7 +118,17 @@ void CSoundRender_Core::_restart() {
 }
 
 void CSoundRender_Core::set_handler(sound_event* E) { Handler = E; }
-void CSoundRender_Core::set_geometry_occ(CDB::MODEL* M) { geom_MODEL = M; }
+void CSoundRender_Core::set_geometry_occ(CDB::MODEL* M) {
+    geom_MODEL = M;
+    room_probe_time = -1.f;
+}
+
+void CSoundRender_Core::set_acoustic_obstacles(const SAcousticObstacle* objects, u32 count) {
+    std::lock_guard<std::mutex> lock(acoustic_mutex);
+    acoustic_obstacles.clear();
+    if (objects && count)
+        acoustic_obstacles.assign(objects, objects + count);
+}
 
 void CSoundRender_Core::set_geometry_som(IReader* I) {
 #ifdef _EDITOR
@@ -223,13 +239,27 @@ void CSoundRender_Core::clone(ref_sound& S, const ref_sound& from, esound_type s
     S._p->handle = from._p->handle;
     S._p->dwBytesTotal = from._p->dwBytesTotal;
     S._p->fTimeTotal = from._p->fTimeTotal;
+    S._p->requested_name = from._p->requested_name;
+    S._p->loaded_language = from._p->loaded_language;
     S._p->fn_attached[0] = from._p->fn_attached[0];
     S._p->fn_attached[1] = from._p->fn_attached[1];
     S._p->g_type = (game_type == sg_SourceType) ? S._p->handle->game_type() : game_type;
     S._p->s_type = sound_type;
 }
 
+void CSoundRender_Core::refresh_language(ref_sound& S) {
+    if (!S._p || !S._p->requested_name.size() ||
+        S._p->loaded_language == snd_language) return;
+    if (S._feedback()) ((CSoundRender_Emitter*)S._feedback())->stop(FALSE);
+    CSoundRender_Source* source = i_create_source(S._p->requested_name.c_str());
+    S._p->handle = source;
+    S._p->dwBytesTotal = source->bytes_total();
+    S._p->fTimeTotal = source->length_sec();
+    S._p->loaded_language = snd_language;
+}
+
 void CSoundRender_Core::play(ref_sound& S, CObject* O, u32 flags, float delay) {
+    refresh_language(S);
     if (!bPresent || 0 == S._handle()) return;
     S._p->g_object = O;
     if (S._feedback()) ((CSoundRender_Emitter*)S._feedback())->rewind();
@@ -241,8 +271,11 @@ void CSoundRender_Core::play(ref_sound& S, CObject* O, u32 flags, float delay) {
 void CSoundRender_Core::play_no_feedback(ref_sound& S, CObject* O, u32 flags, float delay,
                                          Fvector* pos, float* vol, float* freq, Fvector2* range) {
     if (!bPresent || 0 == S._handle()) return;
+    refresh_language(S);
     ref_sound_data_ptr orig = S._p;
     S._p = xr_new<ref_sound_data>();
+    S._p->requested_name = orig->requested_name;
+    S._p->loaded_language = orig->loaded_language;
     S._p->handle = orig->handle;
     S._p->g_type = orig->g_type;
     S._p->s_type = orig->s_type;
@@ -264,6 +297,7 @@ void CSoundRender_Core::play_no_feedback(ref_sound& S, CObject* O, u32 flags, fl
 }
 
 void CSoundRender_Core::play_at_pos(ref_sound& S, CObject* O, const Fvector& pos, u32 flags, float delay) {
+    refresh_language(S);
     if (!bPresent || 0 == S._handle()) return;
     S._p->g_object = O;
     if (S._feedback()) ((CSoundRender_Emitter*)S._feedback())->rewind();
@@ -275,12 +309,13 @@ void CSoundRender_Core::play_at_pos(ref_sound& S, CObject* O, const Fvector& pos
 }
 
 // ================= ЗАТРИМКА ЗВУКУ ================= //
+
 void CSoundRender_Core::play_with_delay(ref_sound& S, CObject* O, const Fvector& pos, u32 flags) {
     if (!bPresent || 0 == S._handle()) return;
 
     Fvector cam_pos = listener_position();
     float dist = cam_pos.distance_to(pos);
-    float delay = dist / 343.0f; // 343 м/с - швидкість звуку
+    float delay = dist / 343.0f; 
 
     if (delay < 0.05f) {
         play_at_pos(S, O, pos, flags, 0.f);
@@ -324,6 +359,8 @@ void CSoundRender_Core::destroy(ref_sound& S) {
 void CSoundRender_Core::_create_data(ref_sound_data& S, LPCSTR fName, esound_type sound_type, int game_type) {
     string_path fn; xr_strcpy(fn, fName);
     if (strext(fn)) *strext(fn) = 0;
+    S.requested_name = fn;
+    S.loaded_language = snd_language;
     S.handle = (CSound_source*)SoundRender->i_create_source(fn);
     S.g_type = (game_type == sg_SourceType) ? S.handle->game_type() : game_type;
     S.s_type = sound_type; S.feedback = 0; S.g_object = 0; S.g_userdata = 0;
@@ -388,6 +425,7 @@ void CSoundRender_Core::object_relcase(CObject* obj) {
         }
         
         // ЗАТРИМКА ЗВУКУ: очищення видалених об'єктів з черги
+		
         for (u32 i = 0; i < m_delayed_sounds.size(); i++) {
             if (m_delayed_sounds[i].obj == obj) m_delayed_sounds[i].obj = nullptr;
         }

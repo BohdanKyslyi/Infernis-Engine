@@ -10,6 +10,7 @@ CSoundRender_Target::CSoundRender_Target(void) {
     m_pEmitter = 0;
     rendering = FALSE;
     wave = 0;
+    warned_missing_wave = false;
 }
 
 CSoundRender_Target::~CSoundRender_Target(void) { VERIFY(wave == 0); }
@@ -22,6 +23,7 @@ void CSoundRender_Target::start(CSoundRender_Emitter* E) {
     R_ASSERT(E);
     m_pEmitter = E;
     rendering = FALSE;
+    warned_missing_wave = false;
 }
 
 void CSoundRender_Target::render() { rendering = TRUE; }
@@ -45,14 +47,31 @@ extern size_t ov_read_func(void* ptr, size_t size, size_t nmemb, void* datasourc
 extern int ov_close_func(void* datasource);
 extern long ov_tell_func(void* datasource);
 
-void CSoundRender_Target::attach() {
+bool CSoundRender_Target::attach() {
     VERIFY(0 == wave);
     VERIFY(m_pEmitter);
     ov_callbacks ovc = { ov_read_func, ov_seek_func, ov_close_func, ov_tell_func };
     wave = FS.r_open(m_pEmitter->source()->pname.c_str());
-    R_ASSERT3(wave && wave->length(), "Can't open wave file:", m_pEmitter->source()->pname.c_str());
-    ov_open_callbacks(wave, &ovf, NULL, 0, ovc);
-    VERIFY(0 != wave);
+    if (!wave || !wave->length()) {
+        if (!warned_missing_wave)
+            Msg("! [Sound] Cannot open wave file during playback: %s", m_pEmitter->source()->pname.c_str());
+        warned_missing_wave = true;
+        if (wave) FS.r_close(wave);
+        wave = nullptr;
+        return false;
+    }
+    const int result = ov_open_callbacks(wave, &ovf, NULL, 0, ovc);
+    if (result != 0) {
+        if (!warned_missing_wave)
+            Msg("! [Sound] Invalid wave file during playback: %s (Vorbis: %d)",
+                m_pEmitter->source()->pname.c_str(), result);
+        warned_missing_wave = true;
+        FS.r_close(wave);
+        wave = nullptr;
+        return false;
+    }
+    warned_missing_wave = false;
+    return true;
 }
 
 void CSoundRender_Target::dettach() {

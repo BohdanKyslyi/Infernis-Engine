@@ -13,7 +13,10 @@
 #include "uilinestd.h"
 #include "../string_table.h"
 
+namespace { xr_set<CUILines*> localized_lines; }
+
 CUILines::CUILines() {
+    localized_lines.insert(this);
     m_pFont = NULL;
     m_eTextAlign = CGameFont::alLeft;
     m_eVTextAlign = valTop;
@@ -33,7 +36,7 @@ CUILines::CUILines() {
     uFlags.set(flRecognizeNewLine, TRUE);
 }
 
-CUILines::~CUILines() {}
+CUILines::~CUILines() { localized_lines.erase(this); }
 
 void CUILines::SetTextComplexMode(bool mode) {
     uFlags.set(flComplexMode, mode);
@@ -56,6 +59,7 @@ void CUILines::SetEllipsis(bool mode) { uFlags.set(flEllipsis, mode); }
 void CUILines::SetUseNewLineMode(bool mode) { uFlags.set(flRecognizeNewLine, mode); }
 
 void CUILines::SetText(const char* text) {
+    m_translation_id = "";
 
     if (!m_pFont)
         m_pFont = UI().Font().pFontLetterica16Russian;
@@ -70,7 +74,17 @@ void CUILines::SetText(const char* text) {
         Reset();
     }
 }
-void CUILines::SetTextST(LPCSTR str_id) { SetText(*CStringTable().translate(str_id)); }
+void CUILines::SetTextST(LPCSTR str_id) {
+    const shared_str id = str_id ? str_id : "";
+    SetText(*CStringTable().translate(id));
+    m_translation_id = id;
+}
+
+void CUILines::RefreshLocalizedTexts() {
+    for (CUILines* line : localized_lines)
+        if (line->m_translation_id.size())
+            line->SetTextST(line->m_translation_id.c_str());
+}
 
 LPCSTR CUILines::GetText() { return m_text.c_str(); }
 

@@ -29,9 +29,11 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
     s_emitters_u++;
 
     // === ЗАТРИМКА ЗВУКУ: Перевірка та відтворення відкладених звуків ===
+	
     update_delayed_sounds();
 
     // Firstly update emitters, which are now being rendered
+	
     for (it = 0; it < s_targets.size(); it++) {
         CSoundRender_Target* T = s_targets[it];
         CSoundRender_Emitter* E = T->get_emitter();
@@ -88,6 +90,7 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
     }
 
     // === EFX РЕФАКТОРИНГ: Застосування реверберації Зони ===
+	
     if (bEFX) {
         if (bListenerMoved) {
             bListenerMoved = FALSE;
@@ -97,7 +100,23 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
         e_current.lerp(e_current, e_target, dt_sec);
 
         // Викликаємо наш новий метод замість i_eax_listener_set та commit
-        update_environment(&e_current);
+		
+        if (psSoundAcoustics) {
+            update_acoustic_room(P);
+            CSoundRender_Environment room = e_current;
+            const float enclosure = 1.f - room_openness;
+            if (enclosure > 0.5f) {
+                const float strength = (enclosure - 0.5f) * 2.f;
+                room.Room = std::max(room.Room, -10000.f + 7400.f * strength);
+                room.RoomHF = std::min(room.RoomHF, -300.f - room_extent * 35.f);
+                room.DecayTime = std::max(room.DecayTime, 0.35f + room_extent * 0.13f);
+                room.ReflectionsDelay = 0.003f + room_extent * 0.001f;
+                room.ReverbDelay = 0.01f + room_extent * 0.001f;
+            }
+            update_environment(&room);
+        } else {
+            update_environment(&e_current);
+        }
     }
 
     // update listener

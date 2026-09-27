@@ -43,6 +43,7 @@ IGame_Level::~IGame_Level() {
     CCameraManager::ResetPP();
     ///////////////////////////////////////////
     Sound->set_geometry_occ(NULL);
+    Sound->set_acoustic_obstacles(nullptr, 0);
     Sound->set_handler(NULL);
     Device.DumpResourcesMemoryUsage();
 
@@ -61,6 +62,7 @@ void IGame_Level::net_Stop() {
     IR_Release();
 
     bReady = false;
+    Sound->set_acoustic_obstacles(nullptr, 0);
 }
 
 //-------------------------------------------------------------------------------------------
@@ -189,6 +191,27 @@ void IGame_Level::OnFrame() {
     // Update all objects
     VERIFY(bReady);
     Objects.Update(false);
+    // Copy only coarse collision proxies on the game thread. The sound thread
+    // never walks the changing object list or touches collision forms.
+    if ((Device.dwFrame % 8) == 0) {
+        xr_vector<SAcousticObstacle> obstacles;
+        if (psSoundAcoustics) {
+            obstacles.reserve(96);
+            for (u32 i = 0; i < Objects.o_count() && obstacles.size() < 96; ++i) {
+                CObject* object = Objects.o_get_by_iterator(i);
+                if (!object || !object->getEnabled() || object == pCurrentEntity) continue;
+                const float radius = object->Radius();
+                if (radius < 0.35f || radius > 8.f ||
+                    object->Position().distance_to_sqr(Device.vCameraPosition) > 1600.f) continue;
+                SAcousticObstacle obstacle;
+                obstacle.position = object->Position();
+                obstacle.radius = radius;
+                obstacle.object = object;
+                obstacles.push_back(obstacle);
+            }
+        }
+        Sound->set_acoustic_obstacles(obstacles.empty() ? nullptr : obstacles.data(), obstacles.size());
+    }
     g_hud->OnFrame();
 
     // Ambience

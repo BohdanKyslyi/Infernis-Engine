@@ -5,8 +5,10 @@
 #include "SoundRender.h"
 #include "SoundRender_Environment.h"
 #include "SoundRender_Cache.h"
+#include <mutex>
 
 // ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ: Структура відкладеного звуку
+
 struct SDelayedSound {
     ref_sound       snd;
     CObject* obj;
@@ -34,6 +36,7 @@ public:
     xr_vector<event> s_events;
 
     // ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ: Черга звуків
+	
     xr_vector<SDelayedSound> m_delayed_sounds;
     void update_delayed_sounds();
 
@@ -56,6 +59,11 @@ protected:
     CDB::MODEL* geom_SOM;
     CDB::MODEL* geom_MODEL;
     CDB::MODEL* geom_ENV;
+    std::mutex acoustic_mutex;
+    xr_vector<SAcousticObstacle> acoustic_obstacles;
+    float room_probe_time;
+    float room_openness;
+    float room_extent;
 
     xr_vector<CSoundRender_Source*> s_sources;
     xr_vector<CSoundRender_Emitter*> s_emitters;
@@ -94,6 +102,7 @@ public:
                              float delay = 0.f);
                              
     // ДОДАНО ДЛЯ ЗАТРИМКИ ЗВУКУ
+	
     virtual void play_with_delay(ref_sound& S, CObject* O, const Fvector& pos, u32 flags = 0);
 
     virtual void play_no_feedback(ref_sound& S, CObject* O, u32 flags = 0, float delay = 0.f,
@@ -103,6 +112,9 @@ public:
     virtual void set_geometry_env(IReader* I);
     virtual void set_geometry_som(IReader* I);
     virtual void set_geometry_occ(CDB::MODEL* M);
+    virtual void set_acoustic_obstacles(const SAcousticObstacle* objects, u32 count);
+    float dynamic_transmission(const Fvector& source, const CObject* owner);
+    void update_acoustic_room(const Fvector& listener);
     virtual void set_handler(sound_event* E);
 
     virtual void update(const Fvector& P, const Fvector& D, const Fvector& N);
@@ -114,9 +126,11 @@ public:
     virtual const Fvector& listener_position() = 0;
 
     // EFX Рефакторинг: Замість старих EAX-костилів, ми передаємо середовище в CoreA
+	
     virtual void update_environment(CSound_environment* E) = 0;
 	
 	// NOIR ENGINE: Cinematic EFX Control
+	
     virtual void set_efx_override(bool bEnable, float room = -10000.0f, float room_hf = 0.0f, float decay_time = 1.0f, float decay_hf_ratio = 0.5f, float reflections_delay = 0.02f, float reverb_delay = 0.04f, float room_rolloff_factor = 0.0f, float diffusion = 1.0f, float reflections = -2602.0f, float reverb = 200.0f, float air_absorption_hf = -5.0f) {}
     virtual void set_efx_override(LPCSTR preset_name) {}
 
@@ -129,6 +143,7 @@ public:
     virtual void set_environment_size(CSound_environment* src_env, CSound_environment** dst_env);
 #endif
 public:
+    void refresh_language(ref_sound& sound);
     CSoundRender_Source* i_create_source(LPCSTR name);
     void i_destroy_source(CSoundRender_Source* S);
     CSoundRender_Emitter* i_play(ref_sound* S, BOOL _loop, float delay);

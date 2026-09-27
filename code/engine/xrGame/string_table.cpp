@@ -3,6 +3,8 @@
 
 #include "ui/xrUIXmlParser.h"
 #include "xr_level_controller.h"
+#include "ui/UILines.h"
+#include "inventory_item.h"
 
 namespace {
 constexpr UINT LEGACY_STRING_TABLE_CODE_PAGE = 1251;
@@ -219,6 +221,42 @@ bool IsUtf8File(EStringTableEncoding mode, LPCSTR path, LPCSTR xml_file) {
 } // namespace
 
 STRING_TABLE_DATA* CStringTable::pData = NULL;
+namespace {
+shared_str selected_language;
+shared_str default_language;
+bool ValidLanguage(LPCSTR language) {
+    if (!language || !*language || xr_strlen(language) > 31) return false;
+    for (LPCSTR p = language; *p; ++p)
+        if (!((*p >= 'a' && *p <= 'z') || (*p >= '0' && *p <= '9') || *p == '_')) return false;
+    string_path mask;
+    xr_sprintf(mask, "text\\%s\\*.xml", language);
+    FS_FileSet files;
+    FS.file_list(files, "$game_config$", FS_ListFiles, mask);
+    return !files.empty();
+}
+}
+
+LPCSTR CStringTable::Language() {
+    if (!default_language.size() && pSettings)
+        default_language = pSettings->r_string("string_table", "language");
+    return selected_language.size() ? selected_language.c_str() :
+        (default_language.size() ? default_language.c_str() : "ukr");
+}
+
+bool CStringTable::SetLanguage(LPCSTR language) {
+    if (!ValidLanguage(language)) {
+        Msg("! [string table] unavailable language: %s", language ? language : "");
+        return false;
+    }
+    // Explicit selection also reloads an already selected language. This lets
+    // newly installed string tables appear without restarting the game.
+	
+    if (_stricmp(Language(), language))
+        selected_language = language;
+    if (pData)
+        CStringTable().rescan();
+    return true;
+}
 
 CStringTable::CStringTable() { Init(); }
 
@@ -229,6 +267,8 @@ void CStringTable::rescan() {
     pData = NULL;
     Init();
     xr_delete(old_data);
+    CUILines::RefreshLocalizedTexts();
+    CInventoryItem::RefreshLocalizedItems();
 
     if (LocalizationDevMode())
         Msg("* [string table] localization reloaded");
@@ -240,8 +280,9 @@ void CStringTable::Init() {
 
     pData = xr_new<STRING_TABLE_DATA>();
 
-    //имя языка, если не задано (NULL), то первый <text> в <string> в XML
-    pData->m_sLanguage = pSettings->r_string("string_table", "language");
+    // Language name; if NULL, use the first <text> in the XML <string>
+	
+    pData->m_sLanguage = Language();
     pData->m_SourceEncoding = ReadStringTableEncoding();
 
     if (pSettings->line_exist("string_table", "fallback_language")) {
@@ -309,7 +350,6 @@ void CStringTable::LoadLanguage(LPCSTR language, bool is_fallback) {
         Load(language, fn, is_fallback, language_ids, loaded_language_ids);
     }
 
-    pData->m_uFilesLoaded += static_cast<u32>(fset.size());
 }
 
 void CStringTable::Load(LPCSTR language, LPCSTR xml_file_full, bool is_fallback,
@@ -319,9 +359,15 @@ void CStringTable::Load(LPCSTR language, LPCSTR xml_file_full, bool is_fallback,
     strconcat(sizeof(_s), _s, "text\\", language);
     const bool is_utf8 = IsUtf8File(pData->m_SourceEncoding, _s, xml_file_full);
 
-    uiXml.Load(CONFIG_PATH, _s, xml_file_full);
+    if (!uiXml.TryLoad(CONFIG_PATH, _s, xml_file_full)) {
+        Msg("! [string table] Skipped '%s\\%s'; remaining languages will supply available ids",
+            language, xml_file_full);
+        return;
+    }
+    ++pData->m_uFilesLoaded;
 
-    //общий список всех записей таблицы в файле
+    // List of all table entries in the file
+	
     int string_num = uiXml.GetNodesNum(uiXml.GetRoot(), "string");
 
     for (int i = 0; i < string_num; ++i) {
@@ -423,12 +469,14 @@ void CStringTable::ReparseKeyBindings() {
 
 STRING_VALUE CStringTable::ParseLine(LPCSTR str, LPCSTR skey, bool bFirst) {
     //	LPCSTR str = "1 $$action_left$$ 2 $$action_right$$ 3 $$action_left$$ 4";
+	
     xr_string res;
     int k = 0;
     const char* b;
 #define ACTION_STR "$$ACTION_"
 
 //.	int LEN				= (int)xr_strlen(ACTION_STR);
+
 #define LEN 9
 
     string256 buff;

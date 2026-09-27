@@ -484,6 +484,7 @@ extern __declspec(dllimport) u32 snd_device_id;
 extern __declspec(dllimport) xr_token* snd_devices_token;
 extern __declspec(dllimport) int snd_hrtf;
 extern __declspec(dllimport) u32 snd_output;
+extern __declspec(dllimport) char snd_language[32];
 extern __declspec(dllimport) void snd_refresh_devices();
 extern __declspec(dllimport) void snd_get_status(char* text, u32 size);
 
@@ -687,10 +688,12 @@ void CCC_Register() {
     // Sound
     CMD2(CCC_Float, "snd_volume_eff", &psSoundVEffects);
     CMD2(CCC_Float, "snd_volume_music", &psSoundVMusic);
+    CMD3(CCC_String, "snd_language", snd_language, 32);
     CMD1(CCC_SND_Restart, "snd_restart");
     CMD3(CCC_Mask, "snd_acceleration", &psSoundFlags, ss_Hardware);
 	// КОМАНДИ NOIR ENGINE
     CMD3(CCC_Mask, "snd_efx", &psSoundFlags, ss_EFX); // Керує EFX
+    CMD4(CCC_Integer, "snd_acoustics", &psSoundAcoustics, 0, 1);
     CMD4(CCC_Integer, "snd_hrtf", &snd_hrtf, 0, 1);   // Керує HRTF
     CMD4(CCC_Integer, "snd_targets", &psSoundTargets, 4, 256);
     CMD4(CCC_Integer, "snd_cache_size", &psSoundCacheSizeMB, 4, 32);

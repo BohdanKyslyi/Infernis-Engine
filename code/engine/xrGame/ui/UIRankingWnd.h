@@ -33,6 +33,7 @@ private:
     CUITextWnd* m_money_value;
 
     CUITextWnd* m_center_caption;
+    shared_str m_center_caption_id;
 
     CUIScrollView* m_achievements;
     CUIFrameWindow* m_achievements_background;
@@ -69,6 +70,7 @@ public:
     virtual void ResetAll();
 
     void Init();
+    void RefreshLocalization();
     void update_info();
 
 protected:

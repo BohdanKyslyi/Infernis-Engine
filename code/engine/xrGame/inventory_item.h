@@ -95,6 +95,7 @@ public:
     virtual LPCSTR NameItem(); // remove <virtual> by sea
     virtual LPCSTR NameShort();
     virtual shared_str ItemDescription() { return m_Description; }
+    static void RefreshLocalizedItems();
     virtual bool GetBriefInfo(II_BriefInfo& info) {
         info.clear();
         return false;
@@ -102,21 +103,21 @@ public:
 
     virtual void OnEvent(NET_Packet& P, u16 type);
 
-    virtual bool Useful() const; // !!! Переопределить. (см. в Inventory.cpp)
+    virtual bool Useful() const; // Override this method (see Inventory.cpp)
     virtual bool Attach(PIItem pIItem, bool b_send_event) { return false; }
     virtual bool Detach(PIItem pIItem) { return false; }
-    //при детаче спаунится новая вещь при заданно названии секции
+    // Detaching spawns an item from the specified section
     virtual bool Detach(const char* item_section_name, bool b_spawn_item);
     virtual bool CanAttach(PIItem pIItem) { return false; }
     virtual bool CanDetach(LPCSTR item_section_name) { return false; }
 
     virtual EHandDependence HandDependence() const { return hd1Hand; };
     virtual bool IsSingleHanded() const { return true; };
-    virtual bool ActivateItem();   // !!! Переопределить. (см. в Inventory.cpp)
-    virtual void DeactivateItem(); // !!! Переопределить. (см. в Inventory.cpp)
+    virtual bool ActivateItem();   // Override this method (see Inventory.cpp)
+    virtual void DeactivateItem(); // Override this method (see Inventory.cpp)
     virtual bool Action(u16 cmd, u32 flags) {
         return false;
-    } // true если известная команда, иначе false
+    } // true for a known command, otherwise false
     virtual void DiscardState(){};
 
     virtual void OnH_B_Chield();
@@ -152,6 +153,7 @@ public:
     shared_str m_name;
     shared_str m_nameShort;
     shared_str m_nameComplex;
+    shared_str m_localized_name, m_localized_short, m_localized_description;
 
     SInvItemPlace m_ItemCurrPlace;
 

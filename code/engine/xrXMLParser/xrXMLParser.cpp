@@ -3,6 +3,88 @@
 
 #include "xrXMLParser.h"
 
+namespace {
+// String tables contain display text. Accept literal '<' and '&' in their
+// <text> elements while preserving CDATA and already escaped XML entities.
+
+size_t XmlEntityLength(const char* at) {
+    static const char* entities[] = {"&amp;", "&lt;", "&gt;", "&quot;", "&apos;"};
+    for (const char* entity : entities) {
+        const size_t size = xr_strlen(entity);
+        if (strncmp(at, entity, size) == 0)
+            return size;
+    }
+
+    if (at[1] != '#')
+        return 0;
+
+    const char* digit = at + 2;
+    const bool hex = *digit == 'x' || *digit == 'X';
+    if (hex)
+        ++digit;
+    const char* first = digit;
+    while ((*digit >= '0' && *digit <= '9') ||
+           (hex && ((*digit >= 'a' && *digit <= 'f') ||
+                    (*digit >= 'A' && *digit <= 'F'))))
+        ++digit;
+    return digit != first && *digit == ';' ? digit + 1 - at : 0;
+}
+
+xr_string EscapeStringTableText(const char* xml) {
+    xr_string escaped;
+    const char* cursor = xml;
+    while (const char* opening = strstr(cursor, "<text")) {
+        // Other element names, such as <texture>, must not be treated as text.
+		
+        const char after_name = opening[5];
+        if (after_name != '>' && after_name != ' ' && after_name != '\t' &&
+            after_name != '\r' && after_name != '\n') {
+            escaped.append(cursor, opening + 5);
+            cursor = opening + 5;
+            continue;
+        }
+
+        const char* body = strchr(opening, '>');
+        if (!body)
+            break;
+        ++body;
+        const char* closing = strstr(body, "</text>");
+        if (!closing)
+            break;
+
+        escaped.append(cursor, body);
+        for (const char* p = body; p < closing;) {
+            if (closing - p >= 9 && strncmp(p, "<![CDATA[", 9) == 0) {
+                const char* end = strstr(p + 9, "]]>");
+                if (end && end < closing) {
+                    escaped.append(p, end + 3);
+                    p = end + 3;
+                    continue;
+                }
+            }
+            if (*p == '&') {
+                const size_t entity_size = XmlEntityLength(p);
+                if (entity_size && p + entity_size <= closing) {
+                    escaped.append(p, p + entity_size);
+                    p += entity_size;
+                } else {
+                    escaped += "&amp;";
+                    ++p;
+                }
+            } else if (*p == '<') {
+                escaped += "&lt;";
+                ++p;
+            } else {
+                escaped += *p++;
+            }
+        }
+        cursor = closing;
+    }
+    escaped += cursor;
+    return escaped;
+}
+} // namespace
+
 XRXMLPARSER_API CXml::CXml() : m_root(), m_pLocalRoot() {}
 
 XRXMLPARSER_API CXml::~CXml() { ClearInternal(); }
@@ -51,27 +133,66 @@ void CXml::Load(const char* path_alias, const char* path, const char* _xml_filen
     return Load(path_alias, str);
 }
 
-//инициализация и загрузка XML файла
+bool CXml::TryLoad(const char* path_alias, const char* path, const char* xml_filename) {
+    const auto fn = correct_file_name(path, xml_filename);
+    string_path relative_path;
+    xr_sprintf(relative_path, "%s\\%s", path, fn.c_str());
+    return LoadInternal(path_alias, relative_path, true);
+}
+
+// Initialize and load an XML file
 void CXml::Load(const char* path, const char* xml_filename) {
+    LoadInternal(path, xml_filename, false);
+}
+
+bool CXml::LoadInternal(const char* path, const char* xml_filename, bool optional) {
     xr_strcpy(m_xml_file_name, xml_filename);
     // Load and parse xml file
 
     IReader* F = FS.r_open(path, xml_filename);
-    R_ASSERT2(F, xml_filename);
+    if (!F) {
+        // Refresh the directory once if a loose XML was installed after the FS scan.
+		
+        string_path full_path;
+        FS.update_path(full_path, path, xml_filename);
+        char* separator = strrchr(full_path, '\\');
+        if (separator) {
+            separator[1] = 0;
+            Msg("! [XML] Cannot open %s; rescanning %s", xml_filename, full_path);
+            FS.rescan_path(full_path, TRUE);
+            F = FS.r_open(path, xml_filename);
+        }
+        if (!F) {
+            FS.update_path(full_path, path, xml_filename);
+            Msg("! [XML] Missing after rescan: %s", full_path);
+            if (optional)
+                return false;
+            R_ASSERT2(F, full_path);
+        }
+    }
 
     CMemoryWriter W;
     ParseFile(path, W, F, this);
     W.w_stringZ("");
     FS.r_close(F);
 
-    m_Doc.parse(reinterpret_cast<const char*>(W.pointer()));
+    const char* xml_data = reinterpret_cast<const char*>(W.pointer());
+    const xr_string normalized = optional ? EscapeStringTableText(xml_data) : xr_string();
+    m_Doc.parse(optional ? normalized.c_str() : xml_data);
     if (m_Doc.isError()) {
         string1024 str;
         xr_sprintf(str, "XML file:%s errDescr:%s:%u", m_xml_file_name, m_Doc.error(), m_Doc.errorOffset());
+        if (optional) {
+            Msg("! [XML] Skipping malformed string table: %s", str);
+            ClearInternal();
+            m_root = XML_NODE();
+            return false;
+        }
         R_ASSERT2(false, str);
     }
 
     m_root = m_Doc.firstChildElement();
+    return true;
 }
 
 XML_NODE CXml::NavigateToNode(XML_NODE start_node, const char* path, const size_t node_index) const {
@@ -85,7 +206,8 @@ XML_NODE CXml::NavigateToNode(XML_NODE start_node, const char* path, const size_
     const char seps[] = ":";
     size_t tmp = 0;
 
-    //разбить путь на отдельные подпути
+    // Split the path into components
+	
     char* token = strtok(buf_str, seps);
 
     if (token != nullptr) {
@@ -98,6 +220,7 @@ XML_NODE CXml::NavigateToNode(XML_NODE start_node, const char* path, const size_
 
     while (token) {
         // Get next token:
+		
         token = strtok(nullptr, seps);
 
         if (token != nullptr)
@@ -320,7 +443,8 @@ size_t CXml::GetNodesNum(XML_NODE node, const char* tag_name) const {
     return result;
 }
 
-//нахождение элемнета по его атрибуту
+// Find an element by its attribute
+
 XML_NODE CXml::SearchForAttribute(const char* path, const size_t index, const char* tag_name, const char* attrib,
                                   const char* attrib_value_pattern) {
     const XML_NODE start_node = NavigateToNode(path, index);

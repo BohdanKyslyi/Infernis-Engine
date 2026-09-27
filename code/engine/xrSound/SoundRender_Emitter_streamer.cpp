@@ -51,7 +51,10 @@ void CSoundRender_Emitter::fill_data(u8* _dest, u32 offset, u32 size) {
     while (size) {
         // cache access
         if (SoundRender->cache.request(source()->CAT, line)) {
-            source()->decompress(line, target->get_data());
+            if (OggVorbis_File* data = target->get_data())
+                source()->decompress(line, data);
+            else
+                std::memset(SoundRender->cache.get_dataptr(source()->CAT, line), 0, line_size);
         }
 
         // fill block

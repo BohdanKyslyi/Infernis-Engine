@@ -4,7 +4,7 @@
 //	Author		: Victor Reutsky, Yuri Dobronravin
 //	Description : Inventory item
 //  Modified 	: 25.08.2026
-//	by  		: Bohdan «Infernis» Kyslyi
+//	by  		: Bohdan "Infernis" Kyslyi
 ////////////////////////////////////////////////////////////////////////////
 
 //#include "stdafx.h"
@@ -30,6 +30,9 @@
 
 #define ITEM_REMOVE_TIME 30000
 
+namespace { xr_set<CInventoryItem*> localized_inventory_items; }
+
+
 net_updateInvData* CInventoryItem::NetSync() {
     if (!m_net_updateData)
         m_net_updateData = xr_new<net_updateInvData>();
@@ -37,6 +40,7 @@ net_updateInvData* CInventoryItem::NetSync() {
 }
 
 CInventoryItem::CInventoryItem() {
+    localized_inventory_items.insert(this);
     m_net_updateData = NULL;
     m_flags.set(Fbelt, FALSE);
     m_flags.set(Fruck, TRUE);
@@ -65,6 +69,7 @@ CInventoryItem::CInventoryItem() {
 }
 
 CInventoryItem::~CInventoryItem() {
+    localized_inventory_items.erase(this);
     delete_data(m_net_updateData);
 
 #ifndef MASTER_GOLD
@@ -93,6 +98,8 @@ void CInventoryItem::Load(LPCSTR section) {
     m_section_id._set(section);
     m_name = CStringTable().translate(pSettings->r_string(section, "inv_name"));
     m_nameShort = CStringTable().translate(pSettings->r_string(section, "inv_name_short"));
+    m_localized_name = m_name;
+    m_localized_short = m_nameShort;
 
     m_weight = pSettings->r_float(section, "inv_weight");
     R_ASSERT(m_weight >= 0.f);
@@ -102,6 +109,7 @@ void CInventoryItem::Load(LPCSTR section) {
     m_ItemCurrPlace.base_slot_id = (sl == -1) ? 0 : (sl + 1);
 
     m_Description = CStringTable().translate(pSettings->r_string(section, "description"));
+    m_localized_description = m_Description;
 
     m_flags.set(Fbelt, READ_IF_EXISTS(pSettings, r_bool, section, "belt", FALSE));
     m_can_trade = READ_IF_EXISTS(pSettings, r_bool, section, "can_take", TRUE);
@@ -228,6 +236,22 @@ void CInventoryItem::Hit(SHit* pHDS) {
     ChangeCondition(-hit_power);
 }
 
+void CInventoryItem::RefreshLocalizedItems() {
+    for (CInventoryItem* item : localized_inventory_items) {
+        if (!item->m_section_id.size()) continue;
+        const LPCSTR section = item->m_section_id.c_str();
+        const shared_str name = CStringTable().translate(pSettings->r_string(section, "inv_name"));
+        const shared_str short_name = CStringTable().translate(pSettings->r_string(section, "inv_name_short"));
+        const shared_str description = CStringTable().translate(pSettings->r_string(section, "description"));
+        if (item->m_name == item->m_localized_name) item->m_name = name;
+        if (item->m_nameShort == item->m_localized_short) item->m_nameShort = short_name;
+        if (item->m_Description == item->m_localized_description) item->m_Description = description;
+        item->m_localized_name = name;
+        item->m_localized_short = short_name;
+        item->m_localized_description = description;
+    }
+}
+
 LPCSTR CInventoryItem::NameItem() { return m_name.c_str(); }
 
 LPCSTR CInventoryItem::NameShort() { return m_nameShort.c_str(); }
@@ -325,9 +349,9 @@ void CInventoryItem::OnEvent(NET_Packet& P, u16 type) {
     }
 }
 
-//процесс отсоединения вещи заключается в спауне новой вещи
-//в инвентаре и установке соответствующих флагов в родительском
-//объекте, поэтому функция должна быть переопределена
+// Detaching an item spawns a new item
+// in the inventory and sets flags on the parent
+// object, so this function must be overridden
 bool CInventoryItem::Detach(const char* item_section_name, bool b_spawn_item) {
     if (OnClient())
         return true;
@@ -411,7 +435,7 @@ void CInventoryItem::net_Destroy() {
                m_pInventory->m_all.end());
     }
 
-    //инвентарь которому мы принадлежали
+    // The inventory that previously owned this item
     //.	m_pInventory = NULL;
 }
 

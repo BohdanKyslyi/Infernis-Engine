@@ -327,7 +327,7 @@ bool CUIXmlInit::InitText(CUIXml& xml_doc, LPCSTR path, int index, CUILines* pLi
 
     shared_str text = xml_doc.Read(path, index, NULL);
     if (text.size())
-        pLines->SetText(CStringTable().translate(text).c_str());
+        pLines->SetTextST(text.c_str());
 
     return true;
 }

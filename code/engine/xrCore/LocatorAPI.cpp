@@ -1290,8 +1290,31 @@ T* CLocatorAPI::r_open_impl(LPCSTR path, LPCSTR _fname) {
     const file* desc = 0;
     LPCSTR source_name = &fname[0];
 
-    if (!check_for_file(path, _fname, fname, desc))
-        return (0);
+    if (!check_for_file(path, _fname, fname, desc)) {
+        // The loose file may exist even if it is absent from the FS index.
+        // Read it directly without mutating the shared index on a sound thread.
+        const char* ext = strext(fname);
+        if (!ext || (xr_strcmp(ext, ".ogg") && xr_strcmp(ext, ".xml")))
+            return 0;
+        const auto addon = m_addon_files.find(fname);
+        if (addon != m_addon_files.end())
+            xr_strcpy(fname, sizeof(fname), addon->second.c_str());
+        struct _stat info;
+        if (_stat(fname, &info) != 0 || info.st_size <= 0)
+            return 0;
+        file loose_file{};
+        loose_file.size_real = static_cast<u32>(info.st_size);
+        file_from_cache_impl(R, fname, loose_file);
+        ++dwOpenCounter;
+        if (m_Flags.test(flDumpFileActivity))
+            _register_open_file(R, fname);
+        static thread_local bool reported = false;
+        if (!reported) {
+            Msg("! FS: recovered a loose file missing from the index: %s", fname);
+            reported = true;
+        }
+        return R;
+    }
 
     // Resolve the virtual gamedata path only for reading; writes still target gamedata.
     const auto addon = m_addon_files.find(fname);
@@ -1559,8 +1582,6 @@ void CLocatorAPI::rescan_path(LPCSTR full_path, BOOL bRecurse) {
     file desc;
     desc.name = full_path;
     files_it I = m_files.lower_bound(desc);
-    if (I == m_files.end())
-        return;
 
     size_t base_len = xr_strlen(full_path);
     for (; I != m_files.end();) {

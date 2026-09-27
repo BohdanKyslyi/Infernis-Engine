@@ -2,6 +2,7 @@
 #include "ui_base.h"
 #include "GamePersistent.h"
 #include "UICursor.h"
+#include "../xrEngine/defines.h"
 
 CUICursor& GetUICursor() { return UI().GetUICursor(); };
 ui_core& UI() { return *GamePersistent().m_pUI_core; };
@@ -227,7 +228,9 @@ void ui_core::pp_stop() {
 void ui_core::RenderFont() { Font().Render(); }
 
 bool ui_core::is_widescreen() {
-    return (Device.dwWidth) / float(Device.dwHeight) > (UI_BASE_WIDTH / UI_BASE_HEIGHT + 0.01f);
+    const u32 width = Device.dwHeight ? Device.dwWidth : psCurrentVidMode[0];
+    const u32 height = Device.dwHeight ? Device.dwHeight : psCurrentVidMode[1];
+    return height && width / float(height) > (UI_BASE_WIDTH / UI_BASE_HEIGHT + 0.01f);
 }
 
 float ui_core::get_current_kx() {
@@ -255,8 +258,17 @@ std::string ui_core::get_xml_name(const std::string_view fn) {
       writer.write("{}_16.xml", fn);
     }
 
-        string_path dummy; // TODO: [imdex] remove this after refactoring
-        if (nullptr == FS.exist(dummy, "$game_config$", "ui\\", writer.c_str())) {
+        string_path dummy;
+        bool available = FS.exist(dummy, "$game_config$", "ui\\", writer.c_str()) != nullptr;
+        if (!available) {
+            // A loose XML may exist on disk even when it is absent from the FS index.
+            string_path candidate;
+            strconcat(sizeof(candidate), candidate, "ui\\", writer.c_str());
+            IReader* reader = FS.r_open("$game_config$", candidate);
+            available = reader && reader->length();
+            if (reader) FS.r_close(reader);
+        }
+        if (!available) {
             writer.clear();
             writer.write("{}", fn);
             if (!hasExtension(fn)) {
@@ -270,5 +282,4 @@ std::string ui_core::get_xml_name(const std::string_view fn) {
 
     return writer.str();
 }
-
 

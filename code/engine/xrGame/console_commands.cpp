@@ -1025,6 +1025,18 @@ public:
     virtual void Save(IWriter*) {}
 };
 
+class CCC_TextLanguage : public IConsole_Command {
+public:
+    CCC_TextLanguage(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; }
+    virtual void Execute(LPCSTR args) {
+        if (args && *args) CStringTable::SetLanguage(args);
+    }
+    virtual void Status(TStatus& status) { xr_strcpy(status, CStringTable::Language()); }
+    virtual void Save(IWriter* writer) {
+        writer->w_printf("%s %s\r\n", cName, CStringTable::Language());
+    }
+};
+
 class CCC_LocalizationDiagnostics : public IConsole_Command {
 public:
     CCC_LocalizationDiagnostics(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; }
@@ -1883,6 +1895,7 @@ public:
 };
 
 void CCC_RegisterCommands() {
+    CMD1(CCC_TextLanguage, "text_language");
     CMD1(CCC_MemStats, "stat_memory");
 #ifdef DEBUG
     CMD1(CCC_MemCheckpoint, "stat_memory_checkpoint");

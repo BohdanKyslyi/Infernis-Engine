@@ -116,6 +116,7 @@ struct XML_DOC {
 
 class XRXMLPARSER_API CXml {
     void Load(const char* path_alias, const char* xml_filename);
+    bool LoadInternal(const char* path_alias, const char* xml_filename, bool optional);
 
 public:
     string_path m_xml_file_name;
@@ -124,8 +125,10 @@ public:
     void ClearInternal();
 
     void Load(const char* path_alias, const char* path, const char* xml_filename);
+    bool TryLoad(const char* path_alias, const char* path, const char* xml_filename);
 
     //чтение элементов
+	
     const char* Read(const char* path, const size_t index, const char* default_str_val) const;
     const char* Read(XML_NODE start_node, const char* path, const size_t index, const char* default_str_val) const;
     const char* Read(XML_NODE node, const char* default_str_val) const;
@@ -159,6 +162,7 @@ public:
                                 const char* attrib_value_pattern) const;
 
     //возвращает количество узлов с заданым именем
+	
     size_t GetNodesNum(const char* path, const size_t index, const char* tag_name) const;
     size_t GetNodesNum(XML_NODE node, const char* tag_name) const;
 
@@ -166,12 +170,14 @@ public:
     //проверка того, что аттрибуты у тегов уникальны
     //(если не NULL, то уникальность нарушена и возврашается имя
     //повторяющегося атрибута)
+	
     std::string_view CheckUniqueAttrib(XML_NODE start_node, const char* tag_name, const char* attrib_name) const;
 #endif
 
     //переместиться по XML дереву
     //путь задается в форме PARENT:CHILD:CHIDLS_CHILD
     // node_index - номер, если узлов с одним именем несколько
+	
     XML_NODE NavigateToNode(const char* path, const size_t node_index = 0) const;
     XML_NODE NavigateToNode(XML_NODE start_node, const char* path, const size_t node_index = 0) const;
     XML_NODE NavigateToNodeWithAttribute(const char* tag_name, const char* attrib_name, const char* attrib_value);

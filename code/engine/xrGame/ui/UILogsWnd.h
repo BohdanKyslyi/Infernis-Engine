@@ -36,6 +36,7 @@ private:
     CUIFrameWindow* m_center_background;
 
     CUITextWnd* m_center_caption;
+    shared_str m_center_caption_id;
     //	CUICharacterInfo*	m_actor_ch_info;
 
     CUICheckButton* m_filter_news;
@@ -71,6 +72,7 @@ public:
     virtual ~CUILogsWnd();
 
     void Init();
+    void RefreshLocalization();
 
     virtual void Show(bool status);
     virtual void Update();

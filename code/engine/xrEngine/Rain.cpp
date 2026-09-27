@@ -14,6 +14,7 @@
 #endif
 
 // Warning: duplicated in dxRainRender
+
 static const int max_desired_items = 6500;
 static const float source_radius = 25.5f;
 static const float source_offset = 40.f;
@@ -29,6 +30,18 @@ static const float drop_speed_max = 80.f;
 const int max_particles = 1000;
 const int particles_cache = 400;
 const float particles_time = .3f;
+
+// Rain sounds may be omitted by a mod or supplied only by a language pack.
+// Do not create a sound source for an asset that cannot be opened later.
+
+static bool rain_sound_available(LPCSTR name) {
+    if (!name || !name[0]) return false;
+    string_path localized;
+    xr_sprintf(localized, "%s.ogg", name);
+    if (snd_localized_exists(localized)) return true;
+    Msg("! [Rain] Sound is missing, disabling it: %s", localized);
+    return false;
+}
 
 //////////////////////////////////////////////////////////////////////
 // SoA Container Implementation
@@ -95,11 +108,13 @@ RainDropsSoA::~RainDropsSoA() {
 
 CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
     // Дефолтні значення на випадок, якщо конфігу немає або там помилка
+	
     LPCSTR snd_name_2d = "ambient\\rain";
     LPCSTR snd_name_portal = "ambient\\rain";
     
     // Read extension switches from the merged global settings. Their source
     // file and include layout are intentionally irrelevant.
+	
     if (pSettings && pSettings->section_exist("environment")) {
         if (pSettings->line_exist("environment", "enable_rain_material_sounds"))
             m_bEnableMaterialSounds =
@@ -115,6 +130,7 @@ CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
         CInifile wex_ini(wex_path);
         
         // Зчитуємо шляхи до базових звуків дощу
+		
         if (wex_ini.section_exist("rain_audio")) {
             if (wex_ini.line_exist("rain_audio", "sound_2d"))
                 snd_name_2d = wex_ini.r_string("rain_audio", "sound_2d");
@@ -129,6 +145,7 @@ CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
                 wex_ini.r_line("rainmaterial", i, &key, &value);
                 
                 if (key && value && xr_strlen(value) > 0) {
+                    if (!rain_sound_available(value)) continue;
                     RainHitSound rhs;
                     rhs.keyword = key;
                     rhs.snd.create(value, st_Effect, sg_Undefined);
@@ -159,8 +176,11 @@ CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
     }
 
     // Створюємо звуки ПІСЛЯ того, як зчитали їх імена з конфігу
-    snd_Ambient2D.create(snd_name_2d, st_Effect, sg_Undefined);
-    snd_AmbientPortal.create(snd_name_portal, st_Effect, sg_Undefined);
+	
+    if (rain_sound_available(snd_name_2d))
+        snd_Ambient2D.create(snd_name_2d, st_Effect, sg_Undefined);
+    if (rain_sound_available(snd_name_portal))
+        snd_AmbientPortal.create(snd_name_portal, st_Effect, sg_Undefined);
 
     p_create();
 }
@@ -261,6 +281,7 @@ void CEffect_Rain::RenewItem(u32 id, float height, BOOL bHit, u16 material_idx) 
 
 void CEffect_Rain::OnFrame() {
     // Фікс витоку пулу партиклів (Оновлення часу життя сплесків)
+	
     for (Particle* P = particle_active; P; ) {
         Particle* next = P->next;
         P->time -= Device.fTimeDelta;
@@ -275,7 +296,7 @@ void CEffect_Rain::OnFrame() {
     float factor = g_pGamePersistent->Environment().CurrentEnv->rain_density;
 
 #ifndef _EDITOR
-    m_uHitSoundsFrame = 0; // Скидаємо лічильник звуків зіткнень на початку кадру
+    m_uHitSoundsFrame = 0; 
     CObject* E = g_pGameLevel->CurrentViewEntity();
     
     static float current_openness = 1.0f;
@@ -287,6 +308,7 @@ void CEffect_Rain::OnFrame() {
 
     // The screen raindrops post-process uses the same solid-roof test as the
     // rain audio system. Keep it closed until a valid view entity is present.
+	
     m_fViewRainExposure = 0.f;
 
     if (E) {
@@ -314,6 +336,7 @@ void CEffect_Rain::OnFrame() {
                     SGameMtl* mtl = GMLib.GetMaterialByIdx(T->material);
                     
                     // Ігноруємо кущі/листя для розрахунку оклюзії
+					
                     if (mtl && !mtl->Flags.test(SGameMtl::flPassable) && 
                         !strstr(mtl->m_Name.c_str(), "bush") && !strstr(mtl->m_Name.c_str(), "leaves")) {
                         bHitSolid = true;
@@ -366,8 +389,8 @@ void CEffect_Rain::OnFrame() {
     case stIdle:
         if (factor < EPS_L) return;
         state = stWorking;
-        snd_Ambient2D.play(0, sm_Looped);
-        snd_AmbientPortal.play(0, sm_Looped | sm_2D);
+        if (snd_Ambient2D._handle()) snd_Ambient2D.play(0, sm_Looped);
+        if (snd_AmbientPortal._handle()) snd_AmbientPortal.play(0, sm_Looped);
         break;
     case stWorking:
         if (factor < EPS_L) {

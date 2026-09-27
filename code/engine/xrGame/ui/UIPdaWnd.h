@@ -32,10 +32,12 @@ protected:
 
     CUITextWnd* m_caption;
     shared_str m_caption_const;
+    shared_str m_caption_id;
+    shared_str m_caption_language;
     //	CUIAnimatedStatic*		m_anim_static;
     CUITextWnd* m_clock;
 
-    // Текущий активный диалог
+    // Currently active dialog
     CUIWindow* m_pActiveDialog;
     shared_str m_sActiveSection;
 
@@ -70,6 +72,7 @@ public:
     void DrawHint();
 
     void SetActiveCaption();
+    void RefreshLocalization();
     void SetCaption(LPCSTR text);
     void Show_SecondTaskWnd(bool status);
     void Show_MapLegendWnd(bool status);

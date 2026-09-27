@@ -1,5 +1,5 @@
 //////////////////////////////////////////////////////////////////////////
-// string_table.h:		таблица строк используемых в игре
+// string_table.h: game string table
 //////////////////////////////////////////////////////////////////////////
 
 #pragma once
@@ -38,6 +38,8 @@ public:
 
     static void Destroy();
     static void DumpDiagnostics();
+    static LPCSTR Language();
+    static bool SetLanguage(LPCSTR language);
 
     STRING_VALUE translate(const STRING_ID& str_id) const;
     void rescan();

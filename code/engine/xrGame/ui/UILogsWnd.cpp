@@ -98,11 +98,10 @@ void CUILogsWnd::Init() {
 
     //	m_center_background	= UIHelper::CreateStatic( m_uiXml, "center_background", this );
     m_center_caption = UIHelper::CreateTextWnd(m_uiXml, "center_caption", this);
+    m_center_caption_id = m_uiXml.Read("center_caption:text", 0, "");
+    if (!m_center_caption_id.size()) m_center_caption_id = m_center_caption->GetText();
 
-    string256 buf;
-    xr_strcpy(buf, sizeof(buf), m_center_caption->GetText());
-    xr_strcat(buf, sizeof(buf), CStringTable().translate("ui_logs_center_caption").c_str());
-    m_center_caption->SetText(buf);
+    RefreshLocalization();
 
     CUIFixedScrollBar* tmp_scroll = xr_new<CUIFixedScrollBar>();
     m_list = xr_new<CUIScrollView>(tmp_scroll);
@@ -144,6 +143,13 @@ void CUILogsWnd::Init() {
     m_start_game_time = Level().GetStartGameTime();
     m_start_game_time = GetShiftPeriod(m_start_game_time, 0);
 }
+void CUILogsWnd::RefreshLocalization() {
+    string256 buf;
+    xr_strcpy(buf, sizeof(buf), CStringTable().translate(m_center_caption_id).c_str());
+    xr_strcat(buf, sizeof(buf), CStringTable().translate("ui_logs_center_caption").c_str());
+    m_center_caption->SetText(buf);
+}
+
 void itemToCache(CUIWindow* w) {
     w->SetAutoDelete(false);
     w->SetParent(NULL);

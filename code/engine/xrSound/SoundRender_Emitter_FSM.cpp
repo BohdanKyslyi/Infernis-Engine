@@ -12,7 +12,7 @@ inline u32 calc_cursor(const float& fTimeStarted, float& fTime, const float& fTi
 
     if (fTime < fTimeStarted)
         fTime =
-            fTimeStarted; // Андрюха посоветовал, ассерт что ниже вылетел из за паузы как то хитро
+            fTimeStarted; // Keep the start time stable across pause transitions
     R_ASSERT((fTime - fTimeStarted) >= 0.0f);
     while ((fTime - fTimeStarted) > fTimeTotal) // looped
     {
@@ -239,6 +239,8 @@ BOOL CSoundRender_Emitter::update_culling(float dt) {
         float occ = (owner_data->g_type == SOUND_TYPE_WORLD_AMBIENT)
                         ? 1.0f
                         : SoundRender->get_occlusion(p_source.position, .2f, occluder);
+        if (psSoundAcoustics && owner_data->g_type != SOUND_TYPE_WORLD_AMBIENT)
+            occ *= SoundRender->dynamic_transmission(p_source.position, owner_data->g_object);
         volume_lerp(occluder_volume, occ, 1.f, dt);
         clamp(occluder_volume, 0.f, 1.f);
     }

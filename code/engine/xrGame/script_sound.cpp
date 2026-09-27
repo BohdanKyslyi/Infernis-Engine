@@ -18,7 +18,8 @@ CScriptSound::CScriptSound(LPCSTR caSoundName, ESoundTypes sound_type) {
     m_caSoundToPlay = caSoundName;
     string_path l_caFileName;
     VERIFY(::Sound);
-    if (FS.exist(l_caFileName, "$game_sounds$", caSoundName, ".ogg"))
+    if (FS.exist(l_caFileName, "$game_sounds$", caSoundName, ".ogg") ||
+        snd_localized_exists(strconcat(sizeof(l_caFileName), l_caFileName, caSoundName, ".ogg")))
         m_sound.create(caSoundName, st_Effect, sound_type);
     else
         ai().script_engine().script_log(ScriptStorage::eLuaMessageTypeError,
