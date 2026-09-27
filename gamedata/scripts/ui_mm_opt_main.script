@@ -229,8 +229,17 @@ function options_dialog:OnBtnAccept()
 end
 
 function options_dialog:OnBtnCancel()
-    get_console():execute("text_language " .. self.previous_text_language)
-    get_console():execute("snd_language " .. self.previous_voice_language)
+    local console = get_console()
+    -- Restoring an unchanged language reloads every string table and can
+    -- invalidate text currently held by open menu controls.
+    if self.previous_text_language and self.previous_text_language ~= "" and
+        console:get_string("text_language") ~= self.previous_text_language then
+        console:execute("text_language " .. self.previous_text_language)
+    end
+    if self.previous_voice_language and self.previous_voice_language ~= "" and
+        console:get_string("snd_language") ~= self.previous_voice_language then
+        console:execute("snd_language " .. self.previous_voice_language)
+    end
 	local opt				= COptionsManager()
 	opt:UndoGroup			("mm_opt_video_preset")
 	opt:UndoGroup			("mm_opt_video")

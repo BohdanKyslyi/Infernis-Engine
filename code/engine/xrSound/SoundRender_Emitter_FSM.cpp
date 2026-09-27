@@ -53,6 +53,7 @@ void CSoundRender_Emitter::update(float dt) {
         fTimeToPropagade = fTime;
         fade_volume = 1.f;
         occluder_volume = SoundRender->get_occlusion(p_source.position, .2f, occluder);
+        acoustic_hf = 1.f;
         smooth_volume =
             p_source.base_volume * p_source.volume *
             (owner_data->s_type == st_Effect ? psSoundVEffects * psSoundVFactor : psSoundVMusic) *
@@ -80,6 +81,7 @@ void CSoundRender_Emitter::update(float dt) {
         fTimeToPropagade = fTime;
         fade_volume = 1.f;
         occluder_volume = SoundRender->get_occlusion(p_source.position, .2f, occluder);
+        acoustic_hf = 1.f;
         smooth_volume =
             p_source.base_volume * p_source.volume *
             (owner_data->s_type == st_Effect ? psSoundVEffects * psSoundVFactor : psSoundVMusic) *
@@ -214,6 +216,8 @@ BOOL CSoundRender_Emitter::update_culling(float dt) {
 
     if (b2D) {
         occluder_volume = 1.f;
+        acoustic_hf = 1.f;
+        acoustic_mid = 1.f;
         fade_volume += dt * 10.f * (bStopping ? -1.f : 1.f);
     } else {
         // Check range
@@ -239,8 +243,56 @@ BOOL CSoundRender_Emitter::update_culling(float dt) {
         float occ = (owner_data->g_type == SOUND_TYPE_WORLD_AMBIENT)
                         ? 1.0f
                         : SoundRender->get_occlusion(p_source.position, .2f, occluder);
-        if (psSoundAcoustics && owner_data->g_type != SOUND_TYPE_WORLD_AMBIENT)
-            occ *= SoundRender->dynamic_transmission(p_source.position, owner_data->g_object);
+        if (psSoundAcoustics && owner_data->g_type != SOUND_TYPE_WORLD_AMBIENT) {
+            if (psSoundAcousticsPreset == 1) {
+                const auto bands = SoundRender->dynamic_transmission_bands(
+                    p_source.position, owner_data->g_object);
+                // The geometry/SOM result must remain the loudness ceiling.
+                // The former 0.70 floor made solid walls much too transparent.
+                const float direct = std::max(0.f, std::min(1.f, occ));
+                float low = powf(direct, 2.40f) * bands.low;
+                float mid = powf(direct, 2.80f) * bands.mid;
+                float high = powf(direct, 3.20f) * bands.high;
+                // Probes are rate limited per emitter. A clear path after a
+                // door opens or a window breaks is reflected by the next poll.
+                if (high < 0.75f && (diffraction_probe_time < 0.f ||
+                    SoundRender->fTimer_Value - diffraction_probe_time > 0.25f)) {
+                    const float probe = SoundRender->diffraction_transmission(
+                        p_source.position, owner_data->g_object);
+                    if (probe >= 0.f) {
+                        diffraction_gain = probe;
+                        diffraction_probe_time = SoundRender->fTimer_Value;
+                    }
+                } else if (high >= 0.75f) {
+                    diffraction_gain = 0.f;
+                }
+                // A detour provides a quiet secondary path; it cannot erase
+                // attenuation from a wall on the direct path.
+                low += (1.f - low) * diffraction_gain * 0.12f;
+                mid += (1.f - mid) * diffraction_gain * 0.25f;
+                high += (1.f - high) * diffraction_gain * 0.35f;
+                low = std::max(0.05f, std::min(1.f, low));
+                mid = std::min(low, std::max(0.05f, mid));
+                high = std::min(mid, std::max(0.025f, high));
+                // OpenAL EFX provides a continuous low-pass response. The
+                // computed mid band shapes the transition, while high/low
+                // defines its endpoint; it is not a three-band equalizer.
+                const float smoothing = std::min(1.f, std::max(0.f, dt) * 8.f);
+                acoustic_mid += (mid / low - acoustic_mid) * smoothing;
+                const float response = (high / low) * std::sqrt(acoustic_mid);
+                acoustic_hf += (std::max(0.025f, response) - acoustic_hf) * smoothing;
+                occ = low;
+            } else {
+                occ *= SoundRender->dynamic_transmission(p_source.position, owner_data->g_object);
+                acoustic_hf = 1.f;
+                acoustic_mid = 1.f;
+                diffraction_gain = 0.f;
+                diffraction_probe_time = -1.f;
+            }
+        } else {
+            acoustic_hf = 1.f;
+            acoustic_mid = 1.f;
+        }
         volume_lerp(occluder_volume, occ, 1.f, dt);
         clamp(occluder_volume, 0.f, 1.f);
     }

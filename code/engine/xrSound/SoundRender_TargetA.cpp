@@ -172,9 +172,10 @@ void CSoundRender_TargetA::apply_effects() {
         float occ = m_pEmitter->occluder_volume;
         clamp(occ, 0.05f, 1.0f);
         A_CHK(alFilterf(filter_lowpass, AL_LOWPASS_GAIN,
-            psSoundAcoustics ? std::max(0.25f, occ) : 1.0f));
+            psSoundAcoustics && psSoundAcousticsPreset == 0 ? std::max(0.25f, occ) : 1.0f));
         A_CHK(alFilterf(filter_lowpass, AL_LOWPASS_GAINHF,
-            psSoundAcoustics ? std::max(0.05f, occ * occ) : occ));
+            psSoundAcoustics ? (psSoundAcousticsPreset == 1 ? m_pEmitter->acoustic_hf :
+                std::max(0.05f, occ * occ)) : occ));
         A_CHK(alSourcei(pSource, AL_DIRECT_FILTER, filter_lowpass));
     } else {
         A_CHK(alSourcei(pSource, AL_DIRECT_FILTER, AL_FILTER_NULL));

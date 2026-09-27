@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="windows-1251"?>
 <string_table>
     <string id="ui_mm_audio_acoustics"><text>Scene acoustics</text></string>
+    <string id="ui_mm_acoustics_preset"><text>Acoustics preset</text></string>
+    <string id="ui_mm_acoustics_optimized"><text>Optimized</text></string>
+    <string id="ui_mm_acoustics_quality"><text>Quality</text></string>
     <string id="ui_mm_audio_efx"><text>EFX effects</text></string>
     <string id="ui_mm_audio_hrtf"><text>HRTF</text></string>
     <string id="ui_mm_audio_output"><text>Output layout</text></string>

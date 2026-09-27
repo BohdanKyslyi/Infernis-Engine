@@ -37,6 +37,7 @@ XRSOUND_API bool snd_localized_exists(LPCSTR name);
 XRSOUND_API extern int psSoundTargets;
 XRSOUND_API extern int psSoundCacheSizeMB;
 XRSOUND_API extern int psSoundAcoustics;
+XRSOUND_API extern u32 psSoundAcousticsPreset; // 0: optimized, 1: quality
 
 // Snapshot of moving obstacles; the sound thread does not dereference objects.
 
@@ -44,6 +45,10 @@ struct SAcousticObstacle {
     Fvector position;
     float radius;
     const CObject* object;
+    Fvector half_extent; // world-space proxy dimensions, copied on the game thread
+    Fvector axes[3]; // door leaf orientation; identity for other shapes
+    u8 shape; // 0 sphere, 1 capsule, 2 ellipsoid, 3 axis-aligned box, 4 door OBB
+    u8 material; // 0 solid, 1 glass, 2 wood, 3 metal, 4 fabric
 };
 
 // Flags

@@ -500,16 +500,23 @@
             <texture>ui_inGame2_checkbox</texture>
             <options_item entry="snd_acoustics" group="mm_opt_sound" depend="snd"/>
         </check_acoustics>
-        <cap_text_language x="15" y="243" width="135" height="24">
+        <cap_acoustics_preset x="15" y="243" width="135" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_acoustics_preset</text>
+        </cap_acoustics_preset>
+        <list_acoustics_preset x="175" y="245" width="235" height="20">
+            <options_item entry="snd_acoustics_preset" group="mm_opt_sound" depend="snd"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+        </list_acoustics_preset>
+        <cap_text_language x="15" y="273" width="135" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_text_language</text>
         </cap_text_language>
-        <list_text_language x="175" y="245" width="235" height="20" always_show_scroll="1">
+        <list_text_language x="175" y="275" width="235" height="20" always_show_scroll="1">
             <list_font r="170" g="170" b="170" font="letterica16"/>
         </list_text_language>
-        <cap_voice_language x="15" y="273" width="135" height="24">
+        <cap_voice_language x="15" y="303" width="135" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_voice_language</text>
         </cap_voice_language>
-        <list_voice_language x="175" y="275" width="235" height="20" always_show_scroll="1">
+        <list_voice_language x="175" y="305" width="235" height="20" always_show_scroll="1">
             <list_font r="170" g="170" b="170" font="letterica16"/>
         </list_voice_language>
     </tab_sound>

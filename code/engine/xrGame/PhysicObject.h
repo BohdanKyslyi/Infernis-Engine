@@ -73,6 +73,7 @@ private:
 
 public:
     bool get_door_vectors(Fvector& closed, Fvector& open) const;
+    virtual bool acoustic_door_box(Fobb& box) const override;
 
 public:
     CPhysicObject(void);

@@ -492,6 +492,9 @@ static xr_token snd_output_token[] = {
     { "snd_output_auto", 0 }, { "snd_output_stereo", 1 },
     { "snd_output_surround51", 2 }, { "snd_output_surround71", 3 }, { nullptr, -1 }
 };
+static xr_token snd_acoustics_preset_token[] = {
+    { "ui_mm_acoustics_optimized", 0 }, { "ui_mm_acoustics_quality", 1 }, { nullptr, -1 }
+};
 
 class CCC_SoundDevicesRefresh : public IConsole_Command {
 public:
@@ -694,6 +697,7 @@ void CCC_Register() {
 	// КОМАНДИ NOIR ENGINE
     CMD3(CCC_Mask, "snd_efx", &psSoundFlags, ss_EFX); // Керує EFX
     CMD4(CCC_Integer, "snd_acoustics", &psSoundAcoustics, 0, 1);
+    CMD3(CCC_Token, "snd_acoustics_preset", &psSoundAcousticsPreset, snd_acoustics_preset_token);
     CMD4(CCC_Integer, "snd_hrtf", &snd_hrtf, 0, 1);   // Керує HRTF
     CMD4(CCC_Integer, "snd_targets", &psSoundTargets, 4, 256);
     CMD4(CCC_Integer, "snd_cache_size", &psSoundCacheSizeMB, 4, 32);

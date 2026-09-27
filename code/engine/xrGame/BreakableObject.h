@@ -50,6 +50,8 @@ public:
     virtual void net_Export(NET_Packet& P);
     virtual void net_Import(NET_Packet& P);
     virtual BOOL UsedAI_Locations();
+    virtual bool acoustic_obstacle_active() const override { return !m_pPhysicsShell && !bRemoved; }
+    virtual u8 acoustic_material() const override { return 1; }
 
 private:
     void Init();

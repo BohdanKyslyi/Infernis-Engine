@@ -19,6 +19,7 @@ float psSoundVFactor = 1.0f;
 float psSoundVMusic = 1.f;
 int psSoundCacheSizeMB = 32;
 int psSoundAcoustics = 0;
+u32 psSoundAcousticsPreset = 0;
 
 CSoundRender_Core* SoundRender = 0;
 CSound_manager_interface* Sound = 0;

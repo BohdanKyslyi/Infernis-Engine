@@ -1,6 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <string_table>
     <string id="ui_mm_audio_acoustics"><text>Акустика сцени</text></string>
+    <string id="ui_mm_acoustics_preset"><text>Пресет акустики</text></string>
+    <string id="ui_mm_acoustics_optimized"><text>Оптимізація</text></string>
+    <string id="ui_mm_acoustics_quality"><text>Якість</text></string>
     <string id="ui_mm_audio_efx"><text>Ефекти EFX</text></string>
     <string id="ui_mm_audio_hrtf"><text>HRTF</text></string>
     <string id="ui_mm_audio_output"><text>Формат виводу</text></string>

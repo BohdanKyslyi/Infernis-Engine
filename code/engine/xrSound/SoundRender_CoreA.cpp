@@ -444,9 +444,13 @@ void CSoundRender_CoreA::update_environment(CSound_environment* _E) {
     
     // ФІКС ЗЛАМАНИХ СДК ЗОН
     // X-Ray не інтерполює ці параметри, тому для базових зон ми жорстко ставимо ідеальні дефолти OpenAL.
-    float target_reflections_delay   = bEFX_ScriptOverride ? s_env_reflections_delay   : 0.007f;
-    float target_reverb_delay        = bEFX_ScriptOverride ? s_env_reverb_delay        : 0.011f;
-    float target_reflections         = bEFX_ScriptOverride ? s_env_reflections         : -2602.0f;
+    const bool quality_room = psSoundAcoustics && psSoundAcousticsPreset == 1;
+    float target_reflections_delay   = bEFX_ScriptOverride ? s_env_reflections_delay   :
+        (quality_room ? E->ReflectionsDelay : 0.007f);
+    float target_reverb_delay        = bEFX_ScriptOverride ? s_env_reverb_delay        :
+        (quality_room ? E->ReverbDelay : 0.011f);
+    float target_reflections         = bEFX_ScriptOverride ? s_env_reflections         :
+        (quality_room ? E->Reflections : -2602.0f);
     float target_reverb              = bEFX_ScriptOverride ? s_env_reverb              : 200.0f;
     float target_air_absorption_hf   = bEFX_ScriptOverride ? s_env_air_absorption_hf   : -5.0f;
 
@@ -470,8 +474,10 @@ void CSoundRender_CoreA::update_environment(CSound_environment* _E) {
 
         env_density             += (target_density             - env_density)             * lerp_speed;
         env_room                += (target_room                - env_room)                * lerp_speed;
-        env_room_hf             += (target_room_hf             - env_room_hf)             * lerp_speed;
-        env_decay_time          += (target_decay_time          - env_decay_time)          * lerp_speed;
+        env_room_hf             += (target_room_hf             - env_room_hf)             *
+            (quality_room ? std::min(1.f, 5.f * fTimeDelta) : lerp_speed);
+        env_decay_time          += (target_decay_time          - env_decay_time)          *
+            (quality_room ? std::min(1.f, 0.8f * fTimeDelta) : lerp_speed);
         env_decay_hf_ratio      += (target_decay_hf_ratio      - env_decay_hf_ratio)      * lerp_speed;
         env_reflections_delay   += (target_reflections_delay   - env_reflections_delay)   * lerp_speed;
         env_reverb_delay        += (target_reverb_delay        - env_reverb_delay)        * lerp_speed;

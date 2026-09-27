@@ -25,6 +25,7 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
     fTimer_Delta = new_tm - fTimer_Value;
     float dt_sec = fTimer_Delta;
     fTimer_Value = new_tm;
+    diffraction_budget = psSoundAcoustics && psSoundAcousticsPreset == 1 ? 2 : 0;
 
     s_emitters_u++;
 
@@ -102,19 +103,55 @@ void CSoundRender_Core::update(const Fvector& P, const Fvector& D, const Fvector
         // Викликаємо наш новий метод замість i_eax_listener_set та commit
 		
         if (psSoundAcoustics) {
+            if (acoustic_last_preset != psSoundAcousticsPreset) {
+                room_probe_time = -1.f;
+                acoustic_room_initialized = false;
+                acoustic_last_preset = psSoundAcousticsPreset;
+            }
             update_acoustic_room(P);
             CSoundRender_Environment room = e_current;
             const float enclosure = 1.f - room_openness;
             if (enclosure > 0.5f) {
                 const float strength = (enclosure - 0.5f) * 2.f;
                 room.Room = std::max(room.Room, -10000.f + 7400.f * strength);
-                room.RoomHF = std::min(room.RoomHF, -300.f - room_extent * 35.f);
-                room.DecayTime = std::max(room.DecayTime, 0.35f + room_extent * 0.13f);
-                room.ReflectionsDelay = 0.003f + room_extent * 0.001f;
-                room.ReverbDelay = 0.01f + room_extent * 0.001f;
+                if (psSoundAcousticsPreset == 1) {
+                    const float extent = std::min(18.f, room_extent);
+                    room.RoomHF = std::min(room.RoomHF, -180.f - extent * 46.f);
+                    // Extent is a size proxy; the cubic term approximates volume.
+                    room.DecayTime = std::max(room.DecayTime,
+                        0.25f + 0.018f * extent * extent * strength);
+                    room.ReflectionsDelay = 0.003f + extent * 0.0012f;
+                    room.ReverbDelay = 0.009f + room_openness * 0.025f + extent * 0.0005f;
+                    room.Reflections = std::max(room.Reflections, -2602.f + strength * 700.f);
+                } else {
+                    room.RoomHF = std::min(room.RoomHF, -300.f - room_extent * 35.f);
+                    room.DecayTime = std::max(room.DecayTime, 0.35f + room_extent * 0.13f);
+                    room.ReflectionsDelay = 0.003f + room_extent * 0.001f;
+                    room.ReverbDelay = 0.01f + room_extent * 0.001f;
+                }
             }
-            update_environment(&room);
+            if (psSoundAcousticsPreset == 1) {
+                const float fast = 1.f - expf(-std::max(0.f, dt_sec) * 5.f);
+                const float medium = 1.f - expf(-std::max(0.f, dt_sec) * 2.f);
+                const float slow = 1.f - expf(-std::max(0.f, dt_sec) * 0.8f);
+                if (!acoustic_room_initialized) {
+                    acoustic_room_current = room;
+                    acoustic_room_initialized = true;
+                } else {
+                    acoustic_room_current.lerp(acoustic_room_current, room, medium);
+                    acoustic_room_current.RoomHF += (room.RoomHF - acoustic_room_current.RoomHF) * fast;
+                    acoustic_room_current.DecayTime +=
+                        (room.DecayTime - acoustic_room_current.DecayTime) * slow;
+                    acoustic_room_current.Reflections +=
+                        (room.Reflections - acoustic_room_current.Reflections) * medium;
+                }
+                update_environment(&acoustic_room_current);
+            } else {
+                update_environment(&room);
+            }
         } else {
+            acoustic_room_initialized = false;
+            acoustic_last_preset = u32(-1);
             update_environment(&e_current);
         }
     }

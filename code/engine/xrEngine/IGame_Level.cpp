@@ -12,6 +12,7 @@
 #include "environment.h"
 #include "xr_object.h"
 #include "feel_sound.h"
+#include <algorithm>
 
 ENGINE_API IGame_Level* g_pGameLevel = NULL;
 extern BOOL g_bLoaded;
@@ -197,9 +198,12 @@ void IGame_Level::OnFrame() {
         xr_vector<SAcousticObstacle> obstacles;
         if (psSoundAcoustics) {
             obstacles.reserve(96);
-            for (u32 i = 0; i < Objects.o_count() && obstacles.size() < 96; ++i) {
+            for (u32 i = 0; i < Objects.o_count() &&
+                 (psSoundAcousticsPreset == 1 || obstacles.size() < 96); ++i) {
                 CObject* object = Objects.o_get_by_iterator(i);
-                if (!object || !object->getEnabled() || object == pCurrentEntity) continue;
+                if (!object || !object->getEnabled() || !object->Visual() ||
+                    (psSoundAcousticsPreset == 1 && !object->acoustic_obstacle_active()) ||
+                    object == pCurrentEntity) continue;
                 const float radius = object->Radius();
                 if (radius < 0.35f || radius > 8.f ||
                     object->Position().distance_to_sqr(Device.vCameraPosition) > 1600.f) continue;
@@ -207,7 +211,61 @@ void IGame_Level::OnFrame() {
                 obstacle.position = object->Position();
                 obstacle.radius = radius;
                 obstacle.object = object;
+                obstacle.shape = 0;
+                obstacle.half_extent.set(radius, radius, radius);
+                obstacle.axes[0].set(1.f, 0.f, 0.f);
+                obstacle.axes[1].set(0.f, 1.f, 0.f);
+                obstacle.axes[2].set(0.f, 0.f, 1.f);
+                obstacle.material = object->acoustic_material();
+                if (psSoundAcousticsPreset == 1) {
+                    Fobb door_box;
+                    if (object->acoustic_door_box(door_box)) {
+                        obstacle.shape = 4;
+                        obstacle.position = door_box.m_translate;
+                        obstacle.half_extent = door_box.m_halfsize;
+                        obstacle.axes[0] = door_box.m_rotate.i;
+                        obstacle.axes[1] = door_box.m_rotate.j;
+                        obstacle.axes[2] = door_box.m_rotate.k;
+                        if (!obstacle.material) obstacle.material = 2;
+                    } else {
+                        Fbox world_box;
+                        world_box.xform(object->BoundingBox(), object->XFORM());
+                        if (!world_box.is_valid()) continue;
+                        world_box.getcenter(obstacle.position);
+                        Fvector dimensions;
+                        dimensions.sub(world_box.max, world_box.min);
+                        obstacle.half_extent.set(
+                            std::max(0.15f, dimensions.x * 0.5f),
+                            std::max(0.15f, dimensions.y * 0.5f),
+                            std::max(0.15f, dimensions.z * 0.5f));
+                        const float horizontal = std::max(obstacle.half_extent.x, obstacle.half_extent.z);
+                        obstacle.shape = obstacle.half_extent.y > horizontal * 1.5f ? 1 :
+                            (obstacle.half_extent.y < horizontal * 0.7f ? 3 : 2);
+                    }
+                    // Optional LTX material override for modded doors, panes and props.
+                    const shared_str section = object->cNameSect();
+                    if (section.size() && pSettings->line_exist(section.c_str(), "acoustic_material")) {
+                        LPCSTR material = pSettings->r_string(section.c_str(), "acoustic_material");
+                        if (!_stricmp(material, "glass")) obstacle.material = 1;
+                        else if (!_stricmp(material, "wood")) obstacle.material = 2;
+                        else if (!_stricmp(material, "metal")) obstacle.material = 3;
+                        else if (!_stricmp(material, "fabric")) obstacle.material = 4;
+                        else obstacle.material = 0;
+                    }
+                }
                 obstacles.push_back(obstacle);
+            }
+            if (psSoundAcousticsPreset == 1 && obstacles.size() > 96) {
+                const Fvector listener = Device.vCameraPosition;
+                std::partial_sort(obstacles.begin(), obstacles.begin() + 96, obstacles.end(),
+                    [&listener](const SAcousticObstacle& a, const SAcousticObstacle& b) {
+                        const float a_distance = a.position.distance_to_sqr(listener) *
+                            (a.shape == 4 ? 0.5f : (a.material == 1 ? 0.8f : 1.f));
+                        const float b_distance = b.position.distance_to_sqr(listener) *
+                            (b.shape == 4 ? 0.5f : (b.material == 1 ? 0.8f : 1.f));
+                        return a_distance < b_distance;
+                    });
+                obstacles.resize(96);
             }
         }
         Sound->set_acoustic_obstacles(obstacles.empty() ? nullptr : obstacles.data(), obstacles.size());

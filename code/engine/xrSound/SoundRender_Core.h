@@ -32,6 +32,11 @@ protected:
     CSoundRender_Environment e_target;
 
 public:
+    struct SAcousticBands {
+        float low = 1.f;
+        float mid = 1.f;
+        float high = 1.f;
+    };
     typedef std::pair<ref_sound_data_ptr, float> event;
     xr_vector<event> s_events;
 
@@ -64,6 +69,10 @@ protected:
     float room_probe_time;
     float room_openness;
     float room_extent;
+    CSoundRender_Environment acoustic_room_current;
+    bool acoustic_room_initialized = false;
+    u32 acoustic_last_preset = u32(-1);
+    u32 diffraction_budget = 0;
 
     xr_vector<CSoundRender_Source*> s_sources;
     xr_vector<CSoundRender_Emitter*> s_emitters;
@@ -114,6 +123,8 @@ public:
     virtual void set_geometry_occ(CDB::MODEL* M);
     virtual void set_acoustic_obstacles(const SAcousticObstacle* objects, u32 count);
     float dynamic_transmission(const Fvector& source, const CObject* owner);
+    SAcousticBands dynamic_transmission_bands(const Fvector& source, const CObject* owner);
+    float diffraction_transmission(const Fvector& source, const CObject* owner);
     void update_acoustic_room(const Fvector& listener);
     virtual void set_handler(sound_event* E);
 

@@ -248,11 +248,12 @@ bool CStringTable::SetLanguage(LPCSTR language) {
         Msg("! [string table] unavailable language: %s", language ? language : "");
         return false;
     }
-    // Explicit selection also reloads an already selected language. This lets
-    // newly installed string tables appear without restarting the game.
-	
-    if (_stricmp(Language(), language))
-        selected_language = language;
+    // Selecting the active language is a no-op. Rebuilding the table here
+    // while a menu holds translated text can leave stale labels behind.
+    // The dedicated reload_localization command rescans newly installed files.
+    if (!_stricmp(Language(), language))
+        return true;
+    selected_language = language;
     if (pData)
         CStringTable().rescan();
     return true;

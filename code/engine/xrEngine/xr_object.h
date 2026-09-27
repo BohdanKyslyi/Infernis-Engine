@@ -123,6 +123,10 @@ public:
     ICF const Fvector& Position() const { return renderable.xform.c; }
     virtual float Radius() const;
     virtual const Fbox& BoundingBox() const;
+    // Queried on the game thread while building the sound-thread snapshot.
+    virtual bool acoustic_obstacle_active() const { return true; }
+    virtual bool acoustic_door_box(Fobb& box) const { return false; }
+    virtual u8 acoustic_material() const { return 0; }
 
     IC IRender_Sector* Sector() { return H_Root()->spatial.sector; }
     IC IRender_ObjectSpecific* ROS() { return renderable_ROS(); }
