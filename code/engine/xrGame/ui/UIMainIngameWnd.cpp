@@ -653,12 +653,18 @@ void CUIMainIngameWnd::UpdateMainIndicators() {
     const float thirst_critical = pActor->conditions().ThirstCritical();
     const float thirst_koef = (thirst - thirst_critical) /
         (thirst >= thirst_critical ? 1.0f - thirst_critical : thirst_critical);
-    m_ind_thirst->Show(thirst_koef <= 0.5f);
-    if (thirst_koef <= 0.5f) {
-        const u32 color = thirst_koef > 0.0f ? color_argb(255, 130, 210, 255) :
-            thirst_koef > -0.5f ? color_argb(255, 255, 210, 60) :
-                                  color_argb(255, 255, 75, 65);
-        m_ind_thirst->TextItemControl()->SetTextColor(color);
+    m_ind_thirst->Show(thirst_koef >= 0.5f);
+    if (thirst_koef >= 0.5f) {
+        m_ind_thirst->Show(false);
+    }
+        else {
+            m_ind_thirst->Show(true);
+            if (thirst_koef > 0.0f)
+                m_ind_thirst->InitTexture("ui_inGame2_circle_thirst_green");
+            else if (thirst_koef > -0.5f)
+                m_ind_thirst->InitTexture("ui_inGame2_circle_thirst_yellow");
+            else
+                m_ind_thirst->InitTexture("ui_inGame2_circle_thirst_red");
     }
     // Armor broken icon
     CCustomOutfit* outfit =
