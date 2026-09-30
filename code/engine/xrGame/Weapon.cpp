@@ -1219,9 +1219,9 @@ float CWeapon::AlternativeHudFovFactor() const {
 
 bool CWeapon::Is3DScopeEnabled() const {
     if (!IsScopeAttached() || !(psDeviceFlags.test(rsR4) || psDeviceFlags.test(rsR3) || psDeviceFlags.test(rsR2)) ||
-        !pSettings->section_exist("weapon_scopes") ||
-        !pSettings->line_exist("weapon_scopes", "enable_3d_scopes") ||
-        !pSettings->r_bool("weapon_scopes", "enable_3d_scopes"))
+        !pSettings->section_exist("shader_extensions") ||
+        !pSettings->line_exist("shader_extensions", "enable_3d_scopes") ||
+        !pSettings->r_bool("shader_extensions", "enable_3d_scopes"))
         return false;
 
     const bool enabled = READ_IF_EXISTS(pSettings, r_bool,
@@ -1249,7 +1249,7 @@ bool CWeapon::ScopeLensShouldRender() const {
         return false;
 
     const LPCSTR setting = READ_IF_EXISTS(pSettings, r_string,
-        "weapon_scopes", "scope_render_mode", "balanced");
+        "shader_extensions", "scope_render_mode", "balanced");
     if (!strcmp(setting, "quality"))
         return true;
     if (!strcmp(setting, "performance") || !strcmp(setting, "perfomance"))
@@ -1503,9 +1503,9 @@ void CWeapon::OnZoomIn() {
     m_zoom_params.m_bIsZoomModeNow = true;
     if (IsScopeAttached()) {
         const shared_str scope_section = ScopeSettingSection("scope_3d");
-        const bool global = pSettings->section_exist("weapon_scopes") &&
-            pSettings->line_exist("weapon_scopes", "enable_3d_scopes") &&
-            pSettings->r_bool("weapon_scopes", "enable_3d_scopes");
+        const bool global = pSettings->section_exist("shader_extensions") &&
+            pSettings->line_exist("shader_extensions", "enable_3d_scopes") &&
+            pSettings->r_bool("shader_extensions", "enable_3d_scopes");
         const bool configured = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d", false);
         Msg("* ScopeLens: weapon=%s optic=%s R4=%d global=%d scope_3d=%d lens_fov=%.1f active=%d",
             cNameSect().c_str(), scope_section.c_str(), !!psDeviceFlags.test(rsR4),

@@ -15,11 +15,11 @@ IC bool pred_sp_sort(ISpatial* _1, ISpatial* _2) {
 // screen-space sampling and the weapon's point of aim stay exactly the same.
 static Fmatrix scope_visibility_transform() {
     if (!Device.scopeLensPass || !pSettings ||
-        !pSettings->section_exist("weapon_scopes") ||
-        !pSettings->line_exist("weapon_scopes", "scope_world_cull_scale"))
+        !pSettings->section_exist("shader_extensions") ||
+        !pSettings->line_exist("shader_extensions", "scope_world_cull_scale"))
         return Device.mFullTransform;
 
-    const float scale = pSettings->r_float("weapon_scopes", "scope_world_cull_scale");
+    const float scale = pSettings->r_float("shader_extensions", "scope_world_cull_scale");
     if (!(scale >= 0.5f && scale < 1.f))
         return Device.mFullTransform;
 
