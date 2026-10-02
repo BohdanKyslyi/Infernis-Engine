@@ -111,8 +111,8 @@ void CUITalkWnd::InitTalkDialog() {
     UITalkDialogWnd->UICharacterInfoRight.InitCharacter(m_pOthersInvOwner->object_id());
 
     if (m_bShowPortraits) {
-        if (m_UIInfoLeft) m_UIInfoLeft->InitCharacter(m_pOurInvOwner->object_id());
-        if (m_UIInfoRight) m_UIInfoRight->InitCharacter(m_pOthersInvOwner->object_id());
+        if (m_UIInfoLeft) m_UIInfoLeft->InitCharacter(m_pOthersInvOwner->object_id());
+        if (m_UIInfoRight) m_UIInfoRight->InitCharacter(m_pOurInvOwner->object_id());
     }
 	
     UITalkDialogWnd->ClearAll();
