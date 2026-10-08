@@ -30,13 +30,30 @@ void CUICursor::InitInternal() {
     m_static = xr_new<CUIStatic>();
     m_static->InitTextureEx("ui\\ui_ani_cursor", "hud\\cursor");
     Frect rect;
-    rect.set(0.0f, 0.0f, 40.0f, 40.0f);
-    m_static->SetTextureRect(rect);
-    Fvector2 sz;
-    sz.set(rect.rb);
-    sz.x *= UI().get_current_kx();
 
-    m_static->SetWndSize(sz);
+    const bool use_kanon_team_modern_cursor =
+        !pSettings->section_exist("ui_extensions") ||
+        !pSettings->line_exist("ui_extensions", "use_kanon_team_modern_cursor") ||
+        pSettings->r_bool("ui_extensions", "use_kanon_team_modern_cursor");
+    if (use_kanon_team_modern_cursor)
+    {
+        rect.set(0.0f, 0.0f, 92.0f, 92.0f);
+        m_static->SetTextureRect(rect);
+        const float cursorSize = 40.0f; // розмір курсора на екрані
+        Fvector2 sz;
+        sz.set(cursorSize * UI().get_current_kx(), cursorSize);
+        m_static->SetWndSize(sz);
+    }
+    else
+    {
+        rect.set(0.0f, 0.0f, 40.0f, 40.0f);
+        m_static->SetTextureRect(rect);
+        Fvector2 sz;
+        sz.set(rect.rb);
+        sz.x *= UI().get_current_kx();
+
+        m_static->SetWndSize(sz);
+    }
     m_static->SetStretchTexture(true);
 
     u32 screen_size_x = GetSystemMetrics(SM_CXSCREEN);
