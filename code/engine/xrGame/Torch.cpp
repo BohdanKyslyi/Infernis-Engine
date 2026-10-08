@@ -78,6 +78,9 @@ void CTorch::Load(LPCSTR section) {
     light_trace_bone = pSettings->r_string(section, "light_trace_bone");
 
     m_bNightVisionEnabled = !!pSettings->r_bool(section, "night_vision");
+
+    m_sounds.LoadSound(section, "snd_torch_on", "TorchOnSnd", false, SOUND_TYPE_ITEM_USING);
+    m_sounds.LoadSound(section, "snd_torch_off", "TorchOffSnd", false, SOUND_TYPE_ITEM_USING);
 }
 
 void CTorch::SwitchNightVision() {
@@ -152,8 +155,18 @@ void CTorch::Switch() {
     Switch(bActive);
 }
 
-void CTorch::Switch(bool light_on) {
+void CTorch::Switch(bool light_on, bool use_sounds) {
+    if (use_sounds && m_switched_on != light_on) {
+        CActor* actor = smart_cast<CActor*>(H_Parent());
+        if (actor) {
+            const bool hud_mode = (Level().CurrentEntity() == H_Parent());
+            m_sounds.PlaySound(light_on ? "TorchOnSnd" : "TorchOffSnd", actor->Position(), actor,
+                               hud_mode);
+        }
+    }
+
     m_switched_on = light_on;
+
     if (can_use_dynamic_lights()) {
         light_render->set_active(light_on);
 
@@ -173,6 +186,7 @@ void CTorch::Switch(bool light_on) {
         pVisual->CalculateBones(TRUE);
     }
 }
+
 bool CTorch::torch_active() const { return (m_switched_on); }
 
 BOOL CTorch::net_Spawn(CSE_Abstract* DC) {
@@ -216,8 +230,8 @@ BOOL CTorch::net_Spawn(CSE_Abstract* DC) {
     glow_render->set_color(clr);
     glow_render->set_radius(pUserData->r_float("torch_definition", "glow_radius"));
 
-    //включить/выключить фонарик
-    Switch(torch->m_active);
+    // увімкнути/вимкнути ліхтар в залежності від стану об'єкта на сервері
+    Switch(torch->m_active, false);
     VERIFY(!torch->m_active || (torch->ID_Parent != 0xffff));
 
     if (torch->ID_Parent == 0)

@@ -44,8 +44,9 @@ public:
 
     virtual void UpdateCL();
 
+
     void Switch();
-    void Switch(bool light_on);
+    void Switch(bool light_on, bool use_sounds = true);
     bool torch_active() const;
 
     virtual bool can_be_attached() const;
