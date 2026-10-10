@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="st_mystery_backpack">
+		<text>Рюкзак с вещами</text>
+	</string>
+	<string id="st_mystery_backpack_descr">
+		<text>Вряд ли удастся взять с собой много вещей, не имея переносного хранилища. Для этого люди используют рюкзаки. Этот рюкзак уже забит барахлом нещасного сталкера, который не дожил до осознания, что из Зоны надо валить.</text>
+	</string>
+	<string id="st_actor_toolkit">
+		<text>Ремонтный набор</text>
+	</string>
+	<string id="st_actor_toolkit_descr">
+		<text>Универсальный набор для ремонта повреждённых предметов. Имеет высокие прочность и стоимость.</text>
+	</string>
+</string_table>

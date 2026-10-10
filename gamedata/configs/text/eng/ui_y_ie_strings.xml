@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="st_default_subtitle_caption">
+        <text>Message</text>
+    </string>
+	<string id="st_currency_name">
+		<text>UAH</text>
+	</string>
+	<string id="st_undress_backpack">
+		<text>unequip backpack</text>
+	</string>
+	<string id="st_dress_backpack">
+		<text>equip backpack</text>
+	</string>
+	<string id="st_move_to_bag">
+		<text>move to bag</text>
+	</string>
+	<string id="st_repair">
+		<text>repair</text>
+	</string>
+	<string id="car_character_use">
+		<text>Use machine gun ($$ACTION_USE$$)</text>
+	</string>
+	<string id="st_discord_main_menu">
+		<text>In main menu</text>
+	</string>
+	<string id="st_discord_exploring_zone">
+		<text>Exploring the Zone</text>
+	</string>
+	<string id="st_discord_on_mission">
+		<text>On a mission</text>
+	</string>
+	<string id="monster_character_use">
+		<text>Get trophies ($$ACTION_USE$$)</text>
+	</string>
+    <string id="ui_inv_thirst">
+		<text>Thirst</text>
+	</string>
+</string_table>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="st_mystery_backpack">
+        <text>Mystery backpack</text>
+    </string>
+    <string id="st_mystery_backpack_descr">
+        <text>It's unlikely you'll be able to carry a lot of stuff with you without a backpack. That’s why stalkers need backpacks. This backpack is already stuffed with the belongings of an unfortunate stalker who didn’t live long enough to realize he needed to get out of the Zone.</text>
+    </string>
+    <string id="st_actor_toolkit">
+        <text>Repair kit</text>
+	</string>
+    <string id="st_actor_toolkit_descr">
+        <text>A versatile kit for repairing damaged items. It’s very durable but comes at a high price.</text>
+    </string>
+</string_table>

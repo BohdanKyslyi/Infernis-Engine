@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="inf_mm_cam1">
+		<text>Вид от 1-го лица</text>
+	</string>
+	<string id="inf_mm_cam2">
+		<text>Вид от 2-го лица</text>
+	</string>
+	<string id="inf_mm_cam3">
+		<text>Вид от 3-го лица</text>
+	</string>
+	<string id="inf_mm_quick_kick">
+		<text>Быстрый удар</text>
+	</string>
+	<string id="inf_mm_quick_grenade">
+		<text>Быстрый кидок гранаты</text>
+	</string>
+	<string id="inf_mm_wpn_inspect">
+		<text>Осмотреть оружие</text>
+	</string>
+	<string id="inf_mm_wpn_zoom_alter">
+		<text>Альтернативное прицеливание</text>
+	</string>
+	<string id="inf_mm_wipe_visor">
+		<text>Протереть экран</text>
+	</string>
+</string_table>

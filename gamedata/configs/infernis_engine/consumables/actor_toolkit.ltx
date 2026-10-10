@@ -1,0 +1,43 @@
+[actor_toolkit]:booster
+$spawn 				= "food and drugs\actor_toolkit"
+class				= D_REPKIT
+visual				= dynamics\devices\dev_rukzak\dev_rukzak.ogf
+
+inv_name			= st_actor_toolkit
+inv_name_short		= st_actor_toolkit
+description			= st_actor_toolkit_descr
+
+inv_weight			= 6
+
+inv_grid_width     = 2 ; Довжина іконки
+inv_grid_height    = 2 ; Ширина іконки
+inv_grid_x         = 10 ; Положення іконки по X
+inv_grid_y         = 25 ; Положення іконки по Y
+
+inv_weight			= 1.0 ; Вага предмету
+cost				= 50000; Вартість (у гривнях)
+
+use_sound			= $silent
+
+eat_portions_num = 10 ; Кількість порцій предмету
+
+hud = actor_toolkit_hud_model ; Підключення системи hud і анімацій використання
+
+[actor_toolkit_hud_model]:animated_item
+timing						= 10000
+main_sect					= actor_toolkit
+hud	                    	= actor_toolkit_hud
+snd_using_anim	 			= device\toolkit
+cam_eff_name       			= ie\toolkit.anm
+cam_eff_cyclic     			= false
+cam_eff_hud_affect 			= false
+
+[actor_toolkit_hud]:animated_item_hud
+;item_visual	            	= dynamics\devices\dev_conserv\dev_conserv_hud.ogf
+anm_show						= toolkit
+hands_position					= 0,-0.035,0.27
+hands_position_16x9				= 0,-0.035,0.27
+hands_orientation				= 0,13,0
+hands_orientation_16x9			= 0,13,0
+hud_fov_degrees 				= 27.5
+viewport_near 					= 0.013

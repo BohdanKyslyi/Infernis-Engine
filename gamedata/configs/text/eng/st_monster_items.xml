@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="mutant_boar_leg">
+		<text>Boar's hoof</text>
+	</string>
+	<string id="mutant_boar_leg_description">
+		<text>Boar's hooves can be used to produce a number of drugs, including an antiradiation serum.</text>
+	</string>
+</string_table>

@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <string_table>
+	<string id="st_default_subtitle_caption">
+        <text>Повідомлення</text>
+    </string>
 	<string id="st_currency_name">
 		<text>UAH</text>
 	</string>
@@ -12,14 +15,11 @@
 	<string id="st_move_to_bag">
 		<text>прибрати</text>
 	</string>
+	<string id="st_repair">
+		<text>відремонтувати</text>
+	</string>
 	<string id="car_character_use">
 		<text>Використати кулемет ($$ACTION_USE$$)</text>
-	</string>
-	<string id="st_mystery_backpack">
-		<text>Рюкзак з речами</text>
-	</string>
-	<string id="st_mystery_backpack_descr">
-		<text>Втягнути з собою багато речей, не маючи переносного сховища навряд чи вийде. Для цього сталкерам потрібні рюкзаки. Цей рюкзак вже забитий барахлом нещасного сталкера, який не дожив до усвідомлення, що з Зони треба валити.</text>
 	</string>
 	<string id="st_discord_main_menu">
 		<text>У головному меню</text>
@@ -32,5 +32,8 @@
 	</string>
 	<string id="monster_character_use">
 		<text>Зрізати трофеї ($$ACTION_USE$$)</text>
+	</string>
+    <string id="ui_inv_thirst">
+		<text>Спрага</text>
 	</string>
 </string_table>

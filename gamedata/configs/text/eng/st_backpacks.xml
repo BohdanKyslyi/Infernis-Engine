@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="inv_backpack_base_name">
+        <text>Beginner's Backpack</text>
+    </string>
+    <string id="inv_backpack_base_desc">
+        <text>It's unlikely you'll be able to carry a lot of stuff with you without a backpack. That’s why stalkers need backpacks. This model isn’t particularly stylish, but it can hold a fair amount of gear, allowing beginner stalkers to carry not only a pistol, first-aid kit, and knife, but also an additional weapon.</text>
+	</string>
+    <string id="inv_backpack_stalker_name">
+        <text>Stalker Backpack</text>
+    </string>
+    <string id="inv_backpack_stalker_desc">
+        <text>A standard field backpack carried by experienced stalkers. It can hold an assault rifle and ammunition for it, as well as provisions for the initial period. It is the most common type of backpack in the Zone, so it isn’t worth much to most merchants.</text>
+    </string>
+</string_table>

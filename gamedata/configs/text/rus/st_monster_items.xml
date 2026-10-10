@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="mutant_boar_leg">
+		<text>Копыто кабана</text>
+	</string>
+	<string id="mutant_boar_leg_description">
+		<text>Копыто кабана используется ученными для изготовления ряда лекарств, самым распространенным из которых является противорадиационная сыворотка.</text>
+	</string>
+</string_table>

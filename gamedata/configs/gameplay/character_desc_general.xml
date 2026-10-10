@@ -66,6 +66,49 @@
 		<visual>actors\stalker_hero\stalker_hero_1</visual>
 	</specific_character>
 
+	<specific_character id="actor_visual_stalker" team_default = "1">
+		<name>GENERATE_NAME_stalker</name>
+		<icon>ui_inGame2_Hero</icon>
+		<map_icon x="1" y="0"></map_icon>
+		<bio>Опытный сталкер. Детальная информация отсутствует.</bio>
+
+		<class>actor_visual_stalker</class>
+		<community>ecolog</community> <terrain_sect>stalker_terrain</terrain_sect>
+    <snd_config>characters_voice\human_01\stalker\</snd_config>
+
+    <rank>0</rank>
+		<reputation>0</reputation>
+
+		<visual>actors\stalker_hero\stalker_hero_1</visual>
+		<supplies>
+      [spawn] \n
+	device_torch = 1 \n
+	wpn_binoc = 1 \n
+	wpn_knife = 1 \n
+	hand_radio = 1 \n
+	hand_radio_r = 1 \n
+
+	ammo_9x18_fmj = 1 \n
+	ammo_9x19_fmj = 1 \n
+	ammo_11.43x23_fmj = 1 \n
+	ammo_5.45x39_fmj = 1 \n
+	ammo_5.56x45_ss190 = 1 \n
+	ammo_pkm_100 = 1 \n
+	ammo_7.62x54_7h1 = 1 \n
+	ammo_gauss_cardan = 1 \n
+	ammo_9x39_pab9 = 1 \n
+	ammo_12x70_buck = 1 \n
+	ammo_og-7b = 1 \n
+	ammo_vog-25 = 1 \n
+
+#include "gameplay\character_items.xml"
+#include "gameplay\character_food.xml"
+#include "gameplay\character_drugs.xml"
+    </supplies>
+#include "gameplay\character_criticals_4.xml"
+#include "gameplay\character_dialogs.xml"
+	</specific_character>
+
 <!-- 													    -->
 <!-- 		`				Duty 							-->
 <!-- 														-->

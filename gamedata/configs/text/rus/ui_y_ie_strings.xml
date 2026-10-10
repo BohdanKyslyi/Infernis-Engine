@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="st_default_subtitle_caption">
+        <text>Сообщение</text>
+    </string>
+	<string id="st_currency_name">
+		<text>UAH</text>
+	</string>
+	<string id="st_undress_backpack">
+		<text>снять рюкзак</text>
+	</string>
+	<string id="st_dress_backpack">
+		<text>надеть рюкзак</text>
+	</string>
+	<string id="st_move_to_bag">
+		<text>убрать в инвентарь</text>
+	</string>
+	<string id="st_repair">
+		<text>отремонтировать</text>
+	</string>
+	<string id="car_character_use">
+		<text>Использовать пулемёт ($$ACTION_USE$$)</text>
+	</string>
+	<string id="st_discord_main_menu">
+		<text>В главном меню</text>
+	</string>
+	<string id="st_discord_exploring_zone">
+		<text>Исследует Зону</text>
+	</string>
+	<string id="st_discord_on_mission">
+		<text>Выполняет задание</text>
+	</string>
+	<string id="monster_character_use">
+		<text>Срезать трофеи ($$ACTION_USE$$)</text>
+	</string>
+    <string id="ui_inv_thirst">
+		<text>Жажда</text>
+	</string>
+</string_table>

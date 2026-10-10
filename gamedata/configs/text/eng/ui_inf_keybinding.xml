@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<string_table>
+	<string id="inf_mm_cam1">
+		<text>First-person perspective</text>
+	</string>
+	<string id="inf_mm_cam2">
+		<text>Second-person perspective</text>
+	</string>
+	<string id="inf_mm_cam3">
+		<text>Third-person perspective</text>
+	</string>
+	<string id="inf_mm_quick_kick">
+		<text>Quick punch</text>
+	</string>
+	<string id="inf_mm_quick_grenade">
+		<text>Quick grenade throw</text>
+	</string>
+	<string id="inf_mm_wpn_inspect">
+		<text>Inspect weapon</text>
+	</string>
+	<string id="inf_mm_wpn_zoom_alter">
+		<text>Alternative zoom</text>
+	</string>
+	<string id="inf_mm_wipe_visor">
+		<text>Raindrops wipe</text>
+	</string>
+</string_table>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<string_table>
+    <string id="ui_mm_audio_acoustics"><text>Акустика сцены</text></string>
+    <string id="ui_mm_acoustics_preset"><text>Пресет акустики</text></string>
+    <string id="ui_mm_acoustics_optimized"><text>Оптимизация</text></string>
+    <string id="ui_mm_acoustics_quality"><text>Качество</text></string>
+    <string id="ui_mm_audio_efx"><text>Эффекты EFX</text></string>
+    <string id="ui_mm_audio_hrtf"><text>HRTF</text></string>
+    <string id="ui_mm_audio_output"><text>Формат вывода</text></string>
+    <string id="ui_mm_audio_hint"><text>HRTF — для наушников. Акустика: помещение и преграды (нужен EFX). Изменение устройства — после «Применить».</text></string>
+    <string id="ui_mm_audio_apply_failed"><text>Не удалось применить настройки звука. Восстановлены предыдущие настройки устройства и формата. Проверьте подключение устройства и поддержку расширений OpenAL Soft. Подробнее — в журнале игры.</text></string>
+    <string id="snd_output_auto"><text>Автоматически</text></string>
+    <string id="snd_output_stereo"><text>Стерео</text></string>
+    <string id="snd_output_surround51"><text>Объёмный 5.1</text></string>
+    <string id="snd_output_surround71"><text>Объёмный 7.1</text></string>
+    <string id="ui_mm_text_language"><text>Язык текста</text></string>
+    <string id="ui_mm_voice_language"><text>Язык озвучки</text></string>
+    <string id="ui_mm_voice_default"><text>По умолчанию</text></string>
+</string_table>

@@ -6,10 +6,11 @@ inv_name			= st_mystery_backpack
 inv_name_short		= st_mystery_backpack
 description			= st_mystery_backpack_descr
 
-inv_grid_width     = 2 ; Довжина іконки
-inv_grid_height    = 3 ; Ширина іконки
-inv_grid_x         = 18 ; Положення іконки по X
-inv_grid_y         = 22 ; Положення іконки по Y
+icons_texture					= ui\ui_icon_backpacks_iba
+inv_grid_width     				= 2
+inv_grid_height    				= 3
+inv_grid_x         				= 0
+inv_grid_y         				= 0
 
 inv_weight			= 1.0 ; Вага предмету
 cost				= 1000; Вартість (у гривнях)
@@ -17,25 +18,25 @@ cost				= 1000; Вартість (у гривнях)
 next_section = backpack_stalker ; Секція, яку ГГ гарантовано отримає розпакувавши цей предмет
 next_section_2 = medkit, 2 ; Декілька секцій одного виду, які ГГ гарантовано отримає розпакувавши цей предмет
 
-next_random   = snag_loot_food ; Набір секцій, з яких ГГ рандомно отримає якийсь предмет
-next_random_2 = snag_loot_detector
-next_random_3 = snag_loot_helmet
-next_random_4 = snag_loot_weapon
+next_random   = mystery_backpack_food ; Набір секцій, з яких ГГ рандомно отримає якийсь предмет
+next_random_2 = mystery_backpack_detectors
+next_random_3 = mystery_backpack_helmets
+next_random_4 = mystery_backpack_weapons
 
-[snag_loot_food]
+[mystery_backpack_food]
 option = bandage, 5, medkit, 3, conserva, 2
 option_2 = medkit, 5, vodka, 3, kolbasa, 2
 option_3 = antirad, 3, medkit, 2, bandage, 1, kolbasa, 2, conserva, 1
 	
-[snag_loot_detector]
+[mystery_backpack_detectors]
 option   = detector_elite
 option_2 = detector_advanced
 
-[snag_loot_helmet]
+[mystery_backpack_helmets]
 option   = helm_hardhat
 option_2 = helm_respirator
 
-[snag_loot_weapon]
+[mystery_backpack_weapons]
 option = wpn_val, 1, ammo_9x39_ap, 3
 option_2 = wpn_spas12, 1, ammo_12x70_buck, 4
 option_3 = wpn_desert_eagle, 1, ammo_11.43x23_fmj, 3, ammo_11.43x23_hydro, 2

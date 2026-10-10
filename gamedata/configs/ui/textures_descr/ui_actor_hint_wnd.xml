@@ -68,10 +68,6 @@
 	    <texture id="ui_inGame2_circle_Helmetbroken_orange" x="200" y="927" width="33" height="35" />
 	    <texture id="ui_inGame2_circle_Helmetbroken_red" x="200" y="969" width="33" height="35" />
 		
-	    <texture id="ui_inGame2_circle_Backpackbroken_green" x="868" y="981" width="37" height="39" />
-	    <texture id="ui_inGame2_circle_Backpackbroken_yellow" x="916" y="981" width="35" height="39" />
-	    <texture id="ui_inGame2_circle_Backpackbroken_red" x="962" y="981" width="35" height="39" />
-		
 	    <texture id="ui_inGame2_circle_Armorbroken_green" x="782" y="983" width="33" height="35" />
 	    <texture id="ui_inGame2_circle_Armorbroken_yellow" x="247" y="886" width="33" height="35" />
 	    <texture id="ui_inGame2_circle_Armorbroken_orange" x="247" y="927" width="33" height="35" />
@@ -118,5 +114,14 @@
 	    <texture id="ui_inGame2_radiation_inv_green" 	x="865" y="933" width="45" height="45" />
 	    <texture id="ui_inGame2_radiation_inv_yellow" 	x="773" y="933" width="45" height="45" />
 	    <texture id="ui_inGame2_radiation_inv_red" 		x="589" y="933" width="45" height="45" />
+	</file>
+    <file name="ui\ui_actor_hint_wnd_ie">
+	    <texture id="ui_inGame2_circle_Backpackbroken_green" x="0" y="0" width="33" height="35" />
+	    <texture id="ui_inGame2_circle_Backpackbroken_yellow" x="33" y="0" width="33" height="35" />
+	    <texture id="ui_inGame2_circle_Backpackbroken_red" x="66" y="0" width="33" height="35" />
+		
+	    <texture id="ui_inGame2_circle_thirst_green" x="0" y="35" width="33" height="35" />
+	    <texture id="ui_inGame2_circle_thirst_yellow" x="33" y="35" width="33" height="35" />
+	    <texture id="ui_inGame2_circle_thirst_red" x="66" y="35" width="33" height="35" />
 	</file>
 </w>
