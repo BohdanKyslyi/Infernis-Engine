@@ -3,6 +3,8 @@
 #include "igame_persistent.h"
 #include "environment.h"
 #include <algorithm>
+#include <io.h>
+#include "RainConfigEdit.h"
 
 #ifdef _EDITOR
 #include "ui_toolscustom.h"
@@ -23,7 +25,6 @@ static const float sink_offset = -(max_distance - source_offset);
 static const float drop_length = 5.f;
 static const float drop_width = 0.30f;
 static const float drop_angle = 3.0f;
-static const float drop_max_wind_vel = 20.0f;
 static const float drop_speed_min = 40.f;
 static const float drop_speed_max = 80.f;
 
@@ -41,6 +42,34 @@ static bool rain_sound_available(LPCSTR name) {
     if (snd_localized_exists(localized)) return true;
     Msg("! [Rain] Sound is missing, disabling it: %s", localized);
     return false;
+}
+
+// Read the physical override first. FS.r_open alone cannot recover an
+// unindexed .ltx, while .ogg/.xml have a special fallback in LocatorAPI.
+static bool rain_read_config(LPCSTR path, std::string& bytes, bool& exists) {
+    exists = false;
+    const auto result = rain_config::read_loose_file(path, bytes);
+    if (result == rain_config::ReadResult::loaded) {
+        exists = true;
+    } else if (result == rain_config::ReadResult::error) {
+        Msg("! Weather editor: rain config disk read failed [%s], errno=%d", path, errno);
+        return false;
+    } else {
+        if (!FS.exist(path)) return true;
+        exists = true; // A packed config is still a valid source.
+        IReader* reader = FS.r_open(path);
+        if (!reader) {
+            Msg("! Weather editor: rain config archive read failed [%s]", path);
+            return false;
+        }
+        bytes.assign(static_cast<const char*>(reader->pointer()), reader->length());
+        FS.r_close(reader);
+    }
+    if (bytes.size() > 0x7fffffffU) {
+        Msg("! Weather editor: rain config is too large [%s]", path);
+        return false;
+    }
+    return true;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -109,8 +138,8 @@ RainDropsSoA::~RainDropsSoA() {
 CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
     // Дефолтні значення на випадок, якщо конфігу немає або там помилка
 	
-    LPCSTR snd_name_2d = "ambient\\rain";
-    LPCSTR snd_name_portal = "ambient\\rain";
+    shared_str snd_name_2d = "ambient\\rain";
+    shared_str snd_name_portal = "ambient\\rain";
     
     // Read extension switches from the merged global settings. Their source
     // file and include layout are intentionally irrelevant.
@@ -126,8 +155,14 @@ CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
     }
 
     string_path wex_path;
-    if (FS.exist(wex_path, "$game_config$", "environment\\noirWeatherEffect.ltx")) {
-        CInifile wex_ini(wex_path);
+    FS.update_path(wex_path, "$game_config$", "environment\\noirWeatherEffect.ltx");
+    std::string config_bytes;
+    bool config_exists = false;
+    if (rain_read_config(wex_path, config_bytes, config_exists) && config_exists) {
+        IReader config_reader(config_bytes.data(), static_cast<int>(config_bytes.size()));
+        string_path config_directory;
+        FS.update_path(config_directory, "$game_config$", "environment\\");
+        CInifile wex_ini(&config_reader, config_directory);
         
         // Зчитуємо шляхи до базових звуків дощу
 		
@@ -162,25 +197,39 @@ CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
             m_bEnableMaterialSounds = false; 
         }
 
-        if (m_bEnableDynamicWind && wex_ini.section_exist("dynamic_wind")) {
-            m_fWindMaxAngle = wex_ini.r_float("dynamic_wind", "max_angle");
-            m_fWindSpeedMultiplier = wex_ini.r_float("dynamic_wind", "speed_wind_multiplier");
-        } else if (m_bEnableDynamicWind) {
-            Msg("! [Noir Engine]: [Rain] Section [dynamic_wind] not found, using vanilla wind physics.");
-            m_bEnableDynamicWind = false;
+        if (wex_ini.section_exist("dynamic_wind")) {
+            if (wex_ini.line_exist("dynamic_wind", "max_angle"))
+                m_fWindMaxAngle = wex_ini.r_float("dynamic_wind", "max_angle");
+            if (wex_ini.line_exist("dynamic_wind", "speed_wind_multiplier")) {
+                SetWindSpeedMultiplier(wex_ini.r_float("dynamic_wind", "speed_wind_multiplier"));
+                m_bHasSpeedConfig = true;
+            }
+            if (wex_ini.line_exist("dynamic_wind", "tilt_multiplier")) {
+                const float configured_tilt = wex_ini.r_float("dynamic_wind", "tilt_multiplier");
+                SetWindTiltMultiplier(configured_tilt);
+                // Persist the corrected limit on Save even if the user did not touch the slider.
+                m_bHasTiltConfig = configured_tilt == m_fWindTiltMultiplier;
+            }
         }
+        if (!xr::valid(m_fWindMaxAngle)) m_fWindMaxAngle = 10.f;
+        clamp(m_fWindMaxAngle, 0.f, 80.f);
+        if (!xr::valid(m_fWindSpeedMultiplier)) m_fWindSpeedMultiplier = 0.f;
+        clamp(m_fWindSpeedMultiplier, 0.f, 10.f);
     } else {
-        Msg("! [Noir Engine]: [Rain] File noirWeatherEffect.ltx not found, using default values.");
+        Msg("! [Noir Engine]: [Rain] Cannot load noirWeatherEffect.ltx, using default values.");
         m_bEnableMaterialSounds = false;
         m_bEnableDynamicWind = false;
     }
 
+    m_fSavedWindTiltMultiplier = m_fWindTiltMultiplier;
+    m_fSavedWindSpeedMultiplier = m_fWindSpeedMultiplier;
+
     // Створюємо звуки ПІСЛЯ того, як зчитали їх імена з конфігу
 	
-    if (rain_sound_available(snd_name_2d))
-        snd_Ambient2D.create(snd_name_2d, st_Effect, sg_Undefined);
-    if (rain_sound_available(snd_name_portal))
-        snd_AmbientPortal.create(snd_name_portal, st_Effect, sg_Undefined);
+    if (rain_sound_available(snd_name_2d.c_str()))
+        snd_Ambient2D.create(snd_name_2d.c_str(), st_Effect, sg_Undefined);
+    if (rain_sound_available(snd_name_portal.c_str()))
+        snd_AmbientPortal.create(snd_name_portal.c_str(), st_Effect, sg_Undefined);
 
     p_create();
 }
@@ -195,16 +244,105 @@ CEffect_Rain::~CEffect_Rain() {
     p_destroy();
 }
 
+void CEffect_Rain::SetWindTiltMultiplier(float value) {
+    value = weather_motion::rain_tilt_multiplier(value);
+    if (value == m_fWindTiltMultiplier) return;
+    m_fWindTiltMultiplier = value;
+    RefreshTrajectories();
+}
+
+void CEffect_Rain::SetWindSpeedMultiplier(float value) {
+    if (!xr::valid(value)) value = 0.f;
+    clamp(value, 0.f, 10.f);
+    if (value == m_fWindSpeedMultiplier) return;
+    m_fWindSpeedMultiplier = value;
+    RefreshTrajectories();
+}
+
+void CEffect_Rain::InvalidateDrops() {
+    // Rebuild trajectories and collision hits together on the next render.
+    for (u32 id = 0; id < drops.capacity; ++id) {
+        drops.invalidate(id);
+        drops.uv_set[id] |= 2; // Do not play an obsolete trajectory hit.
+    }
+}
+
+bool CEffect_Rain::SaveWindSettings() {
+    const bool save_tilt = !m_bHasTiltConfig || m_fWindTiltMultiplier != m_fSavedWindTiltMultiplier;
+    const bool save_speed = !m_bHasSpeedConfig || m_fWindSpeedMultiplier != m_fSavedWindSpeedMultiplier;
+    if (!save_tilt && !save_speed) return true;
+    string_path path;
+    FS.update_path(path, "$game_config$", "environment\\noirWeatherEffect.ltx");
+    std::string text;
+    bool has_original = false;
+    if (!rain_read_config(path, text, has_original)) return false;
+    const std::string original = text;
+    string32 value;
+    if (save_tilt) {
+        xr_sprintf(value, "%.6f", m_fWindTiltMultiplier);
+        text = rain_config::set_tilt_multiplier(text, value);
+    }
+    if (save_speed) {
+        xr_sprintf(value, "%.6f", m_fWindSpeedMultiplier);
+        text = rain_config::set_dynamic_wind_value(text, "speed_wind_multiplier", value);
+    }
+
+    string_path temporary, backup;
+    xr_strcpy(temporary, path);
+    xr_strcat(temporary, ".weather_editor.tmp");
+    createPath(temporary);
+    const char* stage = nullptr;
+    if (!rain_config::write_verified_file(temporary, text, stage)) {
+        Msg("! Weather editor: rain config %s failed [%s], errno=%d", stage, temporary, errno);
+        return false;
+    }
+    xr_strcpy(backup, path);
+    xr_strcat(backup, ".weather_editor.bak");
+    if (has_original && _access(backup, 0) != 0) {
+        if (!rain_config::write_verified_file(backup, original, stage)) {
+            Msg("! Weather editor: rain backup %s failed [%s], errno=%d", stage, backup, errno);
+            return false;
+        }
+    }
+    const DWORD attributes = GetFileAttributesA(path);
+    const bool read_only = attributes != INVALID_FILE_ATTRIBUTES &&
+        (attributes & FILE_ATTRIBUTE_READONLY);
+    if (read_only && !SetFileAttributesA(path, attributes & ~FILE_ATTRIBUTE_READONLY)) {
+        Msg("! Weather editor: cannot make rain config writable [%s], win_error=%lu", path, GetLastError());
+        return false;
+    }
+    // Replace without unlinking the original first. A failed replacement keeps it intact.
+    if (!MoveFileExA(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        const DWORD error = GetLastError();
+        if (read_only) SetFileAttributesA(path, attributes);
+        Msg("! Weather editor: rain config replacement failed [%s], win_error=%lu", path, error);
+        return false;
+    }
+    // Native writes must be made visible to subsequent CInifile/VFS reads.
+    string_path directory;
+    FS.update_path(directory, "$game_config$", "environment\\");
+    FS.rescan_path(directory, FALSE);
+    Msg("* Weather editor: saved rain settings [%s]", path);
+    m_fSavedWindTiltMultiplier = m_fWindTiltMultiplier;
+    m_fSavedWindSpeedMultiplier = m_fWindSpeedMultiplier;
+    m_bHasTiltConfig = true;
+    m_bHasSpeedConfig = true;
+    return true;
+}
+
 void CEffect_Rain::Born(u32 id, float radius) {
     Fvector axis;
     axis.set(0, -1, 0);
 
     if (m_bEnableDynamicWind) {
-        float gust = g_pGamePersistent->Environment().wind_strength_factor / 10.f;
-        float k = std::clamp(g_pGamePersistent->Environment().CurrentEnv->wind_velocity * gust / drop_max_wind_vel, 0.f, 1.f);
-        
-        float pitch = deg2rad(m_fWindMaxAngle) * k - PI_DIV_2;
-        axis.setHP(g_pGamePersistent->Environment().CurrentEnv->wind_direction, pitch);
+        const CEnvironment& environment = g_pGamePersistent->Environment();
+        const float k = weather_motion::rain_wind_influence(
+            environment.CurrentEnv->wind_velocity, environment.wind_strength_factor);
+        const float tilt = deg2rad(std::min(80.f, m_fWindMaxAngle * k * m_fWindTiltMultiplier));
+        const float heading = environment.CurrentEnv->wind_direction;
+        // Match the (+sin, +cos) horizontal wind used by FTreeVisual.
+        axis.set(std::sin(heading) * std::sin(tilt), -std::cos(tilt),
+                 std::cos(heading) * std::sin(tilt));
 
         float base_speed = ::Random.randF(drop_speed_min, drop_speed_max);
         drops.speed[id] = base_speed + (base_speed * k * m_fWindSpeedMultiplier);
@@ -225,11 +363,14 @@ void CEffect_Rain::Born(u32 id, float radius) {
     drops.dy[id] = D.y;
     drops.dz[id] = D.z;
 
-    drops.px[id] = x + view.x - D.x * source_offset;
+    // The disk is defined at camera height, then projected back to the top
+    // plane along this drop's direction. Use ray distance, not vertical height.
+    const float top_distance = weather_motion::rain_path_length(source_offset, D.y);
+    drops.px[id] = x + view.x - D.x * top_distance;
     drops.py[id] = source_offset + view.y;
-    drops.pz[id] = z + view.z - D.z * source_offset;
-               
-    float height = max_distance;
+    drops.pz[id] = z + view.z - D.z * top_distance;
+
+    float height = weather_motion::rain_path_length(max_distance, D.y);
     u16 mat_idx = GAMEMTL_NONE_IDX; 
     
     Fvector s = { drops.px[id], drops.py[id], drops.pz[id] };
@@ -257,26 +398,18 @@ BOOL CEffect_Rain::RayPick(const Fvector& s, const Fvector& d, float& range, col
     return bRes;
 }
 
-void CEffect_Rain::RenewItem(u32 id, float height, BOOL bHit, u16 material_idx) {
-    drops.uv_set[id] = Random.randI(2);
-    drops.material_idx[id] = material_idx; 
-    float speed = drops.speed[id];
-
-    if (bHit) {
-        drops.dwTime_Life[id] = Device.dwTimeGlobal + iFloor(1000.f * height / speed) - Device.dwTimeDelta;
-        drops.dwTime_Hit[id] = drops.dwTime_Life[id];
-        
-        drops.hit_x[id] = drops.px[id] + drops.dx[id] * height;
-        drops.hit_y[id] = drops.py[id] + drops.dy[id] * height;
-        drops.hit_z[id] = drops.pz[id] + drops.dz[id] * height;
-    } else {
-        drops.dwTime_Life[id] = Device.dwTimeGlobal + iFloor(1000.f * height / speed) - Device.dwTimeDelta;
-        drops.dwTime_Hit[id] = Device.dwTimeGlobal + iFloor(2.f * 1000.f * height / speed) - Device.dwTimeDelta;
-        
-        drops.hit_x[id] = drops.px[id];
-        drops.hit_y[id] = drops.py[id];
-        drops.hit_z[id] = drops.pz[id];
-    }
+void CEffect_Rain::RenewItem(u32 id, float distance, BOOL bHit, u16 material_idx) {
+    drops.uv_set[id] = Random.randI(2) | (bHit ? 0u : 2u);
+    drops.material_idx[id] = material_idx;
+    const float speed = std::max(1.f, drops.speed[id]);
+    const u32 flight_ms = static_cast<u32>(std::max(1, iCeil(1000.f * std::max(0.f, distance) / speed)));
+    const u32 trail_ms = static_cast<u32>(std::max(1, iCeil(1000.f * drop_length / speed)));
+    const u32 arrival = Device.dwTimeGlobal + flight_ms;
+    drops.dwTime_Hit[id] = bHit ? arrival : u32(-1);
+    drops.dwTime_Life[id] = arrival + (bHit ? trail_ms : 0u);
+    drops.hit_x[id] = drops.px[id] + drops.dx[id] * distance;
+    drops.hit_y[id] = drops.py[id] + drops.dy[id] * distance;
+    drops.hit_z[id] = drops.pz[id] + drops.dz[id] * distance;
 }
 
 void CEffect_Rain::OnFrame() {
@@ -293,6 +426,12 @@ void CEffect_Rain::OnFrame() {
     if (!g_pGameLevel) return;
 #endif
 
+    // Environment::OnFrame has already mixed the newly edited wind. Rebuild
+    // after that mix, rather than spawning with the previous frame's direction.
+    if (m_bRefreshTrajectories) {
+        InvalidateDrops();
+        m_bRefreshTrajectories = false;
+    }
     float factor = g_pGamePersistent->Environment().CurrentEnv->rain_density;
 
 #ifndef _EDITOR

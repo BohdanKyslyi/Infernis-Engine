@@ -60,6 +60,7 @@ private:
         Fvector3 rain_color;
         float bolt_period;
         float bolt_duration;
+        float trees_amplitude;
         float wind_velocity;
         float wind_direction;
         Fvector3 ambient;
@@ -152,6 +153,8 @@ private:
     xr_vector<SColorControl> m_color_controls;
     xr_vector<SDescriptorState> m_snapshots;
     CEnvDescriptor* m_descriptor;
+    float m_rain_tilt_baseline{ 1.f };
+    float m_rain_speed_baseline{ 0.f };
     float m_editor_time;
     int m_active_color_property;
     bool m_synchronizing;

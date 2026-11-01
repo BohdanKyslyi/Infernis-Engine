@@ -3,6 +3,7 @@
 #pragma hdrstop
 
 #include "Environment.h"
+#include "WeatherWindMath.h"
 #include "xr_efflensflare.h"
 #include "thunderbolt.h"
 #include "rain.h"
@@ -198,6 +199,7 @@ CEnvDescriptor::CEnvDescriptor(std::string identifier) : m_identifier(std::move(
     bolt_period = 0.0f;
     bolt_duration = 0.0f;
 
+    trees_amplitude = 1.0f;
     wind_velocity = 0.0f;
     wind_direction = 0.0f;
 
@@ -258,8 +260,12 @@ void CEnvDescriptor::load(CEnvironment& environment, CInifile& config) {
     rain_density = config.r_float(m_identifier.c_str(), "rain_density");
     clamp(rain_density, 0.f, 1.f);
     rain_color = config.r_fvector3(m_identifier.c_str(), "rain_color");
+    trees_amplitude = config.line_exist(m_identifier.c_str(), "trees_amplitude")
+        ? config.r_float(m_identifier.c_str(), "trees_amplitude") : 1.f;
+    trees_amplitude = weather_motion::tree_amplitude(trees_amplitude);
     wind_velocity = config.r_float(m_identifier.c_str(), "wind_velocity");
-    wind_direction = deg2rad(config.r_float(m_identifier.c_str(), "wind_direction"));
+    wind_direction = weather_motion::normalize_direction(
+        deg2rad(config.r_float(m_identifier.c_str(), "wind_direction")));
     ambient = config.r_fvector3(m_identifier.c_str(), "ambient_color");
     hemi_color = config.r_fvector4(m_identifier.c_str(), "hemisphere_color");
     sun_color = config.r_fvector3(m_identifier.c_str(), "sun_color");
@@ -470,6 +476,7 @@ void CEnvDescriptor::save(CInifile& config) const {
     config.w_float(section, "water_intensity", m_fWaterIntensity);
     config.w_float(section, "wind_direction", rad2deg(wind_direction));
     config.w_float(section, "wind_velocity", wind_velocity);
+    config.w_float(section, "trees_amplitude", weather_motion::tree_amplitude(trees_amplitude));
     config.w_fvector4(section, "hemisphere_color", hemi_color);
     config.w_float(section, "sun_altitude", rad2deg(sun_dir.getH()));
     config.w_float(section, "sun_longitude", rad2deg(sun_dir.getP()));
@@ -586,8 +593,9 @@ void CEnvDescriptorMixer::lerp(CEnvironment*, CEnvDescriptor& A, CEnvDescriptor&
     bolt_period = fi * A.bolt_period + f * B.bolt_period;
     bolt_duration = fi * A.bolt_duration + f * B.bolt_duration;
     // wind
+    trees_amplitude = weather_motion::tree_amplitude(fi * A.trees_amplitude + f * B.trees_amplitude);
     wind_velocity = fi * A.wind_velocity + f * B.wind_velocity;
-    wind_direction = fi * A.wind_direction + f * B.wind_direction;
+    wind_direction = weather_motion::interpolate_direction(A.wind_direction, B.wind_direction, f);
 
     m_fSunShaftsIntensity = fi * A.m_fSunShaftsIntensity + f * B.m_fSunShaftsIntensity;
     m_fWaterIntensity = fi * A.m_fWaterIntensity + f * B.m_fWaterIntensity;
@@ -904,6 +912,7 @@ bool CEnvironment::AddWeatherFrame(const std::string& name, float game_time,
     descriptor->rain_color = source.rain_color;
     descriptor->bolt_period = source.bolt_period;
     descriptor->bolt_duration = source.bolt_duration;
+    descriptor->trees_amplitude = source.trees_amplitude;
     descriptor->wind_velocity = source.wind_velocity;
     descriptor->wind_direction = source.wind_direction;
     descriptor->ambient = source.ambient;

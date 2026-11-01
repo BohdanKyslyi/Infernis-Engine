@@ -4,6 +4,7 @@
 
 #include "../xrcdb/xr_collide_defs.h"
 #include "GameMtlLib.h"
+#include "WeatherWindMath.h"
 #include <immintrin.h>
 #include <string_view>
 
@@ -59,6 +60,12 @@ private:
     bool m_bEnableMaterialSounds{ false };        
     bool m_bEnableDynamicWind{ false };
 
+    float m_fWindTiltMultiplier{ 1.f };
+    float m_fSavedWindTiltMultiplier{ 1.f };
+    bool m_bHasTiltConfig{ false };
+    bool m_bHasSpeedConfig{ false };
+    bool m_bRefreshTrajectories{ false };
+    float m_fSavedWindSpeedMultiplier{ 0.f };
     float m_fWindMaxAngle{ 10.0f };
     float m_fWindSpeedMultiplier{ 0.0f };
     float m_fDripEndTime{ 0.0f };
@@ -90,6 +97,7 @@ private:
     Particle* p_allocate();
     void p_free(Particle* P);
 
+    void InvalidateDrops();
     void Born(u32 id, float radius);
     void Hit(Fvector& pos, u16 material_idx); 
     BOOL RayPick(const Fvector& s, const Fvector& d, float& range, collide::rq_target tgt, u16& material_idx); 
@@ -98,6 +106,13 @@ private:
 public:
     CEffect_Rain();
     ~CEffect_Rain();
+
+    float GetWindTiltMultiplier() const { return m_fWindTiltMultiplier; }
+    void SetWindTiltMultiplier(float value);
+    float GetWindSpeedMultiplier() const { return m_fWindSpeedMultiplier; }
+    void SetWindSpeedMultiplier(float value);
+    void RefreshTrajectories() { m_bRefreshTrajectories = true; }
+    bool SaveWindSettings();
 
     void Render();
     void OnFrame();

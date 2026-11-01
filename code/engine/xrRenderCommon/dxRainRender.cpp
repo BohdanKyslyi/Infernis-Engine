@@ -12,8 +12,7 @@
 constexpr u32 max_desired_items = 6500;
 constexpr float source_radius = 25.5f; 
 constexpr float source_offset = 40.f;
-constexpr float max_distance = source_offset * 2.0f; 
-constexpr float sink_offset = -(max_distance - source_offset);
+constexpr float sink_offset = -source_offset;
 constexpr float drop_length = 5.f;
 constexpr float drop_width = 0.30f;
 constexpr u32 particles_cache = 400;
@@ -50,12 +49,6 @@ void dxRainRender::Render(CEffect_Rain& owner) {
     Fvector3 f_rain_color = g_pGamePersistent->Environment().CurrentEnv->rain_color;
     u32 u_rain_color = color_rgba_f(f_rain_color.x, f_rain_color.y, f_rain_color.z, factor_visual);
     float b_radius_wrap_sqr = xr::sqr(source_radius + 0.5f);
-
-    Fplane src_plane;
-    Fvector norm = { 0.f, -1.f, 0.f };
-    Fvector upper;
-    upper.set(Device.vCameraPosition.x, Device.vCameraPosition.y + source_offset, Device.vCameraPosition.z);
-    src_plane.build(upper, norm);
 
     u32 vOffset;
     FVF::LIT* verts = static_cast<FVF::LIT*>(RCache.Vertex.Lock(desired_items * 4, hGeom_Rain->vb_stride, vOffset));
@@ -96,7 +89,7 @@ void dxRainRender::Render(CEffect_Rain& owner) {
 	Device.Statistic->TEST1.Begin();
     for (u32 id = 0; id < count; ++id) {
         
-        if (owner.drops.dwTime_Hit[id] < current_time) {
+        if (owner.drops.dwTime_Life[id] != 0 && owner.drops.dwTime_Hit[id] < current_time) {
             if ((owner.drops.uv_set[id] & 2) == 0) { 
                 Fvector hit_pos = { owner.drops.hit_x[id], owner.drops.hit_y[id], owner.drops.hit_z[id] };
                 owner.Hit(hit_pos, owner.drops.material_idx[id]);
@@ -104,60 +97,26 @@ void dxRainRender::Render(CEffect_Rain& owner) {
             }
         }
 
-        if (!owner.drops.is_alive(id, current_time)) {
+        if (!owner.drops.is_alive(id, current_time))
             owner.Born(id, source_radius);
-            owner.drops.uv_set[id] &= ~2; 
-
-            Fvector p = { owner.drops.px[id], owner.drops.py[id], owner.drops.pz[id] };
-            Fvector d = { owner.drops.dx[id], owner.drops.dy[id], owner.drops.dz[id] };
-
-            float height = max_distance;
-            u16 dummy_mat = u16(-1);
-            if (owner.RayPick(p, d, height, collide::rqtBoth, dummy_mat)) {
-                owner.RenewItem(id, height, TRUE, dummy_mat);
-                owner.drops.hit_x[id] = p.x + d.x * height;
-                owner.drops.hit_y[id] = p.y + d.y * height;
-                owner.drops.hit_z[id] = p.z + d.z * height;
-            } else {
-                owner.RenewItem(id, max_distance, FALSE, dummy_mat);
-                owner.drops.hit_x[id] = p.x + d.x * max_distance;
-                owner.drops.hit_y[id] = p.y + d.y * max_distance;
-                owner.drops.hit_z[id] = p.z + d.z * max_distance;
-            }
-            owner.drops.dwTime_Life[id] = owner.drops.dwTime_Hit[id] + iFloor(1000.f * drop_length / owner.drops.speed[id]);
-        }
 
         Fvector pos = { owner.drops.px[id], owner.drops.py[id], owner.drops.pz[id] };
         Fvector dir = { owner.drops.dx[id], owner.drops.dy[id], owner.drops.dz[id] };
 
-        Fvector wdir; wdir.set(pos.x - vEye.x, 0.f, pos.z - vEye.z);
-        
-        if (wdir.square_magnitude() > b_radius_wrap_sqr) {
-            float wlen = std::sqrt(wdir.square_magnitude());
-            if ((pos.y - vEye.y) < sink_offset) {
-                owner.drops.invalidate(id); 
-            } else {
-                Fvector inv_dir, src_p;
-                inv_dir.invert(dir);
-                wdir.div(wlen);
-                pos.mad(pos, wdir, -(wlen + source_radius));
-                
-                owner.drops.px[id] = pos.x;
-                owner.drops.py[id] = pos.y;
-                owner.drops.pz[id] = pos.z;
-                
-                if (src_plane.intersectRayPoint(pos, inv_dir, src_p)) {
-                    float dist_sqr = pos.distance_to_sqr(src_p);
-                    float height = max_distance;
-                    u16 dummy_mat = u16(-1);
-                    if (owner.RayPick(src_p, dir, height, collide::rqtBoth, dummy_mat)) {
-                        if (xr::sqr(height) <= dist_sqr) owner.drops.invalidate(id);
-                        else owner.RenewItem(id, height - std::sqrt(dist_sqr), TRUE, dummy_mat);
-                    } else {
-                        owner.RenewItem(id, max_distance - std::sqrt(dist_sqr), FALSE, dummy_mat);
-                    }
-                } else owner.drops.invalidate(id);
-            }
+        // Test the wind-aligned volume at camera height. A strongly tilted
+        // drop may be far outside a vertical cylinder while on a valid path.
+        const float relative_y = pos.y - vEye.y;
+        const float plane_x = weather_motion::rain_plane_offset(
+            pos.x, vEye.x, relative_y, dir.x, dir.y);
+        const float plane_z = weather_motion::rain_plane_offset(
+            pos.z, vEye.z, relative_y, dir.z, dir.y);
+        if (plane_x * plane_x + plane_z * plane_z > b_radius_wrap_sqr ||
+            relative_y < sink_offset || relative_y > source_offset + .5f) {
+            // Rebirth schedules a new hit from the new origin. Never wrap a
+            // trajectory while keeping an old impact point or negative range.
+            owner.Born(id, source_radius);
+            pos.set(owner.drops.px[id], owner.drops.py[id], owner.drops.pz[id]);
+            dir.set(owner.drops.dx[id], owner.drops.dy[id], owner.drops.dz[id]);
         }
 
         Fvector pos_trail;

@@ -4,6 +4,7 @@
 #include "xrEngine/igame_persistent.h"
 #include "xrEngine/igame_level.h"
 #include "xrEngine/environment.h"
+#include "xrEngine/WeatherWindMath.h"
 #include "xrEngine/fmesh.h"
 
 #include "ftreevisual.h"
@@ -94,21 +95,12 @@ struct FTreeVisual_setup {
 
 	void calculate() {
         dwFrame = Device.dwFrame;
-
-        // 1. Отримуємо дескриптор поточної погоди (CurrentEnv)
         CEnvDescriptor* desc = g_pGamePersistent->Environment().CurrentEnv;
-        
-        // 2. Беремо реальні напрямок та силу вітру з дескриптора
-        // Якщо раптом desc ще не ініціалізовано, ставимо захист
         float wind_dir = desc ? desc->wind_direction : 0.0f; 
         float wind_vel = desc ? desc->wind_velocity  : 0.0f; 
-
-        // 3. Переводимо кут у 3D вектор (X, 0, Z)
         wind.set(std::sin(wind_dir), 0, std::cos(wind_dir), 0);
         wind.normalize();
-        
-        // 4. Множимо напрямок на реальну швидкість вітру та консольний множник
-        wind.mul(wind_vel * ps_r__Tree_w_amp); 
+        wind.mul(wind_vel * ps_r__Tree_w_amp * (desc ? weather_motion::tree_amplitude(desc->trees_amplitude) : 1.f));
 
         scale = 1.f / float(FTreeVisual_quant);
 

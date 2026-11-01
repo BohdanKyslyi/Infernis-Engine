@@ -28,7 +28,7 @@
     <string id="ui_weather_editor_sky_color_rgb"><text>ЦВЕТ НЕБА [RGB]</text></string>
     <string id="ui_weather_editor_clouds_color_rgba"><text>ЦВЕТ ТУЧ [RGBA]</text></string>
     <string id="ui_weather_editor_hemisphere_color_rgba"><text>ЦВЕТ ПОЛУСФЕРЫ [RGBA]</text></string>
-    <string id="ui_weather_editor_rain_color_rgb"><text>ЦВЕТ ДОЖДЯ [RGB]</text></string>
+    <string id="ui_weather_editor_rain_color_rgb"><text>ДОЖДЬ: ЦВЕТ [RGB]</text></string>
     <string id="ui_weather_editor_sun_color_rgb"><text>ЦВЕТ СОЛНЦА [RGB]</text></string>
     <string id="ui_weather_editor_wind"><text>ВЕТЕР</text></string>
 
@@ -45,8 +45,8 @@
     <string id="ui_weather_editor_rain_density"><text>Сила дождя</text></string>
     <string id="ui_weather_editor_sun_altitude"><text>Высота солнца</text></string>
     <string id="ui_weather_editor_sun_longitude"><text>Азимут солнца</text></string>
-    <string id="ui_weather_editor_wind_velocity"><text>Скорость</text></string>
-    <string id="ui_weather_editor_wind_direction"><text>Направление</text></string>
+    <string id="ui_weather_editor_wind_velocity"><text>Скорость ветра</text></string>
+    <string id="ui_weather_editor_wind_direction"><text>Направление ветра</text></string>
     <string id="ui_weather_editor_thunderbolt_period"><text>Период</text></string>
     <string id="ui_weather_editor_thunderbolt_duration"><text>Длительность</text></string>
 
@@ -56,8 +56,8 @@
     <string id="ui_weather_editor_hint_create_file"><text>Creates a new weather file with the entered name, using the current keyframe as its base.</text></string>
     <string id="ui_weather_editor_hint_add_section"><text>Adds a new keyframe to the current weather at the time selected on the timeline.</text></string>
     <string id="ui_weather_editor_hint_preview"><text>Hides the editor and keeps the current weather visible in game. Use the weather_editor command to reopen it.</text></string>
-    <string id="ui_weather_editor_hint_save"><text>Writes all changes in the current weather cycle to its .ltx file.</text></string>
-    <string id="ui_weather_editor_hint_revert"><text>Discards unsaved changes and restores the values captured when editing began.</text></string>
+    <string id="ui_weather_editor_hint_save"><text>Сохраняет все временные секции текущей погоды, включая силу раскачивания деревьев, в её файл .ltx. Также записывает общие множители наклона и разгона дождя в noirWeatherEffect.ltx, сохраняя остальные параметры файла.</text></string>
+    <string id="ui_weather_editor_hint_revert"><text>Возвращает выбранную временную секцию и общие параметры наклона и разгона дождя к состоянию начала редактирования или последнего сохранения.</text></string>
     <string id="ui_weather_editor_hint_close"><text>Closes the editor, ends the editing session and returns the game to normal operation.</text></string>
     <string id="ui_weather_editor_hint_color_picker"><text>Color picker: drag in the large field for saturation and brightness, or on the strip for hue.</text></string>
     <string id="ui_weather_editor_hint_weather"><text>The weather cycle (.ltx) currently being edited and rendered in the game.</text></string>
@@ -74,8 +74,8 @@
     <string id="ui_weather_editor_hint_fog_density"><text>Fog density from 0 to 1: 0 disables fog and 1 gives maximum density.</text></string>
     <string id="ui_weather_editor_hint_fog_distance"><text>Distance at which fog almost completely covers the scene. It must not exceed the far plane.</text></string>
     <string id="ui_weather_editor_hint_rain_density"><text>Rain intensity from 0 to 1. It affects drop count and related weather effects.</text></string>
-    <string id="ui_weather_editor_hint_wind_velocity"><text>Wind speed available to weather effects, vegetation and particle systems.</text></string>
-    <string id="ui_weather_editor_hint_wind_direction"><text>Horizontal wind direction in degrees from 0 to 360.</text></string>
+    <string id="ui_weather_editor_hint_wind_velocity"><text>Скорость ветра в выбранной временной секции погоды. Влияет на раскачивание деревьев; при включённом динамическом ветре дождя — также на наклон и разгон капель вместе с силой порывов. 0 убирает это влияние ветра. Для деревьев, наклона и разгона дождя предусмотрены отдельные множители.</text></string>
+    <string id="ui_weather_editor_hint_wind_direction"><text>Горизонтальное направление ветра от 0 до 360 градусов в выбранной временной секции. Деревья и дождь используют одно направление. Переход между секциями идёт кратчайшим путём через границу 0/360. Для влияния на дождь нужен динамический ветер дождя. Само направление не усиливает ветер.</text></string>
     <string id="ui_weather_editor_hint_thunderbolt_period"><text>Average interval between lightning flashes.</text></string>
     <string id="ui_weather_editor_hint_thunderbolt_duration"><text>Duration of a single lightning flash.</text></string>
     <string id="ui_weather_editor_hint_sun_shafts"><text>Sun-shaft intensity. The visible result depends on the active renderer and shaders.</text></string>
@@ -106,4 +106,11 @@
     <string id="ui_weather_editor_status_save_error"><text>ERROR: weather config was not saved. See the log.</text></string>
     <string id="ui_weather_editor_status_saved"><text>Saved: %s (first-save backup: .weather_editor.bak)</text></string>
     <string id="ui_weather_editor_status_reverted"><text>Keyframe reverted to its last saved/opened state.</text></string>
+    <string id="ui_weather_editor_trees_amplitude"><text>Колебания деревьев</text></string>
+    <string id="ui_weather_editor_rain_tilt_multiplier"><text>Наклон от ветра</text></string>
+    <string id="ui_weather_editor_rain_speed_multiplier"><text>Разгон от ветра</text></string>
+    <string id="ui_weather_editor_hint_trees_amplitude"><text>Сила раскачивания деревьев в выбранной временной секции (trees_amplitude), от 0 до 1. 0 — без раскачивания; 0.5 — половина обычной силы; 1 — полная обычная сила. Скорость и направление ветра задаются отдельно. Без ключа используется 1. Значения вне диапазона ограничиваются до 0–1. Сохраняется в текущем файле погоды.</text></string>
+    <string id="ui_weather_editor_hint_rain_tilt_multiplier"><text>Множитель наклона капель от ветра (tilt_multiplier), а не угол в градусах. 0 — без наклона от ветра; 1 — обычный наклон; 2 — вдвое больше. При максимальном влиянии ветра и max_angle = 60 значение 0.5 даёт 30 градусов. Итоговый наклон ограничен 80 градусами. Требует включённого динамического ветра дождя. Настройка общая для всей погоды; сохраняется в [dynamic_wind] файла noirWeatherEffect.ltx.</text></string>
+    <string id="ui_weather_editor_hint_rain_speed_multiplier"><text>Насколько ветер увеличивает скорость падения капель (speed_wind_multiplier). 0 — базовая скорость; 1 — до двойной; 1.5 — до 2.5 раза от базовой. Результат зависит от скорости и порывов ветра. Без ветра или с отключённым динамическим ветром дождя разгона нет. Общая настройка для всей погоды, а не отдельной временной секции. Сохраняется в [dynamic_wind] файла noirWeatherEffect.ltx.</text></string>
+    <string id="ui_weather_editor_status_rain_save_error"><text>Погода сохранена, но не удалось сохранить параметры дождя в noirWeatherEffect.ltx. Подробности — в журнале игры.</text></string>
 </string_table>

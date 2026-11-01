@@ -14,6 +14,7 @@
 #include "xrUIXmlParser.h"
 #include "UICursor.h"
 #include "../../xrEngine/Environment.h"
+#include "../../xrEngine/Rain.h"
 #include "../../xrEngine/IGame_Persistent.h"
 #include "../../xrEngine/xr_input.h"
 #include "../game_cl_base.h"
@@ -339,7 +340,7 @@ struct SPropertyInfo {
     float step;
 };
 
-static const SPropertyInfo properties[] = {
+static constexpr SPropertyInfo properties[] = {
     {0.f, 360.f, 1.f},      {50.f, 1000.f, 5.f},  {0.f, 1.f, .01f},
     {10.f, 1000.f, 5.f},    {0.f, 1.f, .01f},     {0.f, 100.f, 1.f},
     {0.f, 360.f, 1.f},      {0.f, 60.f, .25f},    {0.f, 5.f, .05f},
@@ -352,7 +353,13 @@ static const SPropertyInfo properties[] = {
     {0.f, 1.5f, .01f},      {0.f, 1.5f, .01f},    {0.f, 1.5f, .01f},
     {0.f, 1.f, .01f},       {0.f, 1.5f, .01f},    {0.f, 1.5f, .01f},
     {0.f, 1.5f, .01f},      {-90.f, -.1f, .1f},   {-180.f, 180.f, 1.f},
+    {0.f, weather_motion::tree_amplitude_max, .01f},
+    {0.f, weather_motion::rain_tilt_max, .01f},
+    {0.f, 10.f, .01f},
 };
+
+static_assert(properties[36].maximum == 1.f, "Tree amplitude must be limited to 0..1");
+static_assert(properties[37].maximum == 3.f, "Rain tilt multiplier must be limited to 0..3");
 
 static LPCSTR const property_hint_ids[] = {
     "ui_weather_editor_hint_sky_rotation",
@@ -391,6 +398,9 @@ static LPCSTR const property_hint_ids[] = {
     "ui_weather_editor_hint_sun_color",
     "ui_weather_editor_hint_sun_altitude",
     "ui_weather_editor_hint_sun_longitude",
+    "ui_weather_editor_hint_trees_amplitude",
+    "ui_weather_editor_hint_rain_tilt_multiplier",
+    "ui_weather_editor_hint_rain_speed_multiplier",
 };
 
 static_assert(sizeof(property_hint_ids) / sizeof(property_hint_ids[0]) ==
@@ -565,6 +575,7 @@ void CUIWeatherEditor::Init() {
         AddCallback(control.slider, BUTTON_CLICKED,
                     CUIWndCallback::void_function(this, &CUIWeatherEditor::OnPropertyChanged));
 
+    Msg("* Weather editor: wind limits v2; trees=0..1, rain tilt multiplier=0..3");
     SetStatus("ui_weather_editor_status_ready");
 }
 
@@ -581,6 +592,10 @@ void CUIWeatherEditor::Show(bool status) {
         }
 
         const float current_time = environment.GetGameTime();
+        m_rain_tilt_baseline = environment.eff_Rain
+            ? environment.eff_Rain->GetWindTiltMultiplier() : 1.f;
+        m_rain_speed_baseline = environment.eff_Rain
+            ? environment.eff_Rain->GetWindSpeedMultiplier() : 0.f;
         m_previous_pause = environment.m_paused;
         m_session_active = true;
         m_previewing = false;
@@ -846,12 +861,20 @@ void CUIWeatherEditor::AddPropertyControl(CUIXml& xml, u32 property_index, LPCST
     CUITextWnd* label = UIHelper::CreateTextWnd(xml, "main:property_label_template", this);
     label->SetWndPos(Fvector2().set(x, y + property_y_offset));
     label->SetTextST(caption);
+    // Give descriptive wind/rain captions room without moving the value column.
+    const bool wide_caption = property_index == 5 || property_index == 6 || property_index >= 36;
+    if (wide_caption)
+        label->SetWndSize(Fvector2().set(145.f, 17.f));
 
     CWeatherTrackBar* slider = xr_new<CWeatherTrackBar>();
     slider->SetAutoDelete(true);
     AttachChild(slider);
     CUIXmlInit::InitTrackBar(xml, "main:property_slider_template", 0, slider);
-    slider->SetWndPos(Fvector2().set(x + 104.f, y + property_y_offset + 2.f));
+    if (wide_caption) {
+        slider->SetWidth(97.f); // Resize the enabled/disabled background states too.
+        slider->SetWndSize(Fvector2().set(97.f, 12.f));
+    }
+    slider->SetWndPos(Fvector2().set(x + (wide_caption ? 149.f : 104.f), y + property_y_offset + 2.f));
     slider->SetOptFBounds(properties[property_index].minimum, properties[property_index].maximum);
     slider->SetStep(properties[property_index].step);
 
@@ -906,27 +929,32 @@ void CUIWeatherEditor::CreatePropertyControls(CUIXml& xml) {
     AddPropertyControl(xml, 0, "ui_weather_editor_sky_rotation", center, 413.f);
     AddPropertyControl(xml, 9, "ui_weather_editor_sun_shafts", center, 432.f);
 
-    // Weather, sun and wind
+    // Sun occupies the free space below the atmosphere controls.
+    AddPropertyHeader(xml, "ui_weather_editor_sun_color_rgb", left, 376.f, 31);
+    AddPropertyControl(xml, 31, "ui_weather_editor_channel_r", left, 396.f);
+    AddPropertyControl(xml, 32, "ui_weather_editor_channel_g", left, 415.f);
+    AddPropertyControl(xml, 33, "ui_weather_editor_channel_b", left, 434.f);
+    AddPropertyControl(xml, 34, "ui_weather_editor_sun_altitude", left, 461.f);
+    AddPropertyControl(xml, 35, "ui_weather_editor_sun_longitude", left, 480.f);
+
+    // Rain: color, density, wind tilt and fall acceleration.
     AddPropertyHeader(xml, "ui_weather_editor_rain_color_rgb", right, 124.f, 21);
     AddPropertyControl(xml, 21, "ui_weather_editor_channel_r", right, 144.f);
     AddPropertyControl(xml, 22, "ui_weather_editor_channel_g", right, 163.f);
     AddPropertyControl(xml, 23, "ui_weather_editor_channel_b", right, 182.f);
     AddPropertyControl(xml, 4, "ui_weather_editor_rain_density", right, 207.f);
+    AddPropertyControl(xml, 37, "ui_weather_editor_rain_tilt_multiplier", right, 226.f);
+    AddPropertyControl(xml, 38, "ui_weather_editor_rain_speed_multiplier", right, 245.f);
 
-    AddPropertyHeader(xml, "ui_weather_editor_sun_color_rgb", right, 234.f, 31);
-    AddPropertyControl(xml, 31, "ui_weather_editor_channel_r", right, 254.f);
-    AddPropertyControl(xml, 32, "ui_weather_editor_channel_g", right, 273.f);
-    AddPropertyControl(xml, 33, "ui_weather_editor_channel_b", right, 292.f);
-    AddPropertyControl(xml, 34, "ui_weather_editor_sun_altitude", right, 319.f);
-    AddPropertyControl(xml, 35, "ui_weather_editor_sun_longitude", right, 338.f);
+    // Wind: velocity, direction and tree motion amplitude.
+    AddPropertyHeader(xml, "ui_weather_editor_wind", right, 272.f);
+    AddPropertyControl(xml, 5, "ui_weather_editor_wind_velocity", right, 292.f);
+    AddPropertyControl(xml, 6, "ui_weather_editor_wind_direction", right, 311.f);
+    AddPropertyControl(xml, 36, "ui_weather_editor_trees_amplitude", right, 330.f);
 
-    AddPropertyHeader(xml, "ui_weather_editor_wind", right, 365.f);
-    AddPropertyControl(xml, 5, "ui_weather_editor_wind_velocity", right, 385.f);
-    AddPropertyControl(xml, 6, "ui_weather_editor_wind_direction", right, 404.f);
-
-    AddPropertyHeader(xml, "ui_weather_editor_thunderbolt", right, 431.f);
-    AddPropertyControl(xml, 7, "ui_weather_editor_thunderbolt_period", right, 451.f);
-    AddPropertyControl(xml, 8, "ui_weather_editor_thunderbolt_duration", right, 470.f);
+    AddPropertyHeader(xml, "ui_weather_editor_thunderbolt", right, 357.f);
+    AddPropertyControl(xml, 7, "ui_weather_editor_thunderbolt_period", right, 377.f);
+    AddPropertyControl(xml, 8, "ui_weather_editor_thunderbolt_duration", right, 396.f);
 }
 
 void CUIWeatherEditor::SelectCurrentWeather() {
@@ -1035,6 +1063,7 @@ void CUIWeatherEditor::Snapshot(CEnvDescriptor* descriptor) {
     state.rain_color = descriptor->rain_color;
     state.bolt_period = descriptor->bolt_period;
     state.bolt_duration = descriptor->bolt_duration;
+    state.trees_amplitude = descriptor->trees_amplitude;
     state.wind_velocity = descriptor->wind_velocity;
     state.wind_direction = descriptor->wind_direction;
     state.ambient = descriptor->ambient;
@@ -1078,6 +1107,7 @@ void CUIWeatherEditor::RestoreSnapshot(SDescriptorState& state) {
     descriptor.rain_color = state.rain_color;
     descriptor.bolt_period = state.bolt_period;
     descriptor.bolt_duration = state.bolt_duration;
+    descriptor.trees_amplitude = state.trees_amplitude;
     descriptor.wind_velocity = state.wind_velocity;
     descriptor.wind_direction = state.wind_direction;
     descriptor.ambient = state.ambient;
@@ -1283,6 +1313,15 @@ float CUIWeatherEditor::GetPropertyValue(u32 property_index) const {
     // remain swapped only in CEnvDescriptor::load/save for compatibility.
     case 34: return rad2deg(d.sun_dir.getP());
     case 35: return rad2deg(d.sun_dir.getH());
+    case 36: return d.trees_amplitude;
+    case 37: {
+        const CEffect_Rain* rain = g_pGamePersistent->Environment().eff_Rain;
+        return rain ? rain->GetWindTiltMultiplier() : 1.f;
+    }
+    case 38: {
+        const CEffect_Rain* rain = g_pGamePersistent->Environment().eff_Rain;
+        return rain ? rain->GetWindSpeedMultiplier() : 0.f;
+    }
     default: return 0.f;
     }
 }
@@ -1334,8 +1373,20 @@ void CUIWeatherEditor::SetPropertyValue(u32 property_index, float value) {
     case 33: d.sun_color.z = value; break;
     case 34: d.sun_dir.setHP(heading, deg2rad(value)); break;
     case 35: d.sun_dir.setHP(deg2rad(value), pitch); break;
+    case 36: d.trees_amplitude = weather_motion::tree_amplitude(value); break;
+    case 37:
+        if (g_pGamePersistent->Environment().eff_Rain)
+            g_pGamePersistent->Environment().eff_Rain->SetWindTiltMultiplier(value);
+        break;
+    case 38:
+        if (g_pGamePersistent->Environment().eff_Rain)
+            g_pGamePersistent->Environment().eff_Rain->SetWindSpeedMultiplier(value);
+        break;
     }
 
+    if ((property_index == 5 || property_index == 6) &&
+        g_pGamePersistent->Environment().eff_Rain)
+        g_pGamePersistent->Environment().eff_Rain->RefreshTrajectories();
     if (property_index == 1)
         SyncPropertyControls();
 }
@@ -1613,6 +1664,14 @@ void CUIWeatherEditor::OnSave(CUIWindow*, void*) {
             Snapshot(descriptor);
         }
     }
+    if (environment.eff_Rain && !environment.eff_Rain->SaveWindSettings()) {
+        SetStatus("ui_weather_editor_status_rain_save_error");
+        return;
+    }
+    m_rain_tilt_baseline = environment.eff_Rain
+        ? environment.eff_Rain->GetWindTiltMultiplier() : 1.f;
+    m_rain_speed_baseline = environment.eff_Rain
+        ? environment.eff_Rain->GetWindSpeedMultiplier() : 0.f;
     SetStatus("ui_weather_editor_status_saved", path.c_str());
 }
 
@@ -1621,6 +1680,11 @@ void CUIWeatherEditor::OnRevert(CUIWindow*, void*) {
     if (!state)
         return;
     RestoreSnapshot(*state);
+    if (g_pGamePersistent->Environment().eff_Rain) {
+        g_pGamePersistent->Environment().eff_Rain->SetWindTiltMultiplier(m_rain_tilt_baseline);
+        g_pGamePersistent->Environment().eff_Rain->SetWindSpeedMultiplier(m_rain_speed_baseline);
+        g_pGamePersistent->Environment().eff_Rain->RefreshTrajectories();
+    }
     RefreshTextureSelection();
     RefreshDefinitionSelection();
     SyncPropertyControls();

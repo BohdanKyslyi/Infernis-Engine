@@ -28,7 +28,7 @@
     <string id="ui_weather_editor_sky_color_rgb"><text>КОЛІР НЕБА [RGB]</text></string>
     <string id="ui_weather_editor_clouds_color_rgba"><text>КОЛІР ХМАР [RGBA]</text></string>
     <string id="ui_weather_editor_hemisphere_color_rgba"><text>КОЛІР ПІВСФЕРИ [RGBA]</text></string>
-    <string id="ui_weather_editor_rain_color_rgb"><text>КОЛІР ДОЩУ [RGB]</text></string>
+    <string id="ui_weather_editor_rain_color_rgb"><text>ДОЩ: КОЛІР [RGB]</text></string>
     <string id="ui_weather_editor_sun_color_rgb"><text>КОЛІР СОНЦЯ [RGB]</text></string>
     <string id="ui_weather_editor_wind"><text>ВІТЕР</text></string>
 
@@ -45,8 +45,8 @@
     <string id="ui_weather_editor_rain_density"><text>Сила дощу</text></string>
     <string id="ui_weather_editor_sun_altitude"><text>Висота сонця</text></string>
     <string id="ui_weather_editor_sun_longitude"><text>Азимут сонця</text></string>
-    <string id="ui_weather_editor_wind_velocity"><text>Швидкість</text></string>
-    <string id="ui_weather_editor_wind_direction"><text>Напрямок</text></string>
+    <string id="ui_weather_editor_wind_velocity"><text>Швидкість вітру</text></string>
+    <string id="ui_weather_editor_wind_direction"><text>Напрямок вітру</text></string>
     <string id="ui_weather_editor_thunderbolt_period"><text>Період</text></string>
     <string id="ui_weather_editor_thunderbolt_duration"><text>Тривалість</text></string>
 
@@ -56,8 +56,8 @@
     <string id="ui_weather_editor_hint_create_file"><text>Створює новий файл погоди з указаною назвою на основі поточної секції.</text></string>
     <string id="ui_weather_editor_hint_add_section"><text>Додає до поточної погоди нову секцію для часу, встановленого на часовій шкалі.</text></string>
     <string id="ui_weather_editor_hint_preview"><text>Приховує редактор і залишає поточну погоду для перегляду в грі. Відкрити редактор знову можна командою weather_editor.</text></string>
-    <string id="ui_weather_editor_hint_save"><text>Записує всі зміни поточного погодного циклу у файл .ltx.</text></string>
-    <string id="ui_weather_editor_hint_revert"><text>Скасовує незбережені зміни та повертає значення, зафіксовані на початку редагування.</text></string>
+    <string id="ui_weather_editor_hint_save"><text>Зберігає всі часові секції поточного погодного циклу, включно з амплітудою дерев, у його файл .ltx. Окремо записує глобальні множники нахилу та розгону дощу в noirWeatherEffect.ltx, зберігаючи решту його параметрів.</text></string>
+    <string id="ui_weather_editor_hint_revert"><text>Повертає вибрану часову секцію та глобальні налаштування нахилу й розгону дощу до стану на початку редагування або після останнього збереження.</text></string>
     <string id="ui_weather_editor_hint_close"><text>Закриває редактор, завершує сеанс редагування та повертає гру до звичайного режиму.</text></string>
     <string id="ui_weather_editor_hint_color_picker"><text>Палітра кольору: переміщуйте курсор у великому полі для насиченості й яскравості, а на смузі - для відтінку.</text></string>
     <string id="ui_weather_editor_hint_weather"><text>Погодний цикл (.ltx), який зараз редагується та відображається у грі.</text></string>
@@ -74,8 +74,8 @@
     <string id="ui_weather_editor_hint_fog_density"><text>Щільність туману від 0 до 1: 0 - туман відсутній, 1 - максимальна щільність.</text></string>
     <string id="ui_weather_editor_hint_fog_distance"><text>Відстань, на якій туман майже повністю перекриває сцену. Не повинна перевищувати дальню межу.</text></string>
     <string id="ui_weather_editor_hint_rain_density"><text>Інтенсивність дощу від 0 до 1. Впливає на кількість крапель і пов’язані погодні ефекти.</text></string>
-    <string id="ui_weather_editor_hint_wind_velocity"><text>Швидкість вітру, яку можуть використовувати погодні ефекти, рослинність і частинки.</text></string>
-    <string id="ui_weather_editor_hint_wind_direction"><text>Горизонтальний напрямок вітру в градусах від 0 до 360.</text></string>
+    <string id="ui_weather_editor_hint_wind_velocity"><text>Швидкість вітру у вибраній часовій секції погоди. Впливає на коливання дерев; з увімкненим динамічним вітром дощу — також на нахил і розгін крапель разом із силою поривів. Значення 0 прибирає цей вплив вітру. Амплітуда дерев, нахил і розгін дощу регулюються окремими множниками.</text></string>
+    <string id="ui_weather_editor_hint_wind_direction"><text>Горизонтальний напрямок вітру від 0 до 360 градусів у вибраній часовій секції. Дерева і дощ використовують один напрямок. Між секціями він змінюється найкоротшим шляхом через межу 0/360. Для впливу на дощ потрібен увімкнений динамічний вітер дощу. Сам напрямок не збільшує силу вітру.</text></string>
     <string id="ui_weather_editor_hint_thunderbolt_period"><text>Середній проміжок часу між спалахами блискавки.</text></string>
     <string id="ui_weather_editor_hint_thunderbolt_duration"><text>Тривалість одного спалаху блискавки.</text></string>
     <string id="ui_weather_editor_hint_sun_shafts"><text>Інтенсивність сонячних променів. Ефект залежить від активного рендера та шейдерів.</text></string>
@@ -106,4 +106,11 @@
     <string id="ui_weather_editor_status_save_error"><text>ПОМИЛКА: конфіг погоди не збережено. Перевірте журнал гри.</text></string>
     <string id="ui_weather_editor_status_saved"><text>Збережено: %s (резервна копія першого збереження: .weather_editor.bak)</text></string>
     <string id="ui_weather_editor_status_reverted"><text>Часову секцію повернено до останнього збереженого або початкового стану.</text></string>
+    <string id="ui_weather_editor_trees_amplitude"><text>Коливання дерев</text></string>
+    <string id="ui_weather_editor_rain_tilt_multiplier"><text>Нахил від вітру</text></string>
+    <string id="ui_weather_editor_hint_trees_amplitude"><text>Сила розгойдування дерев у вибраній часовій секції (trees_amplitude), від 0 до 1. 0 — без коливання; 0.5 — половина звичайної сили; 1 — повна звичайна сила. Швидкість і напрямок вітру задаються окремо. Якщо ключа немає, використовується 1. Значення поза діапазоном обмежуються до 0–1. Зберігається у поточному файлі погоди.</text></string>
+    <string id="ui_weather_editor_hint_rain_tilt_multiplier"><text>Множник нахилу крапель від вітру (tilt_multiplier), а не кут у градусах. 0 — без нахилу від вітру; 1 — звичайний нахил; 2 — удвічі більший. За максимального впливу вітру й max_angle = 60 значення 0.5 дає 30 градусів. Підсумковий нахил обмежено 80 градусами. Працює лише з увімкненим динамічним вітром дощу. Налаштування спільне для всієї погоди; зберігається в [dynamic_wind] файлу noirWeatherEffect.ltx.</text></string>
+    <string id="ui_weather_editor_status_rain_save_error"><text>Погоду збережено, але не вдалося зберегти параметри дощу в noirWeatherEffect.ltx.</text></string>
+    <string id="ui_weather_editor_rain_speed_multiplier"><text>Розгін від вітру</text></string>
+    <string id="ui_weather_editor_hint_rain_speed_multiplier"><text>Наскільки вітер збільшує швидкість падіння крапель (speed_wind_multiplier). 0 — базова швидкість; 1 — до подвійної; 1.5 — до 2.5 раза від базової. Результат залежить від швидкості та поривів вітру. За відсутності вітру або з вимкненим динамічним вітром дощу розгону немає. Це спільне налаштування для всієї погоди, а не окремої часової секції. Зберігається в [dynamic_wind] файлу noirWeatherEffect.ltx.</text></string>
 </string_table>

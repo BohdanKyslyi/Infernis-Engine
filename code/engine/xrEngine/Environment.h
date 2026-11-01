@@ -156,6 +156,7 @@ public:
     float bolt_period;
     float bolt_duration;
 
+    float trees_amplitude; // Weather multiplier; 1 preserves legacy tree motion.
     float wind_velocity;
     float wind_direction;
 

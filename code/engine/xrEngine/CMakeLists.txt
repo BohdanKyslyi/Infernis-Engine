@@ -242,7 +242,9 @@ set(INTERFACES_PHYSICS IObjectPhysicsCollision.h
 set(EDITOR_ENVIRONMENT_AMBIENTS editor_environment_ambients_manager.hpp
                                 editor_environment_ambients_manager.cpp)
 
-set(GAME_API_ENVIRONMENT_EFFECTS Rain.h
+set(GAME_API_ENVIRONMENT_EFFECTS WeatherWindMath.h
+                                 RainConfigEdit.h
+                                 Rain.h
                                  thunderbolt.h
                                  xr_efflensflare.h
                                  Rain.cpp

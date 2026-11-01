@@ -28,7 +28,7 @@
     <string id="ui_weather_editor_sky_color_rgb"><text>SKY COLOR [RGB]</text></string>
     <string id="ui_weather_editor_clouds_color_rgba"><text>CLOUDS COLOR [RGBA]</text></string>
     <string id="ui_weather_editor_hemisphere_color_rgba"><text>HEMISPHERE COLOR [RGBA]</text></string>
-    <string id="ui_weather_editor_rain_color_rgb"><text>RAIN COLOR [RGB]</text></string>
+    <string id="ui_weather_editor_rain_color_rgb"><text>RAIN: COLOR [RGB]</text></string>
     <string id="ui_weather_editor_sun_color_rgb"><text>SUN COLOR [RGB]</text></string>
     <string id="ui_weather_editor_wind"><text>WIND</text></string>
 
@@ -45,8 +45,8 @@
     <string id="ui_weather_editor_rain_density"><text>Rain density</text></string>
     <string id="ui_weather_editor_sun_altitude"><text>Sun altitude</text></string>
     <string id="ui_weather_editor_sun_longitude"><text>Sun longitude</text></string>
-    <string id="ui_weather_editor_wind_velocity"><text>Velocity</text></string>
-    <string id="ui_weather_editor_wind_direction"><text>Direction</text></string>
+    <string id="ui_weather_editor_wind_velocity"><text>Wind speed</text></string>
+    <string id="ui_weather_editor_wind_direction"><text>Wind direction</text></string>
     <string id="ui_weather_editor_thunderbolt_period"><text>Period</text></string>
     <string id="ui_weather_editor_thunderbolt_duration"><text>Duration</text></string>
 
@@ -56,8 +56,8 @@
     <string id="ui_weather_editor_hint_create_file"><text>Creates a new weather file with the entered name, using the current keyframe as its base.</text></string>
     <string id="ui_weather_editor_hint_add_section"><text>Adds a new keyframe to the current weather at the time selected on the timeline.</text></string>
     <string id="ui_weather_editor_hint_preview"><text>Hides the editor and keeps the current weather visible in game. Use the weather_editor command to reopen it.</text></string>
-    <string id="ui_weather_editor_hint_save"><text>Writes all changes in the current weather cycle to its .ltx file.</text></string>
-    <string id="ui_weather_editor_hint_revert"><text>Discards unsaved changes and restores the values captured when editing began.</text></string>
+    <string id="ui_weather_editor_hint_save"><text>Saves all time sections of the current weather cycle, including tree sway strength, to its .ltx file. Also saves global rain tilt and speed boost factors to noirWeatherEffect.ltx while preserving its other settings.</text></string>
+    <string id="ui_weather_editor_hint_revert"><text>Restores the selected time section and global rain tilt and speed boost settings to their state when editing began or after the last save.</text></string>
     <string id="ui_weather_editor_hint_close"><text>Closes the editor, ends the editing session and returns the game to normal operation.</text></string>
     <string id="ui_weather_editor_hint_color_picker"><text>Color picker: drag in the large field for saturation and brightness, or on the strip for hue.</text></string>
     <string id="ui_weather_editor_hint_weather"><text>The weather cycle (.ltx) currently being edited and rendered in the game.</text></string>
@@ -74,8 +74,8 @@
     <string id="ui_weather_editor_hint_fog_density"><text>Fog density from 0 to 1: 0 disables fog and 1 gives maximum density.</text></string>
     <string id="ui_weather_editor_hint_fog_distance"><text>Distance at which fog almost completely covers the scene. It must not exceed the far plane.</text></string>
     <string id="ui_weather_editor_hint_rain_density"><text>Rain intensity from 0 to 1. It affects drop count and related weather effects.</text></string>
-    <string id="ui_weather_editor_hint_wind_velocity"><text>Wind speed available to weather effects, vegetation and particle systems.</text></string>
-    <string id="ui_weather_editor_hint_wind_direction"><text>Horizontal wind direction in degrees from 0 to 360.</text></string>
+    <string id="ui_weather_editor_hint_wind_velocity"><text>Wind speed for the selected weather time section. Drives tree sway and, with dynamic rain wind enabled, rain tilt and speed boost together with gust strength. 0 removes these wind effects. Tree sway, rain tilt and rain speed boost each have their own multiplier.</text></string>
+    <string id="ui_weather_editor_hint_wind_direction"><text>Horizontal wind direction from 0 to 360 degrees in the selected time section. Trees and rain use the same direction. Transitions between sections take the shortest path across 0/360. Rain requires dynamic rain wind to be enabled. Direction alone does not increase wind strength.</text></string>
     <string id="ui_weather_editor_hint_thunderbolt_period"><text>Average interval between lightning flashes.</text></string>
     <string id="ui_weather_editor_hint_thunderbolt_duration"><text>Duration of a single lightning flash.</text></string>
     <string id="ui_weather_editor_hint_sun_shafts"><text>Sun-shaft intensity. The visible result depends on the active renderer and shaders.</text></string>
@@ -106,4 +106,11 @@
     <string id="ui_weather_editor_status_save_error"><text>ERROR: weather config was not saved. See the log.</text></string>
     <string id="ui_weather_editor_status_saved"><text>Saved: %s (first-save backup: .weather_editor.bak)</text></string>
     <string id="ui_weather_editor_status_reverted"><text>Keyframe reverted to its last saved/opened state.</text></string>
+    <string id="ui_weather_editor_trees_amplitude"><text>Tree sway strength</text></string>
+    <string id="ui_weather_editor_rain_tilt_multiplier"><text>Wind tilt factor</text></string>
+    <string id="ui_weather_editor_hint_trees_amplitude"><text>Tree sway strength in the selected time section (trees_amplitude), from 0 to 1. 0 stops sway; 0.5 gives half normal strength; 1 gives full normal strength. Wind speed and direction are set separately. A missing key defaults to 1. Out-of-range values are clamped to 0–1. Saved in the current weather file.</text></string>
+    <string id="ui_weather_editor_hint_rain_tilt_multiplier"><text>Multiplier for rain tilt caused by wind (tilt_multiplier), not an angle in degrees. 0 removes wind tilt; 1 keeps normal tilt; 2 doubles it. At maximum wind influence and max_angle = 60, a value of 0.5 gives 30 degrees. Final tilt is capped at 80 degrees. Requires dynamic rain wind. This setting is shared by all weather cycles and is saved under [dynamic_wind] in noirWeatherEffect.ltx.</text></string>
+    <string id="ui_weather_editor_status_rain_save_error"><text>Weather saved, but saving rain settings to noirWeatherEffect.ltx failed.</text></string>
+    <string id="ui_weather_editor_rain_speed_multiplier"><text>Wind speed boost</text></string>
+    <string id="ui_weather_editor_hint_rain_speed_multiplier"><text>How much wind increases rain fall speed (speed_wind_multiplier). 0 keeps base speed; 1 gives up to double speed; 1.5 gives up to 2.5 times base speed. The result depends on wind speed and gust strength. No boost applies without wind or with dynamic rain wind disabled. Shared by all weather cycles, rather than one time section. Saved under [dynamic_wind] in noirWeatherEffect.ltx.</text></string>
 </string_table>
