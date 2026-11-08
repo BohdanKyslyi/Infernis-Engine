@@ -107,6 +107,10 @@ public:
     } stats;
 
 public:
+    // Screen Space Shaders. Monolith r3.h:126. True while the sun is actually lighting the scene,
+    // which the grass uses to decide whether its visibility list is still needed for a shadow pass.
+    bool is_sun();
+
     // Sector detection and visibility
     CSector* pLastSector;
     Fvector vLastCameraPos;

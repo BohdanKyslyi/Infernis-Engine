@@ -56,9 +56,11 @@ protected:
     void reinit();
 
 public:
-#ifdef PRINT_CALL_STACK
+    // Monolith ( script_storage.h:72-77 ): in every build; script_log_no_stack writes a line
+    // without the stack after it ( the lines print_stack itself writes )
     void print_stack();
-#endif // #ifdef PRINT_CALL_STACK
+    static int __cdecl script_log_no_stack(ScriptStorage::ELuaMessageType tLuaMessageType,
+                                           LPCSTR caFormat, ...);
 
 public:
     CScriptStorage();

@@ -43,9 +43,37 @@ IC void R_xforms::set_c_wvp(R_constant* C) {
     RCache.set_c(C, m_wvp);
 };
 
+IC void R_xforms::set_c_w_prev(R_constant* C) {
+    c_w_prev = C;
+    RCache.set_c(C, m_w_prev);
+};
+IC void R_xforms::set_c_v_prev(R_constant* C) {
+    c_v_prev = C;
+    RCache.set_c(C, m_v_prev);
+};
+IC void R_xforms::set_c_p_prev(R_constant* C) {
+    c_p_prev = C;
+    RCache.set_c(C, m_p_prev);
+};
+IC void R_xforms::set_c_wv_prev(R_constant* C) {
+    c_wv_prev = C;
+    RCache.set_c(C, m_wv_prev);
+};
+IC void R_xforms::set_c_vp_prev(R_constant* C) {
+    c_vp_prev = C;
+    RCache.set_c(C, m_vp_prev);
+};
+IC void R_xforms::set_c_wvp_prev(R_constant* C) {
+    c_wvp_prev = C;
+    RCache.set_c(C, m_wvp_prev);
+};
+
 IC void CBackend::set_xform_world(const Fmatrix& M) { xforms.set_W(M); }
 IC void CBackend::set_xform_view(const Fmatrix& M) { xforms.set_V(M); }
 IC void CBackend::set_xform_project(const Fmatrix& M) { xforms.set_P(M); }
+IC void CBackend::set_xform_world_prev(const Fmatrix& M) { xforms.set_W_prev(M); }
+IC void CBackend::set_xform_view_prev(const Fmatrix& M) { xforms.set_V_prev(M); }
+IC void CBackend::set_xform_project_prev(const Fmatrix& M) { xforms.set_P_prev(M); }
 IC const Fmatrix& CBackend::get_xform_world() { return xforms.get_W(); }
 IC const Fmatrix& CBackend::get_xform_view() { return xforms.get_V(); }
 IC const Fmatrix& CBackend::get_xform_project() { return xforms.get_P(); }

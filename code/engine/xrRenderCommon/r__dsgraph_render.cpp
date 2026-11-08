@@ -5,6 +5,9 @@
 #include "xrEngine/igame_persistent.h"
 #include "xrEngine/environment.h"
 #include "xrEngine/CustomHUD.h"
+#if RENDER == R_R4
+#include "xrEngine/ssfx_console_vars.h"
+#endif
 
 #include "FBasicVisual.h"
 
@@ -67,6 +70,80 @@ void __fastcall sorted_L1(mapSorted_Node* N) {
     RCache.set_xform_world(N->val.Matrix);
     RImplementation.apply_object(N->val.pObject);
     RImplementation.apply_lmaterial();
+    V->Render(calcLOD(N->key, V->vis.sphere.R));
+}
+
+#if RENDER != R_R4 // the water diagnostic: removed on DX11 only, see r__dsgraph_build.cpp
+extern u32 g_mapWaterFrame; // defined in r__dsgraph_build.cpp
+#endif
+
+// Screen Space Shaders: water into the reflection buffer. The shader is forced, because this
+// pass draws the same geometry the normal water pass does, only into a smaller target.
+void __fastcall water_node_ssr(mapSorted_Node* N) {
+#ifdef USE_DX11
+    // VERIFY() is a no-op in release builds, so guard explicitly
+    if (!N || !N->val.pVisual) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            Msg("! water_node_ssr: null visual, N=%p, frame=%u", (void*)N, Device.dwFrame);
+        }
+        return;
+    }
+    dxRender_Visual* V = N->val.pVisual;
+
+    RCache.set_Shader(RImplementation.Target->s_ssfx_water_ssr);
+
+    RCache.set_xform_world(N->val.Matrix);
+    RImplementation.apply_object(N->val.pObject);
+    RImplementation.apply_lmaterial();
+
+    RCache.set_c("cam_pos", RImplementation.Target->Position_previous.x,
+                 RImplementation.Target->Position_previous.y,
+                 RImplementation.Target->Position_previous.z, 0.0f);
+
+    // Previous matrix data
+    RCache.set_c("m_current", RImplementation.Target->Matrix_current);
+    RCache.set_c("m_previous", RImplementation.Target->Matrix_previous);
+
+    V->Render(calcLOD(N->key, V->vis.sphere.R));
+#endif
+}
+
+// Screen Space Shaders: the normal water pass. Falls back to the shader the visual already
+// carries when the water module is not installed.
+void __fastcall water_node(mapSorted_Node* N) {
+    if (!N || !N->val.pVisual) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            Msg("! water_node: null visual, N=%p, frame=%u", (void*)N, Device.dwFrame);
+        }
+        return;
+    }
+    dxRender_Visual* V = N->val.pVisual;
+
+#ifdef USE_DX11
+    if (RImplementation.o.ssfx_water) {
+        RCache.set_Shader(RImplementation.Target->s_ssfx_water);
+    }
+#endif
+
+    RCache.set_xform_world(N->val.Matrix);
+    RImplementation.apply_object(N->val.pObject);
+    RImplementation.apply_lmaterial();
+
+    // Wind settings
+    float WindDir = g_pGamePersistent->Environment().CurrentEnv->wind_direction;
+    float WindVel = g_pGamePersistent->Environment().CurrentEnv->wind_velocity;
+#if RENDER == R_R4
+    // NOT AS IN MONOLITH: the water gets the same minimum wind as the SSFX trees and grass
+    // ("Minimum wind speed", ssfx_wind_trees.w, CEnvironment::OnFrame). This engine's weather
+    // wind is 0..100 and mostly 0, the SSFX water expects Anomaly's 0..1000.
+    WindVel = std::max(WindVel, ps_ssfx_wind_trees.w * 1000);
+#endif
+    RCache.set_c("wind_setup", WindDir, WindVel, 0, 0);
+
     V->Render(calcLOD(N->key, V->vis.sphere.R));
 }
 
@@ -505,6 +582,10 @@ void R_dsgraph_structure::r_dsgraph_render_hud() {
     Device.mFullTransform.mul(Device.mProject, Device.mView);
     RCache.set_xform_project(Device.mProject);
 
+    // SSFX motion vectors: previous frame HUD projection
+    Fmatrix Pold_prev = Device.mProject_prev;
+    RCache.set_xform_project_prev(Device.mProject);
+
     // Rendering
     rmNear();
     mapHUD.traverseLR(sorted_L1);
@@ -555,6 +636,9 @@ RImplementation.Target->rt_Normal,	RImplementation.Target->rt_Color,		HW.pBaseZB
     Device.mProject = Pold;
     Device.mFullTransform = FTold;
     RCache.set_xform_project(Device.mProject);
+
+    // Restore previous frame projection
+    RCache.set_xform_project_prev(Pold_prev);
 }
 
 void R_dsgraph_structure::r_dsgraph_render_hud_ui() {
@@ -646,11 +730,16 @@ void R_dsgraph_structure::r_dsgraph_render_sorted(bool renderHUD) {
 
 //////////////////////////////////////////////////////////////////////////
 // strict-sorted render
-void R_dsgraph_structure::r_dsgraph_render_emissive() {
+// Screen Space Shaders render the emissive geometry twice: once into the accumulator as before,
+// and once into the bloom emissive buffer. `clear` lets the first call keep the lists for the
+// second one, `renderHUD` adds the sorted HUD so glowing weapon parts bloom too. Both default to
+// the original behaviour, so R2, R3 and a stock R4 are unaffected.
+void R_dsgraph_structure::r_dsgraph_render_emissive(bool clear, bool renderHUD) {
 #if RENDER != R_R1
     // Sorted (back to front)
     mapEmissive.traverseLR(sorted_L1);
-    mapEmissive.clear();
+    if (clear)
+        mapEmissive.clear();
 
     //	HACK: Calculate this only once
 
@@ -670,7 +759,11 @@ void R_dsgraph_structure::r_dsgraph_render_emissive() {
     rmNear();
     // Sorted (back to front)
     mapHUDEmissive.traverseLR(sorted_L1);
-    mapHUDEmissive.clear();
+    if (clear)
+        mapHUDEmissive.clear();
+
+    if (renderHUD)
+        mapHUDSorted.traverseRL(sorted_L1);
 
     rmNormal();
 
@@ -679,6 +772,25 @@ void R_dsgraph_structure::r_dsgraph_render_emissive() {
     Device.mFullTransform = FTold;
     RCache.set_xform_project(Device.mProject);
 #endif
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Screen Space Shaders: water
+void R_dsgraph_structure::r_dsgraph_render_water_ssr() {
+#if RENDER != R_R4 // the water diagnostic: removed on DX11 only, see r__dsgraph_build.cpp
+    static u32 s_logged = 0;
+    if (g_mapWaterFrame != Device.dwFrame && mapWater.size() && s_logged < 20) {
+        s_logged++;
+        Msg("! mapWater: render in frame %u, last insert in frame %u, nodes %u", Device.dwFrame,
+            g_mapWaterFrame, mapWater.size());
+    }
+#endif
+    mapWater.traverseLR(water_node_ssr);
+}
+
+void R_dsgraph_structure::r_dsgraph_render_water() {
+    mapWater.traverseLR(water_node);
+    mapWater.clear();
 }
 
 //////////////////////////////////////////////////////////////////////////

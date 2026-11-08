@@ -1,3 +1,252 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+#include "sload.h"
+#include "screenspace_mvectors.h"
+
+// Screen Space Shaders: the deffer_base_hud_* wrappers set this to flag HUD pixels in the motion vectors
+#ifndef SSFX_MV_HUD
+#define SSFX_MV_HUD 0
+#endif
+
+#if SSFX_MV_HUD
+    #include "screenspace_hud_raindrops.h"
+    #include "check_screenspace.h"
+#endif
+
+f_deffer main(p_bumped I)
+{
+    f_deffer O;
+
+    // =========================================================
+    // Screen Space Shaders - HUD raindrops, SSS Update 17
+    // https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+    //
+    // Deviation from the donor, and the only one: the donor ships this as a separate full copy,
+    // deffer_base_hud_bump.ps. That copy has no PBR G-buffer packing, so installing it whole
+    // would drop PBR from every weapon in the player's hands. The donor's code lives here
+    // instead, behind the flag the HUD wrapper sets, so the PBR block further down stays in one
+    // place. Everything inside the guards is the donor's, line for line, and the world pass
+    // compiles exactly as it did before: drops_gloss folds to zero there.
+    // =========================================================
+
+#if SSFX_MV_HUD
+
+    float4 drops = 0; // xy = Normal | z = Overall str | w = reflection str
+
+    if (ssfx_hud_drops_1.y > 0)
+    {
+        // Calc droplets
+        drops.xyz = ssfx_hud_raindrops(s_hud_rain, I.RDrops.xyz, 1.0f);
+
+        // Facing weight. Donor: saturate( World Y+ ) - top only. See screenspace_hud_raindrops.h.
+        drops.xyz *= ssfx_hud_drops_facing(I.RDrops.w);
+
+        // Intensity from script ( Cover + Rain intensity )
+        drops.xyz *= ssfx_hud_drops_1.y;
+
+        // Refraction - moves the texture lookup, so it has to happen before sload()
+        //
+        // The donor's facing weight is carried here explicitly, and only here. The wrapped weight
+        // above puts drops on the sides and the underside, which is what was asked for, but this
+        // line is the one that MOVES the texture: on a face turned towards the player the donor's
+        // weight is exactly zero, so the donor never shifts it. With the wrapped weight the front
+        // of a held object - the PDA case and screen, the flat of the receiver - was drawn with a
+        // displaced texture. saturate( world normal Y ) restores the donor's value on top faces
+        // and the donor's exact zero everywhere else. The droplets themselves, their tilt and
+        // their sheen, keep the wrapped weight and stay visible on the sides.
+        I.tcdh.xy = I.tcdh.xy + drops.xy * ssfx_hud_drops_1.w * saturate(I.RDrops.w);
+
+        // Reflection adjustments
+    #ifdef SSFX_SSS
+        drops.w = ssfx_hud_drops_1.z;
+    #else
+        drops.w = ssfx_hud_drops_1.z * dot(L_hemi_color, SSFX_HUD_LIGHTVECTOR);
+    #endif
+
+        drops.w = max(drops.w, 3.0f);
+    }
+
+#endif
+
+    surface_bumped S = sload(I);
+
+#ifdef USE_PBR
+    float surface_height = 0.0f;
+#else
+    float surface_height = S.height;
+#endif
+
+    // Sample normal, rotate it by matrix, encode position
+#if SSFX_MV_HUD
+    // The donor writes S.normal + float3(drops.xy * drops.w, 1.0f). The +1.0 on z is what flattens
+    // the bump under the water film, and on a legacy surface it is right: sload() has already halved
+    // z there, so flat is 0.5 and the donor's sum is 1.5.
+    //
+    // DEVIATION FROM THE DONOR, forced by PBR. A PBR normal is unit length - sload.h reconstructs
+    // z from xy and sload() does not halve it - so flat is 1.0 and the donor's +1.0 would make it
+    // 2.0, halving the relief of every weapon in the player's hands in dry weather as well. Here z
+    // is left alone, which keeps a dry weapon bit-for-bit as before, and the droplet tilt is scaled
+    // by the same 1/1.5 so that wet drops have exactly the donor's slope against z.
+    #ifdef USE_PBR
+        float3 drops_normal = float3(drops.xy * (drops.w / 1.5f), 0.0f);
+    #else
+        float3 drops_normal = float3(drops.xy * drops.w, 1.0f);
+    #endif
+#endif
+
+    float3 Ne = mul(
+        float3x3(I.M1, I.M2, I.M3),
+#if SSFX_MV_HUD
+        S.normal + drops_normal
+#else
+        S.normal
+#endif
+    );
+
+    Ne = normalize(Ne);
+
+    // hemi, sun, material
+    float ms = xmaterial;
+
+#if SSFX_MV_HUD
+    // The wet sheen the drops add. The donor writes it straight into S.gloss; it is kept as its
+    // own term as well, because on a PBR surface this engine stores roughness, which is the
+    // inverse, so the same amount has to be subtracted there instead of added.
+    float drops_gloss = (ssfx_hud_drops_1.y * ssfx_hud_drops_2.z) + drops.z * ssfx_hud_drops_2.w;
+    S.gloss += drops_gloss;
+#else
+    float drops_gloss = 0.0f;
+#endif
+
+#ifdef USE_LM_HEMI
+
+    float4 lm = s_hemi.Sample(
+        smp_rtlinear,
+        I.lmh
+    );
+
+    float h = get_hemi(lm);
+
+#ifdef USE_R2_STATIC_SUN
+    ms = get_sun(lm);
+#endif
+
+#else
+
+    float h = I.position.w;
+
+#ifdef USE_R2_STATIC_SUN
+    ms = I.tcdh.w;
+#endif
+
+#endif // USE_LM_HEMI
+
+
+    // =========================================================
+    // Infernis Engine PBR G-buffer data
+    // =========================================================
+
+#ifdef USE_PBR
+
+    // Real PBR material data.
+    // _bump#.R = Metallic
+    // _bump#.G = Roughness
+    // _bump#.A = AO
+
+    // Infernis PBR Stage 2.22:
+    // Material AO describes small-scale occlusion; X-Ray hemi carries the
+    // large-scale sky visibility that distinguishes outdoors from interiors.
+    // Keep a conservative floor for meshes that have no authored legacy hemi,
+    // but no longer let full IBL illuminate a PBR surface under a solid roof.
+    static const float IE_PBR_HEMI_VISIBILITY_FLOOR = 0.20f;
+
+    float skyVisibility =
+        lerp(
+            IE_PBR_HEMI_VISIBILITY_FLOOR,
+            1.0f,
+            saturate(h)
+        );
+
+    float gbuffer_hemi =
+        saturate(
+            S.ao * skyVisibility
+        );
+
+    float gbuffer_material =
+        gbuf_pack_pbr(
+            gbuffer_hemi,
+            S.metallic
+        );
+
+    // Screen Space Shaders: the HUD drops' sheen, applied the PBR way round.
+    //
+    // DEVIATION FROM THE DONOR, forced by PBR. The donor adds drops_gloss to legacy gloss and lets
+    // it saturate; subtracting the same amount from roughness is the exact algebraic mirror of
+    // that, since saturate(r - x) == 1 - saturate(g + x). The algebra holds, the picture does not:
+    // legacy gloss 1 is a tight specular highlight and nothing more, while roughness 0 makes
+    // ie_pbr_specular_irradiance sample the sharpest environment mip ( combine_1.ps:213-220 ), so
+    // the surface becomes a mirror of the sky. ssfx_ui_drops_gloss runs to 5, so drops_gloss passes
+    // 1.0 long before the slider is maxed and every wet HUD pixel landed on roughness 0.
+    //
+    // The donor's amount is kept exactly as the donor computes it and used as a wetness weight
+    // instead: 0 leaves the surface untouched, 1 takes it to a wet-surface roughness. min() keeps
+    // the weight from ever making a surface rougher than it is dry, and the target sits well clear
+    // of IE_PBR_MIN_ROUGHNESS ( 0.08 ) so that a soaked weapon reads as wet and not as chrome. The
+    // slider keeps its full authority below that ceiling. drops_gloss is zero on every world
+    // surface and sload.h:262 already saturates S.roughness, so outside the HUD pass this is
+    // bit-for-bit the previous line.
+    static const float IE_PBR_WET_ROUGHNESS = 0.30f;
+
+    float gbuffer_surface =
+        lerp(
+            S.roughness,
+            min(S.roughness, IE_PBR_WET_ROUGHNESS),
+            saturate(drops_gloss)
+        );
+
+#else
+
+    // Original X-Ray values.
+    float gbuffer_hemi =
+        h;
+
+    float gbuffer_material =
+        ms;
+
+    float gbuffer_surface =
+        S.gloss;
+
+#endif
+
+
+    O = pack_gbuffer(
+        float4(
+            Ne,
+            gbuffer_hemi
+        ),
+
+        float4(
+            I.position.xyz +
+            Ne * surface_height * def_virtualh,
+
+            gbuffer_material
+        ),
+
+        float4(
+            S.base.xyz,
+            gbuffer_surface
+        )
+    );
+
+    // Motion vectors
+    O.velocity = ssfx_mv_calc(I.vel_curr, I.vel_prev, SSFX_MV_HUD, 0);
+
+    return O;
+}
+#else
 #include "common.h"
 #include "sload.h"
 
@@ -125,3 +374,4 @@ f_deffer main(p_bumped I)
 
     return O;
 }
+#endif

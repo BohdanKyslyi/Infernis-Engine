@@ -88,6 +88,10 @@ CKinematics::CKinematics() {
 #endif
 
     m_is_original_lod = false;
+
+    CurrentFrame = 0;
+    Matrix_Prev.identity();
+    Matrix_Temp.identity();
 }
 
 CKinematics::~CKinematics() {

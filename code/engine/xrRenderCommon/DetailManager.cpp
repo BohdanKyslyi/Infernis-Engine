@@ -4,6 +4,7 @@
 #include "cl_intersect.h"
 #include "xrEngine/igame_persistent.h"
 #include "xrEngine/environment.h"
+#include "xrEngine/ssfx_console_vars.h"
 #include <xmmintrin.h>
 
 const float dbgOffset = 0.f;
@@ -90,6 +91,9 @@ void CDetailManager::Load() {
     for (u32 i = 0; i < 3; ++i)
         m_visibles[i].resize(objects.size());
     cache_Initialize();
+#if RENDER == R_R4
+    m_density_laid = ps_r__Detail_density; // the density the queued slots will be unpacked with
+#endif
 
     bwdithermap(2, dither);
 
@@ -130,6 +134,7 @@ void CDetailManager::Unload() {
 }
 
 extern ECORE_API float r_ssaDISCARD;
+extern ECORE_API float ps_r__Detail_radius;
 
 void CDetailManager::UpdateVisibleM() {
     Fvector EYE = RDEVICE.vCameraPosition_saved;
@@ -138,7 +143,24 @@ void CDetailManager::UpdateVisibleM() {
     View.CreateFromMatrix(RDEVICE.mFullTransform_saved, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
 
     // Кешування констант для зменшення навантаження у циклі
+    // Screen Space Shaders: grass draw distance ( r__detail_radius ).
+    // The cache geometry is fixed at compile time ( dm_size in DetailManager.h ), so this can only
+    // shorten the radius the cache already holds, never extend it - hence the clamp to dm_fade.
+    // Slots past it take the "hidden" branch below, so their blades fade back in when the player
+    // walks closer instead of popping into view. fade_range follows fade_limit, which means the
+    // shrink curve stretches to whatever radius is set: at the full 152 m a blade stays tall far
+    // out, at 48 m it shrinks as fast as stock Call of Pripyat did.
+#if RENDER == R_R4
+    // With SSS switched off ( ssfx_session_enable ) the game's own distance: Infernis built its
+    // grass cache for 48 m ( dm_size 24, DetailManager.h:25 ) and faded a blade over all of it.
+    float _detail_radius = ssfx_session_enable ? ps_r__Detail_radius : 2 * 24 - 0.5f;
+    clamp(_detail_radius, 8.0f, dm_fade);
+    const float fade_limit = _detail_radius * _detail_radius;
+#else
+    // The other renderers: the game's own line, Infernis DetailManager.cpp:141 ( dm_size is the
+    // game's 24 there, DetailManager.h ).
     const float fade_limit = dm_fade * dm_fade;
+#endif
     const float fade_start = 1.f; // 1.f * 1.f
     const float fade_range = fade_limit - fade_start;
     const float r_ssaCHEAP = 16.f * r_ssaDISCARD;
@@ -172,8 +194,18 @@ void CDetailManager::UpdateVisibleM() {
 
                 if (RDEVICE.dwFrame > S.frame) {
                     float dist_sq = EYE.distance_to_sqr(S.vis.sphere.P);
+#if RENDER == R_R4
+                    // Screen Space Shaders. Monolith DetailManager.cpp:353-357: a slot that leaves
+                    // fade range is marked, so its blades fade back in from nothing when it returns
+                    // instead of popping into view at full opacity.
+                    if (dist_sq > fade_limit) {
+                        S.hidden = true;
+                        continue;
+                    }
+#else
                     if (dist_sq > fade_limit) continue;
-                    
+#endif
+
                     float alpha = (dist_sq < fade_start) ? 0.f : (dist_sq - fade_start) / fade_range;
                     float alpha_i = 1.f - alpha;
                     float dist_sq_rcp = 1.f / dist_sq;
@@ -184,22 +216,71 @@ void CDetailManager::UpdateVisibleM() {
                         SlotPart& sp = S.G[sp_id];
                         if (sp.id == DetailSlot::ID_Empty) continue;
 
+                        // The donor calls clear_not_free() here; in this engine xr_vector is
+                        // std::vector, whose clear() already keeps the capacity, so clear() is the
+                        // same operation under a different name.
                         sp.r_items[0].clear();
                         sp.r_items[1].clear();
                         sp.r_items[2].clear();
 
                         const float R = objects[sp.id]->bv_sphere.R;
-                        const float Rq_drcp = R * R * dist_sq_rcp; 
+                        const float Rq_drcp = R * R * dist_sq_rcp;
 
-                        // МАКСИМАЛЬНА ОПТИМІЗАЦІЯ: Range-based цикл замість подвійних вказівників
+                        // Screen Space Shaders. The body of this loop is the donor's - Monolith
+                        // DetailManager.cpp:376-403. It records the distance and the slot centre
+                        // that the grass shader fades a blade against, drives the blade's own
+                        // opacity, and honours r__no_scale_on_fade. The range-based form around it
+                        // is this engine's and does exactly what the donor's pointer walk does.
                         for (auto* item : sp.items) {
-                            float scale = item->scale_calculated = item->scale * alpha_i;
+                            SlotItem& Item = *item;
+                            // Screen Space Shaders: grass height ( r__detail_height ).
+                            // See the note in DetailManager_Decompress.cpp for why it is applied
+                            // here and not where the donor applies it. The only thing left behind
+                            // is the slot bounding box, which the decompressor still builds for
+                            // height 1.0 - about a metre of slack on a 2x2 m patch of grass, far
+                            // too little to change what the frustum or the occluder culls. ssa
+                            // below is computed from this scale, so taller blades survive the
+                            // distance cull exactly as they should.
+#if RENDER == R_R4
+                            // With SSS switched off ( ssfx_session_enable ) the game's own two
+                            // lines, Infernis DetailManager.cpp:196-197: no grass height, and a
+                            // blade always shrinks as it fades ( no r__no_scale_on_fade ).
+                            float scale, ssa;
+                            if (ssfx_session_enable) {
+                                scale = psDeviceFlags2.test(rsNoScale)
+                                            ? (Item.scale_calculated =
+                                                   Item.scale * ps_r__Detail_height)
+                                            : (Item.scale_calculated =
+                                                   Item.scale * ps_r__Detail_height * alpha_i);
+                                ssa = psDeviceFlags2.test(rsNoScale) ? scale
+                                                                     : scale * scale * Rq_drcp;
+                            } else {
+                                scale = Item.scale_calculated = Item.scale * alpha_i;
+                                ssa = scale * scale * Rq_drcp;
+                            }
+#else
+                            // The other renderers: the game's own two lines, Infernis
+                            // DetailManager.cpp:196-197.
+                            float scale = Item.scale_calculated = Item.scale * alpha_i;
                             float ssa = scale * scale * Rq_drcp;
-                            
-                            if (ssa < r_ssaDISCARD) continue;
-                            
-                            u32 vis_id = (ssa > r_ssaCHEAP) ? item->vis_ID : 0;
+#endif
+                            if (ssa < r_ssaDISCARD) {
+                                Item.alpha_target = 0;
+                                continue;
+                            }
+                            u32 vis_id = 0;
+                            if (ssa > r_ssaCHEAP)
+                                vis_id = Item.vis_ID;
+
                             sp.r_items[vis_id].push_back(item);
+
+                            if (S.hidden) {
+                                Item.alpha = 0;
+                                S.hidden = false;
+                            }
+                            Item.alpha_target = 1;
+                            Item.distance = dist_sq;
+                            Item.position = S.vis.sphere.P;
                         }
                     }
                 }
@@ -216,6 +297,31 @@ void CDetailManager::UpdateVisibleM() {
         }
     }
     RDEVICE.Statistic->RenderDUMP_DT_VIS.End();
+}
+
+// Screen Space Shaders. Monolith DetailManager.cpp:490-512. Called once at the end of the frame:
+// it puts the fade distance back to "no fade" after a shadow pass has moved it, and, when grass
+// shadows are on, empties the visibility lists that the shadow passes deliberately left filled so
+// the same blades could be drawn again into each shadow map.
+void CDetailManager::details_clear() {
+    // Disable fade, next render will be scene
+    fade_distance = 99999;
+
+    if (ps_ssfx_grass_shadows.x <= 0)
+        return;
+
+    for (u32 x = 0; x < 3; x++) {
+        vis_list& list = m_visibles[x];
+
+        for (u32 O = 0; O < objects.size(); O++) {
+            xr_vector<SlotItemVec*>& vis = list[O];
+            if (!vis.empty()) {
+                // Donor: clear_not_free(). Here xr_vector is std::vector and clear() keeps the
+                // capacity, which is what that name means.
+                vis.clear();
+            }
+        }
+    }
 }
 
 void CDetailManager::Render() {
@@ -261,6 +367,16 @@ void __stdcall CDetailManager::MT_CALC() {
             int s_z = iFloor(EYE.z / dm_slot_size + 0.5f);
 
             RDEVICE.Statistic->RenderDUMP_DT_Cache.Begin();
+#if RENDER == R_R4
+            // Grass density at once, as the grass height ( user 2026-11-04; beyond the donor, which
+            // takes r__detail_density at the next level load only, its DetailManager.cpp:100 ):
+            // with SSS another slider value lays the cached grass out again, the way Load() does,
+            // under the lock cache_Update runs under. Without SSS it waits for the next level load.
+            if (ssfx_session_enable && m_density_laid != ps_r__Detail_density) {
+                m_density_laid = ps_r__Detail_density;
+                cache_Initialize();
+            }
+#endif
             cache_Update(s_x, s_z, EYE, dm_max_decompress);
             RDEVICE.Statistic->RenderDUMP_DT_Cache.End();
 

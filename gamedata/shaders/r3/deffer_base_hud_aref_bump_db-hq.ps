@@ -1,0 +1,5 @@
+// NOT IN THE SSFX FOLDER, and needed: the SSFX folder ships deffer_base_hud_bump_db-hq.ps but not its alpha-ref twin. _db comes
+// from uber_deffer.cpp:92, when the detail texture has a bump of its own.
+// A name uber_deffer() can build and ResourceManager_Resources.cpp:268 asserts on.
+#define USE_TDETAIL_BUMP
+#include "deffer_base_hud_aref_bump_d-hq.ps"

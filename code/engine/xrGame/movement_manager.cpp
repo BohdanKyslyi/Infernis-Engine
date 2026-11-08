@@ -23,6 +23,7 @@
 #include "detail_path_builder.h"
 #include "profiler.h"
 #include "mt_config.h"
+#include "../xrEngine/IGame_Persistent.h" // GrassBendersUpdate
 //#include "custommonster.h"
 
 // Lain: added
@@ -35,6 +36,12 @@ const float verify_distance = 15.f;
 CMovementManager::CMovementManager(CCustomMonster* object) {
     VERIFY(object);
     m_object = object;
+    // NOT FROM MONOLITH: the donor never initialises these two. A leftover value in
+    // grassbender_id is used as an index into the 16 bender slots, and a leftover
+    // grassbender_frame can keep the object waiting for a frame that never comes - grass would
+    // bend under it on one launch and not on the next.
+    grassbender_id = 0;
+    grassbender_frame = 0;
 }
 
 CMovementManager::~CMovementManager() {
@@ -319,6 +326,10 @@ void CMovementManager::on_frame(CPHMovementControl* movement_control, Fvector& d
         update_path();
 
     move_along_path(movement_control, dest_position, object().client_update_fdelta());
+
+    // Update Grass benders
+    g_pGamePersistent->GrassBendersUpdate(object().ID(), grassbender_id, grassbender_frame,
+                                          object().Position(), -1.0f, 1.0f, true);
 }
 
 void CMovementManager::on_travel_point_change(const u32& previous_travel_point_index) {

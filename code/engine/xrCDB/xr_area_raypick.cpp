@@ -158,6 +158,79 @@ BOOL CObjectSpace::_RayPick(const Fvector& start, const Fvector& dir, float rang
     return (R.element >= 0);
 }
 
+// Screen Space Shaders: Monolith xr_area_raypick.cpp:126-134 and 145-205 - RayPick with a list of
+// objects to skip, for the script class ray_pick ( xrGame raypick.cpp ). The donor sends the
+// one-object RayPick above through this one too; here that one stays as it is, and this copy of it
+// differs from it in the skip test only.
+BOOL CObjectSpace::RayPick(const Fvector& start, const Fvector& dir, float range, rq_target tgt,
+                           rq_result& R, xr_vector<CObject*>& ignore_objects) {
+    std::lock_guard<decltype(Lock)> lock(Lock);
+    BOOL _res = _RayPick(start, dir, range, tgt, R, ignore_objects);
+    r_spatial.clear();
+    return _res;
+}
+BOOL CObjectSpace::_RayPick(const Fvector& start, const Fvector& dir, float range, rq_target tgt,
+                            rq_result& R, xr_vector<CObject*>& ignore_objects) {
+    r_temp.r_clear();
+    R.O = 0;
+    R.range = range;
+    R.element = -1;
+    // static test
+    if (tgt & rqtStatic) {
+        xrc.ray_options(CDB::OPT_ONLYNEAREST | CDB::OPT_CULL);
+        xrc.ray_query(&Static, start, dir, range);
+        if (xrc.r_count())
+            R.set_if_less(xrc.r_begin());
+    }
+    // dynamic test
+    if (tgt & rqtDyn) {
+        collide::ray_defs Q(start, dir, R.range, CDB::OPT_ONLYNEAREST | CDB::OPT_CULL, tgt);
+        // traverse object database
+        u32 d_flags = STYPE_COLLIDEABLE | ((tgt & rqtObstacle) ? STYPE_OBSTACLE : 0) |
+                      ((tgt & rqtShape) ? STYPE_SHAPE : 0);
+        g_SpatialSpace->q_ray(r_spatial, 0, d_flags, start, dir, range);
+        // Determine visibility for dynamic part of scene
+        for (u32 o_it = 0; o_it < r_spatial.size(); o_it++) {
+            ISpatial* spatial = r_spatial[o_it];
+            CObject* collidable = spatial->dcast_CObject();
+            if (0 == collidable)
+                continue;
+
+            // demonized: support for multiple objects
+            bool ignore = false;
+            for (const auto& it : ignore_objects) {
+                if (collidable == it) {
+                    ignore = true;
+                    break;
+                }
+            }
+            if (ignore)
+                continue;
+
+            ECollisionFormType tp = collidable->collidable.model->Type();
+            if (((tgt & (rqtObject | rqtObstacle)) && (tp == cftObject)) ||
+                ((tgt & rqtShape) && (tp == cftShape))) {
+                u32 C = D3DCOLOR_XRGB(64, 64, 64);
+                Q.range = R.range;
+                if (collidable->collidable.model->_RayQuery(Q, r_temp)) {
+                    C = D3DCOLOR_XRGB(128, 128, 196);
+                    R.set_if_less(r_temp.r_begin());
+                }
+#ifdef DEBUG
+                if (bDebug()) {
+                    Fsphere S;
+                    S.P = spatial->spatial.sphere.P;
+                    S.R = spatial->spatial.sphere.R;
+                    (*m_pRender)->dbgAddSphere(S, C);
+                    // dbg_S.push_back (std::make_pair(S,C));
+                }
+#endif
+            }
+        }
+    }
+    return (R.element >= 0);
+}
+
 //--------------------------------------------------------------------------------
 // RayQuery
 //--------------------------------------------------------------------------------

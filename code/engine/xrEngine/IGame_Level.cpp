@@ -13,6 +13,7 @@
 #include "xr_object.h"
 #include "feel_sound.h"
 #include <algorithm>
+#include "shader_bus.h"
 
 ENGINE_API IGame_Level* g_pGameLevel = NULL;
 extern BOOL g_bLoaded;
@@ -128,6 +129,8 @@ BOOL IGame_Level::Load(u32 dwNum) {
 
     Device.seqRender.Add(this);
     Device.seqFrame.Add(this);
+
+    ShaderBus::dump();
 
     return TRUE;
 }

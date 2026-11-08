@@ -1,0 +1,5 @@
+// NOT IN THE SSFX FOLDER, and needed: same gap as deffer_base_hud_flat_d.ps, on the alpha-ref branch. bAref is oBlend.value in
+// blender_deffer_model.cpp:86, so an alpha model shader on a HUD item reaches this name.
+// A name uber_deffer() can build and ResourceManager_Resources.cpp:268 asserts on.
+#define USE_TDETAIL
+#include "deffer_base_hud_aref_flat.ps"

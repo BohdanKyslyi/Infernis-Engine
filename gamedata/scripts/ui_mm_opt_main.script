@@ -38,6 +38,18 @@ function options_dialog:InitControls()
 
 	self.dlg_gameplay			= ui_mm_opt_gameplay.opt_gameplay()
 	self.dlg_gameplay:InitControls(0,0, xml, self)
+	-- The aim and lean toggles ( wpn_aim_toggle, g_lookout_toggle ), under the crouch toggle.
+	-- The tab's own script comes from the game's archives and builds only its stock rows, so
+	-- the two rows of ui_mm_opt.xml that are new are built here.
+	xml:InitStatic				("tab_gameplay:cap_check_aim_toggle", self.dlg_gameplay)
+	xml:InitCheck				("tab_gameplay:check_aim_toggle", self.dlg_gameplay)
+	xml:InitStatic				("tab_gameplay:cap_check_lookout_toggle", self.dlg_gameplay)
+	xml:InitCheck				("tab_gameplay:check_lookout_toggle", self.dlg_gameplay)
+	-- The actor's own shadow ( r__actor_shadow ) works on DX11 only, so its row is built there only.
+	if get_console():get_token("renderer") == "renderer_r4" then
+		xml:InitStatic				("tab_gameplay:cap_check_actor_shadow", self.dlg_gameplay)
+		xml:InitCheck				("tab_gameplay:check_actor_shadow", self.dlg_gameplay)
+	end
 	self.dlg_gameplay:Show		(false)
 	self.dialog:AttachChild		(self.dlg_gameplay)
 	xml:InitWindow				("tab_size", 0, self.dlg_gameplay)
@@ -59,6 +71,36 @@ function options_dialog:InitControls()
 	self.dlg_video_adv:Show		(false)
 	self.dialog:AttachChild		(self.dlg_video_adv)
 	xml:InitWindow				("tab_size", 0, self.dlg_video_adv)
+
+	-- Screen Space Shaders. The SSFX page, built and owned exactly like the advanced graphics page
+	-- above: attached to the dialog, hidden until its button is pressed, and destroyed with the
+	-- dialog rather than by the Lua collector.
+	self.dlg_ssfx				= ui_mm_opt_ssfx.opt_ssfx()
+	self.dlg_ssfx:InitControls	(0,0, xml, self)
+	self.dlg_ssfx:Show			(false)
+	self.dialog:AttachChild		(self.dlg_ssfx)
+	xml:InitWindow				("tab_size", 0, self.dlg_ssfx)
+
+	-- The button that opens it. It lives on the video page in ui_mm_opt.xml, to the left of
+	-- "Advanced", so the video page is its parent.
+	local btn_ssfx				= xml:Init3tButton("tab_video:btn_ssfx", self.dlg_video)
+	self:Register				(btn_ssfx, "btn_ssfx")
+	-- Screen Space Shaders on / off ( ssfx_enable, read at the next game start ): the check box
+	-- above the button; SSFXSwitch keeps the button and the renderer list in step with it
+	self.btn_ssfx				= btn_ssfx
+	self.check_ssfx_enable		= xml:InitCheck("tab_video:check_ssfx_enable", self.dlg_video)
+	self:Register				(self.check_ssfx_enable, "check_ssfx_enable")
+
+	-- Infernis PBR. A page of its own, built and owned like the SSFX page above. Its button
+	-- stands on the video page too, between "SSFX Settings" and "Advanced".
+	self.dlg_pbr				= ui_mm_opt_pbr.opt_pbr()
+	self.dlg_pbr:InitControls	(0,0, xml, self)
+	self.dlg_pbr:Show			(false)
+	self.dialog:AttachChild		(self.dlg_pbr)
+	xml:InitWindow				("tab_size", 0, self.dlg_pbr)
+
+	local btn_pbr				= xml:Init3tButton("tab_video:btn_pbr", self.dlg_video)
+	self:Register				(btn_pbr, "btn_pbr")
 
 	local btn
 	btn = xml:Init3tButton		("main_dialog:btn_accept", self.dialog)
@@ -96,11 +138,23 @@ function options_dialog:SetCurrentValues()
 	opt:SetCurrentValues("mm_opt_video_preset")
 	opt:SaveBackupValues("mm_opt_video_preset")
 
+	-- the renderer list is read in full: SSFXSwitch below may have hidden all but DX11 the last time
+	for id = 0, 4 do
+		self.combo_renderer:enable_id(id)
+	end
 	opt:SetCurrentValues("mm_opt_video")
 	opt:SaveBackupValues("mm_opt_video")
 
 	opt:SetCurrentValues("mm_opt_video_adv")
 	opt:SaveBackupValues("mm_opt_video_adv")
+
+	-- Screen Space Shaders
+	opt:SetCurrentValues("mm_opt_ssfx")
+	opt:SaveBackupValues("mm_opt_ssfx")
+
+	-- Infernis PBR
+	opt:SetCurrentValues("mm_opt_pbr")
+	opt:SaveBackupValues("mm_opt_pbr")
 
 	opt:SetCurrentValues("mm_opt_gameplay")
 	opt:SaveBackupValues("mm_opt_gameplay")
@@ -117,6 +171,7 @@ function options_dialog:SetCurrentValues()
 	opt:SetCurrentValues("key_binding")
 	opt:SaveBackupValues("key_binding")
 
+	self:SSFXSwitch()	-- Screen Space Shaders on / off
 	self:UpdateDependControls()
 end
 
@@ -147,6 +202,15 @@ end
 function options_dialog:InitCallBacks()
 	self:AddCallback("tab",					ui_events.TAB_CHANGED,		self.OnTabChange,			self)
 	self:AddCallback("btn_advanced_graphic",ui_events.BUTTON_CLICKED,	self.OnBtnAdvGraphic,		self)
+	-- Screen Space Shaders
+	self:AddCallback("btn_ssfx",			ui_events.BUTTON_CLICKED,	self.OnBtnSSFX,				self)
+	self:AddCallback("check_ssfx_enable",	ui_events.BUTTON_CLICKED,	self.OnSSFXEnableClicked,	self)
+	self:AddCallback("btn_ssfx_basic",		ui_events.BUTTON_CLICKED,	self.OnBtnSSFXBasic,		self)
+	self:AddCallback("btn_ssfx_reset",		ui_events.BUTTON_CLICKED,	self.OnBtnSSFXReset,		self)
+	-- Infernis PBR
+	self:AddCallback("btn_pbr",				ui_events.BUTTON_CLICKED,	self.OnBtnPBR,				self)
+	self:AddCallback("btn_pbr_basic",		ui_events.BUTTON_CLICKED,	self.OnBtnPBRBasic,			self)
+	self:AddCallback("btn_pbr_reset",		ui_events.BUTTON_CLICKED,	self.OnBtnPBRReset,			self)
 	self:AddCallback("btn_accept",			ui_events.BUTTON_CLICKED,	self.OnBtnAccept,			self)
 	self:AddCallback("btn_cancel",			ui_events.BUTTON_CLICKED,	self.OnBtnCancel,			self)
 	self:AddCallback("btn_default_graphic",	ui_events.BUTTON_CLICKED,	self.OnBtnDefGraph,			self)
@@ -207,6 +271,21 @@ function options_dialog:OnBtnAccept()
 	opt:SaveValues("key_binding")
 	opt:SaveValues("mm_opt_video")
 	opt:SaveValues("mm_opt_video_adv")
+
+	-- Screen Space Shaders. Saving the page also hands the SSFX settings over to this menu: from
+	-- here on the values in user.ltx are the player's, and the addon's settings scripts must stop
+	-- writing their own file defaults over them on the next game start. That is what
+	-- ssfx_001_mcm.menu_owns_settings() reads.
+	opt:SaveValues("mm_opt_ssfx")
+	console:execute("ssfx_menu_configured 1")
+	self.ssfx_before_reset = nil
+	self:SSFXNotifyScripts()
+
+	-- Infernis PBR. Two of its settings are compiled into the shaders ( depend="restart" in
+	-- ui_mm_opt.xml ), so the dialog asks for a restart by itself when one of them was changed.
+	opt:SaveValues("mm_opt_pbr")
+	self.pbr_before_reset = nil
+
 	opt:SaveValues("mm_opt_gameplay")
 	opt:SaveValues("mm_opt_sound")
 	opt:SaveValues("mm_opt_controls")
@@ -244,6 +323,10 @@ function options_dialog:OnBtnCancel()
 	opt:UndoGroup			("mm_opt_video_preset")
 	opt:UndoGroup			("mm_opt_video")
 	opt:UndoGroup			("mm_opt_video_adv")
+	opt:UndoGroup			("mm_opt_ssfx")	-- Screen Space Shaders
+	self:SSFXRestoreValues	()
+	opt:UndoGroup			("mm_opt_pbr")	-- Infernis PBR
+	self:PBRRestoreValues	()
 	opt:UndoGroup			("mm_opt_sound")
 	opt:OptionsPostAccept	()
 
@@ -258,6 +341,8 @@ function options_dialog:OnTabChange()
 	self.dlg_gameplay:Show	(false)
 	self.dlg_controls:Show	(false)
 	self.dlg_video_adv:Show	(false)
+	self.dlg_ssfx:Show		(false)	-- Screen Space Shaders
+	self.dlg_pbr:Show		(false)	-- Infernis PBR
 
 	local ids = self.tab:GetActiveId()
 	if ids == "video" then
@@ -295,6 +380,197 @@ function options_dialog:OnSimplyGraphic()
 	self.dlg_video_adv:Show	(false)
 end
 
+-- Screen Space Shaders. The button on the video page opens the "SSS Settings" window
+-- ( ui_sss_menu.script ): a window of its own, the modules on the left and the settings of the
+-- one picked on the right. It is built once per options dialog and hands the screen back to it
+-- when it closes, the way the main menu keeps its load dialog. The SSFX page and its two buttons
+-- below are still built, but nothing opens that page any more.
+function options_dialog:OnBtnSSFX()
+	if self.dlg_sss == nil then
+		self.dlg_sss = ui_sss_menu.sss_menu()
+		self.dlg_sss.owner = self
+	end
+	self.dlg_sss:Open()
+	self:HideDialog()
+	self:Show(false)
+end
+
+-- Screen Space Shaders on / off ( user 2026-10-23 ). The check box above "SSS Settings" holds
+-- ssfx_enable, which the engine reads at the next start ( depend="restart" asks for it ). While
+-- it is not ticked "SSS Settings" is grey; while it is ticked the renderer list offers DX11 only,
+-- since SSS runs on DX11 only, and the stock options SSS runs without are grey: the SSAO mode and
+-- quality, the anti-aliasing ( MSAA ) and the tessellation ( user 2026-10-27; with SSS the engine
+-- keeps them off, CRender::create ). A list drops the entries given to disable_id when it next
+-- reads its value from the console ( SetCurrentOptValue ). For that read the console holds the
+-- entry on show and right after it gets its own value back, so nothing reaches it before Accept.
+-- The ids are the places in the engine's list ( CreateRendererList, EngineAPI.cpp ); without DX11
+-- the list ends before it, and then nothing is dropped.
+local ssfx_renderers = { [0] = "renderer_r1", "renderer_r2a", "renderer_r2", "renderer_r2.5",
+	"renderer_r3", "renderer_r4" }
+
+-- The controls of those stock options. The advanced page hands over the SSAO two itself; the
+-- anti-aliasing and the tessellation only in its copy in gamedata ( ui_mm_opt_video_adv.script ),
+-- and the grass density, which SSS sets in its own window ( user 2026-11-04: grey here with SSS ).
+local ssfx_stock_off = { "tab_ao_opt", "combo_ssao", "combo_msaa", "check_tessellation",
+	"track_detail_density" }
+
+-- true when the entry on show had to change ( any renderer but DX11 while the box is ticked )
+function options_dialog:SSFXSwitch()
+	local on = self.check_ssfx_enable:GetCheck()
+	self.btn_ssfx:Enable(on)
+	for _, name in ipairs(ssfx_stock_off) do
+		if self[name] then
+			self[name]:Enable(not on)
+		end
+	end
+
+	local combo = self.combo_renderer
+	local was = combo:CurrentID()
+	local shown = ssfx_renderers[was]
+	if shown == nil then
+		return false
+	end
+
+	local c = get_console()
+	local kept = c:get_token("renderer")
+	for id = 0, 4 do
+		combo:enable_id(id)
+	end
+	c:execute("renderer " .. shown)
+	combo:SetCurrentOptValue()
+	if on and combo:GetTextOf(5) ~= "" then
+		if was ~= 5 then
+			c:execute("renderer renderer_r4")
+		end
+		for id = 0, 4 do
+			combo:disable_id(id)
+		end
+		combo:SetCurrentOptValue()
+	end
+	c:execute("renderer " .. kept)
+	return combo:CurrentID() ~= was
+end
+
+function options_dialog:OnSSFXEnableClicked()
+	if self:SSFXSwitch() then
+		self:UpdateDependControls()
+	end
+end
+
+function options_dialog:OnBtnSSFXBasic()
+	self.dlg_ssfx:Show		(false)
+	self.dlg_video:Show		(true)
+end
+
+function options_dialog:OnBtnSSFXReset()
+	-- NOT SendMessage2Group( "set_default_value" ). The stock trackbar answers that message with
+	-- the MIDDLE OF ITS RANGE ( xrGame\ui\UITrackBar.cpp:248-255 ), which is not a default: a
+	-- reset left every slider halfway along its travel instead of where SSFX ships it, and that
+	-- is how pressing reset used to leave the picture broken. The engine code is Call of
+	-- Pripyat's own and is shared with the vanilla «Базові» button, so it stays untouched.
+	--
+	-- Instead the author's values go to the console first and the page is re-read from it
+	-- afterwards - the same pattern OnBtnKeybDefault uses for the key bindings. The table is
+	-- written by the tool that builds the page itself, so the two cannot drift apart.
+	--
+	-- A write to the console is outside what COptionsManager can undo. So what the console held
+	-- before the first press is kept, and goes back if the dialog is left without accepting
+	-- ( SSFXRestoreValues ).
+	local c = get_console()
+	if self.ssfx_before_reset == nil then
+		local kept = {}
+		for i, row in ipairs(ssfx_factory_defaults.values) do
+			kept[i] = { row[1], c:get_string(row[1]) }
+		end
+		self.ssfx_before_reset = kept
+	end
+
+	for _, row in ipairs(ssfx_factory_defaults.values) do
+		c:execute(row[1] .. " " .. row[2])
+	end
+
+	COptionsManager():SetCurrentValues("mm_opt_ssfx")
+end
+
+-- Screen Space Shaders. The dialog is being left without accepting it: if the defaults button was
+-- pressed, the console gets back what it held before.
+function options_dialog:SSFXRestoreValues()
+	local kept = self.ssfx_before_reset
+	if kept == nil then
+		return
+	end
+	self.ssfx_before_reset = nil
+
+	local c = get_console()
+	for _, row in ipairs(kept) do
+		if row[2] ~= nil then
+			c:execute(row[1] .. " " .. row[2])
+		end
+	end
+end
+
+-- Infernis PBR. Opening its page from the video page, and the two buttons on the page itself.
+function options_dialog:OnBtnPBR()
+	self.dlg_video:Show		(false)
+	self.dlg_video_adv:Show	(false)
+	self.dlg_pbr:Show		(true)
+end
+
+function options_dialog:OnBtnPBRBasic()
+	self.dlg_pbr:Show		(false)
+	self.dlg_video:Show		(true)
+end
+
+-- Infernis PBR. The defaults button, done the way OnBtnSSFXReset does it and for the same
+-- reason ( a stock slider answers "set_default_value" with the middle of its range ): the values
+-- the shader header and the game's settings file ship with go to the console, and the page is
+-- read back from it. What the console held before the first press is kept, and goes back if the
+-- dialog is left without accepting ( PBRRestoreValues ).
+function options_dialog:OnBtnPBRReset()
+	local c = get_console()
+	if self.pbr_before_reset == nil then
+		local kept = {}
+		for i, row in ipairs(pbr_factory_defaults.values) do
+			kept[i] = { row[1], c:get_string(row[1]) }
+		end
+		self.pbr_before_reset = kept
+	end
+
+	for _, row in ipairs(pbr_factory_defaults.values) do
+		c:execute(row[1] .. " " .. row[2])
+	end
+
+	COptionsManager():SetCurrentValues("mm_opt_pbr")
+end
+
+-- Infernis PBR. The dialog is being left without accepting it: if the defaults button was
+-- pressed, the console gets back what it held before.
+function options_dialog:PBRRestoreValues()
+	local kept = self.pbr_before_reset
+	if kept == nil then
+		return
+	end
+	self.pbr_before_reset = nil
+
+	local c = get_console()
+	for _, row in ipairs(kept) do
+		if row[2] ~= nil then
+			c:execute(row[1] .. " " .. row[2])
+		end
+	end
+end
+
+-- Screen Space Shaders. A few settings are inputs to the addon's own scripts
+-- ( ssfx_menu_vars.script ), and those read them when this callback arrives - it is the one
+-- Anomaly's MCM sends after a change. Only with a game running: from the main menu there is
+-- nobody to tell, the scripts read everything when a game starts.
+function options_dialog:SSFXNotifyScripts()
+	local send = rawget(_G, "SendScriptCallback")
+	if send and level.present() then
+		send("on_option_change")
+	end
+end
+
 function options_dialog:OnKeyboard(dik, keyboard_action)
 	local res = CUIScriptWnd.OnKeyboard(self,dik,keyboard_action)
 
@@ -304,7 +580,15 @@ function options_dialog:OnKeyboard(dik, keyboard_action)
 
 		if keyboard_action == ui_events.WINDOW_KEY_PRESSED then
 			if dik == DIK_keys.DIK_ESCAPE then
-				if self.dlg_video_adv:IsShown() then
+				-- Screen Space Shaders: Escape on the SSFX page goes back to the basic video page,
+				-- the same way it does on the advanced one, instead of closing the whole dialog.
+				if self.dlg_ssfx:IsShown() then
+					self.dlg_ssfx:Show		(false)
+					self.dlg_video:Show		(true)
+				elseif self.dlg_pbr:IsShown() then	-- Infernis PBR: the same for its page
+					self.dlg_pbr:Show		(false)
+					self.dlg_video:Show		(true)
+				elseif self.dlg_video_adv:IsShown() then
 					self.dlg_video_adv:Show	(false)
 					self.dlg_video:Show		(true)
 				else
@@ -340,6 +624,12 @@ function options_dialog:Update()
 		self.btn_cancel_download:Show			(false)
 	end
 	if(_G.b_discard_settings_shown) then
+		-- While this flag is set the confirmation box has to be on screen. A dialog created after the flag
+		-- was raised ( the engine rebuilds the main menu when the aspect ratio changes ) has a message box
+		-- that was never built, and writing the countdown into it crashes the game. Build it first.
+		if not self.message_box:IsShown() then
+			self:OnMenuReloaded()
+		end
 		local tg = math.floor(time_global_async()/1000)
 		if(self.timer==nil) then
 			self.timer = tg
@@ -402,6 +692,8 @@ function options_dialog:OnDiscardChanges()
     self:ReadAudioApplyStatus()
 
 	self:SetCurrentValues()
+	-- Screen Space Shaders: the values the addon's scripts were just told about are gone again.
+	self:SSFXNotifyScripts()
 
 	c:execute("vid_restart")
    	c:execute("cfg_save")

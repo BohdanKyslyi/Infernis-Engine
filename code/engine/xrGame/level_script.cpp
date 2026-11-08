@@ -50,6 +50,11 @@
 #include "ItemUseController.h"
 #include "ui\UICinematicBorders.h"
 #include "UIGameCustom.h"
+// Screen Space Shaders: ray_pick and four functions of the weather module ( script_register )
+#include "raypick.h"
+#include "../xrEngine/ssfx_console_vars.h" // ssfx_session_enable
+
+extern ENGINE_API int g_current_renderer; // xrEngine/EngineAPI.cpp: 4 = the DX11 renderer runs
 
 using namespace luabind;
 
@@ -241,6 +246,44 @@ float low_cover_in_direction(u32 level_vertex_id, const Fvector& direction) {
 }
 
 float rain_factor() { return (g_pGamePersistent->Environment().CurrentEnv->rain_density); }
+
+// =============================================================================================
+// Screen Space Shaders - the script API the addon's scripts call. Ported from Monolith
+// ( src\xrGame\level_script.cpp: rain_wetness 380, rain_hemi 385, ActorMovingState 1733,
+// block_all_except_movement / only_movement_allowed 1689 ), same bodies.
+// =============================================================================================
+
+// How wet the world is, 0..1. The environment already keeps this and the shaders already read it
+// ( Blender_Recorder_StandartBinding.cpp:427 ); only the script side was missing.
+float rain_wetness() { return (g_pGamePersistent->Environment().wetness_factor); }
+
+// How much open sky the camera sees, 0..1. Monolith reads a value CEffect_Rain caches every frame
+// and falls back to this same computation when there is no rain effect; the cache is filled from
+// exactly these numbers, so computing it here is the same value and needs no change to the rain
+// class. Deviation from Monolith, and the only one: it is computed rather than cached.
+float rain_hemi() {
+    CObject* E = g_pGameLevel->CurrentViewEntity();
+    if (E && E->renderable_ROS()) {
+        float* hemi_cube = E->renderable_ROS()->get_luminocity_hemi_cube();
+        float hemi_val = std::max(hemi_cube[0], hemi_cube[1]);
+        hemi_val = std::max(hemi_val, hemi_cube[2]);
+        hemi_val = std::max(hemi_val, hemi_cube[3]);
+        hemi_val = std::max(hemi_val, hemi_cube[5]);
+        return hemi_val;
+    }
+    return 0.f;
+}
+
+// The player's movement bits ( walking / running / crouching / jumping ): mstate_real. Monolith
+// writes g_actor->MovingState() with no guard; the null check is this port's, because a script
+// callback can reach here between levels.
+u32 actor_moving_state() { return (Actor() ? Actor()->MovingState() : 0); }
+
+// Monolith's "only movement keys work" flag, used by animated item use. Nothing in the engine or
+// in SSFX sets it, so it stays false and changes nothing until a script turns it on.
+bool g_block_all_except_movement = false;
+void block_all_except_movement(bool b) { g_block_all_except_movement = b; }
+bool only_movement_allowed() { return g_block_all_except_movement; }
 
 u32 vertex_in_direction(u32 level_vertex_id, Fvector direction, float max_distance) {
     direction.normalize_safe();
@@ -881,6 +924,82 @@ cphysics_world_scripted* physics_world_scripted() {
 CEnvironment* environment() { return (g_pGamePersistent->pEnvironment); }
 
 CEnvDescriptor* current_environment(CEnvironment* self) { return (self->CurrentEnv); }
+
+// Screen Space Shaders: four functions of Monolith's weather module ( level_script.cpp:1273-1313,
+// 1491-1494, 1501-1529 ), the ones the Anomaly weather scripts of the Weather_ATMOS addon call,
+// registered in script_register only while SSS runs. tree_amplitude_intensity is the weather's, as
+// there ( CEnvDescriptor::load ); the weather of Infernis has no volumetric_intensity_factor or
+// volumetric_distance_factor, so those two answer 0, as an unknown name does there
+// ( level_weathers.script asks for fog_distance ).
+float get_weather_value_numric(LPCSTR name) {
+    CEnvDescriptor& E = *environment()->CurrentEnv;
+
+    if (0 == xr_strcmp(name, "sky_rotation"))
+        return E.sky_rotation;
+    else if (0 == xr_strcmp(name, "far_plane"))
+        return E.far_plane;
+    else if (0 == xr_strcmp(name, "fog_density"))
+        return E.fog_density;
+    else if (0 == xr_strcmp(name, "fog_distance"))
+        return E.fog_distance;
+    else if (0 == xr_strcmp(name, "rain_density"))
+        return E.rain_density;
+    else if (0 == xr_strcmp(name, "thunderbolt_period"))
+        return E.bolt_period;
+    else if (0 == xr_strcmp(name, "thunderbolt_duration"))
+        return E.bolt_duration;
+    else if (0 == xr_strcmp(name, "wind_velocity"))
+        return E.wind_velocity;
+    else if (0 == xr_strcmp(name, "wind_direction"))
+        return E.wind_direction;
+    else if (0 == xr_strcmp(name, "sun_shafts_intensity"))
+        return E.m_fSunShaftsIntensity;
+    else if (0 == xr_strcmp(name, "water_intensity"))
+        return E.m_fWaterIntensity;
+    else if (0 == xr_strcmp(name, "tree_amplitude_intensity"))
+        return E.m_fTreeAmplitudeIntensity;
+    else if (0 == xr_strcmp(name, "bloom_threshold"))
+        return E.bloom_threshold;
+    else if (0 == xr_strcmp(name, "bloom_exposure"))
+        return E.bloom_exposure;
+    else if (0 == xr_strcmp(name, "bloom_sky_intensity"))
+        return E.bloom_sky_intensity;
+
+    return (0);
+}
+
+bool is_weather_paused() { return environment()->m_paused; }
+
+void boost_weather_value(LPCSTR name, float value) {
+    if (0 == xr_strcmp(name, "ambient_color"))
+        environment()->env_boost.ambient = value;
+    else if (0 == xr_strcmp(name, "hemisphere_color"))
+        environment()->env_boost.hemi = value;
+    else if (0 == xr_strcmp(name, "fog_color"))
+        environment()->env_boost.fog_color = value;
+    else if (0 == xr_strcmp(name, "rain_color"))
+        environment()->env_boost.rain_color = value;
+    else if (0 == xr_strcmp(name, "sky_color"))
+        environment()->env_boost.sky_color = value;
+    else if (0 == xr_strcmp(name, "clouds_color"))
+        environment()->env_boost.clouds_color = value;
+    else if (0 == xr_strcmp(name, "sun_color"))
+        environment()->env_boost.sun_color = value;
+    else
+        Msg("~xrGame\\level_script.cpp (boost_weather_value)| [%s] is not a valid weather "
+            "parameter to boost",
+            name);
+}
+
+void boost_weather_reset() {
+    environment()->env_boost.ambient = 0.f;
+    environment()->env_boost.hemi = 0.f;
+    environment()->env_boost.fog_color = 0.f;
+    environment()->env_boost.rain_color = 0.f;
+    environment()->env_boost.sky_color = 0.f;
+    environment()->env_boost.sun_color = 0.f;
+}
+
 extern bool g_bDisableAllInput;
 void disable_input() {
     g_bDisableAllInput = true;
@@ -1144,6 +1263,9 @@ void CLevel::script_register(lua_State* L) {
         def("high_cover_in_direction", high_cover_in_direction),
         def("low_cover_in_direction", low_cover_in_direction),
         def("vertex_in_direction", vertex_in_direction), def("rain_factor", rain_factor),
+        // Screen Space Shaders
+        def("rain_wetness", rain_wetness), def("rain_hemi", rain_hemi),
+        def("actor_moving_state", actor_moving_state),
         def("patrol_path_exists", patrol_path_exists), def("vertex_position", vertex_position),
         def("name", get_name), def("prefetch_sound", prefetch_sound),
 
@@ -1296,7 +1418,72 @@ void CLevel::script_register(lua_State* L) {
 
          def("start_tutorial", &start_tutorial), def("stop_tutorial", &stop_tutorial),
          def("has_active_tutorial", &has_active_tutotial),
+         // Screen Space Shaders
+         def("only_movekeys_allowed", only_movement_allowed),
+         def("block_all_except_movement", block_all_except_movement),
          def("translate_string", &translate_string)
 
     ];
+
+    // Screen Space Shaders: Monolith level_script.cpp:2686-2733 ( ray_pick, rq_result, rq_target )
+    // and the four functions above of its weather module ( :2744-2758 ), for Wind Leaves and the
+    // Anomaly weather scripts of the Weather_ATMOS addon. That addon is mounted only while SSS runs
+    // ( x_ray.cpp, FS.ssfx_addons ), and these exist only then: with SSS off, or on another
+    // renderer, the script API is the game's own.
+    if (ssfx_session_enable && g_current_renderer == 4) {
+        module(L)[class_<CRayPick>("ray_pick")
+                      .def(constructor<>())
+                      .def(constructor<Fvector&, Fvector&, float, collide::rq_target,
+                                       CScriptGameObject*>())
+                      .def("set_position", &CRayPick::set_position)
+                      .def("set_direction", &CRayPick::set_direction)
+                      .def("set_range", &CRayPick::set_range)
+                      .def("set_flags", &CRayPick::set_flags)
+                      .def("set_ignore_object", &CRayPick::set_ignore_object)
+                      .def("query", &CRayPick::query)
+                      .def("get_result", &CRayPick::get_result)
+                      .def("get_object", &CRayPick::get_object)
+                      .def("get_distance", &CRayPick::get_distance)
+                      .def("get_element", &CRayPick::get_element)
+                      .def("get_normal", &CRayPick::get_normal),
+                  class_<script_rq_result>("rq_result")
+                      .def_readonly("object", &script_rq_result::O)
+                      .def_readonly("range", &script_rq_result::range)
+                      .def_readonly("element", &script_rq_result::element)
+                      .def_readonly("material_name", &script_rq_result::pMaterialName)
+                      .def_readonly("material_flags", &script_rq_result::pMaterialFlags)
+                      .def_readonly("material_phfriction", &script_rq_result::fPHFriction)
+                      .def_readonly("material_phdamping", &script_rq_result::fPHDamping)
+                      .def_readonly("material_phspring", &script_rq_result::fPHSpring)
+                      .def_readonly("material_phbounce_start_velocity",
+                                    &script_rq_result::fPHBounceStartVelocity)
+                      .def_readonly("material_phbouncing", &script_rq_result::fPHBouncing)
+                      .def_readonly("material_flotation_factor",
+                                    &script_rq_result::fFlotationFactor)
+                      .def_readonly("material_shoot_factor", &script_rq_result::fShootFactor)
+                      .def_readonly("material_shoot_factor_mp", &script_rq_result::fShootFactorMP)
+                      .def_readonly("material_bounce_damage_factor",
+                                    &script_rq_result::fBounceDamageFactor)
+                      .def_readonly("material_injurious_speed",
+                                    &script_rq_result::fInjuriousSpeed)
+                      .def_readonly("material_vis_transparency_factor",
+                                    &script_rq_result::fVisTransparencyFactor)
+                      .def_readonly("material_snd_occlusion_factor",
+                                    &script_rq_result::fSndOcclusionFactor)
+                      .def_readonly("material_density_factor", &script_rq_result::fDensityFactor)
+                      .def(constructor<>()),
+                  class_<enum_exporter<collide::rq_target>>("rq_target")
+                      .enum_("targets")[value("rqtNone", int(collide::rqtNone)),
+                                        value("rqtObject", int(collide::rqtObject)),
+                                        value("rqtStatic", int(collide::rqtStatic)),
+                                        value("rqtShape", int(collide::rqtShape)),
+                                        value("rqtObstacle", int(collide::rqtObstacle)),
+                                        value("rqtBoth", int(collide::rqtBoth)),
+                                        value("rqtDyn", int(collide::rqtDyn))]];
+
+        module(L, "weather")[def("get_value_numric", get_weather_value_numric),
+                             def("is_paused", is_weather_paused),
+                             def("boost_value", boost_weather_value),
+                             def("boost_reset", boost_weather_reset)];
+    }
 }

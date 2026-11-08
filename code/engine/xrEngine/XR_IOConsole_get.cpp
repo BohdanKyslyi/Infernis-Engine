@@ -11,6 +11,11 @@
 
 bool CConsole::GetBool(LPCSTR cmd) const {
     IConsole_Command* cc = GetCommand(cmd);
+    // A command that keeps a shadow copy of its value - CCC_ssfx_ui_bool, whose real value is one
+    // float of an SSFX vector - refreshes it here, so a check box in the menu shows the state the
+    // engine actually has and not the one it was last given.
+    if (cc)
+        cc->Sync();
     CCC_Mask* cf = dynamic_cast<CCC_Mask*>(cc);
     if (cf) {
         return (cf->GetValue() != 0);
@@ -47,6 +52,8 @@ int CConsole::GetInteger(LPCSTR cmd, int& min, int& max) const {
     min = 0;
     max = 1;
     IConsole_Command* cc = GetCommand(cmd);
+    if (cc)
+        cc->Sync();
 
     CCC_Integer* cf = dynamic_cast<CCC_Integer*>(cc);
     if (cf) {

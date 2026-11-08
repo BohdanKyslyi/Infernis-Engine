@@ -204,6 +204,8 @@ BOOL CTorch::net_Spawn(CSE_Abstract* DC) {
 
     bool b_r2 = !!psDeviceFlags.test(rsR2);
     b_r2 |= !!psDeviceFlags.test(rsR3);
+    // As in Monolith ( Torch.cpp:206 ): on DX11 the *_r2 numbers of torch_definition are read.
+    b_r2 |= !!psDeviceFlags.test(rsR4);
 
     IKinematics* K = smart_cast<IKinematics*>(Visual());
     CInifile* pUserData = K->LL_UserData();
@@ -254,10 +256,17 @@ void CTorch::net_Destroy() {
 void CTorch::OnH_A_Chield() {
     inherited::OnH_A_Chield();
     m_focus.set(Position());
+
+    // Screen Space Shaders: the player's own torch is left out of the contact shadow pass,
+    // because it sits at the camera and would only shade what it is lighting.
+    light_render->set_is_playerlight(smart_cast<CActor*>(H_Parent()) != nullptr);
 }
 
 void CTorch::OnH_B_Independent(bool just_before_destroy) {
     inherited::OnH_B_Independent(just_before_destroy);
+
+    // Screen Space Shaders: dropped on the ground it is no longer the player's torch.
+    light_render->set_is_playerlight(false);
 
     Switch(false);
     SwitchNightVision(false);

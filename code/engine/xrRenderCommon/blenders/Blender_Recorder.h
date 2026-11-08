@@ -25,6 +25,7 @@ public:
     BOOL bDetail_Bump;
     BOOL bUseSteepParallax;
     int iElement;
+    bool HudElement = false; // SSFX: compiling a HUD model (hud_loading)
 
 public:
     CSimulator RS;

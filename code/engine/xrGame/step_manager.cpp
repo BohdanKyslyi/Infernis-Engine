@@ -7,6 +7,7 @@
 #include "material_manager.h"
 #include "profiler.h"
 #include "IKLimbsController.h"
+#include "ssfx_script_bridge.h" // Screen Space Shaders
 
 #ifdef DEBUG
 BOOL debug_step_info = FALSE;
@@ -193,9 +194,27 @@ void CStepManager::update(bool b_hud_view) {
                 break;
 
             // Играть звук
-            if (b_play && is_on_ground())
-                m_step_sound.play_next(mtl_pair, m_object, m_step_info.params.step[i].power,
-                                       b_hud_view);
+            if (b_play && is_on_ground()) {
+                // Screen Space Shaders. Monolith step_manager.cpp:203-215 reports the player's own
+                // footstep to the script layer, with the name of the material underfoot, and only
+                // plays the step sound if the script agrees; ssfx_rain_footsteps.script listens for
+                // it and lays a wet splash over the step.
+                //
+                // One difference from the donor, and it is deliberate: Monolith drops the actor's
+                // footstep sound entirely when that Lua function is not there, which would silence
+                // stock Infernis footsteps whenever the addon is absent. Here the sound plays unless
+                // a listener actually refuses it, so the veto is kept and the game without the addon
+                // is untouched.
+                bool play_step = true;
+                if (m_object->ID() == 0) {
+                    SGameMtl* mt = GMLib.GetMaterialByID(mtl_pair->GetMtl1());
+                    play_step = ssfx_script_bridge::on_actor_footstep(
+                        mt ? *mt->m_Name : "", m_step_info.params.step[i].power, b_hud_view);
+                }
+                if (play_step)
+                    m_step_sound.play_next(mtl_pair, m_object, m_step_info.params.step[i].power,
+                                           b_hud_view);
+            }
 
             // Играть партиклы
             if (b_play && !mtl_pair->CollideParticles.empty()) {

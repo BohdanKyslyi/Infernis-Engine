@@ -11,6 +11,7 @@
 #include "IGame_Level.h"
 #include "../xrServerEntities/object_broker.h"
 #include "../xrServerEntities/LevelGameDef.h"
+#include "ssfx_console_vars.h"
 
 void CEnvModifier::load(IReader* fs, u32 version) {
     use_flags.one();
@@ -211,6 +212,13 @@ CEnvDescriptor::CEnvDescriptor(std::string identifier) : m_identifier(std::move(
     m_fSunShaftsIntensity = 0;
     m_fWaterIntensity = 1;
 
+    // Screen Space Shaders: as in Monolith ( its Environment_misc.cpp:248-250 ).
+    m_fTreeAmplitudeIntensity = 0.01f;
+
+    bloom_threshold = 3.5f;
+    bloom_exposure = 3.f;
+    bloom_sky_intensity = 0.6f;
+
     lens_flare_id = "";
     tb_id = "";
 
@@ -236,7 +244,13 @@ void CEnvDescriptor::load(CEnvironment& environment, CInifile& config) {
     sky_texture_name = st;
     sky_texture_env_name = st_env;
     // TODO: [imdex] remove shared_str (ini)
-    clouds_texture_name = config.r_string(m_identifier.c_str(), "clouds_texture");
+    // Screen Space Shaders: an empty clouds_texture ( the Anomaly weathers of Weather_ATMOS
+    // leave it empty in 35 of their 37 files ) is NULL from r_string, which a std::string cannot
+    // take. Monolith keeps the name in a shared_str, which can ( its Environment.h:151 ): no
+    // name, no cloud texture, no cloud layer. The same here: dxEnvironmentRender.cpp:124 creates
+    // no texture for an empty name, and the backend binds none ( R_Backend_Runtime.cpp:225 ).
+    LPCSTR clouds_name = config.r_string(m_identifier.c_str(), "clouds_texture");
+    clouds_texture_name = clouds_name ? clouds_name : "";
     LPCSTR cldclr = config.r_string(m_identifier.c_str(), "clouds_color");
     float multiplier = 2.f, save = 0;
     const int clouds_values =
@@ -273,9 +287,15 @@ void CEnvDescriptor::load(CEnvironment& environment, CInifile& config) {
     // Legacy X-Ray naming is counter-intuitive: sun_altitude is stored as the
     // vector heading (horizontal azimuth), while sun_longitude is its pitch
     // (vertical altitude). Keep this disk format for mod compatibility.
-    sun_dir.setHP(deg2rad(config.r_float(m_identifier.c_str(), "sun_altitude")),
-                  deg2rad(config.r_float(m_identifier.c_str(), "sun_longitude")));
-    R_ASSERT(xr::valid(sun_dir));
+    // Screen Space Shaders: not while the sun follows the table of sun_positions.ltx
+    // ( CEnvironment::m_ssfx_sun_positions, Weather_ATMOS ): Monolith reads no sun direction from a
+    // weather ( its CEnvDescriptor::load, Environment_misc.cpp:264-357 ), and some Anomaly weathers
+    // have none, or not in every section. Then the direction stays the constructor's.
+    if (!environment.m_ssfx_sun_positions) {
+        sun_dir.setHP(deg2rad(config.r_float(m_identifier.c_str(), "sun_altitude")),
+                      deg2rad(config.r_float(m_identifier.c_str(), "sun_longitude")));
+        R_ASSERT(xr::valid(sun_dir));
+    }
     //	else
     //		sun_dir.setHP			(
     //			deg2rad(config.r_fvector2(m_identifier.c_str(),"sun_dir").y),
@@ -302,6 +322,22 @@ void CEnvDescriptor::load(CEnvironment& environment, CInifile& config) {
 
     if (config.line_exist(m_identifier.c_str(), "water_intensity"))
         m_fWaterIntensity = config.r_float(m_identifier.c_str(), "water_intensity");
+
+    // Screen Space Shaders: as in Monolith ( its Environment_misc.cpp:337-340 ). With SSS the tree
+    // sway of FTreeVisual.cpp follows it; without SSS nothing reads it.
+    if (config.line_exist(m_identifier.c_str(), "tree_amplitude_intensity"))
+        m_fTreeAmplitudeIntensity =
+            config.r_float(m_identifier.c_str(), "tree_amplitude_intensity");
+
+    bloom_threshold = config.line_exist(m_identifier.c_str(), "bloom_threshold")
+                          ? config.r_float(m_identifier.c_str(), "bloom_threshold")
+                          : 3.5f;
+    bloom_exposure = config.line_exist(m_identifier.c_str(), "bloom_exposure")
+                         ? config.r_float(m_identifier.c_str(), "bloom_exposure")
+                         : 3.0f;
+    bloom_sky_intensity = config.line_exist(m_identifier.c_str(), "bloom_sky_intensity")
+                              ? config.r_float(m_identifier.c_str(), "bloom_sky_intensity")
+                              : 0.6f;
 
     C_CHECK(clouds_color);
     C_CHECK(sky_color);
@@ -450,7 +486,7 @@ bool CEnvDescriptor::set_thunderbolt_collection(CEnvironment& environment,
     return !tb_id.empty();
 }
 
-void CEnvDescriptor::save(CInifile& config) const {
+void CEnvDescriptor::save(CInifile& config, bool sun_direction) const {
     LPCSTR section = m_identifier.c_str();
     if (env_ambient)
         config.w_string(section, "ambient", env_ambient->name().c_str());
@@ -478,8 +514,13 @@ void CEnvDescriptor::save(CInifile& config) const {
     config.w_float(section, "wind_velocity", wind_velocity);
     config.w_float(section, "trees_amplitude", weather_motion::tree_amplitude(trees_amplitude));
     config.w_fvector4(section, "hemisphere_color", hemi_color);
-    config.w_float(section, "sun_altitude", rad2deg(sun_dir.getH()));
-    config.w_float(section, "sun_longitude", rad2deg(sun_dir.getP()));
+    // Screen Space Shaders: while the sun follows the table of sun_positions.ltx the weather has no
+    // sun direction to keep ( load ): none is written, and the lines a weather file has stay as
+    // they are ( SaveWeather )
+    if (sun_direction) {
+        config.w_float(section, "sun_altitude", rad2deg(sun_dir.getH()));
+        config.w_float(section, "sun_longitude", rad2deg(sun_dir.getP()));
+    }
 
     // Runtime stores RGB after the loader's 0.5 * multiplier conversion.
     // A multiplier of 2 writes an exactly reversible five-component value.
@@ -535,7 +576,7 @@ void CEnvDescriptorMixer::clear() {
 
 int get_ref_count(IUnknown* ii);
 
-void CEnvDescriptorMixer::lerp(CEnvironment*, CEnvDescriptor& A, CEnvDescriptor& B, float f,
+void CEnvDescriptorMixer::lerp(CEnvironment* env, CEnvDescriptor& A, CEnvDescriptor& B, float f,
                                CEnvModifier& Mdf, float modifier_power) {
     float modif_power = 1.f / (modifier_power + 1); // the environment itself
     float fi = 1 - f;
@@ -600,6 +641,25 @@ void CEnvDescriptorMixer::lerp(CEnvironment*, CEnvDescriptor& A, CEnvDescriptor&
     m_fSunShaftsIntensity = fi * A.m_fSunShaftsIntensity + f * B.m_fSunShaftsIntensity;
     m_fWaterIntensity = fi * A.m_fWaterIntensity + f * B.m_fWaterIntensity;
 
+    // Screen Space Shaders: as in Monolith ( its Environment_misc.cpp:492-494 ).
+    m_fTreeAmplitudeIntensity = fi * A.m_fTreeAmplitudeIntensity + f * B.m_fTreeAmplitudeIntensity;
+
+    // r2_sunshafts_min raises the floor so the weather can no longer switch the shafts off
+    // completely, r2_sunshafts_value scales what is left.
+    // Ported from Monolith Environment_misc.cpp:480-483, unchanged.
+    // Both are SSS settings, and SSS runs only on DX11: with SSS off, or on any other renderer,
+    // the weather's own value, as in the game.
+    if (ssfx_session_enable && psDeviceFlags.test(rsR4)) {
+        m_fSunShaftsIntensity *= 1.0f - ps_r2_sun_shafts_min;
+        m_fSunShaftsIntensity += ps_r2_sun_shafts_min;
+        m_fSunShaftsIntensity *= ps_r2_sun_shafts_value;
+        clamp(m_fSunShaftsIntensity, 0.0f, 1.0f);
+    }
+
+    bloom_threshold = fi * A.bloom_threshold + f * B.bloom_threshold;
+    bloom_exposure = fi * A.bloom_exposure + f * B.bloom_exposure;
+    bloom_sky_intensity = fi * A.bloom_sky_intensity + f * B.bloom_sky_intensity;
+
     // colors
     //.	sky_color.lerp
     //(A.sky_color,B.sky_color,f).add(Mdf.sky_color).mul(modif_power);
@@ -625,12 +685,84 @@ void CEnvDescriptorMixer::lerp(CEnvironment*, CEnvDescriptor& A, CEnvDescriptor&
 
     sun_color.lerp(A.sun_color, B.sun_color, f);
 
-    R_ASSERT(xr::valid(A.sun_dir));
-    R_ASSERT(xr::valid(B.sun_dir));
-    sun_dir.lerp(A.sun_dir, B.sun_dir, f).normalize();
-    R_ASSERT(xr::valid(sun_dir));
+    if (rain_density > 0.f)
+        env->wetness_factor += (rain_density * ssfx_wetness_multiplier.x) / 10000.f;
+    else
+        env->wetness_factor -= 0.0001f * ssfx_wetness_multiplier.y;
 
-    VERIFY2(sun_dir.y < 0, "Invalid sun direction settings while lerp");
+    clamp(env->wetness_factor, 0.f, 1.f);
+
+    // Screen Space Shaders: not while the sun follows the table of sun_positions.ltx
+    // ( CEnvironment::m_ssfx_sun_positions ): the weathers carry no sun direction then, and
+    // CEnvironment::OnFrame sets it from the table ( calculate_config_sun_dir ) - Monolith mixes
+    // none ( its CEnvDescriptorMixer::lerp, Environment_misc.cpp:434-532 ).
+    if (!env->m_ssfx_sun_positions) {
+        R_ASSERT(xr::valid(A.sun_dir));
+        R_ASSERT(xr::valid(B.sun_dir));
+        sun_dir.lerp(A.sun_dir, B.sun_dir, f).normalize();
+        R_ASSERT(xr::valid(sun_dir));
+
+        VERIFY2(sun_dir.y < 0, "Invalid sun direction settings while lerp");
+    }
+
+    // Screen Space Shaders: Monolith Environment_misc.cpp:530-531 - the brightness boosts of the
+    // Anomaly weather scripts, last, as there. Only while SSS runs ( DX11 ), as the shafts above.
+    if (ssfx_session_enable && psDeviceFlags.test(rsR4))
+        boost(env);
+}
+
+// Screen Space Shaders: Monolith Environment_misc.cpp:534-589, the same but for the clouds: the
+// Fvector4 of Infernis has no clamp( min, max ), so their four parts are clamped one by one - what
+// the donor's Fvector4::clamp does ( Monolith _vector4.h:217-224 ).
+void CEnvDescriptorMixer::boost(CEnvironment* env) {
+    // Sky color brightness adjustment
+    if (env->env_boost.sky_color != 0.f) {
+        sky_color.add(env->env_boost.sky_color);
+        sky_color.clamp({ 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f });
+    }
+
+    // Clouds color brightness adjustment
+    if (env->env_boost.clouds_color != 0.f) {
+        clouds_color.add(env->env_boost.clouds_color);
+        clamp(clouds_color.x, 0.f, 1.f);
+        clamp(clouds_color.y, 0.f, 1.f);
+        clamp(clouds_color.z, 0.f, 1.f);
+        clamp(clouds_color.w, 0.f, 1.f);
+    }
+
+    // Ambient color brightness adjustment
+    if (env->env_boost.ambient != 0.f) {
+        ambient.add(env->env_boost.ambient);
+        ambient.clamp({ 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f });
+    }
+
+    // Hemi color brightness adjustment
+    if (env->env_boost.hemi != 0.f) {
+        float adj = hemi_color.w;
+        hemi_color.add(env->env_boost.hemi);
+        hemi_color.w = adj;
+        clamp(hemi_color.x, 0.f, 1.f);
+        clamp(hemi_color.y, 0.f, 1.f);
+        clamp(hemi_color.z, 0.f, 1.f);
+    }
+
+    // Sun color brightness adjustment
+    if (env->env_boost.sun_color != 0.f) {
+        sun_color.add(env->env_boost.sun_color);
+        sun_color.clamp({ 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f });
+    }
+
+    // Rain color brightness adjustment
+    if (env->env_boost.rain_color != 0.f) {
+        rain_color.add(env->env_boost.rain_color);
+        rain_color.clamp({ 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f });
+    }
+
+    // Fog color brightness adjustment
+    if (env->env_boost.fog_color != 0.f) {
+        fog_color.add(env->env_boost.fog_color);
+        fog_color.clamp({ 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f });
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -713,6 +845,28 @@ CEnvDescriptor* CEnvironment::create_descriptor(std::string identifier, CInifile
     return (result);
 }
 
+// Screen Space Shaders: Monolith Environment_misc.cpp:695-712 - the table of sun_positions.ltx
+// ( Weather_ATMOS ), a point an hour: sun_altitude and sun_longitude, the names and the order of
+// setHP of the game's weathers ( CEnvDescriptor::load ). Only while that table is in use
+// ( m_ssfx_sun_positions, the constructor ).
+void CEnvironment::load_sun() {
+    int i = 0;
+    do {
+        string16 sun_identifier;
+        xr_sprintf(sun_identifier, i >= 10 ? "%d:00:00" : "0%d:00:00", i);
+
+        float sun_alt = m_sun_pos_config->r_float(sun_identifier, "sun_altitude");
+        float sun_long = m_sun_pos_config->r_float(sun_identifier, "sun_longitude");
+
+        R_ASSERT(xr::valid(sun_alt));
+        R_ASSERT(xr::valid(sun_long));
+        sun_hp[i].set(sun_alt, sun_long);
+        i++;
+    } while (i < 24);
+}
+
+extern int g_current_renderer; // EngineAPI.cpp
+
 void CEnvironment::load_weathers() {
     if (!WeatherCycles.empty())
         return;
@@ -720,6 +874,31 @@ void CEnvironment::load_weathers() {
     typedef xr_vector<LPSTR> file_list_type;
     file_list_type* file_list = FS.file_list_open("$game_weathers$", "");
     VERIFY(file_list);
+
+    // Screen Space Shaders: while SSS runs ( switched on, DX11 ) the Weather_ATMOS addon brings its
+    // own weathers and the Anomaly weather scripts that choose among them ( level_weathers.script ).
+    // Then the game's own weathers stay out of the list, so the scripts and the weather editor see
+    // the addon's only. A weather is an addon's when the file the game reads for it comes from an
+    // addon folder ( FS.addon_file, the test SaveWeather makes ); the name test is the game's own,
+    // below. With no such weather - SSS off, another renderer, no weather addon mounted - every
+    // weather is loaded, as in the game.
+    bool ssfx_addon_weathers_only = false;
+    if (ssfx_session_enable && g_current_renderer == 4) {
+        for (LPCSTR name : *file_list) {
+            const u32 length = xr_strlen(name);
+            if (length < 5 || name[length - 4] != '.' ||
+                (name[length - 3] != 'l' && name[length - 3] != 'L') ||
+                (name[length - 2] != 't' && name[length - 2] != 'T') ||
+                (name[length - 1] != 'x' && name[length - 1] != 'X'))
+                continue;
+            string_path game_path;
+            FS.update_path(game_path, "$game_weathers$", name);
+            if (FS.addon_file(game_path)) {
+                ssfx_addon_weathers_only = true;
+                break;
+            }
+        }
+    }
 
     file_list_type::const_iterator i = file_list->begin();
     file_list_type::const_iterator e = file_list->end();
@@ -739,6 +918,15 @@ void CEnvironment::load_weathers() {
         LPSTR identifier = (LPSTR)_alloca((new_length + 1) * sizeof(char));
         std::memcpy(identifier, *i, new_length * sizeof(char));
         identifier[new_length] = 0;
+        // Screen Space Shaders: see ssfx_addon_weathers_only above
+        if (ssfx_addon_weathers_only) {
+            string_path game_path;
+            FS.update_path(game_path, "$game_weathers$", *i);
+            if (!FS.addon_file(game_path)) {
+                Msg("* Weather loader: SSS runs, the game's weather [%s] is left out", identifier);
+                continue;
+            }
+        }
         EnvVec& env = WeatherCycles[identifier];
 
         string_path file_name;
@@ -780,6 +968,42 @@ void CEnvironment::load_weathers() {
     SetWeather((*WeatherCycles.begin()).first);
 }
 
+// Screen Space Shaders: SaveWeather for a weather the game reads from an addon folder. The game's
+// own steps below - a temporary file, a backup made once, the swap - next to the addon's file.
+// FS.exist and FS.file_copy know the game's paths only, so the backup is copied directly, and the
+// swap goes through FS.addon_file_replace, which points the game at the saved file.
+static bool ssfx_save_addon_weather(CInifile& config, LPCSTR file_name, LPCSTR addon_name,
+                                    bool make_backup, std::string* saved_path) {
+    string_path temporary_name;
+    xr_strcpy(temporary_name, addon_name);
+    xr_strcat(temporary_name, ".weather_editor.tmp");
+    if (!config.save_as(temporary_name)) {
+        Msg("! Weather editor: cannot write temporary config [%s]", temporary_name);
+        return false;
+    }
+
+    if (make_backup) {
+        string_path backup_name;
+        xr_strcpy(backup_name, addon_name);
+        xr_strcat(backup_name, ".weather_editor.bak");
+        if (_access(addon_name, 0) == 0)
+            CopyFile(addon_name, backup_name, TRUE); // TRUE: an existing backup stays
+    }
+
+    const DWORD attributes = GetFileAttributes(addon_name);
+    if (attributes != DWORD(-1) && (attributes & FILE_ATTRIBUTE_READONLY))
+        SetFileAttributes(addon_name, attributes & ~FILE_ATTRIBUTE_READONLY);
+    if (!FS.addon_file_replace(file_name, temporary_name, addon_name)) {
+        Msg("! Weather editor: cannot replace config [%s]", addon_name);
+        return false;
+    }
+
+    if (saved_path)
+        *saved_path = addon_name;
+    Msg("* Weather editor: saved [%s]", addon_name);
+    return true;
+}
+
 bool CEnvironment::SaveWeather(const std::string& name, bool make_backup,
                                std::string* saved_path) {
     const EnvsMap::const_iterator weather = WeatherCycles.find(name);
@@ -797,8 +1021,25 @@ bool CEnvironment::SaveWeather(const std::string& name, bool make_backup,
     // a loose override in $game_weathers$.
     CInifile config(file_name, FALSE, TRUE, FALSE);
     config.set_override_names(TRUE);
+    // Screen Space Shaders: no sun direction while the sun follows the table of sun_positions.ltx
+    // ( CEnvDescriptor::save )
     for (const CEnvDescriptor* descriptor : weather->second)
-        descriptor->save(config);
+        descriptor->save(config, !m_ssfx_sun_positions);
+
+    // Screen Space Shaders: while SSS runs ( switched on, DX11 ) the Anomaly weathers come from an
+    // addon folder ( Weather_ATMOS, [shader_extensions] ssfx_addons ). The game reads such a
+    // weather from the addon, so it is saved there: a copy in $game_weathers$ would never be read.
+    // A new weather goes into that addon too, whatever weather it was made from. With SSS off, on
+    // any other renderer, and for a weather of the game's own, the game's way below.
+    if (ssfx_session_enable && g_current_renderer == 4) {
+        string_path addon_name = "";
+        if (LPCSTR addon = FS.addon_file(file_name))
+            xr_strcpy(addon_name, addon);
+        else if (!FS.exist(file_name))
+            FS.ssfx_addon_target(file_name, addon_name);
+        if (addon_name[0])
+            return ssfx_save_addon_weather(config, file_name, addon_name, make_backup, saved_path);
+    }
 
     string_path temporary_name;
     xr_strcpy(temporary_name, file_name);
@@ -1032,6 +1273,9 @@ void CEnvironment::load() {
 
     load_weathers();
     load_weather_effects();
+    // Screen Space Shaders: Monolith Environment_misc.cpp:870 ( the sun table, the constructor )
+    if (m_ssfx_sun_positions)
+        load_sun();
 }
 
 void CEnvironment::unload() {

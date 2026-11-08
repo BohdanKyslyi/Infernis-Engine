@@ -1,138 +1,55 @@
 <w>
-    <!-- Transparent editor: there is intentionally no full-panel background. -->
     <main x="20" y="20" width="984" height="708">
-        <title x="0" y="0" width="984" height="26">
-            <text font="graffiti22" r="225" g="225" b="225" align="c">ui_weather_editor_title</text>
-        </title>
-
-        <auto_static x="8" y="34" width="66" height="18">
-            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_weather</text>
-        </auto_static>
-        <weather x="76" y="32" width="234" height="18" list_length="8" always_show_scroll="1">
-            <list_font r="205" g="205" b="205" font="letterica16"/>
-            <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
-        </weather>
-
-        <auto_static x="336" y="34" width="70" height="18">
-            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_keyframe</text>
-        </auto_static>
-        <frame x="408" y="32" width="230" height="18" list_length="8" always_show_scroll="1">
-            <list_font r="205" g="205" b="205" font="letterica16"/>
-            <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
-        </frame>
-
-        <auto_static x="664" y="34" width="68" height="18">
-            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_sky</text>
-        </auto_static>
-        <sky x="734" y="32" width="242" height="18" list_length="8" always_show_scroll="1">
-            <list_font r="205" g="205" b="205" font="letterica16"/>
-            <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
-        </sky>
-
-        <auto_static x="8" y="61" width="66" height="18">
-            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_clouds</text>
-        </auto_static>
-        <clouds x="76" y="59" width="234" height="18" list_length="8" always_show_scroll="1">
-            <list_font r="205" g="205" b="205" font="letterica16"/>
-            <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
-        </clouds>
-
-        <auto_static x="336" y="61" width="70" height="18">
-            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_ambient</text>
-        </auto_static>
-        <ambient_definition x="408" y="59" width="230" height="18" list_length="8" always_show_scroll="1">
-            <list_font r="205" g="205" b="205" font="letterica16"/>
-            <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
-        </ambient_definition>
-
-        <auto_static x="664" y="61" width="68" height="18">
-            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_sun</text>
-        </auto_static>
-        <sun_definition x="734" y="59" width="242" height="18" list_length="8" always_show_scroll="1">
-            <list_font r="205" g="205" b="205" font="letterica16"/>
-            <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
-        </sun_definition>
-
-        <auto_static x="8" y="88" width="108" height="18">
-            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_thunderbolt_selector</text>
-        </auto_static>
-        <thunderbolt_definition x="118" y="86" width="192" height="18" list_length="8" always_show_scroll="1">
-            <list_font r="205" g="205" b="205" font="letterica16"/>
-            <text_color><e r="220" g="220" b="220"/><d r="80" g="80" b="80"/></text_color>
-        </thunderbolt_definition>
-
-        <auto_static x="336" y="88" width="154" height="18">
-            <text font="letterica16" r="180" g="180" b="180">ui_weather_editor_new_weather</text>
-        </auto_static>
-        <new_weather_name x="494" y="84" width="278" height="23" max_symb_count="63" file_name_mode="1">
-            <texture>ui_inGame2_edit_box_1</texture>
-            <text x="3" font="letterica16" r="220" g="220" b="220" vert_align="c"/>
-        </new_weather_name>
-        <create_weather x="782" y="82" width="194" height="25" stretch="1">
-            <texture>ui_inGame2_Mp_bigbuttone</texture>
-            <text font="letterica16" align="c">ui_weather_editor_create_weather</text>
-            <text_color><e r="185" g="220" b="175"/></text_color>
-        </create_weather>
-
-        <auto_static x="8" y="116" width="46" height="18">
-            <text font="letterica16" r="190" g="190" b="190">ui_weather_editor_time</text>
-        </auto_static>
-        <time_slider x="54" y="116" width="602" height="12" step="60"/>
-        <time_value x="666" y="112" width="82" height="20">
-            <text font="letterica16" r="225" g="225" b="225" align="c" vert_align="c">00:00:00</text>
-        </time_value>
-        <add_frame x="758" y="108" width="104" height="25" stretch="1">
-            <texture>ui_inGame2_Mp_bigbuttone</texture>
-            <text font="letterica16" align="c">ui_weather_editor_add_section</text>
-            <text_color><e r="185" g="220" b="175"/></text_color>
-        </add_frame>
-        <preview x="872" y="108" width="104" height="25" stretch="1">
-            <texture>ui_inGame2_Mp_bigbuttone</texture>
-            <text font="letterica16" align="c">ui_weather_editor_preview</text>
-            <text_color><e r="190" g="205" b="220"/></text_color>
-        </preview>
-
-        <!-- C++ clones these templates for all 36 numeric values. -->
-        <property_header_template x="0" y="0" width="310" height="18">
-            <text font="letterica16" r="210" g="220" b="210">ui_weather_editor_section</text>
-        </property_header_template>
-        <property_label_template x="0" y="0" width="100" height="17">
-            <text font="letterica16" r="185" g="185" b="185" vert_align="c">ui_weather_editor_value</text>
-        </property_label_template>
-        <property_slider_template x="0" y="0" width="142" height="12" step="0.01"/>
-        <property_value_template x="0" y="0" width="55" height="17">
-            <text font="letterica16" r="220" g="220" b="220" align="r" vert_align="c">0.000</text>
-        </property_value_template>
-
-        <status x="8" y="548" width="968" height="34">
-            <text font="letterica16" r="195" g="210" b="195" align="c" vert_align="c" complex_mode="1"/>
-        </status>
-
-        <learning_mode x="8" y="604" width="29" height="29">
-            <texture>ui_inGame2_checkbox</texture>
-        </learning_mode>
-        <learning_mode_label x="43" y="604" width="151" height="29">
-            <text font="letterica16" r="205" g="215" b="205" vert_align="c">ui_weather_editor_learning_mode</text>
-        </learning_mode_label>
-
-        <save x="200" y="604" width="180" height="28" stretch="1">
-            <texture>ui_inGame2_Mp_bigbuttone</texture>
-            <text font="letterica18" align="c">ui_weather_editor_save</text>
-            <text_color><e r="190" g="220" b="170"/></text_color>
-        </save>
-        <revert x="402" y="604" width="180" height="28" stretch="1">
-            <texture>ui_inGame2_Mp_bigbuttone</texture>
-            <text font="letterica18" align="c">ui_weather_editor_revert</text>
-            <text_color><e r="220" g="200" b="150"/></text_color>
-        </revert>
-        <close x="604" y="604" width="180" height="28" stretch="1">
-            <texture>ui_inGame2_Mp_bigbuttone</texture>
-            <text font="letterica18" align="c">ui_weather_editor_close</text>
-            <text_color><e r="205" g="205" b="205"/></text_color>
-        </close>
-
-        <auto_static x="8" y="654" width="968" height="20">
-            <text font="letterica16" r="135" g="135" b="135" align="c">ui_weather_editor_footer</text>
-        </auto_static>
+        <auto_static x="0" y="68" width="984" height="72" stretch="1"><texture r="8" g="12" b="11" a="165">ui\ui_weather_editor_white</texture></auto_static>
+        <auto_static x="0" y="146" width="172" height="382" stretch="1"><texture r="8" g="12" b="11" a="175">ui\ui_weather_editor_white</texture></auto_static>
+        <auto_static x="176" y="146" width="410" height="382" stretch="1"><texture r="8" g="12" b="11" a="185">ui\ui_weather_editor_white</texture></auto_static>
+        <auto_static x="0" y="642" width="984" height="64" stretch="1"><texture r="8" g="12" b="11" a="170">ui\ui_weather_editor_white</texture></auto_static>
+        <title x="0" y="0" width="984" height="26"><text font="graffiti22" r="210" g="215" b="200" align="c">ui_env_title</text></title>
+        <weather_tab x="300" y="30" width="190" height="28" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_weather_tab</text></weather_tab>
+        <lightning_tab x="502" y="30" width="190" height="28" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_lightning_page</text></lightning_tab>
+        <auto_static x="8" y="80" width="64" height="20"><text font="letterica16" r="210" g="215" b="200" >ui_weather_editor_weather</text></auto_static>
+        <weather x="74" y="78" width="238" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></weather>
+        <auto_static x="330" y="80" width="64" height="20"><text font="letterica16" r="210" g="215" b="200" >ui_weather_editor_keyframe</text></auto_static>
+        <frame x="396" y="78" width="218" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></frame>
+        <add_frame x="630" y="76" width="118" height="26" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_weather_editor_add_section</text></add_frame>
+        <files x="858" y="76" width="118" height="26" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_env_files</text></files>
+        <auto_static x="8" y="112" width="64" height="20"><text font="letterica16" r="210" g="215" b="200" >ui_weather_editor_time</text></auto_static>
+        <time_slider x="74" y="114" width="680" height="12" step="60"/>
+        <time_value x="762" y="110" width="82" height="22"><text font="letterica16" r="210" g="215" b="200" align="c" vert_align="c">00:00:00</text></time_value>
+        <preview x="858" y="108" width="118" height="26" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_weather_editor_preview</text></preview>
+        <auto_static x="8" y="150" width="158" height="20"><text font="letterica16" r="210" g="215" b="200" >ui_env_categories</text></auto_static>
+        <category_title x="188" y="150" width="380" height="20"><text font="letterica16" r="210" g="215" b="200" >ui_env_sky_sun</text></category_title>
+        <category_template x="0" y="0" width="158" height="34" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_env_sky_sun</text></category_template>
+        <sky x="330" y="176" width="236" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></sky>
+        <sun_definition x="330" y="348" width="236" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></sun_definition>
+        <clouds x="330" y="176" width="236" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></clouds>
+        <ambient_definition x="330" y="176" width="236" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></ambient_definition>
+        <thunderbolt_definition x="330" y="348" width="236" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></thunderbolt_definition>
+        <property_header_template x="0" y="0" width="320" height="18"><text font="letterica16" r="210" g="215" b="200" >ui_weather_editor_section</text></property_header_template>
+        <property_label_template x="0" y="0" width="180" height="22"><text font="letterica16" r="210" g="215" b="200" vert_align="c">ui_weather_editor_value</text></property_label_template>
+        <property_slider_template x="0" y="0" width="114" height="12" step="0.01"/>
+        <resource_search x="0" y="0" width="220" height="22" max_symb_count="96" file_name_mode="0"><texture>ui_inGame2_edit_box_1</texture><text x="3" font="letterica16" r="220" g="220" b="210" vert_align="c"></text></resource_search>
+        <number_template x="0" y="0" width="70" height="22" max_symb_count="24" file_name_mode="0"><texture>ui_inGame2_edit_box_1</texture><text x="3" font="letterica16" r="220" g="220" b="210" vert_align="c"></text></number_template>
+        <property_value_template x="0" y="0" width="70" height="22"><text font="letterica16" r="210" g="215" b="200" align="r">0.000</text></property_value_template>
+        <lightning_collection_template x="0" y="26" width="380" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></lightning_collection_template>
+        <lightning_particle_template x="0" y="22" width="270" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></lightning_particle_template>
+        <lightning_sound_template x="284" y="22" width="270" height="22" list_length="8" always_show_scroll="1"><list_font r="210" g="215" b="205" font="letterica16"/><text_color><e r="220" g="220" b="210"/><d r="100" g="100" b="100"/></text_color></lightning_sound_template>
+        <lightning_apply_template x="568" y="22" width="220" height="26" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_lightning_apply_assets</text></lightning_apply_template>
+        <lightning_test_template x="668" y="494" width="240" height="28" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_lightning_test</text></lightning_test_template>
+        <live_label x="610" y="176" width="350" height="20"><text font="letterica16" r="210" g="215" b="200" >ui_env_live_preview</text></live_label>
+        <context_help x="600" y="456" width="376" height="66"><text font="letterica16" r="210" g="215" b="200" complex_mode="1">ui_env_live_hint</text></context_help>
+        <file_label x="0" y="0" width="788" height="20"><text font="letterica16" r="210" g="215" b="200" >ui_env_file_help</text></file_label>
+        <new_weather_name x="0" y="28" width="478" height="22" max_symb_count="63" file_name_mode="0"><texture>ui_inGame2_edit_box_1</texture><text x="3" font="letterica16" r="220" g="220" b="210" vert_align="c"></text></new_weather_name>
+        <create_weather x="494" y="26" width="294" height="26" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_weather_editor_create_weather</text></create_weather>
+        <status x="8" y="614" width="968" height="28"><text font="letterica16" r="210" g="215" b="200" align="c" complex_mode="1"></text></status>
+        <learning_mode x="8" y="650" width="26" height="26"><texture>ui_inGame2_checkbox</texture></learning_mode>
+        <learning_mode_label x="40" y="650" width="180" height="28"><text font="letterica16" r="210" g="215" b="200" vert_align="c">ui_weather_editor_learning_mode</text></learning_mode_label>
+        <revert x="240" y="650" width="238" height="28" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_env_revert_weather</text></revert>
+        <save x="490" y="650" width="238" height="28" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_env_save_weather</text></save>
+        <close x="740" y="650" width="236" height="28" stretch="1"><texture>ui_inGame2_Mp_bigbuttone</texture><text font="letterica16" align="c">ui_weather_editor_close</text></close>
+        <dirty_status x="240" y="686" width="736" height="20"><text font="letterica16" r="210" g="215" b="200" align="c">ui_env_saved</text></dirty_status>
+        <multi_strikes_template x="308" y="0" width="26" height="26"><texture>ui_inGame2_checkbox</texture></multi_strikes_template>
+        <file_back x="0" y="0" width="788" height="68" stretch="1"><texture r="8" g="12" b="11" a="190">ui\ui_weather_editor_white</texture></file_back>
+        <assets_back x="0" y="0" width="788" height="78" stretch="1"><texture r="8" g="12" b="11" a="190">ui\ui_weather_editor_white</texture></assets_back>
     </main>
 </w>

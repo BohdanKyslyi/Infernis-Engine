@@ -2,6 +2,8 @@
 
 #include "UIDialogWnd.h"
 #include "UIWndCallback.h"
+#include <map>
+#include "../../xrEngine/LightningEditorSettings.h"
 
 class CUI3tButton;
 class CUIComboBox;
@@ -25,12 +27,16 @@ public:
     void Init();
     virtual void Show(bool status);
     virtual void Update();
+    virtual void Draw();
+    virtual bool OnMouseAction(float x, float y, EUIMessages action);
+    virtual bool OnKeyboardHold(int dik);
     virtual void SendMessage(CUIWindow* pWnd, s16 msg, void* pData = nullptr);
     virtual bool OnKeyboardAction(int dik, EUIMessages keyboard_action);
 
     bool IsSessionActive() const { return m_session_active; }
     bool IsPreviewing() const { return m_previewing; }
     void EnterPreview();
+    void LeavePreview();
     void CloseEditorSession();
 
 private:
@@ -38,7 +44,7 @@ private:
         u32 property_index;
         CUITextWnd* label;
         CUITrackBar* slider;
-        CUITextWnd* value;
+        CUIEditBox* value;
     };
 
     struct SColorControl {
@@ -76,6 +82,27 @@ private:
         std::string thunderbolt_name;
     };
 
+    void CreateLightningControls(CUIXml& xml);
+    void SetLightningPage(bool enabled);
+    void SyncLightningControls(bool assets=false);
+    void FillLightningParticles();
+    void FillLightningSounds();
+    bool ApplyLightningAssets();
+    void OnSelectTab(CUIWindow*,void*);
+    void OnLightningChanged(CUIWindow*,void*);
+    void OnLightningAssets(CUIWindow*,void*);
+    void OnLightningMulti(CUIWindow*,void*);
+    void OnTestLightning(CUIWindow*,void*);
+    void CreateNavigation(CUIXml& xml);
+    void RefreshCategory();
+    void CloseLists();
+    void CommitNumericEdits(bool apply=true);
+    void OnNumberCommitted(CUIWindow*,void*);
+    void OnCategory(CUIWindow*,void*);
+    void OnFiles(CUIWindow*,void*);
+    void TrackWeatherWindow(CUIWindow*,unsigned);
+    void UpdateDirtyState();
+    std::string WeatherSignature(const std::string& name) const;
     void FillWeatherList();
     void FillFrameList();
     void FillTextureLists();
@@ -117,10 +144,56 @@ private:
     void OnCreateWeather(CUIWindow*, void*);
     void OnPreview(CUIWindow*, void*);
     void OnSave(CUIWindow*, void*);
+    void OnSaveClose(CUIWindow*, void*);
     void OnRevert(CUIWindow*, void*);
     void OnClose(CUIWindow*, void*);
 
 private:
+    struct SLightningControl {
+        u32 index;
+        CUITextWnd* label;
+        CUITrackBar* slider;
+        CUIEditBox* value;
+    };
+    CUIStatic* m_preview_frame{nullptr};
+    bool m_save_ok{false};
+    bool m_keep_session{false}; // F7: hide the window, keep the editor session ( weather and time stay fixed )
+    CUI3tButton* m_weather_tab{nullptr};
+    CUI3tButton* m_lightning_tab{nullptr};
+    CUIWindow* m_lightning_header{nullptr};
+    CUIComboBox* m_lightning_collection{nullptr};
+    struct SCategoryWindow {CUIWindow* window;unsigned category;};
+    xr_vector<SCategoryWindow> m_category_windows;
+    xr_vector<CUI3tButton*> m_categories;
+    unsigned m_build_category{0};
+    unsigned m_weather_category{0};
+    unsigned m_lightning_category{0};
+    CUITextWnd* m_category_title{nullptr};
+    CUITextWnd* m_context_help{nullptr};
+    CUITextWnd* m_dirty_status{nullptr};
+    CUI3tButton* m_files{nullptr};
+    CUIWindow* m_file_panel{nullptr};
+    CUIWindow* m_assets_panel{nullptr};
+    std::map<std::string,std::string> m_weather_baselines;
+    std::map<std::string,bool> m_weather_dirty;
+    u32 m_next_dirty_update{0};
+    bool m_files_visible{false};
+    CUIWindow* m_lightning_panel{nullptr};
+    CUIComboBox* m_lightning_particle{nullptr};
+    CUIComboBox* m_lightning_sound{nullptr};
+    CUI3tButton* m_lightning_apply{nullptr};
+    CUI3tButton* m_lightning_test{nullptr};
+    CUICheckButton* m_multi_strikes{nullptr};
+    xr_vector<SLightningControl> m_lightning_controls;
+    xr_vector<CUIWindow*> m_weather_property_windows;
+    xr_vector<std::string> m_lightning_particles;
+    xr_vector<std::string> m_lightning_sounds;
+    lightning_editor::Settings m_lightning_baseline;
+    lightning_editor::Settings m_lightning_saved;
+    float m_rain_tilt_saved{1.f};
+    float m_rain_speed_saved{0.f};
+    bool m_saved_baselines_ready{false};
+    bool m_lightning_mode{false};
     CUITextWnd* m_title;
     CUITextWnd* m_status;
     CUIComboBox* m_weather;
@@ -171,3 +244,5 @@ void ToggleWeatherEditor(bool force_show = false, bool force_hide = false);
 void PreviewWeatherEditor();
 void DestroyWeatherEditor();
 bool WeatherEditorShown();
+
+bool WeatherEditorPreviewAllowsInput(const CUIDialogWnd* receiver, int key);

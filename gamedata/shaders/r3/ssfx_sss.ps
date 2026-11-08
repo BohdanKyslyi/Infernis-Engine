@@ -1,0 +1,109 @@
+/**
+ * @ Version: SCREEN SPACE SHADERS - UPDATE 22
+ * @ Description: Screen Space Shadows - Direct Light + Far Shadows
+ * @ Modified time: 2025-05-29 02:07:12
+ * @ Author: https://www.moddb.com/members/ascii1457
+ * @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+ */
+
+#include "screenspace_shadows.h"
+
+float4x4 m_current; // Current projection matrix
+float4x4 m_previous; // Previous projection matrix
+
+Texture2D sss_image;
+Texture2D s_prev_pos;
+
+float4 main(p_screen I) : SV_Target
+{
+
+// Sample buffers and prepare all requiered data ------------------
+	
+	// Scale TexCoor
+	float2 tc = I.tc0;
+	float2 Pos2D = I.hpos;
+
+	// Sample buffers
+#ifndef USE_MSAA
+	float4 Pos = s_position.Sample( smp_nofilter, tc );
+#else
+	float4 Pos = s_position.Load( int3( Pos2D, 0 ), 0 );
+#endif
+
+	// [ xy = MV | z = HUD Mask ] The s_motion_vectors is declared on "screenspace_shadows.h"
+	float3 Motion_Vectors = s_motion_vectors.Sample(smp_nofilter, tc);
+
+	// Reconstruct Position, Normal and Material
+	float3 P 	= float3( Pos.z * ( Pos2D * pos_decompression_params.zw - pos_decompression_params.xy ), Pos.z );
+	float3 N 	= gbuf_unpack_normal( Pos.xy );
+	float mtl	= gbuf_unpack_mtl( Pos.w );
+
+// SSS -------------------------------------------------------------
+
+	// Var to accumulate the SSS ( r ) and disocclusion mask ( g )
+	float4 sss = 0.0f;
+
+	// Direct Light SSS
+	sss.r = SSFX_ScreenSpaceShadows(float4(P, mtl), N, tc, Motion_Vectors.z, 0);
+
+// Accumulation ----------------------------------------------------
+
+	// Position
+	float4 P4 = float4(P, 1.0);
+	
+	// Get current
+	float4 p_current = mul(m_current, P4);
+	
+	// Get previous
+	float4 p_previous = mul(m_previous, P4);
+
+	float2 current = p_current.xy / p_current.w;
+	float2 previous = p_previous.xy / p_previous.w;
+
+	// Reprojection UV
+	float2 cam_rp = current.xy - previous.xy;
+	cam_rp = float2(cam_rp.x, -cam_rp.y) * 0.5f;
+
+	// Without Camera MV
+	float vel_history = length(Motion_Vectors.xy - cam_rp * (1.0f - Motion_Vectors.z)) * 200;
+
+	// Velocity
+	float vel = length(Motion_Vectors.xy);
+
+	// Prev Position + Reprojection UV
+	float4 prev_P = s_prev_pos.Sample( smp_rtlinear, (tc - Motion_Vectors.xy) );
+
+	// Disocclusion
+	float docc = saturate(abs(1.0f - P.z / prev_P.z));
+
+	// Agressive disocclusion for the HUD elements
+	docc *= 1.0f + 10.0f * (Motion_Vectors.z);
+
+	// Noise
+	float2 rnd = hash22(tc * 100 + timers.xx * 100) * 2.0f - 1.0f;
+	rnd = rnd * (1.0f / screen_res.xy) * 0.5f * saturate(1.0f - vel * 10); //0.5f;
+
+	// Previous frame + Reprojection UV + Noise
+	float4 prev = sss_image.Sample(smp_rtlinear, (tc + rnd) - Motion_Vectors.xy);
+
+	// Offscreen check	
+	float outoffsrc = any((tc - Motion_Vectors.xy) < 0) + any((tc - Motion_Vectors.xy) > 1.0);
+	outoffsrc = lerp(outoffsrc, prev.a, 0.95f); // Use previous offscreen samples
+
+	// 0 Current frame ~ 1 Prev frame
+	float2 weight = 0;
+
+	// Use velocity to diminish weight ( HUD Only )
+	vel *= 30 * Motion_Vectors.z;
+
+	// SSS weight ( TAA enable/disable ssfx_jitter.z )
+	weight.x = saturate(0.95f - (outoffsrc + docc + vel));
+
+	// OCC weight
+	weight.y = saturate(0.60f - (outoffsrc + docc));
+
+	// Accumulate frames + Disocclusion Mask
+	sss.rg = lerp(float2(sss.r, docc), prev.rg, weight.xy);
+
+	return float4(sss.rg, 1, max(outoffsrc, lerp(saturate(vel_history), prev.w, 0.95f)));
+}

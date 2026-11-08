@@ -52,6 +52,9 @@ public:
     R_dsgraph::mapSorted_T mapHUDEmissive;
 #endif
 
+    // Screen Space Shaders: water, drawn separately from the rest of the sorted geometry
+    R_dsgraph::mapWater_T mapWater;
+
     // Runtime structures
     xr_vector<R_dsgraph::mapNormalVS::TNode*, render_alloc<R_dsgraph::mapNormalVS::TNode*>> nrmVS;
 #if defined(USE_DX10) || defined(USE_DX11)
@@ -171,6 +174,7 @@ public:
         mapHUD.destroy();
         mapLOD.destroy();
         mapDistort.destroy();
+        mapWater.destroy(); // Screen Space Shaders
 
 #if RENDER != R_R1
         mapWmark.destroy();
@@ -192,7 +196,9 @@ public:
     void r_dsgraph_render_hud_ui();
     void r_dsgraph_render_lods(bool _setup_zb, bool _clear);
     void r_dsgraph_render_sorted(bool renderHUD = true);
-    void r_dsgraph_render_emissive();
+    // Screen Space Shaders pass clear=false on the first call so the emissive lists survive for
+    // the bloom pass, which then runs with (true, true). The defaults keep stock behaviour.
+    void r_dsgraph_render_emissive(bool clear = true, bool renderHUD = false);
     void r_dsgraph_render_wmarks();
     void r_dsgraph_render_distort();
     void r_dsgraph_render_subspace(IRender_Sector* _sector, CFrustum* _frustum, Fmatrix& mCombined,
@@ -200,6 +206,11 @@ public:
     void r_dsgraph_render_subspace(IRender_Sector* _sector, Fmatrix& mCombined, Fvector& _cop,
                                    BOOL _dynamic, BOOL _precise_portals = FALSE);
     void r_dsgraph_render_R1_box(IRender_Sector* _sector, Fbox& _bb, int _element);
+
+    // Screen Space Shaders: the reflection pass leaves the bucket filled, the normal pass
+    // empties it.
+    void r_dsgraph_render_water_ssr();
+    void r_dsgraph_render_water();
 
 public:
     virtual u32 memory_usage() {

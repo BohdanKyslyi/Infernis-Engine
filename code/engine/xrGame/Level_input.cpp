@@ -7,6 +7,7 @@
 #include "alife_simulator_header.h"
 #include "level_graph.h"
 #include "../xrEngine/fdemorecord.h"
+#include "../xrEngine/CameraManager.h"
 #include "level.h"
 #include "xr_level_controller.h"
 #include "game_cl_base.h"
@@ -21,6 +22,7 @@
 #include "UI/UIDialogWnd.h"
 #include "../xrEngine/xr_input.h"
 #include "saved_game_wrapper.h"
+#include "ssfx_script_bridge.h"
 
 #include "xrRender/DebugRender.h"
 
@@ -90,6 +92,7 @@ void CLevel::IR_OnMouseMove(int dx, int dy) {
 
 // Обработка нажатия клавиш
 extern bool g_block_pause;
+extern bool g_block_all_except_movement; // Screen Space Shaders, level_script.cpp
 
 // Lain: added TEMP!!!
 extern float g_separate_factor;
@@ -162,12 +165,36 @@ void CLevel::IR_OnKeyboardPress(int key) {
     if (b_ui_exist && CurrentGameUI()->IR_UIOnKeyboardPress(key))
         return;
 
+    // Weather editor: F11 opens it, as the console command "weather_editor on" does ( that command
+    // checks the loaded level and single player ). With the editor open nothing happens; it closes
+    // on Esc. A dialog that takes F11 gets it first, above. In demo_record F11 stays the level map
+    // screenshot ( FDemoRecord.cpp ): demo_record takes the keys itself, and when Num * passes them
+    // here, F11 does not open the editor either.
+    if (key == DIK_F11 && !dynamic_cast<CDemoRecord*>(Cameras().GetCamEffector(cefDemo))) {
+        Console->Execute("weather_editor on");
+        return;
+    }
+
     if (Device.Paused() && !IsDemoPlay()
 #ifdef DEBUG
         && !psActorFlags.test(AF_NO_CLIP)
 #endif // DEBUG
     )
         return;
+
+    // Screen Space Shaders - while a script holds "only movement keys", everything except
+    // movement, firing and the system keys is dropped. Ported from Monolith Level_input.cpp:194.
+    // g_block_all_except_movement is false unless a script sets it, so this is inert by default.
+    if (g_block_all_except_movement) {
+        if (!(_curr < kCAM_1 || _curr == kWPN_FIRE || _curr == kPAUSE || _curr == kDROP ||
+              _curr == kSCREENSHOT || _curr == kQUIT || _curr == kCONSOLE ||
+              _curr == kQUICK_LOAD || _curr == kQUICK_SAVE))
+            return;
+    }
+
+    // Screen Space Shaders - the addon scripts' on_key_press. Keys taken by a UI dialog (the
+    // weather editor included) never get here, and the key is not consumed.
+    ssfx_script_bridge::on_key_press(key);
 
     if (game && game->OnKeyboardPress(get_binded_action(key)))
         return;

@@ -9,6 +9,7 @@
 #include "game_cl_base.h"
 #include "../xrEngine/x_ray.h"
 #include "../xrEngine/gamemtllib.h"
+#include "../xrEngine/Rain.h" // CEffect_Rain::InvalidateState ( Screen Space Shaders, below )
 #include "../xrphysics/PhysicsCommon.h"
 #include "level_sounds.h"
 #include "GamePersistent.h"
@@ -101,6 +102,15 @@ BOOL CLevel::Load_GameSpecific_After() {
         }
         Sounds_Random_dwNextTime = Device.TimerAsync() + 50000;
         Sounds_Random_Enabled = FALSE;
+    }
+
+    // Screen Space Shaders: Monolith Level_load.cpp:143-149. Every sound stops when a level
+    // unloads ( CGamePersistent::Disconnect ), so the rain starts its sound again. It does nothing
+    // unless SSS runs ( Rain.cpp ).
+    if (g_pGamePersistent->pEnvironment) {
+        if (CEffect_Rain* rain = g_pGamePersistent->pEnvironment->eff_Rain) {
+            rain->InvalidateState();
+        }
     }
 
     if (FS.exist(fn_game, "$level$", "level.fog_vol")) {

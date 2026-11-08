@@ -15,6 +15,8 @@
 #include "../../../detail_path_manager.h"
 #include "../../../CharacterPhysicsSupport.h"
 #include "../control_path_builder_base.h"
+#include "../../../../xrEngine/IGame_Persistent.h"
+#include "../../../../xrEngine/ssfx_console_vars.h" // ps_ssfx_grass_interactive
 
 CPseudoGigant::CPseudoGigant() {
     CControlled::init_external(this);
@@ -297,6 +299,10 @@ void CPseudoGigant::on_threaten_execute() {
     pos.set(Position());
     pos.y += 0.1f;
     m_sound_threaten_hit.play_at_pos(this, pos);
+
+    // Interactive Grass FX
+    g_pGamePersistent->GrassBendersAddExplosion(ID(), pos, Fvector().set(0, -99, 0), 1.33f, 5.0f,
+                                                ps_ssfx_grass_interactive.w, 20);
 
     // играть партиклы
     PlayParticles(m_kick_particles, pos, Direction());

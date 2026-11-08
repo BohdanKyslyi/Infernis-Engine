@@ -168,6 +168,20 @@ void CActor::IR_OnKeyboardPress(int cmd) {
         if (psActorFlags.test(AF_CROUCH_TOGGLE))
             mstate_wishful ^= mcCrouch;
     } break;
+    // Ported from Monolith ( ActorInput.cpp:146-163 ): with g_lookout_toggle a press leans to that
+    // side, or straightens up when already leaning there; leaning to one side ends the other.
+    case kL_LOOKOUT: {
+        if (psActorFlags.test(AF_LOOKOUT_TOGGLE)) {
+            mstate_wishful &= ~mcRLookout;
+            mstate_wishful ^= mcLLookout;
+        }
+    } break;
+    case kR_LOOKOUT: {
+        if (psActorFlags.test(AF_LOOKOUT_TOGGLE)) {
+            mstate_wishful &= ~mcLLookout;
+            mstate_wishful ^= mcRLookout;
+        }
+    } break;
     case kCAM_1:
         cam_Set(eacFirstEye);
         break;
@@ -402,11 +416,15 @@ void CActor::IR_OnKeyboardHold(int cmd) {
     case kR_STRAFE:
         mstate_wishful |= mcRStrafe;
         break;
+    // Held only without g_lookout_toggle ( Monolith ActorInput.cpp:392-403; its free-look check
+    // is left out - this engine has no free look ).
     case kL_LOOKOUT:
-        mstate_wishful |= mcLLookout;
+        if (!psActorFlags.test(AF_LOOKOUT_TOGGLE))
+            mstate_wishful |= mcLLookout;
         break;
     case kR_LOOKOUT:
-        mstate_wishful |= mcRLookout;
+        if (!psActorFlags.test(AF_LOOKOUT_TOGGLE))
+            mstate_wishful |= mcRLookout;
         break;
     case kFWD:
         mstate_wishful |= mcFwd;

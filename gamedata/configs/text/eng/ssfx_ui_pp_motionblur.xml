@@ -1,0 +1,51 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 23
+- @ Description: Motion Blur - MCM strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+<string_table>
+
+	<!-- Bloom Title -->
+	<string id="ui_mcm_ssfx_module_motionblur_title">
+		<text>Motion Blur - Settings</text>
+	</string>
+
+	<!-- Bloom Settings -->
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_motionblur_quality_mcm">
+		<text>Quality</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_motionblur_quality_mcm_desc">
+		<text>Define the amount of samples used to create the motion blur effect. [ 4 - 6 - 8 - 12 ]</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_motionblur_intensity_mcm">
+		<text>Overall Intensity</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_motionblur_intensity_mcm_desc">
+		<text>Set the intensity of the motion blur effect. Set the value to 0 to disable the effect.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_motionblur_camera_mcm">
+		<text>Camera Motion Intensity</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_motionblur_camera_mcm_desc">
+		<text>You can adjust the intensity or completely disable the motion blur effect caused by the movement of the camera.</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_motionblur_hudonly_mcm">
+		<text>HUD Only</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_motionblur_hudonly_mcm_desc">
+		<text>Apply the motion blur effect to only HUD elements. ( Hands, Weapons, etc. )</text>
+	</string>
+
+</string_table>

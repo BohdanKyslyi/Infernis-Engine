@@ -127,6 +127,10 @@ public:
                 cur->~TNode();
             allocator::dealloc(nodes);
         }
+        // Reset state, otherwise traverse/insert after destroy() walk freed memory
+        nodes = 0;
+        pool = 0;
+        limit = 0;
     }
     IC TNode* insert(const K& k) {
         if (pool) {

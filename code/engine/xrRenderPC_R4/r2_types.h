@@ -29,6 +29,62 @@
 #define r2_RT_generic2 "$user$generic2"     // ---	//	Igor: for volumetric lights
 #define r2_RT_generic "$user$generic"       // ---
 
+// OGSE screen-space sun shafts. Monolith xrRenderPC_R4\r2_types.h:21-22, names unchanged.
+#define r2_RT_sunshafts0 "$user$sun_shafts0" // first rt
+#define r2_RT_sunshafts1 "$user$sun_shafts1" // second rt
+
+// Screen Space Shaders
+#define r2_RT_generic0_temp "$user$generic_temp"  // Copy of the combined scene, read by SSR
+#define r2_RT_ssfx "$user$ssfx"                   // SSS new phase
+#define r2_RT_ssfx_temp "$user$ssfx_temp"         // SSS new phase
+#define r2_RT_ssfx_temp2 "$user$ssfx_temp2"       // Full res - D3DFMT_A8B8G8R8F
+#define r2_RT_ssfx_temp3 "$user$ssfx_temp3"       // Temp3
+#define r2_RT_ssfx_accum "$user$ssfx_accum"       // Full res - D3DFMT_A16B16G16R16F
+#define r2_RT_ssfx_ao "$user$ssfx_ao"             // AO accumulator
+#define r2_RT_ssfx_il "$user$ssfx_il"             // IL accumulator
+#define r2_RT_ssfx_prevPos "$user$ssfx_prev_p"    // Previous position
+#define r2_RT_ssfx_water_waves "$user$ssfx_water_waves"
+#define r2_RT_ssfx_motion_vectors "$user$ssfx_motion_vectors" // Motion vectors
+
+#define r2_RT_ssfx_ssr "$user$ssfx_ssr"                       // SSR accumulator
+#define r2_RT_ssfx_water "$user$ssfx_water"                   // Water accumulator
+#define r2_RT_ssfx_sss "$user$ssfx_sss"                       // Sun shadow occlusion
+#define r2_RT_ssfx_sss_ext "$user$ssfx_sss_ext"               // Omni/spot shadow occlusion, set 1
+#define r2_RT_ssfx_sss_ext2 "$user$ssfx_sss_ext2"             // Omni/spot shadow occlusion, set 2
+#define r2_RT_ssfx_sss_tmp "$user$ssfx_sss_tmp"               // SSS scratch
+#define r2_RT_ssfx_rain "$user$ssfx_rain"                     // Rain refraction buffer
+#define r2_RT_ssfx_volumetric "$user$ssfx_volumetric"         // Volumetric, spot/omni
+#define r2_RT_ssfx_volumetric_tmp "$user$ssfx_volumetric_tmp" // Volumetric blur scratch
+#define r2_RT_ssfx_taa "$user$ssfx_taa"                       // TAA motion vectors
+#define r2_RT_ssfx_prev_frame "$user$ssfx_prev_frame"         // TAA history
+
+// Blur chain, Monolith r2_types.h. phase_blur fills all six every frame; the SSFX bloom and the
+// SSFX depth of field read blur_2, and SSFX fog scattering renders its own blur into blur_4 and
+// blur_2 before that.
+#define r2_RT_blur_h_2 "$user$blur_h_2"
+#define r2_RT_blur_2 "$user$blur_2"
+#define r2_RT_blur_h_4 "$user$blur_h_4"
+#define r2_RT_blur_4 "$user$blur_4"
+#define r2_RT_blur_h_8 "$user$blur_h_8"
+#define r2_RT_blur_8 "$user$blur_8"
+
+// Depth of field scratch, Monolith r2_types.h:72. phase_dof renders into it.
+#define r2_RT_dof "$user$dof"
+
+#define r2_RT_ssfx_bloom1 "$user$ssfx_bloom1"
+#define r2_RT_ssfx_bloom_emissive "$user$ssfx_bloom_emissive"
+#define r2_RT_ssfx_bloom_lens "$user$ssfx_bloom_lens"
+#define r2_RT_ssfx_bloom_tmp2 "$user$ssfx_bloom_tmp2"
+#define r2_RT_ssfx_bloom_tmp4 "$user$ssfx_bloom_tmp4"
+#define r2_RT_ssfx_bloom_tmp8 "$user$ssfx_bloom_tmp8"
+#define r2_RT_ssfx_bloom_tmp16 "$user$ssfx_bloom_tmp16"
+#define r2_RT_ssfx_bloom_tmp32 "$user$ssfx_bloom_tmp32"
+#define r2_RT_ssfx_bloom_tmp64 "$user$ssfx_bloom_tmp64"
+#define r2_RT_ssfx_bloom_tmp32_2 "$user$ssfx_bloom_tmp32_2"
+#define r2_RT_ssfx_bloom_tmp16_2 "$user$ssfx_bloom_tmp16_2"
+#define r2_RT_ssfx_bloom_tmp8_2 "$user$ssfx_bloom_tmp8_2"
+#define r2_RT_ssfx_bloom_tmp4_2 "$user$ssfx_bloom_tmp4_2"
+
 #define r2_RT_bloom1 "$user$bloom1" // ---
 #define r2_RT_bloom2 "$user$bloom2" // ---
 
@@ -98,8 +154,24 @@ const u32 LUMINANCE_size = 16;
 #define SE_SUN_RAIN_SMAP 5
 
 extern float ps_r2_gloss_factor;
+extern float ps_r2_gloss_min;
+
+#include "xrEngine/ssfx_console_vars.h"
+
 IC float u_diffuse2s(float x, float y, float z) {
-    float v = (x + y + z) / 3.f;
-    return ps_r2_gloss_factor * ((v < 1) ? powf(v, 2.f / 3.f) : v);
+    if (ps_ssfx_gloss_method == 0) {
+        float v = (x + y + z) / 3.f;
+        // With SSS switched off ( ssfx_session_enable ) the game's own, Infernis r2_types.h:133:
+        // r2_gloss_min is the donor's, Infernis has no such floor.
+        if (!ssfx_session_enable)
+            return ps_r2_gloss_factor * ((v < 1) ? powf(v, 2.f / 3.f) : v);
+        // Monolith r2_types.h:182, unchanged.
+        return ps_r2_gloss_min + ps_r2_gloss_factor * ((v < 1) ? powf(v, 2.f / 3.f) : v);
+    }
+
+    // Gloss driven by the wetness module: sun is removed from the equation and the range clamped.
+    return ps_ssfx_gloss_minmax.x +
+           clampr(ps_ssfx_gloss_minmax.y - ps_ssfx_gloss_minmax.x, 0.0f, 1.0f) *
+               ps_ssfx_gloss_factor;
 }
 IC float u_diffuse2s(Fvector3& c) { return u_diffuse2s(c.x, c.y, c.z); }

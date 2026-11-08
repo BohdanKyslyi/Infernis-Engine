@@ -61,7 +61,21 @@ void CRenderTarget::draw_rain(light& RainSetup) {
     }
 
     // recalculate d_Z, to perform depth-clipping
-    const float fRainFar = ps_r3_dyn_wet_surf_far;
+    //
+    // Monolith r4_rendertarget_draw_rain.cpp:61-65, unchanged. This plane is how far the wetness
+    // patch is allowed to draw. The vanilla value is the rain shadow map's own range
+    // ( r3_dynamic_wet_surfaces_far, 30 m by default ), but rain_patch_normal.ps only trusts that
+    // map inside the range and then assumes full exposure to the sky, fading in over the last 20 m
+    // ( line 150 ) and fading the whole effect out at 250 m ( line 162 ). Clipping at 30 m
+    // therefore removed exactly the region the shader treats as fully wet and left only the blend
+    // on screen: a dry bubble around the camera, a hard edge across the ground a few metres ahead
+    // of the actor, and no wet surfaces at all further out.
+    float fRainFar = 250;
+
+    // With SSS switched off ( ssfx_session_enable ) the game's own plane whatever the gloss
+    // method, Infernis r4_rendertarget_draw_rain.cpp:64: the rain shadow map's range.
+    if (ps_ssfx_gloss_method == 0 || !ssfx_session_enable)
+        fRainFar = ps_r3_dyn_wet_surf_far;
 
     Fvector center_pt;
     center_pt.mad(Device.vCameraPosition, Device.vCameraDirection, fRainFar);

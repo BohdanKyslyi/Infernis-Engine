@@ -11,6 +11,8 @@ public:
     virtual void CreateUIGeom();
     virtual void DestroyUIGeom();
 
+    bool DrawWeatherPreview(const Frect& destination);
+    void ReleaseWeatherPreview();
     virtual void SetShader(IUIShader& shader);
     virtual void SetAlphaRef(int aref);
     //.	virtual void StartTriList(u32 iMaxVerts);
@@ -39,6 +41,9 @@ public:
     virtual void CacheSetCullMode(CullMode);
 
 private:
+    ref_texture_list m_weatherEmptyTextures;
+    ref_rt m_weatherScene;
+    ref_shader m_weatherShader;
     ref_geom hGeom_TL;
     ref_geom hGeom_LIT;
 

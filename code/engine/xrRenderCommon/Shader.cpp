@@ -80,6 +80,11 @@ ShaderElement::ShaderElement() {
     flags.bEmissive = FALSE;
     flags.bDistort = FALSE;
     flags.bWmark = FALSE;
+    // Screen Space Shaders. Neither of these is compared in equal() below, and the donor does not
+    // compare them either: two elements that differ only by one of these flags always differ by
+    // their passes as well, so the de-duplication cannot confuse them.
+    flags.isLandscape = FALSE;
+    flags.isWater = FALSE;
 }
 
 BOOL ShaderElement::equal(ShaderElement& S) {

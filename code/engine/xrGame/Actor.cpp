@@ -49,6 +49,7 @@
 #include "string_table.h"
 #include "usablescriptobject.h"
 #include "../xrEngine/cl_intersect.h"
+#include "../xrEngine/ssfx_console_vars.h" // ps_actor_shadow_flags
 #include "alife_registry_wrappers.h"
 #include "xrRender/Kinematics.h"
 #include "artefact.h"
@@ -68,6 +69,7 @@
 #include "ui/UIHudEditor.h"
 #include "ItemUseController.h"
 #include "ai/monsters/basemonster/base_monster.h"
+#include "ssfx_script_bridge.h"
 
 #include "xrRender/UIRender.h"
 
@@ -932,6 +934,11 @@ void CActor::set_state_box(u32 mstate) {
 }
 
 void CActor::shedule_Update(u32 DT) {
+    // Screen Space Shaders - the addon scripts' actor_on_first_update / actor_on_update. Ahead of
+    // the early return below, so it runs on every update like Anomaly's actor binder update does.
+    if (g_actor == this)
+        ssfx_script_bridge::on_actor_update(DT);
+
     setSVU(OnServer());
 
     if (IsFocused() && !(m_item_use && m_item_use->IsActive())) {
@@ -990,8 +997,12 @@ void CActor::shedule_Update(u32 DT) {
             mstate_wishful &= ~mcAccel;
             mstate_wishful &= ~mcLStrafe;
             mstate_wishful &= ~mcRStrafe;
-            mstate_wishful &= ~mcLLookout;
-            mstate_wishful &= ~mcRLookout;
+            // A toggled lean stays until its key is pressed again ( Monolith Actor.cpp:1879; its
+            // free-look condition is left out - this engine has no free look ).
+            if (!psActorFlags.test(AF_LOOKOUT_TOGGLE)) {
+                mstate_wishful &= ~mcLLookout;
+                mstate_wishful &= ~mcRLookout;
+            }
             mstate_wishful &= ~mcFwd;
             mstate_wishful &= ~mcBack;
             if (!psActorFlags.test(AF_CROUCH_TOGGLE))
@@ -1068,7 +1079,7 @@ void CActor::shedule_Update(u32 DT) {
     }
 
     if (!character_physics_support()->IsRemoved())
-        setVisible(!HUDview());
+        setVisible(!HUDview() || AllowActorShadow()); // Monolith: in the scene for its own shadow
 
     collide::rq_result& RQ = HUD().GetCurrentRayQuery();
 
@@ -1131,8 +1142,20 @@ void CActor::shedule_Update(u32 DT) {
     Check_for_AutoPickUp();
 };
 
+// Monolith (Swartz), Actor.cpp:2215. Not ported: the demo-record checks and the CFlashlight check,
+// neither exists in CoP. Added: DX11 only, the other renderers stay stock.
+bool CActor::AllowActorShadow() {
+    if (!ps_actor_shadow_flags.test(1)) return false;
+    if (::Render->get_generation() != ::Render->GENERATION_R2) return false;
+    if (!psDeviceFlags.test(rsR4)) return false;
+    return true;
+}
+
 void CActor::renderable_Render() {
     VERIFY(xr::valid(XFORM()));
+    // Monolith (Swartz): in first person the body goes into the shadow maps only, not into the view.
+    // Checked only while the shadow is allowed, so the stock paths ( R1 shadows ) stay unchanged.
+    if (HUDview() && AllowActorShadow() && ::Render->active_phase() == 0) return;
     inherited::renderable_Render();
     if (1 /*!HUDview()*/) {
         CInventoryOwner::renderable_Render();

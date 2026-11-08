@@ -1,0 +1,115 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 22
+- @ Description: SSS Rain - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Rain Title -->
+	<string id="ui_mcm_ssfx_module_rain_title">
+		<text>Дощ - Налаштування</text>
+	</string>
+
+	<!-- Rain Settings -->
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_quality_mcm">
+		<text>Якість рендерингу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_quality_mcm_desc">
+		<text>НИЗЬКЕ: Стандартний рендеринг - СЕРЕДНЄ: Стандартний рендеринг + виправлення некоректної обробки - ВИСОКЕ: Повноцінна обробка з додатковою обробкою відбиттів</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_max_drops_mcm">
+		<text>Кількість часток</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_max_drops_mcm_desc">
+		<text>Максимальна кількість часток дощу. Стандартне значення: 2500</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_radius_mcm">
+		<text>Радіус</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_radius_mcm_desc">
+		<text>Радіус поширення дощу. Ванільне значення: 15</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_speed_mcm">
+		<text>Швидкість</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_speed_mcm_desc">
+		<text>Швидкість падіння крапель.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_len_mcm">
+		<text>Довжина</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_len_mcm_desc">
+		<text>Довжина краплі дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_width_mcm">
+		<text>Ширина</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_width_mcm_desc">
+		<text>Ширина краплі дощу</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_alpha_mcm">
+		<text>Прозорість</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_alpha_mcm_desc">
+		<text>Загальна прозорість крапель</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_brightness_mcm">
+		<text>Яскравість</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_brightness_mcm_desc">
+		<text>Наскільки яскравим буде базовий колір краплі</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_refraction_mcm">
+		<text>Заломлення</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_refraction_mcm_desc">
+		<text>Наскільки інтенсивним буде ефект заломлення</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_reflection_mcm">
+		<text>Відбиття</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_reflection_mcm_desc">
+		<text>Прозорість ефекту відбиття</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_splash_alpha_mcm">
+		<text>Прозорість бризок</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_splash_alpha_mcm_desc">
+		<text>Наскільки прозорими будуть бризки від крапель дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_splash_refraction_mcm">
+		<text>Заломлення бризок</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_main_splash_refraction_mcm_desc">
+		<text>Інтенсивність заломлення бризок від крапель</text>
+	</string>
+	
+</string_table>

@@ -138,6 +138,25 @@
         </check_fullscreen>
 
 
+        <check_ssfx_enable x="37" y="290" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <text x="-7" font="letterica16">ui_ssfx_enable</text>
+            <text_color><e r="170" g="170" b="170"/></text_color>
+            <options_item entry="ssfx_enable" group="mm_opt_video" depend="restart"/>
+        </check_ssfx_enable>
+
+        <btn_ssfx x="50" y="322" width="140" height="24" stretch="1">
+            <text r="170" g="170" b="170" align="c" font="letterica16">ui_ssfx_button</text>
+            <texture>ui_inGame2_button</texture>
+            <text_color><e r="210" g="210" b="210"/><d r="70" g="70" b="70"/></text_color>
+        </btn_ssfx>
+
+        <btn_pbr x="194" y="322" width="140" height="24" stretch="1">
+            <text r="170" g="170" b="170" align="c" font="letterica16">ui_pbr_button</text>
+            <texture>ui_inGame2_button</texture>
+            <text_color><e r="210" g="210" b="210"/></text_color>
+        </btn_pbr>
+
         <btn_advanced x="338" y="322" width="108" height="24">
             <text align="c" font="letterica16">ui_mm_advanced</text>
             <texture>ui_inGame2_button</texture>
@@ -432,6 +451,1676 @@
         </btn_to_simply>
     </video_adv>
 
+    <ssfx>
+        <scroll_v x="-5" y="0" width="450" height="320" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0"
+        vert_interval="0" always_show_scroll="1"/>
+
+        <templ_item width="430" height="30"/>
+        <templ_item_2 width="430" height="44"/>
+        <templ_item_3 width="430" height="60"/>
+
+        <btn_basic x="226" y="322" width="108" height="24">
+            <text r="170" g="170" b="170" align="c" font="letterica16">ui_mm_simply</text>
+            <texture>ui_inGame2_button</texture>
+            <text_color><e r="210" g="210" b="210"/></text_color>
+        </btn_basic>
+
+        <btn_reset x="338" y="322" width="108" height="24">
+            <text r="170" g="170" b="170" align="c" font="letterica16">ui_ssfx_reset</text>
+            <texture>ui_inGame2_button</texture>
+            <text_color><e r="210" g="210" b="210"/></text_color>
+        </btn_reset>
+
+        <cap_legend x="8" y="3" width="410" height="38">
+            <text r="140" g="140" b="140" font="letterica16" align="l" vert_align="c" complex_mode="1">ui_ssfx_legend</text>
+        </cap_legend>
+
+        <cap_h_ao x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ao</text>
+        </cap_h_ao>
+
+        <cap_ao_quality x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_quality</text>
+        </cap_ao_quality>
+        <list_ao_quality x="262" y="0" width="156" height="20" list_length="3" always_show_scroll="0">
+            <options_item entry="ssfx_ui_ao_quality" group="mm_opt_ssfx" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_ao_quality>
+
+        <cap_ao_res x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_res</text>
+        </cap_ao_res>
+        <track_ao_res x="262" y="6" width="156" height="16" step="0.2" invert="1">
+            <options_item entry="ssfx_ui_ao_res" group="mm_opt_ssfx"/>
+        </track_ao_res>
+
+        <cap_ao_dist x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_dist</text>
+        </cap_ao_dist>
+        <track_ao_dist x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_ao_dist" group="mm_opt_ssfx"/>
+        </track_ao_dist>
+
+        <cap_ao_blur x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_blur</text>
+        </cap_ao_blur>
+        <track_ao_blur x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_ao_blur" group="mm_opt_ssfx"/>
+        </track_ao_blur>
+
+        <cap_ao_radius x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_radius</text>
+        </cap_ao_radius>
+        <track_ao_radius x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_ao_radius" group="mm_opt_ssfx"/>
+        </track_ao_radius>
+
+        <cap_ao_max_occ x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_max_occ</text>
+        </cap_ao_max_occ>
+        <track_ao_max_occ x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_ao_max_occ" group="mm_opt_ssfx"/>
+        </track_ao_max_occ>
+
+        <cap_ao_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_int</text>
+        </cap_ao_int>
+        <track_ao_int x="262" y="6" width="156" height="16" step="0.5">
+            <options_item entry="ssfx_ui_ao_int" group="mm_opt_ssfx"/>
+        </track_ao_int>
+
+        <cap_ao_hud_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_hud_int</text>
+        </cap_ao_hud_int>
+        <track_ao_hud_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_ao_hud_int" group="mm_opt_ssfx"/>
+        </track_ao_hud_int>
+
+        <cap_ao_flora_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ao_flora_int</text>
+        </cap_ao_flora_int>
+        <track_ao_flora_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_ao_flora_int" group="mm_opt_ssfx"/>
+        </track_ao_flora_int>
+
+        <cap_h_parallax x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_parallax</text>
+        </cap_h_parallax>
+
+        <cap_pom_quality x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_pom_quality</text>
+        </cap_pom_quality>
+        <list_pom_quality x="262" y="0" width="156" height="20" list_length="3" always_show_scroll="0">
+            <options_item entry="ssfx_ui_pom_quality" group="mm_opt_ssfx"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_pom_quality>
+
+        <cap_pom_refine x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_pom_refine</text>
+        </cap_pom_refine>
+        <check_pom_refine x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_pom_refine" group="mm_opt_ssfx" depend="restart"/>
+        </check_pom_refine>
+
+        <cap_pom_range x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_pom_range</text>
+        </cap_pom_range>
+        <track_pom_range x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_pom_range" group="mm_opt_ssfx"/>
+        </track_pom_range>
+
+        <cap_pom_height x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_pom_height</text>
+        </cap_pom_height>
+        <track_pom_height x="262" y="6" width="156" height="16" step="0.001">
+            <options_item entry="ssfx_ui_pom_height" group="mm_opt_ssfx"/>
+        </track_pom_height>
+
+        <cap_pom_ao x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_pom_ao</text>
+        </cap_pom_ao>
+        <track_pom_ao x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_pom_ao" group="mm_opt_ssfx"/>
+        </track_pom_ao>
+
+        <cap_h_ssr x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssr</text>
+        </cap_h_ssr>
+
+        <cap_ssr_quality x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ssr_quality</text>
+        </cap_ssr_quality>
+        <list_ssr_quality x="262" y="7" width="156" height="20" list_length="6" always_show_scroll="0">
+            <options_item entry="ssfx_ui_ssr_quality" group="mm_opt_ssfx" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_ssr_quality>
+
+        <cap_ssr_render_scale x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ssr_render_scale</text>
+        </cap_ssr_render_scale>
+        <track_ssr_render_scale x="262" y="6" width="156" height="16" step="0.2" invert="1">
+            <options_item entry="ssfx_ui_ssr_render_scale" group="mm_opt_ssfx"/>
+        </track_ssr_render_scale>
+
+        <cap_ssr_blur x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ssr_blur</text>
+        </cap_ssr_blur>
+        <track_ssr_blur x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_ssr_blur" group="mm_opt_ssfx"/>
+        </track_ssr_blur>
+
+        <cap_ssr_use_noise x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ssr_use_noise</text>
+        </cap_ssr_use_noise>
+        <check_ssr_use_noise x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_ssr_use_noise" group="mm_opt_ssfx"/>
+        </check_ssr_use_noise>
+
+        <cap_ssr_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ssr_int</text>
+        </cap_ssr_int>
+        <track_ssr_int x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_ssr_int" group="mm_opt_ssfx"/>
+        </track_ssr_int>
+
+        <cap_ssr_sky_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ssr_sky_int</text>
+        </cap_ssr_sky_int>
+        <track_ssr_sky_int x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_ssr_sky_int" group="mm_opt_ssfx"/>
+        </track_ssr_sky_int>
+
+        <cap_ssr_weapon_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ssr_weapon_int</text>
+        </cap_ssr_weapon_int>
+        <track_ssr_weapon_int x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_ssr_weapon_int" group="mm_opt_ssfx"/>
+        </track_ssr_weapon_int>
+
+        <cap_ssr_weapon_int_max x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_ssr_weapon_int_max</text>
+        </cap_ssr_weapon_int_max>
+        <track_ssr_weapon_int_max x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_ssr_weapon_int_max" group="mm_opt_ssfx"/>
+        </track_ssr_weapon_int_max>
+
+        <cap_h_water x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_water</text>
+        </cap_h_water>
+
+        <cap_water_ssr_quality x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_ssr_quality</text>
+        </cap_water_ssr_quality>
+        <list_water_ssr_quality x="262" y="7" width="156" height="20" list_length="5" always_show_scroll="0">
+            <options_item entry="ssfx_ui_water_ssr_quality" group="mm_opt_ssfx" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_water_ssr_quality>
+
+        <cap_water_ssr_res x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_ssr_res</text>
+        </cap_water_ssr_res>
+        <track_water_ssr_res x="262" y="6" width="156" height="16" step="0.5" invert="1">
+            <options_item entry="ssfx_ui_water_ssr_res" group="mm_opt_ssfx"/>
+        </track_water_ssr_res>
+
+        <cap_water_parallax_quality x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_parallax_quality</text>
+        </cap_water_parallax_quality>
+        <list_water_parallax_quality x="262" y="7" width="156" height="20" list_length="4" always_show_scroll="0">
+            <options_item entry="ssfx_ui_water_parallax_quality" group="mm_opt_ssfx" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_water_parallax_quality>
+
+        <cap_water_parallax_height x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_parallax_height</text>
+        </cap_water_parallax_height>
+        <track_water_parallax_height x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_water_parallax_height" group="mm_opt_ssfx"/>
+        </track_water_parallax_height>
+
+        <cap_water_blur x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_blur</text>
+        </cap_water_blur>
+        <track_water_blur x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_water_blur" group="mm_opt_ssfx"/>
+        </track_water_blur>
+
+        <cap_water_blur_pattern x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_blur_pattern</text>
+        </cap_water_blur_pattern>
+        <track_water_blur_pattern x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_water_blur_pattern" group="mm_opt_ssfx"/>
+        </track_water_blur_pattern>
+
+        <cap_water_distortion x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_distortion</text>
+        </cap_water_distortion>
+        <track_water_distortion x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_water_distortion" group="mm_opt_ssfx"/>
+        </track_water_distortion>
+
+        <cap_water_turbidity x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_turbidity</text>
+        </cap_water_turbidity>
+        <track_water_turbidity x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_water_turbidity" group="mm_opt_ssfx"/>
+        </track_water_turbidity>
+
+        <cap_water_softborder x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_softborder</text>
+        </cap_water_softborder>
+        <track_water_softborder x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_water_softborder" group="mm_opt_ssfx"/>
+        </track_water_softborder>
+
+        <cap_water_reflect x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_reflect</text>
+        </cap_water_reflect>
+        <track_water_reflect x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_water_reflect" group="mm_opt_ssfx"/>
+        </track_water_reflect>
+
+        <cap_water_specular_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_specular_int</text>
+        </cap_water_specular_int>
+        <track_water_specular_int x="262" y="6" width="156" height="16" step="0.6">
+            <options_item entry="ssfx_ui_water_specular_int" group="mm_opt_ssfx"/>
+        </track_water_specular_int>
+
+        <cap_water_caustics x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_caustics</text>
+        </cap_water_caustics>
+        <track_water_caustics x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_water_caustics" group="mm_opt_ssfx"/>
+        </track_water_caustics>
+
+        <cap_water_ripples_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_ripples_int</text>
+        </cap_water_ripples_int>
+        <track_water_ripples_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_water_ripples_int" group="mm_opt_ssfx"/>
+        </track_water_ripples_int>
+
+        <cap_h_ssfx_rain_main x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssfx_rain_main</text>
+        </cap_h_ssfx_rain_main>
+
+        <cap_rain_quality x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_quality</text>
+        </cap_rain_quality>
+        <list_rain_quality x="262" y="7" width="156" height="20" list_length="3" always_show_scroll="0">
+            <options_item entry="ssfx_ui_rain_quality" group="mm_opt_ssfx" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_rain_quality>
+
+        <cap_rain_max_drops x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_max_drops</text>
+        </cap_rain_max_drops>
+        <track_rain_max_drops x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_rain_max_drops" group="mm_opt_ssfx"/>
+        </track_rain_max_drops>
+
+        <cap_rain_radius x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_radius</text>
+        </cap_rain_radius>
+        <track_rain_radius x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_rain_radius" group="mm_opt_ssfx"/>
+        </track_rain_radius>
+
+        <cap_rain_speed x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_speed</text>
+        </cap_rain_speed>
+        <track_rain_speed x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_rain_speed" group="mm_opt_ssfx"/>
+        </track_rain_speed>
+
+        <cap_rain_len x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_len</text>
+        </cap_rain_len>
+        <track_rain_len x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_rain_len" group="mm_opt_ssfx"/>
+        </track_rain_len>
+
+        <cap_rain_width x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_width</text>
+        </cap_rain_width>
+        <track_rain_width x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_rain_width" group="mm_opt_ssfx"/>
+        </track_rain_width>
+
+        <cap_rain_alpha x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_alpha</text>
+        </cap_rain_alpha>
+        <track_rain_alpha x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_rain_alpha" group="mm_opt_ssfx"/>
+        </track_rain_alpha>
+
+        <cap_rain_bright x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_bright</text>
+        </cap_rain_bright>
+        <track_rain_bright x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_rain_bright" group="mm_opt_ssfx"/>
+        </track_rain_bright>
+
+        <cap_rain_refraction x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_refraction</text>
+        </cap_rain_refraction>
+        <track_rain_refraction x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_rain_refraction" group="mm_opt_ssfx"/>
+        </track_rain_refraction>
+
+        <cap_rain_reflection x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_reflection</text>
+        </cap_rain_reflection>
+        <track_rain_reflection x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_rain_reflection" group="mm_opt_ssfx"/>
+        </track_rain_reflection>
+
+        <cap_splash_alpha x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_splash_alpha</text>
+        </cap_splash_alpha>
+        <track_splash_alpha x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_splash_alpha" group="mm_opt_ssfx"/>
+        </track_splash_alpha>
+
+        <cap_rain_splash_refraction x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_rain_splash_refraction</text>
+        </cap_rain_splash_refraction>
+        <track_rain_splash_refraction x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_rain_splash_refraction" group="mm_opt_ssfx"/>
+        </track_rain_splash_refraction>
+
+        <cap_h_ssfx_rain_hud_raindrops x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssfx_rain_hud_raindrops</text>
+        </cap_h_ssfx_rain_hud_raindrops>
+
+        <cap_drops_density x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_density</text>
+        </cap_drops_density>
+        <track_drops_density x="262" y="6" width="156" height="16" step="0.0015" invert="1">
+            <options_item entry="ssfx_ui_drops_density" group="mm_opt_ssfx"/>
+        </track_drops_density>
+
+        <cap_drops_refle x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_refle</text>
+        </cap_drops_refle>
+        <track_drops_refle x="262" y="6" width="156" height="16" step="0.3">
+            <options_item entry="ssfx_ui_drops_refle" group="mm_opt_ssfx"/>
+        </track_drops_refle>
+
+        <cap_drops_refra x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_refra</text>
+        </cap_drops_refra>
+        <track_drops_refra x="262" y="6" width="156" height="16" step="0.0005">
+            <options_item entry="ssfx_ui_drops_refra" group="mm_opt_ssfx"/>
+        </track_drops_refra>
+
+        <cap_drops_animation_speed x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_animation_speed</text>
+        </cap_drops_animation_speed>
+        <track_drops_animation_speed x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_drops_animation_speed" group="mm_opt_ssfx"/>
+        </track_drops_animation_speed>
+
+        <cap_drops_buildup x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_buildup</text>
+        </cap_drops_buildup>
+        <track_drops_buildup x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_drops_buildup" group="mm_opt_ssfx"/>
+        </track_drops_buildup>
+
+        <cap_drops_drying x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_drying</text>
+        </cap_drops_drying>
+        <track_drops_drying x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_drops_drying" group="mm_opt_ssfx"/>
+        </track_drops_drying>
+
+        <cap_drops_size x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_size</text>
+        </cap_drops_size>
+        <track_drops_size x="262" y="6" width="156" height="16" step="0.01" invert="1">
+            <options_item entry="ssfx_ui_drops_size" group="mm_opt_ssfx"/>
+        </track_drops_size>
+
+        <cap_drops_gloss x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_gloss</text>
+        </cap_drops_gloss>
+        <track_drops_gloss x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_drops_gloss" group="mm_opt_ssfx"/>
+        </track_drops_gloss>
+
+        <cap_drops_extragloss x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_drops_extragloss</text>
+        </cap_drops_extragloss>
+        <track_drops_extragloss x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_drops_extragloss" group="mm_opt_ssfx"/>
+        </track_drops_extragloss>
+
+        <cap_h_ssfx_rain_footsteps x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssfx_rain_footsteps</text>
+        </cap_h_ssfx_rain_footsteps>
+
+        <cap_fs_main_vol x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fs_main_vol</text>
+        </cap_fs_main_vol>
+        <track_fs_main_vol x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_fs_main_vol" group="mm_opt_ssfx"/>
+        </track_fs_main_vol>
+
+        <cap_fs_vol_rnd x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fs_vol_rnd</text>
+        </cap_fs_vol_rnd>
+        <track_fs_vol_rnd x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_fs_vol_rnd" group="mm_opt_ssfx"/>
+        </track_fs_vol_rnd>
+
+        <cap_fs_multi_no_rain x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fs_multi_no_rain</text>
+        </cap_fs_multi_no_rain>
+        <track_fs_multi_no_rain x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_fs_multi_no_rain" group="mm_opt_ssfx"/>
+        </track_fs_multi_no_rain>
+
+        <cap_fs_multi_walk x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fs_multi_walk</text>
+        </cap_fs_multi_walk>
+        <track_fs_multi_walk x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_fs_multi_walk" group="mm_opt_ssfx"/>
+        </track_fs_multi_walk>
+
+        <cap_fs_multi_run x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fs_multi_run</text>
+        </cap_fs_multi_run>
+        <track_fs_multi_run x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_fs_multi_run" group="mm_opt_ssfx"/>
+        </track_fs_multi_run>
+
+        <cap_fs_jump_vol x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fs_jump_vol</text>
+        </cap_fs_jump_vol>
+        <track_fs_jump_vol x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_fs_jump_vol" group="mm_opt_ssfx"/>
+        </track_fs_jump_vol>
+
+        <cap_fs_land_vol x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fs_land_vol</text>
+        </cap_fs_land_vol>
+        <track_fs_land_vol x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_fs_land_vol" group="mm_opt_ssfx"/>
+        </track_fs_land_vol>
+
+        <cap_h_wpn_dof x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_wpn_dof</text>
+        </cap_h_wpn_dof>
+
+        <cap_wdof_aim_fadestart x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_aim_fadestart</text>
+        </cap_wdof_aim_fadestart>
+        <track_wdof_aim_fadestart x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wdof_aim_fadestart" group="mm_opt_ssfx"/>
+        </track_wdof_aim_fadestart>
+
+        <cap_wdof_aim_fadelen x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_aim_fadelen</text>
+        </cap_wdof_aim_fadelen>
+        <track_wdof_aim_fadelen x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wdof_aim_fadelen" group="mm_opt_ssfx"/>
+        </track_wdof_aim_fadelen>
+
+        <cap_wdof_aim_blur x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_aim_blur</text>
+        </cap_wdof_aim_blur>
+        <track_wdof_aim_blur x="262" y="13" width="156" height="16" step="0.05">
+            <options_item entry="ssfx_ui_wdof_aim_blur" group="mm_opt_ssfx"/>
+        </track_wdof_aim_blur>
+
+        <cap_wdof_aim_edgeblur x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_aim_edgeblur</text>
+        </cap_wdof_aim_edgeblur>
+        <track_wdof_aim_edgeblur x="262" y="13" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wdof_aim_edgeblur" group="mm_opt_ssfx"/>
+        </track_wdof_aim_edgeblur>
+
+        <cap_wdof_fadestart x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_fadestart</text>
+        </cap_wdof_fadestart>
+        <track_wdof_fadestart x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wdof_fadestart" group="mm_opt_ssfx"/>
+        </track_wdof_fadestart>
+
+        <cap_wdof_fadelen x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_fadelen</text>
+        </cap_wdof_fadelen>
+        <track_wdof_fadelen x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wdof_fadelen" group="mm_opt_ssfx"/>
+        </track_wdof_fadelen>
+
+        <cap_wdof_blur x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_blur</text>
+        </cap_wdof_blur>
+        <track_wdof_blur x="262" y="13" width="156" height="16" step="0.05">
+            <options_item entry="ssfx_ui_wdof_blur" group="mm_opt_ssfx"/>
+        </track_wdof_blur>
+
+        <cap_wdof_edgeblur x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_edgeblur</text>
+        </cap_wdof_edgeblur>
+        <track_wdof_edgeblur x="262" y="13" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wdof_edgeblur" group="mm_opt_ssfx"/>
+        </track_wdof_edgeblur>
+
+        <cap_wdof_reloading x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_reloading</text>
+        </cap_wdof_reloading>
+        <check_wdof_reloading x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_wdof_reloading" group="mm_opt_ssfx"/>
+        </check_wdof_reloading>
+
+        <cap_wdof_pda x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_pda</text>
+        </cap_wdof_pda>
+        <check_wdof_pda x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_wdof_pda" group="mm_opt_ssfx"/>
+        </check_wdof_pda>
+
+        <cap_wdof_inventory x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_inventory</text>
+        </cap_wdof_inventory>
+        <check_wdof_inventory x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_wdof_inventory" group="mm_opt_ssfx"/>
+        </check_wdof_inventory>
+
+        <cap_wdof_fdda x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_fdda</text>
+        </cap_wdof_fdda>
+        <check_wdof_fdda x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_wdof_fdda" group="mm_opt_ssfx"/>
+        </check_wdof_fdda>
+
+        <cap_wdof_looting_mutant x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wdof_looting_mutant</text>
+        </cap_wdof_looting_mutant>
+        <check_wdof_looting_mutant x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_wdof_looting_mutant" group="mm_opt_ssfx"/>
+        </check_wdof_looting_mutant>
+
+        <cap_h_il x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_il</text>
+        </cap_h_il>
+
+        <cap_il_quality x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_il_quality</text>
+        </cap_il_quality>
+        <list_il_quality x="262" y="0" width="156" height="20" list_length="5" always_show_scroll="0">
+            <options_item entry="ssfx_ui_il_quality" group="mm_opt_ssfx" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_il_quality>
+
+        <cap_il_res x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_il_res</text>
+        </cap_il_res>
+        <track_il_res x="262" y="6" width="156" height="16" step="0.333335" invert="1">
+            <options_item entry="ssfx_ui_il_res" group="mm_opt_ssfx"/>
+        </track_il_res>
+
+        <cap_il_dist x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_il_dist</text>
+        </cap_il_dist>
+        <track_il_dist x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_il_dist" group="mm_opt_ssfx"/>
+        </track_il_dist>
+
+        <cap_il_blur x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_il_blur</text>
+        </cap_il_blur>
+        <track_il_blur x="262" y="6" width="156" height="16" step="0.5">
+            <options_item entry="ssfx_ui_il_blur" group="mm_opt_ssfx"/>
+        </track_il_blur>
+
+        <cap_il_vibrance x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_il_vibrance</text>
+        </cap_il_vibrance>
+        <track_il_vibrance x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_il_vibrance" group="mm_opt_ssfx"/>
+        </track_il_vibrance>
+
+        <cap_il_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_il_int</text>
+        </cap_il_int>
+        <track_il_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_il_int" group="mm_opt_ssfx"/>
+        </track_il_int>
+
+        <cap_il_hud_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_il_hud_int</text>
+        </cap_il_hud_int>
+        <track_il_hud_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_il_hud_int" group="mm_opt_ssfx"/>
+        </track_il_hud_int>
+
+        <cap_il_flora_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_il_flora_int</text>
+        </cap_il_flora_int>
+        <track_il_flora_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_il_flora_int" group="mm_opt_ssfx"/>
+        </track_il_flora_int>
+
+        <cap_h_fog x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_fog</text>
+        </cap_h_fog>
+
+        <cap_fog_height x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fog_height</text>
+        </cap_fog_height>
+        <track_fog_height x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_fog_height" group="mm_opt_ssfx"/>
+        </track_fog_height>
+
+        <cap_fog_density x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fog_density</text>
+        </cap_fog_density>
+        <track_fog_density x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_fog_density" group="mm_opt_ssfx"/>
+        </track_fog_density>
+
+        <cap_fog_suncolor x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fog_suncolor</text>
+        </cap_fog_suncolor>
+        <track_fog_suncolor x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="ssfx_ui_fog_suncolor" group="mm_opt_ssfx"/>
+        </track_fog_suncolor>
+
+        <cap_fog_scattering x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_fog_scattering</text>
+        </cap_fog_scattering>
+        <track_fog_scattering x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_fog_scattering" group="mm_opt_ssfx"/>
+        </track_fog_scattering>
+
+        <cap_h_florafixes x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_florafixes</text>
+        </cap_h_florafixes>
+
+        <cap_flora_sss_int x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_flora_sss_int</text>
+        </cap_flora_sss_int>
+        <track_flora_sss_int x="262" y="13" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_flora_sss_int" group="mm_opt_ssfx"/>
+        </track_flora_sss_int>
+
+        <cap_flora_sss_color x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_flora_sss_color</text>
+        </cap_flora_sss_color>
+        <track_flora_sss_color x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_flora_sss_color" group="mm_opt_ssfx"/>
+        </track_flora_sss_color>
+
+        <cap_flora_grass_specular x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_flora_grass_specular</text>
+        </cap_flora_grass_specular>
+        <track_flora_grass_specular x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_flora_grass_specular" group="mm_opt_ssfx"/>
+        </track_flora_grass_specular>
+
+        <cap_flora_grass_specular_wet x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_flora_grass_specular_wet</text>
+        </cap_flora_grass_specular_wet>
+        <track_flora_grass_specular_wet x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_flora_grass_specular_wet" group="mm_opt_ssfx"/>
+        </track_flora_grass_specular_wet>
+
+        <cap_flora_trees_specular x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_flora_trees_specular</text>
+        </cap_flora_trees_specular>
+        <track_flora_trees_specular x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_flora_trees_specular" group="mm_opt_ssfx"/>
+        </track_flora_trees_specular>
+
+        <cap_flora_trees_specular_wet x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_flora_trees_specular_wet</text>
+        </cap_flora_trees_specular_wet>
+        <track_flora_trees_specular_wet x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_flora_trees_specular_wet" group="mm_opt_ssfx"/>
+        </track_flora_trees_specular_wet>
+
+        <cap_h_inter_grass x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_inter_grass</text>
+        </cap_h_inter_grass>
+
+        <cap_grass_enable x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_enable</text>
+        </cap_grass_enable>
+        <check_grass_enable x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_grass_enable" group="mm_opt_ssfx" depend="restart"/>
+        </check_grass_enable>
+
+        <cap_grass_max_entities x="8" y="3" width="239" height="54">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_max_entities</text>
+        </cap_grass_max_entities>
+        <track_grass_max_entities x="262" y="21" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_grass_max_entities" group="mm_opt_ssfx" depend="restart"/>
+        </track_grass_max_entities>
+
+        <cap_grass_max_distance x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_max_distance</text>
+        </cap_grass_max_distance>
+        <track_grass_max_distance x="262" y="6" width="156" height="16" step="10">
+            <options_item entry="ssfx_ui_grass_max_distance" group="mm_opt_ssfx"/>
+        </track_grass_max_distance>
+
+        <cap_grass_enable_player x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_enable_player</text>
+        </cap_grass_enable_player>
+        <check_grass_enable_player x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_grass_enable_player" group="mm_opt_ssfx"/>
+        </check_grass_enable_player>
+
+        <cap_grass_enable_mutants x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_enable_mutants</text>
+        </cap_grass_enable_mutants>
+        <check_grass_enable_mutants x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_grass_enable_mutants" group="mm_opt_ssfx"/>
+        </check_grass_enable_mutants>
+
+        <cap_grass_enable_anomalies x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_enable_anomalies</text>
+        </cap_grass_enable_anomalies>
+        <check_grass_enable_anomalies x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_grass_enable_anomalies" group="mm_opt_ssfx"/>
+        </check_grass_enable_anomalies>
+
+        <cap_grass_anomalies_distance x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_anomalies_distance</text>
+        </cap_grass_anomalies_distance>
+        <track_grass_anomalies_distance x="262" y="13" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_grass_anomalies_distance" group="mm_opt_ssfx"/>
+        </track_grass_anomalies_distance>
+
+        <cap_grass_radius x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_radius</text>
+        </cap_grass_radius>
+        <track_grass_radius x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_grass_radius" group="mm_opt_ssfx"/>
+        </track_grass_radius>
+
+        <cap_grass_horizontal_str x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_horizontal_str</text>
+        </cap_grass_horizontal_str>
+        <track_grass_horizontal_str x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_grass_horizontal_str" group="mm_opt_ssfx"/>
+        </track_grass_horizontal_str>
+
+        <cap_grass_vertical_str x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_vertical_str</text>
+        </cap_grass_vertical_str>
+        <track_grass_vertical_str x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_grass_vertical_str" group="mm_opt_ssfx"/>
+        </track_grass_vertical_str>
+
+        <cap_grass_explosions_str x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_explosions_str</text>
+        </cap_grass_explosions_str>
+        <track_grass_explosions_str x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="ssfx_ui_grass_explosions_str" group="mm_opt_ssfx"/>
+        </track_grass_explosions_str>
+
+        <cap_grass_explosions_speed x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_explosions_speed</text>
+        </cap_grass_explosions_speed>
+        <track_grass_explosions_speed x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_grass_explosions_speed" group="mm_opt_ssfx"/>
+        </track_grass_explosions_speed>
+
+        <cap_grass_shooting_str x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_shooting_str</text>
+        </cap_grass_shooting_str>
+        <track_grass_shooting_str x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="ssfx_ui_grass_shooting_str" group="mm_opt_ssfx"/>
+        </track_grass_shooting_str>
+
+        <cap_grass_shooting_range x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_shooting_range</text>
+        </cap_grass_shooting_range>
+        <track_grass_shooting_range x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_grass_shooting_range" group="mm_opt_ssfx"/>
+        </track_grass_shooting_range>
+
+        <cap_h_wind x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_wind</text>
+        </cap_h_wind>
+
+        <cap_wind_min_speed x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wind_min_speed</text>
+        </cap_wind_min_speed>
+        <track_wind_min_speed x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wind_min_speed" group="mm_opt_ssfx"/>
+        </track_wind_min_speed>
+
+        <cap_wind_grass_speed x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wind_grass_speed</text>
+        </cap_wind_grass_speed>
+        <track_wind_grass_speed x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wind_grass_speed" group="mm_opt_ssfx"/>
+        </track_wind_grass_speed>
+
+        <cap_wind_grass_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wind_grass_int</text>
+        </cap_wind_grass_int>
+        <track_wind_grass_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wind_grass_int" group="mm_opt_ssfx"/>
+        </track_wind_grass_int>
+
+        <cap_wind_grass_push x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wind_grass_push</text>
+        </cap_wind_grass_push>
+        <track_wind_grass_push x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wind_grass_push" group="mm_opt_ssfx"/>
+        </track_wind_grass_push>
+
+        <cap_wind_grass_wave x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wind_grass_wave</text>
+        </cap_wind_grass_wave>
+        <track_wind_grass_wave x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wind_grass_wave" group="mm_opt_ssfx"/>
+        </track_wind_grass_wave>
+
+        <cap_wind_tree_branch x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wind_tree_branch</text>
+        </cap_wind_tree_branch>
+        <track_wind_tree_branch x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wind_tree_branch" group="mm_opt_ssfx"/>
+        </track_wind_tree_branch>
+
+        <cap_wind_tree_trunk x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wind_tree_trunk</text>
+        </cap_wind_tree_trunk>
+        <track_wind_tree_trunk x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wind_tree_trunk" group="mm_opt_ssfx"/>
+        </track_wind_tree_trunk>
+
+        <cap_wind_tree_bend x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wind_tree_bend</text>
+        </cap_wind_tree_bend>
+        <track_wind_tree_bend x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wind_tree_bend" group="mm_opt_ssfx"/>
+        </track_wind_tree_bend>
+
+        <cap_h_terrain x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_terrain</text>
+        </cap_h_terrain>
+
+        <cap_terrain_dist x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_terrain_dist</text>
+        </cap_terrain_dist>
+        <track_terrain_dist x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_terrain_dist" group="mm_opt_ssfx"/>
+        </track_terrain_dist>
+
+        <cap_terrain_pom_quality x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_terrain_pom_quality</text>
+        </cap_terrain_pom_quality>
+        <list_terrain_pom_quality x="262" y="0" width="156" height="20" list_length="3" always_show_scroll="0">
+            <options_item entry="ssfx_ui_terrain_pom_quality" group="mm_opt_ssfx"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_terrain_pom_quality>
+
+        <cap_terra_pom_refine x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_terra_pom_refine</text>
+        </cap_terra_pom_refine>
+        <check_terra_pom_refine x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_terra_pom_refine" group="mm_opt_ssfx" depend="restart"/>
+        </check_terra_pom_refine>
+
+        <cap_terrain_pom_range x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_terrain_pom_range</text>
+        </cap_terrain_pom_range>
+        <track_terrain_pom_range x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_terrain_pom_range" group="mm_opt_ssfx"/>
+        </track_terrain_pom_range>
+
+        <cap_terrain_pom_height x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_terrain_pom_height</text>
+        </cap_terrain_pom_height>
+        <track_terrain_pom_height x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_terrain_pom_height" group="mm_opt_ssfx"/>
+        </track_terrain_pom_height>
+
+        <cap_terrain_pom_water x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_terrain_pom_water</text>
+        </cap_terrain_pom_water>
+        <track_terrain_pom_water x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_terrain_pom_water" group="mm_opt_ssfx"/>
+        </track_terrain_pom_water>
+
+        <cap_terra_grass_align x="8" y="3" width="239" height="54">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_terra_grass_align</text>
+        </cap_terra_grass_align>
+        <check_terra_grass_align x="249" y="15" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_terra_grass_align" group="mm_opt_ssfx"/>
+        </check_terra_grass_align>
+
+        <cap_terra_grass_slope x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_terra_grass_slope</text>
+        </cap_terra_grass_slope>
+        <track_terra_grass_slope x="262" y="13" width="156" height="16" step="0.011111">
+            <options_item entry="ssfx_ui_terra_grass_slope" group="mm_opt_ssfx"/>
+        </track_terra_grass_slope>
+
+        <cap_h_ssfx_bloom x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssfx_bloom</text>
+        </cap_h_ssfx_bloom>
+
+        <cap_bloom_use_weather x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_bloom_use_weather</text>
+        </cap_bloom_use_weather>
+        <check_bloom_use_weather x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_bloom_use_weather" group="mm_opt_ssfx"/>
+        </check_bloom_use_weather>
+
+        <cap_bloom_threshold x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_bloom_threshold</text>
+        </cap_bloom_threshold>
+        <track_bloom_threshold x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_bloom_threshold" group="mm_opt_ssfx"/>
+        </track_bloom_threshold>
+
+        <cap_bloom_exposure x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_bloom_exposure</text>
+        </cap_bloom_exposure>
+        <track_bloom_exposure x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_bloom_exposure" group="mm_opt_ssfx"/>
+        </track_bloom_exposure>
+
+        <cap_bloom_blur x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_bloom_blur</text>
+        </cap_bloom_blur>
+        <track_bloom_blur x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_bloom_blur" group="mm_opt_ssfx"/>
+        </track_bloom_blur>
+
+        <cap_bloom_vibrance x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_bloom_vibrance</text>
+        </cap_bloom_vibrance>
+        <track_bloom_vibrance x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_bloom_vibrance" group="mm_opt_ssfx"/>
+        </track_bloom_vibrance>
+
+        <cap_bloom_sky x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_bloom_sky</text>
+        </cap_bloom_sky>
+        <track_bloom_sky x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_bloom_sky" group="mm_opt_ssfx"/>
+        </track_bloom_sky>
+
+        <cap_bloom_lens x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_bloom_lens</text>
+        </cap_bloom_lens>
+        <track_bloom_lens x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_bloom_lens" group="mm_opt_ssfx"/>
+        </track_bloom_lens>
+
+        <cap_bloom_dirt x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_bloom_dirt</text>
+        </cap_bloom_dirt>
+        <track_bloom_dirt x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_bloom_dirt" group="mm_opt_ssfx"/>
+        </track_bloom_dirt>
+
+        <cap_h_ssfx_motionblur x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssfx_motionblur</text>
+        </cap_h_ssfx_motionblur>
+
+        <cap_mblur_quality x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_mblur_quality</text>
+        </cap_mblur_quality>
+        <list_mblur_quality x="262" y="0" width="156" height="20" list_length="4" always_show_scroll="0">
+            <options_item entry="ssfx_ui_mblur_quality" group="mm_opt_ssfx"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_mblur_quality>
+
+        <cap_mblur_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_mblur_int</text>
+        </cap_mblur_int>
+        <track_mblur_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_mblur_int" group="mm_opt_ssfx"/>
+        </track_mblur_int>
+
+        <cap_mblur_camera x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_mblur_camera</text>
+        </cap_mblur_camera>
+        <track_mblur_camera x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_mblur_camera" group="mm_opt_ssfx"/>
+        </track_mblur_camera>
+
+        <cap_mblur_hudonly x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_mblur_hudonly</text>
+        </cap_mblur_hudonly>
+        <check_mblur_hudonly x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_mblur_hudonly" group="mm_opt_ssfx"/>
+        </check_mblur_hudonly>
+
+        <cap_h_ssfx_taa x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssfx_taa</text>
+        </cap_h_ssfx_taa>
+
+        <cap_taa_enabled x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_taa_enabled</text>
+        </cap_taa_enabled>
+        <check_taa_enabled x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_taa_enabled" group="mm_opt_ssfx"/>
+        </check_taa_enabled>
+
+        <cap_taa_sharp x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_taa_sharp</text>
+        </cap_taa_sharp>
+        <track_taa_sharp x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_taa_sharp" group="mm_opt_ssfx"/>
+        </track_taa_sharp>
+
+        <cap_taa_jitter x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_taa_jitter</text>
+        </cap_taa_jitter>
+        <track_taa_jitter x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_taa_jitter" group="mm_opt_ssfx"/>
+        </track_taa_jitter>
+
+        <cap_h_shadows x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_shadows</text>
+        </cap_h_shadows>
+
+        <cap_shw_lod_quality x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_shw_lod_quality</text>
+        </cap_shw_lod_quality>
+        <track_shw_lod_quality x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_shw_lod_quality" group="mm_opt_ssfx"/>
+        </track_shw_lod_quality>
+
+        <cap_shw_lod_min x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_shw_lod_min</text>
+        </cap_shw_lod_min>
+        <list_shw_lod_min x="262" y="7" width="156" height="20" list_length="5" always_show_scroll="0">
+            <options_item entry="ssfx_ui_shw_lod_min" group="mm_opt_ssfx"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_shw_lod_min>
+
+        <cap_shw_lod_max x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_shw_lod_max</text>
+        </cap_shw_lod_max>
+        <list_shw_lod_max x="262" y="7" width="156" height="20" list_length="5" always_show_scroll="0">
+            <options_item entry="ssfx_ui_shw_lod_max" group="mm_opt_ssfx"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_shw_lod_max>
+
+        <cap_shw_volumetric_force x="8" y="3" width="239" height="54">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_shw_volumetric_force</text>
+        </cap_shw_volumetric_force>
+        <check_shw_volumetric_force x="249" y="15" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_shw_volumetric_force" group="mm_opt_ssfx"/>
+        </check_shw_volumetric_force>
+
+        <cap_volumetric_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_volumetric_int</text>
+        </cap_volumetric_int>
+        <track_volumetric_int x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_volumetric_int" group="mm_opt_ssfx"/>
+        </track_volumetric_int>
+
+        <cap_shw_volumetric_quality x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_shw_volumetric_quality</text>
+        </cap_shw_volumetric_quality>
+        <list_shw_volumetric_quality x="262" y="0" width="156" height="20" list_length="5" always_show_scroll="0">
+            <options_item entry="ssfx_ui_shw_volumetric_quality" group="mm_opt_ssfx"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_shw_volumetric_quality>
+
+        <cap_h_shw_cascades x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_shw_cascades</text>
+        </cap_h_shw_cascades>
+
+        <cap_cas_size_1 x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_cas_size_1</text>
+        </cap_cas_size_1>
+        <track_cas_size_1 x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_cas_size_1" group="mm_opt_ssfx"/>
+        </track_cas_size_1>
+
+        <cap_cas_size_2 x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_cas_size_2</text>
+        </cap_cas_size_2>
+        <track_cas_size_2 x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_cas_size_2" group="mm_opt_ssfx"/>
+        </track_cas_size_2>
+
+        <cap_cas_size_3 x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_cas_size_3</text>
+        </cap_cas_size_3>
+        <track_cas_size_3 x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_cas_size_3" group="mm_opt_ssfx"/>
+        </track_cas_size_3>
+
+        <cap_cas_grass_shw_quality x="8" y="3" width="155" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_cas_grass_shw_quality</text>
+        </cap_cas_grass_shw_quality>
+        <list_cas_grass_shw_quality x="178" y="7" width="240" height="20" list_length="4" always_show_scroll="0">
+            <options_item entry="ssfx_ui_cas_grass_shw_quality" group="mm_opt_ssfx"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_cas_grass_shw_quality>
+
+        <cap_grass_shadows x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_grass_shadows</text>
+        </cap_grass_shadows>
+        <track_grass_shadows x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_grass_shadows" group="mm_opt_ssfx"/>
+        </track_grass_shadows>
+
+        <cap_cas_grass_shw_nondir_maxdistance x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_cas_grass_shw_nondir_maxdistance</text>
+        </cap_cas_grass_shw_nondir_maxdistance>
+        <track_cas_grass_shw_nondir_maxdistance x="262" y="13" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_cas_grass_shw_nondir_maxdistance" group="mm_opt_ssfx"/>
+        </track_cas_grass_shw_nondir_maxdistance>
+
+        <cap_h_sss x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_sss</text>
+        </cap_h_sss>
+
+        <cap_sss_quality_dir x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_sss_quality_dir</text>
+        </cap_sss_quality_dir>
+        <list_sss_quality_dir x="262" y="7" width="156" height="20" list_length="4" always_show_scroll="0">
+            <options_item entry="ssfx_ui_sss_quality_dir" group="mm_opt_ssfx" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_sss_quality_dir>
+
+        <cap_sss_quality_point x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_sss_quality_point</text>
+        </cap_sss_quality_point>
+        <list_sss_quality_point x="262" y="7" width="156" height="20" list_length="4" always_show_scroll="0">
+            <options_item entry="ssfx_ui_sss_quality_point" group="mm_opt_ssfx" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_sss_quality_point>
+
+        <cap_sss_enable_dir x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_sss_enable_dir</text>
+        </cap_sss_enable_dir>
+        <check_sss_enable_dir x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_sss_enable_dir" group="mm_opt_ssfx"/>
+        </check_sss_enable_dir>
+
+        <cap_sss_enable_point x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_sss_enable_point</text>
+        </cap_sss_enable_point>
+        <check_sss_enable_point x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_sss_enable_point" group="mm_opt_ssfx"/>
+        </check_sss_enable_point>
+
+        <cap_sss_len_dir x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_sss_len_dir</text>
+        </cap_sss_len_dir>
+        <track_sss_len_dir x="262" y="13" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_sss_len_dir" group="mm_opt_ssfx"/>
+        </track_sss_len_dir>
+
+        <cap_sss_len_point x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_sss_len_point</text>
+        </cap_sss_len_point>
+        <track_sss_len_point x="262" y="13" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_sss_len_point" group="mm_opt_ssfx"/>
+        </track_sss_len_point>
+
+        <cap_h_ssfx_gloss x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssfx_gloss</text>
+        </cap_h_ssfx_gloss>
+
+        <cap_gloss_min x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_gloss_min</text>
+        </cap_gloss_min>
+        <track_gloss_min x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_gloss_min" group="mm_opt_ssfx"/>
+        </track_gloss_min>
+
+        <cap_gloss_max x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_gloss_max</text>
+        </cap_gloss_max>
+        <track_gloss_max x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_gloss_max" group="mm_opt_ssfx"/>
+        </track_gloss_max>
+
+        <cap_gloss_auto_gloss x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_gloss_auto_gloss</text>
+        </cap_gloss_auto_gloss>
+        <check_gloss_auto_gloss x="249" y="0" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="ssfx_ui_gloss_auto_gloss" group="mm_opt_ssfx"/>
+        </check_gloss_auto_gloss>
+
+        <cap_gloss_auto_gloss_max x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_gloss_auto_gloss_max</text>
+        </cap_gloss_auto_gloss_max>
+        <track_gloss_auto_gloss_max x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_gloss_auto_gloss_max" group="mm_opt_ssfx"/>
+        </track_gloss_auto_gloss_max>
+
+        <cap_spec_int x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_spec_int</text>
+        </cap_spec_int>
+        <track_spec_int x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_spec_int" group="mm_opt_ssfx"/>
+        </track_spec_int>
+
+        <cap_spec_color x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_spec_color</text>
+        </cap_spec_color>
+        <track_spec_color x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_spec_color" group="mm_opt_ssfx"/>
+        </track_spec_color>
+
+        <cap_h_ssfx_wet_surf x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_ssfx_wet_surf</text>
+        </cap_h_ssfx_wet_surf>
+
+        <cap_wet_buildup x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_buildup</text>
+        </cap_wet_buildup>
+        <track_wet_buildup x="262" y="13" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wet_buildup" group="mm_opt_ssfx"/>
+        </track_wet_buildup>
+
+        <cap_wet_dry x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_dry</text>
+        </cap_wet_dry>
+        <track_wet_dry x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="ssfx_ui_wet_dry" group="mm_opt_ssfx"/>
+        </track_wet_dry>
+
+        <cap_wet_ripples_size x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_ripples_size</text>
+        </cap_wet_ripples_size>
+        <track_wet_ripples_size x="262" y="6" width="156" height="16" step="0.01" invert="1">
+            <options_item entry="ssfx_ui_wet_ripples_size" group="mm_opt_ssfx"/>
+        </track_wet_ripples_size>
+
+        <cap_wet_ripples_speed x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_ripples_speed</text>
+        </cap_wet_ripples_speed>
+        <track_wet_ripples_speed x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wet_ripples_speed" group="mm_opt_ssfx"/>
+        </track_wet_ripples_speed>
+
+        <cap_wet_ripples_min_speed x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_ripples_min_speed</text>
+        </cap_wet_ripples_min_speed>
+        <track_wet_ripples_min_speed x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wet_ripples_min_speed" group="mm_opt_ssfx"/>
+        </track_wet_ripples_min_speed>
+
+        <cap_wet_ripples x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_ripples</text>
+        </cap_wet_ripples>
+        <track_wet_ripples x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wet_ripples" group="mm_opt_ssfx"/>
+        </track_wet_ripples>
+
+        <cap_wet_waterfall_size x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_waterfall_size</text>
+        </cap_wet_waterfall_size>
+        <track_wet_waterfall_size x="262" y="6" width="156" height="16" step="0.01" invert="1">
+            <options_item entry="ssfx_ui_wet_waterfall_size" group="mm_opt_ssfx"/>
+        </track_wet_waterfall_size>
+
+        <cap_wet_waterfall_speed x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_waterfall_speed</text>
+        </cap_wet_waterfall_speed>
+        <track_wet_waterfall_speed x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wet_waterfall_speed" group="mm_opt_ssfx"/>
+        </track_wet_waterfall_speed>
+
+        <cap_wet_waterfall_min_speed x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_waterfall_min_speed</text>
+        </cap_wet_waterfall_min_speed>
+        <track_wet_waterfall_min_speed x="262" y="13" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wet_waterfall_min_speed" group="mm_opt_ssfx"/>
+        </track_wet_waterfall_min_speed>
+
+        <cap_wet_waterfall x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_waterfall</text>
+        </cap_wet_waterfall>
+        <track_wet_waterfall x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_ui_wet_waterfall" group="mm_opt_ssfx"/>
+        </track_wet_waterfall>
+
+        <cap_wet_cover_res x="8" y="3" width="225" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_cover_res</text>
+        </cap_wet_cover_res>
+        <list_wet_cover_res x="248" y="7" width="170" height="20" list_length="6" always_show_scroll="0">
+            <options_item entry="ssfx_ui_wet_cover_res" group="mm_opt_ssfx"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_wet_cover_res>
+
+        <cap_wet_cover_distance x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_wet_cover_distance</text>
+        </cap_wet_cover_distance>
+        <track_wet_cover_distance x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="ssfx_ui_wet_cover_distance" group="mm_opt_ssfx"/>
+        </track_wet_cover_distance>
+
+        <cap_h_extras x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_ssfx_h_extras</text>
+        </cap_h_extras>
+
+        <cap_x_gloss_floor x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_gloss_floor</text>
+        </cap_x_gloss_floor>
+        <track_x_gloss_floor x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="r2_gloss_min" group="mm_opt_ssfx"/>
+        </track_x_gloss_floor>
+
+        <cap_x_cover_near x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_cover_near</text>
+        </cap_x_cover_near>
+        <track_x_cover_near x="262" y="6" width="156" height="16" step="1">
+            <options_item entry="r3_dynamic_wet_surfaces_near" group="mm_opt_ssfx"/>
+        </track_x_cover_near>
+
+        <cap_x_sun_min x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_sun_min</text>
+        </cap_x_sun_min>
+        <track_x_sun_min x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="r2_sunshafts_min" group="mm_opt_ssfx"/>
+        </track_x_sun_min>
+
+        <cap_x_sun_value x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_sun_value</text>
+        </cap_x_sun_value>
+        <track_x_sun_value x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="r2_sunshafts_value" group="mm_opt_ssfx"/>
+        </track_x_sun_value>
+
+        <cap_x_ss_length x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_ss_length</text>
+        </cap_x_ss_length>
+        <track_x_ss_length x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="r2_ss_sunshafts_length" group="mm_opt_ssfx"/>
+        </track_x_ss_length>
+
+        <cap_x_ss_radius x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_ss_radius</text>
+        </cap_x_ss_radius>
+        <track_x_ss_radius x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="r2_ss_sunshafts_radius" group="mm_opt_ssfx"/>
+        </track_x_ss_radius>
+
+        <cap_x_hud_hemi x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_hud_hemi</text>
+        </cap_x_hud_hemi>
+        <track_x_hud_hemi x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="ssfx_hud_hemi" group="mm_opt_ssfx"/>
+        </track_x_hud_hemi>
+
+        <cap_x_grass_density x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_grass_density</text>
+        </cap_x_grass_density>
+        <track_x_grass_density x="262" y="6" width="156" height="16" step="0.02" invert="1">
+            <options_item entry="r__detail_density" group="mm_opt_ssfx"/>
+        </track_x_grass_density>
+
+        <cap_x_grass_height x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_grass_height</text>
+        </cap_x_grass_height>
+        <track_x_grass_height x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="r__detail_height" group="mm_opt_ssfx"/>
+        </track_x_grass_height>
+
+        <cap_x_grass_dist x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_x_grass_dist</text>
+        </cap_x_grass_dist>
+        <track_x_grass_dist x="262" y="6" width="156" height="16" step="2">
+            <options_item entry="r__detail_radius" group="mm_opt_ssfx"/>
+        </track_x_grass_dist>
+
+    </ssfx>
+
+    <pbr>
+        <scroll_v x="-5" y="0" width="450" height="320" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0"
+        vert_interval="0" always_show_scroll="1"/>
+
+        <templ_item width="430" height="30"/>
+        <templ_item_2 width="430" height="44"/>
+        <templ_item_3 width="430" height="60"/>
+
+        <btn_basic x="226" y="322" width="108" height="24">
+            <text r="170" g="170" b="170" align="c" font="letterica16">ui_mm_simply</text>
+            <texture>ui_inGame2_button</texture>
+            <text_color><e r="210" g="210" b="210"/></text_color>
+        </btn_basic>
+
+        <btn_reset x="338" y="322" width="108" height="24">
+            <text r="170" g="170" b="170" align="c" font="letterica16">ui_pbr_reset</text>
+            <texture>ui_inGame2_button</texture>
+            <text_color><e r="210" g="210" b="210"/></text_color>
+        </btn_reset>
+
+        <cap_legend x="8" y="3" width="410" height="38">
+            <text r="140" g="140" b="140" font="letterica16" align="l" vert_align="c" complex_mode="1">ui_pbr_legend</text>
+        </cap_legend>
+
+        <cap_legend2 x="8" y="3" width="410" height="38">
+            <text r="140" g="140" b="140" font="letterica16" align="l" vert_align="c" complex_mode="1">ui_pbr_legend2</text>
+        </cap_legend2>
+
+        <cap_h_main x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_pbr_h_main</text>
+        </cap_h_main>
+
+        <cap_enable x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_enable</text>
+        </cap_enable>
+        <check_enable x="249" y="7" width="44" height="29">
+            <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="pbr_enable" group="mm_opt_pbr" depend="restart"/>
+        </check_enable>
+
+        <cap_sslr_mode x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_sslr_mode</text>
+        </cap_sslr_mode>
+        <list_sslr_mode x="262" y="7" width="156" height="20" list_length="5" always_show_scroll="0">
+            <options_item entry="pbr_sslr_mode" group="mm_opt_pbr" depend="restart"/>
+            <list_font r="170" g="170" b="170" font="letterica16"/>
+            <text_color>
+                <e r="170" g="170" b="170"/>
+                <d r="70" g="70" b="70"/>
+            </text_color>
+        </list_sslr_mode>
+
+        <cap_h_diffuse x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_pbr_h_diffuse</text>
+        </cap_h_diffuse>
+
+        <cap_sun_diffuse x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_sun_diffuse</text>
+        </cap_sun_diffuse>
+        <track_sun_diffuse x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="pbr_sun_diffuse" group="mm_opt_pbr"/>
+        </track_sun_diffuse>
+
+        <cap_local_diffuse x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_local_diffuse</text>
+        </cap_local_diffuse>
+        <track_local_diffuse x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="pbr_local_diffuse" group="mm_opt_pbr"/>
+        </track_local_diffuse>
+
+        <cap_ambient_diffuse x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_ambient_diffuse</text>
+        </cap_ambient_diffuse>
+        <track_ambient_diffuse x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="pbr_ambient_diffuse" group="mm_opt_pbr"/>
+        </track_ambient_diffuse>
+
+        <cap_h_specular x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_pbr_h_specular</text>
+        </cap_h_specular>
+
+        <cap_sun_specular x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_sun_specular</text>
+        </cap_sun_specular>
+        <track_sun_specular x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="pbr_sun_specular" group="mm_opt_pbr"/>
+        </track_sun_specular>
+
+        <cap_local_specular x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_local_specular</text>
+        </cap_local_specular>
+        <track_local_specular x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="pbr_local_specular" group="mm_opt_pbr"/>
+        </track_local_specular>
+
+        <cap_ambient_specular x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_ambient_specular</text>
+        </cap_ambient_specular>
+        <track_ambient_specular x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="pbr_ambient_specular" group="mm_opt_pbr"/>
+        </track_ambient_specular>
+
+        <cap_sun_peak x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_sun_peak</text>
+        </cap_sun_peak>
+        <track_sun_peak x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="pbr_sun_peak" group="mm_opt_pbr"/>
+        </track_sun_peak>
+
+        <cap_local_peak x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_local_peak</text>
+        </cap_local_peak>
+        <track_local_peak x="262" y="6" width="156" height="16" step="0.1">
+            <options_item entry="pbr_local_peak" group="mm_opt_pbr"/>
+        </track_local_peak>
+
+        <cap_h_surface x="8" y="5" width="410" height="22">
+            <text r="235" g="219" b="178" font="letterica18" align="l" vert_align="c">ui_pbr_h_surface</text>
+        </cap_h_surface>
+
+        <cap_min_roughness x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_min_roughness</text>
+        </cap_min_roughness>
+        <track_min_roughness x="262" y="6" width="156" height="16" step="0.005">
+            <options_item entry="pbr_min_roughness" group="mm_opt_pbr"/>
+        </track_min_roughness>
+
+        <cap_aa_strength x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_aa_strength</text>
+        </cap_aa_strength>
+        <track_aa_strength x="262" y="6" width="156" height="16" step="0.05">
+            <options_item entry="pbr_aa_strength" group="mm_opt_pbr"/>
+        </track_aa_strength>
+
+        <cap_aa_variance x="8" y="3" width="239" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_aa_variance</text>
+        </cap_aa_variance>
+        <track_aa_variance x="262" y="6" width="156" height="16" step="0.01">
+            <options_item entry="pbr_aa_variance" group="mm_opt_pbr"/>
+        </track_aa_variance>
+
+        <cap_metal_energy x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_metal_energy</text>
+        </cap_metal_energy>
+        <track_metal_energy x="262" y="13" width="156" height="16" step="0.02">
+            <options_item entry="pbr_metal_energy" group="mm_opt_pbr"/>
+        </track_metal_energy>
+
+        <cap_metal_roughness_gain x="8" y="3" width="239" height="38">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_pbr_metal_roughness_gain</text>
+        </cap_metal_roughness_gain>
+        <track_metal_roughness_gain x="262" y="13" width="156" height="16" step="0.1">
+            <options_item entry="pbr_metal_roughness_gain" group="mm_opt_pbr"/>
+        </track_metal_roughness_gain>
+
+    </pbr>
+
     <tab_sound>
         <cap_mastervolume x="15" y="3" width="135" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_master_volume</text>
@@ -521,11 +2210,11 @@
         </list_voice_language>
     </tab_sound>
     <tab_gameplay>
-        <cap_difficulty x="15" y="3" width="135" height="24">
+        <cap_difficulty x="8" y="3" width="273" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_difficulty</text>
         </cap_difficulty>
 
-        <list_difficulty x="175" y="5" width="235" height="20">
+        <list_difficulty x="306" y="5" width="136" height="20">
             <options_item entry="g_game_difficulty" group="mm_opt_gameplay"/>
             <list_font r="170" g="170" b="170" font="letterica16"/>
             <text_color>
@@ -534,69 +2223,93 @@
             </text_color>
         </list_difficulty>
 
-        <cap_check_crosshair x="15" y="33" width="135" height="24">
+        <cap_check_crosshair x="8" y="33" width="273" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_show_crosshair</text>
         </cap_check_crosshair>
-        <check_crosshair x="162" y="30" width="44" height="29">
+        <check_crosshair x="293" y="30" width="44" height="29">
 	        <texture>ui_inGame2_checkbox</texture>
             <options_item entry="hud_crosshair" group="mm_opt_gameplay"/>
         </check_crosshair>
 
-        <cap_check_dyn_crosshair x="15" y="63" width="135" height="24">
+        <cap_check_dyn_crosshair x="8" y="63" width="273" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_dyn_crosshair</text>
         </cap_check_dyn_crosshair>
-        <check_dyn_crosshair x="162" y="60" width="44" height="29">
+        <check_dyn_crosshair x="293" y="60" width="44" height="29">
 	        <texture>ui_inGame2_checkbox</texture>
             <options_item entry="cl_dynamiccrosshair" group="mm_opt_gameplay"/>
         </check_dyn_crosshair>
 
-        <cap_check_show_weapon x="15" y="93" width="135" height="24">
+        <cap_check_show_weapon x="8" y="93" width="273" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_show_weapon</text>
         </cap_check_show_weapon>
-        <check_show_weapon x="162" y="90" width="44" height="29">
+        <check_show_weapon x="293" y="90" width="44" height="29">
 	        <texture>ui_inGame2_checkbox</texture>
             <options_item entry="hud_weapon" group="mm_opt_gameplay"/>
         </check_show_weapon>
 
-        <cap_check_dist x="15" y="123" width="135" height="24">
+        <cap_check_dist x="8" y="123" width="273" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_crosshair_distance</text>
         </cap_check_dist>
-        <check_dist x="162" y="120" width="44" height="29">
+        <check_dist x="293" y="120" width="44" height="29">
 	        <texture>ui_inGame2_checkbox</texture>
             <options_item entry="hud_crosshair_dist" group="mm_opt_gameplay"/>
         </check_dist>
 
-        <cap_check_tips x="15" y="153" width="135" height="24">
+        <cap_check_tips x="8" y="153" width="273" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_tips</text>
         </cap_check_tips>
-        <check_tips x="162" y="150" width="44" height="29">
+        <check_tips x="293" y="150" width="44" height="29">
 	        <texture>ui_inGame2_checkbox</texture>
             <options_item entry="hud_info" group="mm_opt_gameplay"/>
         </check_tips>
 
-        <cap_check_crouch_toggle x="15" y="183" width="135" height="24">
+        <cap_check_crouch_toggle x="8" y="183" width="273" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_crouch_toggle</text>
         </cap_check_crouch_toggle>
-        <check_crouch_toggle x="162" y="180" width="44" height="29">
+        <check_crouch_toggle x="293" y="180" width="44" height="29">
 	        <texture>ui_inGame2_checkbox</texture>
             <options_item entry="g_crouch_toggle" group="mm_opt_gameplay"/>
         </check_crouch_toggle>
 
-        <cap_check_important_save x="15" y="213" width="135" height="24">
+        <cap_check_aim_toggle x="8" y="213" width="273" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_aim_toggle</text>
+        </cap_check_aim_toggle>
+        <check_aim_toggle x="293" y="210" width="44" height="29">
+	        <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="wpn_aim_toggle" group="mm_opt_gameplay"/>
+        </check_aim_toggle>
+
+        <cap_check_lookout_toggle x="8" y="243" width="273" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_lookout_toggle</text>
+        </cap_check_lookout_toggle>
+        <check_lookout_toggle x="293" y="240" width="44" height="29">
+	        <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="g_lookout_toggle" group="mm_opt_gameplay"/>
+        </check_lookout_toggle>
+
+        <cap_check_important_save x="8" y="273" width="273" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_important_save</text>
         </cap_check_important_save>
-        <check_important_save x="162" y="210" width="44" height="29">
+        <check_important_save x="293" y="270" width="44" height="29">
 	        <texture>ui_inGame2_checkbox</texture>
             <options_item entry="g_important_save" group="mm_opt_gameplay"/>
         </check_important_save>
 
-      <cap_check_hud_draw x="15" y="243" width="135" height="24">
+      <cap_check_hud_draw x="8" y="303" width="273" height="24">
         <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_st_disable_hud</text>
       </cap_check_hud_draw>
-      <check_hud_draw x="162" y="240" width="44" height="29">
+      <check_hud_draw x="293" y="300" width="44" height="29">
         <texture>ui_inGame2_checkbox</texture>
         <options_item entry="hud_draw" group="mm_opt_gameplay"/>
       </check_hud_draw>
+
+        <cap_check_actor_shadow x="8" y="333" width="273" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_actor_shadow</text>
+        </cap_check_actor_shadow>
+        <check_actor_shadow x="293" y="330" width="44" height="29">
+	        <texture>ui_inGame2_checkbox</texture>
+            <options_item entry="r__actor_shadow" group="mm_opt_gameplay"/>
+        </check_actor_shadow>
 
       <btn_check_updates x="338" y="322" width="108" height="24">
             <text align="c" font="letterica16">ui_mm_check_updates</text>

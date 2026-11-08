@@ -66,6 +66,9 @@ public:
     virtual void set_color(float r, float g, float b) = 0;
     virtual void set_hud_mode(bool b) = 0;
     virtual bool get_hud_mode() = 0;
+    // Screen Space Shaders: the actor's own torch is excluded from the SSS spot pass.
+    // Not pure - renderers without SSS simply ignore it.
+    virtual void set_is_playerlight(bool){};
     virtual ~IRender_Light();
 };
 struct ENGINE_API resptrcode_light : public resptr_base<IRender_Light> {
@@ -172,6 +175,7 @@ public:
 
 public:
     // options
+    bool hud_loading = false; // SSFX: models created now are HUD models
     s32 m_skinning;
     s32 m_MSAASample;
 
@@ -308,6 +312,9 @@ public:
     virtual void rmFar() = 0;
     virtual void rmNormal() = 0;
     virtual u32 memory_usage() = 0;
+    // Monolith (Swartz): actor shadow. Only the DX11 renderer overrides it, the others stay
+    // stock and report the normal phase.
+    virtual u32 active_phase() { return 0; }
 
     // Constructor/destructor
     virtual ~IRender_interface();

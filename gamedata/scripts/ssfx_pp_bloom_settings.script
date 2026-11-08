@@ -1,0 +1,31 @@
+-- @ Version: SCREEN SPACE SHADERS - UPDATE 22
+-- @ Description: Bloom script - Settings
+-- @ Author: https://www.moddb.com/members/ascii1457
+-- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+
+-- If you're not using MCM you can customize your settings here --
+
+-- Infernis: use_weather is the author's MCM default ( ssfx_pp_mcm.script, false ) and not the 0.0
+-- this file shipped with. Lua takes any number for true, so the 0.0 switched the weather presets
+-- ON ( ssfx_pp_bloom.script tests it with "and 1 or 0" ), and with them on the threshold,
+-- exposure and sky values below are not used at all. This table is what a new profile runs on
+-- until the native settings page is applied, and the defaults button of that page gives false.
+
+ssfx_default_settings =
+{
+	["use_weather"]		= false,
+
+	["threshold"]		= 3.5,
+	["exposure"]		= 3.0,
+
+	["blur"]			= 3.0,
+
+	["vibrance"]		= 1.5,
+	["sky"]				= 0.6,
+
+	["lens"]			= 1.5,
+	["dirt"]			= 1.0,
+
+}
+
+----------------------------------------------------

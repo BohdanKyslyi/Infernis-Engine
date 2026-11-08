@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Weapon.h"
+#include "ssfx_script_bridge.h" // Screen Space Shaders
 #include "ParticlesObject.h"
 #include "entity_alive.h"
 #include "inventory_item_impl.h"
@@ -1501,6 +1502,10 @@ float CWeapon::CurrentZoomFactor() {
 void GetZoomData(const float scope_factor, float& delta, float& min_zoom_factor);
 void CWeapon::OnZoomIn() {
     m_zoom_params.m_bIsZoomModeNow = true;
+    // Screen Space Shaders - aim depth of field. Only the player's own weapon: an NPC aiming must
+    // not move the player's focus.
+    if (H_Parent() == static_cast<CObject*>(Actor()))
+        ssfx_script_bridge::on_weapon_zoom(true);
     if (IsScopeAttached()) {
         const shared_str scope_section = ScopeSettingSection("scope_3d");
         const bool global = pSettings->section_exist("shader_extensions") &&
@@ -1551,6 +1556,9 @@ void CWeapon::OnZoomIn() {
 }
 
 void CWeapon::OnZoomOut() {
+    // Screen Space Shaders - see OnZoomIn.
+    if (H_Parent() == static_cast<CObject*>(Actor()))
+        ssfx_script_bridge::on_weapon_zoom(false);
     const bool was_alternative_aim = m_bAlternativeAimActive;
     m_zoom_params.m_bIsZoomModeNow = false;
     if (!was_alternative_aim)

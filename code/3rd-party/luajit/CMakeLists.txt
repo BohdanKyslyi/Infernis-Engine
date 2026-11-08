@@ -7,8 +7,9 @@ set(OUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/${ARCH_SUFFIX})
 
 file(WRITE ${OUT_DIR}/makeluajit.bat
            "call \"${VC_ENV_BAT}\" ${ARCH_SUFFIX}
+           set NoDefaultCurrentDirectoryInExePath=
            cd /d \"${SRC_DIR}\"
-           call msvcbuild.bat
+           call ./msvcbuild.bat
            del luajit.exe
            del lua51.exp")
 

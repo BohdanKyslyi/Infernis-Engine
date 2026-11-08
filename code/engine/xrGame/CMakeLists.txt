@@ -421,6 +421,7 @@ set(AI_ACOVER_SMART_COVER_STORAGE_DESCRIPTION smart_cover_description.h
 set(AI_ASCRIPT_SCRIPTCLASSES_UI_UIWINDOWS_WINDOWS ui/UIDialogWnd.h
                                                   ui/UIHudEditor.h
                                                   ui/UIWeatherEditor.h
+                                                  ui/WeatherEditorModel.h
                                                   ui/UIFrameLineWnd.h
                                                   ui/UIFrameWindow.h
                                                   ui/UIWindow.h
@@ -1647,7 +1648,11 @@ set(AI_ACOMPONENTS_DECISIONMANAGEMENT_ACTIONMANAGEMENT_ACTIONBASE action_base.h
 
 set(AI_ASCRIPT ../xrServerEntities/script_export_macroses.h
                ../xrServerEntities/script_export_space.h
-               ../xrServerEntities/script_space_forward.h)
+               ../xrServerEntities/script_space_forward.h
+               ssfx_script_bridge.h
+               ssfx_script_bridge.cpp
+               raypick.h
+               raypick.cpp)
 
 set(AI_ALIFE_UPDATE_MANAGER_STORAGE_MANAGER alife_storage_manager.h
                                             alife_storage_manager_inline.h
@@ -2059,7 +2064,9 @@ set(AI_ALIFE_SIMULATOR_BASE_REGISTRIES_SAFE_MAP_ITERATOR safe_map_iterator.h
                                                          safe_map_iterator_inline.h)
 
 set(AI_ASCRIPT_SCRIPTCLASSES_CONSOLE console_registrator.h
-                                     console_registrator_script.cpp)
+                                     shader_bus_script.h
+                                     console_registrator_script.cpp
+                                     shader_bus_script.cpp)
 
 set(AI_AMONSTERS_COMMON_COMPONENTS_MOTION_STATS ai/Monsters/ai_monster_motion_stats.h
                                                 ai/Monsters/ai_monster_motion_stats.cpp)
@@ -3890,6 +3897,7 @@ set_source_files_properties(ai/trader/ai_trader.cpp PROPERTIES COMPILE_FLAGS "/Y
 set_source_files_properties(ai/trader/trader_animation.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(alife_simulator.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(alife_simulator_base.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
+set_source_files_properties(ssfx_script_bridge.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(client_spawn_manager.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(console_commands.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(CustomMonster.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
@@ -4084,6 +4092,7 @@ set_source_files_properties(base_client_classes_script.cpp PROPERTIES HEADER_FIL
 set_source_files_properties(CarScript.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
 set_source_files_properties(client_spawn_manager_script.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
 set_source_files_properties(console_registrator_script.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties(shader_bus_script.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
 set_source_files_properties(cover_point_script.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
 set_source_files_properties(ef_storage_script.cpp PROPERTIES HEADER_FILE_ONLY TRUE)
 set_source_files_properties(ExplosiveScript.cpp PROPERTIES HEADER_FILE_ONLY TRUE)

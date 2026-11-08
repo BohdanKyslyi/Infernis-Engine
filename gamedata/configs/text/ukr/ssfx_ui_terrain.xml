@@ -1,0 +1,88 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 22
+- @ Description: Terrain - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Button -->
+	<string id="ui_mcm_ssfx_module_terrain">
+		<text>Ландшафт</text>
+	</string>
+
+	<!-- Terrain Settings -->
+	<string id="ui_mcm_ssfx_module_terrain_title">
+		<text>Налаштування ландшафту</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_distance_mcm">
+		<text>Якість відмальовування</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_distance_mcm_desc">
+		<text>Налаштування максимальної дистанції відмальовування при максимальній якості.</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_quality_mcm">
+		<text>Якість ефекту рельєфу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_quality_mcm_desc">
+		<text>Деталізація ефекту рельєфу. Високі значення дають більш м'який результат.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_refine_mcm">
+		<text>Покращення ефекту рельєфу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_refine_mcm_desc">
+		<text>Додаткове покращення ефекту рельєфності. Покращує якість ефекту рельєфу, але збільшує навантаження.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_range_mcm">
+		<text>Дистанція відмальовування</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_range_mcm_desc">
+		<text>Налаштування дистанції відмальовування ефекту рельєфу.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_height_mcm">
+		<text>Висота ефекту рельєфу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_height_mcm_desc">
+		<text>Максимальна висота перепадів рельєфу.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_water_level_mcm">
+		<text>Глибина калюж</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_pom_water_level_mcm_desc">
+		<text>Налаштування максимальної глибини калюж.</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_terrain_grass_align_mcm">
+		<text>Калібрування трави під рельєф ( потрібне перезавантаження )</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_grass_align_mcm_desc">
+		<text>Підлаштовує траву до перепадів/схилів рельєфу.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_grass_slope_mcm">
+		<text>Ліміт трави ( потрібне перезавантаження )</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_terrain_grass_slope_mcm_desc">
+		<text>Обмеження калібрування трави, якщо кут перевищує значення.</text>
+	</string>
+
+</string_table>

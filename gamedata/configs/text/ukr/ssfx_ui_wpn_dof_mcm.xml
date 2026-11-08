@@ -1,0 +1,73 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 15
+- @ Description: Weapons DOF - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Button -->
+	<string id="ui_mcm_ssfx_module_wpn_dof">
+		<text>Глибина різкості зброї</text>
+	</string>
+
+	<!-- DOF Settings -->
+	<string id="ui_mcm_ssfx_module_wpn_dof_title">
+		<text>Налаштування глибини різкості зброї</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_aim_fadestart_mcm">
+		<text>Точка початку розмиття [прицілювання]</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_aim_fadelen_mcm">
+		<text>Величина розмиття [прицілювання]</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_aim_blur_mcm">
+		<text>Інтенсивність розмиття [прицілювання] (0-вимкнено)</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_aim_edgeblur_mcm">
+		<text>Периферійне розмиття [прицілювання] (0-вимкнено)</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_fadestart_mcm">
+		<text>Точка початку розмиття</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_fadelen_mcm">
+		<text>Величина розмиття</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_blur_mcm">
+		<text>Інтенсивність розмиття (0-вимкнено)</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_edgeblur_mcm">
+		<text>Периферійне розмиття (0-вимкнено)</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_reloading_mcm">
+		<text>Глибина різкості при перезарядці</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_pda_mcm">
+		<text>Глибина різкості при використанні КПК</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_inventory_mcm">
+		<text>Глибина різкості при відкритті інвентарю</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_fdda_mcm">
+		<text>Глибина різкості при анімації використання предметів (FDDA)</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wpn_dof_looting_mutant_mcm">
+		<text>Глибина різкості при обшуку мутанта</text>
+	</string>
+
+</string_table>

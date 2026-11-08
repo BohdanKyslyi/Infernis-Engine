@@ -11,6 +11,7 @@
 #include "xrRenderCommon/dxWallMarkArray.h"
 #include "xrRenderCommon/dxUIShader.h"
 #include "xrRenderCommon/infernis_pbr_settings.h"
+#include "xrEngine/ssfx_console_vars.h"
 
 #include "../xrRenderDX10/3DFluid/dx103DFluidManager.h"
 #include "xrRenderCommon/ShaderResourceTraits.h"
@@ -36,6 +37,15 @@ public:
     virtual void set_color(float r, float g, float b) {}
 };
 
+// Screen Space Shaders. Monolith r4.cpp:62-67, unchanged.
+bool CRender::is_sun() {
+    if (o.sunstatic)
+        return FALSE;
+    Fcolor sun_color = ((light*)Lights.sun_adapted._get())->color;
+    return (ps_r2_ls_flags.test(R2FLAG_SUN) &&
+            (u_diffuse2s(sun_color.r, sun_color.g, sun_color.b) > EPS));
+}
+
 float r_dtex_range = 50.f;
 //////////////////////////////////////////////////////////////////////////
 ShaderElement* CRender::rimp_select_sh_dynamic(dxRender_Visual* pVisual, float cdist_sq) {
@@ -50,8 +60,32 @@ ShaderElement* CRender::rimp_select_sh_dynamic(dxRender_Visual* pVisual, float c
 ShaderElement* CRender::rimp_select_sh_static(dxRender_Visual* pVisual, float cdist_sq) {
     int id = SE_R2_SHADOW;
     if (CRender::PHASE_NORMAL == RImplementation.phase) {
-        id = ((std::sqrt(cdist_sq) - pVisual->vis.sphere.R) < r_dtex_range) ? SE_R2_NORMAL_HQ
-                                                                        : SE_R2_NORMAL_LQ;
+        // Screen Space Shaders - ground relief. Ported from Monolith r4.cpp:84-99.
+        //
+        // Everything else keeps the stock 50 metre cut between the detailed and the plain shader.
+        // The terrain does not: its relief shader is expensive, so SSFX gives it three bands and a
+        // distance the player sets - ssfx_terrain_quality.x, in tens of metres, the "Ground: relief
+        // distance" slider. Past 240 metres it drops to the third band.
+        //
+        // Deviation from the donor ( user 2026-10-23 ): in Monolith the third band starts at 240
+        // metres whatever the slider says and the slider stops at 40, so the detailed ground ends at
+        // 240 metres at the most - that edge is the seam the player sees in the distance. Here the
+        // slider goes to 100 ( xr_ioc_cmd.cpp ) and the third band waits until the detailed one has
+        // ended; up to 24 on the slider the bands are the donor's.
+        //
+        // Blender_BmmD raises isLandscape on element 0 when it compiled the SSFX terrain shaders,
+        // so this branch is reached only when the addon is installed and the terrain module is on.
+        if (pVisual->shader->E[0]->flags.isLandscape) {
+            float sec_dist = std::sqrt(cdist_sq) - pVisual->vis.sphere.R;
+            id = (sec_dist < ps_ssfx_terrain_quality.x * 10) ? SE_R2_NORMAL_HQ : SE_R2_NORMAL_LQ;
+
+            // Very low shader variation
+            if (sec_dist > 240 && sec_dist >= ps_ssfx_terrain_quality.x * 10)
+                id = 3;
+        } else {
+            id = ((std::sqrt(cdist_sq) - pVisual->vis.sphere.R) < r_dtex_range) ? SE_R2_NORMAL_HQ
+                                                                            : SE_R2_NORMAL_LQ;
+        }
     }
     return pVisual->shader->E[id]._get();
 }
@@ -348,6 +382,40 @@ void CRender::create() {
     o.disasm = (strstr(Core.Params, "-disasm")) ? TRUE : FALSE;
     o.forceskinw = (strstr(Core.Params, "-skinw")) ? TRUE : FALSE;
 
+    // Screen Space Shaders - the stock video options the addon rides on are the PLAYER'S.
+    //
+    // There was a block here that forced a combination of them at every start: r2_ssao and
+    // r2_soft_water off, r2_volumetric_lights, r2_steep_parallax, r2_detail_bump,
+    // r3_dynamic_wet_surfaces and r2_sun_shafts on. It was written for this port and Monolith has
+    // nothing like it. Removed, because it was wrong twice over:
+    //
+    //   - it overwrote the player's own choice in the Video menu on every single start, in memory,
+    //     after the menu had already saved the opposite to user.ltx. From the outside that reads as
+    //     "the settings do not save".
+    //   - r2_steep_parallax and r2_detail_bump change the NAME of the shader the renderer asks for,
+    //     and the addon does not ship every variant under those names yet. The missing ones are not
+    //     reported anywhere: the draw simply produces nothing, which is what tore the grass and the
+    //     branches into streaks after each restart.
+    //
+    // The switches belong to the player until those variants exist. Anything a module truly cannot
+    // run without has to be shown in the menu, not set behind the player's back.
+
+    // Screen Space Shaders: SSS runs without the stock SSAO, anti-aliasing ( MSAA ) and
+    // tessellation ( the user, 2026-10-27 ). Not behind the player's back: the video pages show
+    // them grey while SSS is ticked ( ui_mm_opt_main.script, SSFXSwitch ), and the profile of the
+    // game without SSS, user.ltx, keeps its own values. Set on the console values themselves - as
+    // "r2_ssao_mode disabled", "r3_msaa st_opt_off" and "r4_enable_tessellation off" set them - so
+    // what runs is what user_sss.ltx and the pages show. MSAA would also break the SSS shaders: they
+    // read the motion vectors as a plain Texture2D.
+    if (ssfx_session_enable) {
+        ps_r_ssao_mode = 0;
+        ps_r_ssao = 0;
+        ps_r2_ls_flags_ext.set(R2FLAGEXT_SSAO_HBAO, 0);
+        ps_r2_ls_flags_ext.set(R2FLAGEXT_SSAO_HDAO, 0);
+        ps_r3_msaa = 0;
+        ps_r2_ls_flags_ext.set(R2FLAGEXT_ENABLE_TESSELLATION, 0);
+    }
+
     o.ssao_blur_on = ps_r2_ls_flags_ext.test(R2FLAGEXT_SSAO_BLUR) && (ps_r_ssao != 0);
     o.ssao_opt_data = ps_r2_ls_flags_ext.test(R2FLAGEXT_SSAO_OPT_DATA) && (ps_r_ssao != 0);
     o.ssao_half_data =
@@ -436,6 +504,95 @@ void CRender::create() {
             }
         }
     }
+
+    // Screen Space Shaders - each module stays off unless its shader is actually installed
+    string_path ssfx_fn;
+    o.ssfx_core = FS.exist(ssfx_fn, "$game_shaders$", "r3\\screenspace_common", ".h") ? 1 : 0;
+    o.ssfx_rain = FS.exist(ssfx_fn, "$game_shaders$", "r3\\effects_rain_splash", ".ps") ? 1 : 0;
+    o.ssfx_blood = FS.exist(ssfx_fn, "$game_shaders$", "r3\\effects_wallmark_blood", ".ps") ? 1 : 0;
+    o.ssfx_branches =
+        FS.exist(ssfx_fn, "$game_shaders$", "r3\\deffer_tree_branch_aref_bump-hq", ".ps") ? 1 : 0;
+    o.ssfx_hud_raindrops =
+        FS.exist(ssfx_fn, "$game_shaders$", "r3\\deffer_base_hud_bump", ".ps") ? 1 : 0;
+    o.ssfx_ssr = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_ssr", ".ps") ? 1 : 0;
+    o.ssfx_terrain =
+        FS.exist(ssfx_fn, "$game_shaders$", "r3\\deffer_terrain_high_flat_d", ".ps") ? 1 : 0;
+    o.ssfx_volumetric =
+        FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_volumetric_blur", ".ps") ? 1 : 0;
+    o.ssfx_water = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_water", ".ps") ? 1 : 0;
+    o.ssfx_ao = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_ao", ".ps") ? 1 : 0;
+    o.ssfx_il = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_il", ".ps") ? 1 : 0;
+    o.ssfx_sss = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_sss", ".ps") ? 1 : 0;
+    o.ssfx_bloom = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_bloom", ".ps") ? 1 : 0;
+    o.ssfx_taa = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_taa", ".ps") ? 1 : 0;
+    o.ssfx_fog = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_fog_scattering", ".ps") ? 1 : 0;
+    o.ssfx_motionblur =
+        FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_motion_blur", ".ps") ? 1 : 0;
+    o.ssfx_motionvectors =
+        FS.exist(ssfx_fn, "$game_shaders$", "r3\\screenspace_mvectors", ".h") ? 1 : 0;
+    o.ssfx_glass = FS.exist(ssfx_fn, "$game_shaders$", "r3\\ssfx_glass", ".ps") ? 1 : 0;
+
+    // ... and only while SSS is switched on ( ssfx_enable as the game started with it, see
+    // ssfx_console_vars.h ). The shaders are installed either way: every gamedata file SSS changes
+    // holds both versions, and with the modules off here every shader compiles the game's own -
+    // IE_SSFX_ENABLED, which picks the SSS version, follows ssfx_core ( shader_compile ).
+    if (!ssfx_session_enable) {
+        o.ssfx_core = 0;
+        o.ssfx_rain = 0;
+        o.ssfx_blood = 0;
+        o.ssfx_branches = 0;
+        o.ssfx_hud_raindrops = 0;
+        o.ssfx_ssr = 0;
+        o.ssfx_terrain = 0;
+        o.ssfx_volumetric = 0;
+        o.ssfx_water = 0;
+        o.ssfx_ao = 0;
+        o.ssfx_il = 0;
+        o.ssfx_sss = 0;
+        o.ssfx_bloom = 0;
+        o.ssfx_taa = 0;
+        o.ssfx_fog = 0;
+        o.ssfx_motionblur = 0;
+        o.ssfx_motionvectors = 0;
+        o.ssfx_glass = 0;
+
+        // The sun cascade sizes were set before this switch was known - by the constructor and by
+        // the ssfx_shadow_cascades line of user.ltx, both through init_cacades(). With SSS off that
+        // function keeps the game's own sizes; build them again now that it can tell.
+        init_cacades();
+    }
+
+    // Screen Space Shaders exist only for the packed G-buffer. Monolith removed the unpacked path
+    // outright - its whole source tree and both of its shader trees contain no gbuffer_opt and no
+    // GBUFFER_OPTIMIZATION at all - which is why its gbuffer_stage.h declares
+    // gbuffer_load_data( tc, pos2d, iSample ) unconditionally. This engine still carries the old
+    // r3_gbuffer_opt switch, and with it off the donor's own rain_patch_normal.ps, combine_1.ps and
+    // ssao_calc.ps find no such overload. A failed shader compile is CHECK_OR_EXIT, so that is not a
+    // dimmer picture, it is the game closing. The switch stays for a build without the addon.
+    if (o.ssfx_core && !o.dx10_gbuffer_opt) {
+        o.dx10_gbuffer_opt = 1;
+        Msg("~ r3_gbuffer_opt forced on: Screen Space Shaders require the packed G-buffer");
+    }
+
+    Msg("- SSS SWITCHED ON %i ( ssfx_enable )", ssfx_session_enable);
+    Msg("- SSS CORE INSTALLED %i", o.ssfx_core);
+    Msg("- SSS HUD SHADER INSTALLED %i", o.ssfx_hud_raindrops);
+    Msg("- SSS MOTION VECTORS SHADER INSTALLED %i", o.ssfx_motionvectors);
+    Msg("- SSS RAIN SHADER INSTALLED %i", o.ssfx_rain);
+    Msg("- SSS BLOOD SHADER INSTALLED %i", o.ssfx_blood);
+    Msg("- SSS BRANCHES SHADER INSTALLED %i", o.ssfx_branches);
+    Msg("- SSS SSR SHADER INSTALLED %i", o.ssfx_ssr);
+    Msg("- SSS TERRAIN SHADER INSTALLED %i", o.ssfx_terrain);
+    Msg("- SSS VOLUMETRIC SHADER INSTALLED %i", o.ssfx_volumetric);
+    Msg("- SSS WATER SHADER INSTALLED %i", o.ssfx_water);
+    Msg("- SSS AO SHADER INSTALLED %i", o.ssfx_ao);
+    Msg("- SSS IL SHADER INSTALLED %i", o.ssfx_il);
+    Msg("- SSS SSS SHADER INSTALLED %i", o.ssfx_sss);
+    Msg("- SSS BLOOM SHADER INSTALLED %i", o.ssfx_bloom);
+    Msg("- SSS FOG SHADER INSTALLED %i", o.ssfx_fog);
+    Msg("- SSS GLASS SHADER INSTALLED %i", o.ssfx_glass);
+    Msg("- SSS MOTION BLUR SHADER INSTALLED %i", o.ssfx_motionblur);
+    Msg("- SSS TAA SHADER INSTALLED %i", o.ssfx_taa);
 
     // constants
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("parallax", &binder_parallax);
@@ -585,6 +742,10 @@ void CRender::OnFrame() {
         Device.seqParallel.insert(Device.seqParallel.begin(),
                                   fastdelegate::FastDelegate0<>(&HOM, &CHOM::MT_RENDER));
     }
+
+    // SSFX interactive grass: advance the bender animations once per frame. Donor r4.cpp:677-678.
+    if (Details)
+        g_pGamePersistent->GrassBendersUpdateAnimations();
 }
 
 // Implementation
@@ -1050,6 +1211,20 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     char c_sun_quality[32];
     char c_infernis_pbr[2];
     char c_infernis_sslr[2];
+    // Screen Space Shaders preprocessor values
+    char c_ssfx_sss_dir_quality[32];
+    char c_ssfx_sss_omni_quality[32];
+    char c_ssfx_terrain_pom_refine[32];
+    char c_ssfx_pom_refine[32];
+    char c_ssfx_il[32];
+    char c_ssfx_ao[32];
+    char c_ssfx_water[32];
+    char c_ssfx_water_parallax[32];
+    char c_ssr_quality[32];
+    char c_rain_quality[32];
+    char c_inter_grass[32];
+    char c_ssfx_es_burley[2];
+    char c_ssfx_es_ggx[2];
 
     char sh_name[MAX_PATH] = "";
 
@@ -1503,6 +1678,171 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         sh_name[len] = '0';
         ++len;
         sh_name[len] = '0';
+        ++len;
+    }
+
+    // Screen Space Shaders ( Monolith )
+    //
+    // sh_name is the key the compiled shaders are cached under, so every entry below writes a
+    // fixed number of characters. Values that can have two digits always take two characters in
+    // the key, while the define gets the plain number: HLSL reads a leading zero as an octal
+    // literal. Module switches ( SSFX_AO, SSFX_SSR, SSFX_WIND, ... ) are not set here: every
+    // installed module defines its own in its check_screenspace_*.h, as in Monolith.
+    {
+        // Every gamedata file SSS changes holds both versions under the one name: the SSS one
+        // where IE_SSFX_ENABLED is defined, the game's own otherwise. The shader cache keys a
+        // compiled shader by its name and this string only - never by its source. Without this
+        // char, "SSS on" and "SSS off" would build identical keys from different sources, and one
+        // would load the other's cached bytecode.
+        sh_name[len] = '0' + char(o.ssfx_core);
+        ++len;
+        if (o.ssfx_core) {
+            defines[def_it].Name = "IE_SSFX_ENABLED";
+            defines[def_it].Definition = "1";
+            def_it++;
+        }
+
+        if (ps_ssfx_rain_1.w > 0) {
+            xr_sprintf(c_rain_quality, "%d", u8(ps_ssfx_rain_1.w));
+            defines[def_it].Name = "SSFX_RAIN_QUALITY";
+            defines[def_it].Definition = c_rain_quality;
+            def_it++;
+            sh_name[len] = '1';
+            ++len;
+            xr_strcat(sh_name, c_rain_quality);
+            len += xr_strlen(c_rain_quality);
+        } else {
+            sh_name[len] = '0';
+            ++len;
+            sh_name[len] = '0';
+            ++len;
+        }
+
+        if (ps_ssfx_grass_interactive.y > 0) {
+            const u8 inter_grass = u8(ps_ssfx_grass_interactive.y);
+            xr_sprintf(c_inter_grass, "%d", inter_grass);
+            defines[def_it].Name = "SSFX_INT_GRASS";
+            defines[def_it].Definition = c_inter_grass;
+            def_it++;
+            sh_name[len] = '1';
+            ++len;
+            sh_name[len] = '0' + char(inter_grass / 10);
+            ++len;
+            sh_name[len] = '0' + char(inter_grass % 10);
+            ++len;
+        } else {
+            sh_name[len] = '0';
+            ++len;
+            sh_name[len] = '0';
+            ++len;
+            sh_name[len] = '0';
+            ++len;
+        }
+
+        xr_sprintf(c_ssr_quality, "%d", u8(std::min(std::max(ps_ssfx_ssr_quality, 0), 5)));
+        defines[def_it].Name = "SSFX_SSR_QUALITY";
+        defines[def_it].Definition = c_ssr_quality;
+        def_it++;
+        xr_strcat(sh_name, c_ssr_quality);
+        len += xr_strlen(c_ssr_quality);
+
+        xr_sprintf(c_ssfx_water, "%d",
+                   u8(std::min(std::max(ps_ssfx_water_quality.x, 0.0f), 4.0f)));
+        defines[def_it].Name = "SSFX_WATER_QUALITY";
+        defines[def_it].Definition = c_ssfx_water;
+        def_it++;
+        xr_strcat(sh_name, c_ssfx_water);
+        len += xr_strlen(c_ssfx_water);
+
+        xr_sprintf(c_ssfx_water_parallax, "%d",
+                   u8(std::min(std::max(ps_ssfx_water_quality.y, 0.0f), 3.0f)));
+        defines[def_it].Name = "SSFX_WATER_PARALLAX";
+        defines[def_it].Definition = c_ssfx_water_parallax;
+        def_it++;
+        xr_strcat(sh_name, c_ssfx_water_parallax);
+        len += xr_strlen(c_ssfx_water_parallax);
+
+        const u8 il_quality = u8(std::min(std::max(ps_ssfx_il_quality, 0), 64));
+        xr_sprintf(c_ssfx_il, "%d", il_quality);
+        defines[def_it].Name = "SSFX_IL_QUALITY";
+        defines[def_it].Definition = c_ssfx_il;
+        def_it++;
+        sh_name[len] = '0' + char(il_quality / 10);
+        ++len;
+        sh_name[len] = '0' + char(il_quality % 10);
+        ++len;
+
+        xr_sprintf(c_ssfx_ao, "%d", u8(std::min(std::max(ps_ssfx_ao_quality, 2), 8)));
+        defines[def_it].Name = "SSFX_AO_QUALITY";
+        defines[def_it].Definition = c_ssfx_ao;
+        def_it++;
+        xr_strcat(sh_name, c_ssfx_ao);
+        len += xr_strlen(c_ssfx_ao);
+
+        xr_sprintf(c_ssfx_pom_refine, "%d", u8(std::min(std::max(ps_ssfx_pom_refine, 0), 1)));
+        defines[def_it].Name = "SSFX_POM_REFINE";
+        defines[def_it].Definition = c_ssfx_pom_refine;
+        def_it++;
+        xr_strcat(sh_name, c_ssfx_pom_refine);
+        len += xr_strlen(c_ssfx_pom_refine);
+
+        xr_sprintf(c_ssfx_terrain_pom_refine, "%d",
+                   u8(std::min(std::max(ps_ssfx_terrain_pom_refine, 0), 1)));
+        defines[def_it].Name = "SSFX_TERRA_POM_REFINE";
+        defines[def_it].Definition = c_ssfx_terrain_pom_refine;
+        def_it++;
+        xr_strcat(sh_name, c_ssfx_terrain_pom_refine);
+        len += xr_strlen(c_ssfx_terrain_pom_refine);
+
+        const u8 sss_dir_quality = u8(std::min(std::max((int)ps_ssfx_sss_quality.x, 1), 24));
+        xr_sprintf(c_ssfx_sss_dir_quality, "%d", sss_dir_quality);
+        defines[def_it].Name = "SSFX_SSS_DIR_QUALITY";
+        defines[def_it].Definition = c_ssfx_sss_dir_quality;
+        def_it++;
+        sh_name[len] = '0' + char(sss_dir_quality / 10);
+        ++len;
+        sh_name[len] = '0' + char(sss_dir_quality % 10);
+        ++len;
+
+        const u8 sss_omni_quality = u8(std::min(std::max((int)ps_ssfx_sss_quality.y, 1), 12));
+        xr_sprintf(c_ssfx_sss_omni_quality, "%d", sss_omni_quality);
+        defines[def_it].Name = "SSFX_SSS_OMNI_QUALITY";
+        defines[def_it].Definition = c_ssfx_sss_omni_quality;
+        def_it++;
+        sh_name[len] = '0' + char(sss_omni_quality / 10);
+        ++len;
+        sh_name[len] = '0' + char(sss_omni_quality % 10);
+        ++len;
+
+        // SSFX_BEEFS_NVG is deliberately never defined here. Monolith has no such switch: the
+        // Beefs NVGs patch defines it in its own check_screenspace_NVG.h, exactly like every other
+        // SSFX module switch. The patch is not part of this port, so the #ifdef SSFX_BEEFS_NVG
+        // blocks in combine_1 / combine_2 / pp_blur simply never compile.
+
+        // The pseudo-PBR module's two compiled-in switches ( pbr_settings.h: USE_BURLEY_DIFFUSE,
+        // USE_GGX_SPECULAR ), from ssfx_es_burley / ssfx_es_ggx. One char each in the key, so the
+        // two choices never share a cached shader. Shaders are compiled when they are created,
+        // so a change shows after a restart.
+        c_ssfx_es_burley[0] = ps_ssfx_es_burley ? '1' : '0';
+        c_ssfx_es_burley[1] = 0;
+        defines[def_it].Name = "SSFX_ES_BURLEY";
+        defines[def_it].Definition = c_ssfx_es_burley;
+        def_it++;
+        sh_name[len] = c_ssfx_es_burley[0];
+        ++len;
+
+        c_ssfx_es_ggx[0] = ps_ssfx_es_ggx ? '1' : '0';
+        c_ssfx_es_ggx[1] = 0;
+        defines[def_it].Name = "SSFX_ES_GGX";
+        defines[def_it].Definition = c_ssfx_es_ggx;
+        def_it++;
+        sh_name[len] = c_ssfx_es_ggx[0];
+        ++len;
+
+        defines[def_it].Name = "SSFX_MODEXE";
+        defines[def_it].Definition = "1";
+        def_it++;
+        sh_name[len] = '1';
         ++len;
     }
 

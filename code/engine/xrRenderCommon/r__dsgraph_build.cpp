@@ -20,6 +20,15 @@ float r_ssaLOD_A, r_ssaLOD_B;
 float r_ssaGLOD_start, r_ssaGLOD_end;
 float r_ssaHZBvsTEX;
 
+#if RENDER == R_R4
+// The mapWater diagnostic of 2026-10-08 is removed on DX11, where it printed in normal play (the
+// list is drawn one frame after it is filled). The other renderers keep their code as it was;
+// their water list is always empty, so it never prints there.
+#else
+// Frame in which mapWater was last filled (diagnostics only).
+u32 g_mapWaterFrame = u32(-1);
+#endif
+
 ICF float CalcSSA(float& distSQ, Fvector& C, dxRender_Visual* V) {
     float R = V->vis.sphere.R + 0;
     distSQ = Device.vCameraPosition.distance_to_sqr(C) + EPS;
@@ -280,6 +289,20 @@ void R_dsgraph_structure::r_dsgraph_insert_static(dxRender_Visual* pVisual) {
         return;
     if (!pmask[sh->flags.iPriority / 2])
         return;
+
+    // Screen Space Shaders: water gets its own bucket so it can be drawn twice. It has already
+    // been added to the distortion mask above, exactly as before.
+#if RENDER == R_R4
+    if (sh->flags.isWater && RImplementation.o.ssfx_water) {
+        mapWater_Node* N = mapWater.insertInAnyWay(distSQ);
+        N->val.ssa = SSA;
+        N->val.pObject = NULL;
+        N->val.pVisual = pVisual;
+        N->val.Matrix = Fidentity;
+        N->val.se = sh;
+        return;
+    }
+#endif
 
     // strict-sorting selection
     if (sh->flags.bStrictB2F) {

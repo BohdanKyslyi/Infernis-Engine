@@ -154,6 +154,9 @@ class_<CScriptGameObject> script_register_game_object1(class_<CScriptGameObject>
         .def("patrol", &CScriptGameObject::GetPatrolPathName)
 
         .def("get_ammo_in_magazine", &CScriptGameObject::GetAmmoElapsed)
+        // Screen Space Shaders. Monolith script_game_object_script3.cpp:522, same name and the same
+        // method behind it; Monolith wraps it in SAFE_WRAP, which this engine does not have.
+        .def("get_state", &CScriptGameObject::GetState)
         .def("get_ammo_total", &CScriptGameObject::GetSuitableAmmoTotal)
         .def("set_ammo_elapsed", &CScriptGameObject::SetAmmoElapsed)
         .def("set_queue_size", &CScriptGameObject::SetQueueSize)

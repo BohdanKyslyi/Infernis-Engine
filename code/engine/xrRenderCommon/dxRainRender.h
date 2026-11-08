@@ -16,6 +16,9 @@ public:
 
 private:
     ref_shader SH_Rain;
+    // Screen Space Shaders draw the splash on the ground with a shader of their own. Ported from
+    // Monolith dxRainRender.h / dxRainRender.cpp:42. Left empty unless the addon is installed.
+    ref_shader SH_Splash;
     ref_geom hGeom_Rain;
 
     IRender_DetailModel* DM_Drop{ nullptr };

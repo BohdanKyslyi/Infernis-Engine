@@ -107,6 +107,8 @@ public:
     // Render
     virtual void renderable_Render() override;
     [[nodiscard]] virtual BOOL renderable_ShadowGenerate() override;
+    // Monolith (Swartz): may the first-person actor cast its own shadow ( r__actor_shadow, DX11 only ).
+    virtual bool AllowActorShadow();
     virtual void feel_sound_new(CObject* who, int type, CSound_UserDataPtr user_data, const Fvector& Position, float power) override;
     [[nodiscard]] virtual Feel::Sound* dcast_FeelSound() override { return this; }
     

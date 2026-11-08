@@ -1,5 +1,8 @@
 #pragma once
 
+#include "../../../../xrEngine/IGame_Persistent.h"
+#include "../../../../xrEngine/ssfx_console_vars.h" // ps_ssfx_grass_interactive
+
 template <typename Object>
 CStateBurerAttackGravi<Object>::CStateBurerAttackGravi(Object* obj) : inherited(obj) {
     m_next_gravi_allowed_tick = 0;
@@ -128,4 +131,9 @@ void CStateBurerAttackGravi<Object>::ExecuteGraviFire() {
 
     this->object->StopGraviPrepare();
     this->object->sound().play(CBurer::eMonsterSoundGraviAttack);
+
+    // Interactive Grass FX
+    g_pGamePersistent->GrassBendersAddExplosion(this->object->ID(), from_pos,
+                                                this->object->Direction(), 1.33f, 3.0f,
+                                                ps_ssfx_grass_interactive.w, 13.0f);
 }

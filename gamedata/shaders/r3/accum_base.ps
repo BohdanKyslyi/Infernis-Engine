@@ -1,3 +1,263 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+#include "lmodel.h"
+#include "shadow.h"
+
+// Check Screen Space Shaders modules & addons
+#include "check_screenspace.h"
+
+// MAT_FLORA lives here in this addon. The reference keeps it in common_brdf.h, which lmodel.h
+// includes only with the pseudo-PBR module on; this copy serves the module-off build as well, and
+// both define it with the same text, which the compiler accepts. The flora writers
+// ( deffer_grass.ps, deffer_tree_branch_aref_bump-hq.ps ) agree with this copy of the constant.
+#include "screenspace_common.h"
+
+#ifdef SSFX_SSS
+	int sss_id;
+	Texture2D s_ssfx_sss;
+#endif
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// This is the basic primitive used by convex, volumetric lights
+// for example spot-lights, one face of the omni lights, etc.
+//////////////////////////////////////////////////////////////////////////////////////////
+// following options are available to configure compilation:
+// USE_LMAP
+// USE_LMAPXFORM
+// USE_SHADOW
+//////////////////////////////////////////////////////////////////////////////////////////
+uniform float4 m_lmap [2] ;
+//float4 main( float4 tc : TEXCOORD0, float4 tcJ : TEXCOORD1 ) : SV_Target
+#ifdef MSAA_OPTIMIZATION
+#ifdef GBUFFER_OPTIMIZATION
+float4 main( p_volume I, float4 pos2d : SV_Position, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#else
+float4 main( p_volume I, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#endif
+#else
+#ifdef GBUFFER_OPTIMIZATION
+float4 main( p_volume I, float4 pos2d : SV_Position ) : SV_Target
+#else
+float4 main( p_volume I ) : SV_Target
+#endif
+#endif
+{
+// float4 _P = tex2Dproj (s_position, tc);
+// float4 _N = tex2Dproj (s_normal, tc);
+
+ float2 tcProj = I.tc.xy / I.tc.w;
+
+#ifdef GBUFFER_OPTIMIZATION
+ // Infernis PBR Stage 2.21: sample material data at the exact raster pixel.
+ // Light-volume projective UVs are kept only for shadow/lightmap projection.
+ float2 gbufferTC = pos2d.xy / pos_decompression_params2.xy;
+#else
+ float2 gbufferTC = tcProj;
+#endif
+
+ gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, pos2d, ISAMPLE) );
+
+#if IE_PBR_STAGE246_LOCAL_HUD_PROJECTION == 1
+ if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+ {
+     return blendp(float4(0.0f, 0.35f, 0.0f, 0.0f), I.tc);
+ }
+#elif IE_PBR_STAGE246_LOCAL_HUD_PROJECTION == 2
+ // Correct the position before both the GGX evaluation and m_shadow lookup.
+ ie_pbr_stage246_correct_local_position(gbd);
+#endif
+
+#if IE_PBR_LOCAL_ROUTE_MODE == 1
+ // Cyan means this spotlight/point-light pixel reached the PBR branch.
+ if (gbd.pbr > 0.5f)
+ {
+     return blendp(float4(0.0f, 0.30f, 0.30f, 0.0f), I.tc);
+ }
+
+ // Orange means the same local-light pixel was classified as legacy.
+ return blendp(float4(0.35f, 0.10f, 0.0f, 0.0f), I.tc);
+#endif
+
+#ifdef GBUFFER_OPTIMIZATION
+ // Emulate virtual offset
+ gbd.P += gbd.N*0.015f;
+#endif // GBUFFER_OPTIMIZATION
+
+ float4 _P = float4( gbd.P, gbd.mtl );
+ float4 _N = float4( gbd.N, gbd.hemi );
+
+ float m = xmaterial ;
+# ifndef USE_R2_STATIC_SUN
+ m = _P.w ;
+# endif
+
+ // FLORA FIXES & IMPROVEMENTS - SSS Update 14.2
+ // Align the flora normal to the light, so point lights stop lighting leaves as if they were
+ // flat cards. The tree and grass shaders already write the fake upward normal for the sun;
+ // deffer_tree_branch_aref_bump-hq.ps says in its own comment that the point-light half has to
+ // be fixed here and in accum_omni_unshadowed.ps.
+ // The reference edits its local _N and _C only. Here the PBR branch reads gbd directly, so the
+ // corrected normal and gloss go back into gbd as well - otherwise the fix would reach the
+ // legacy branch and miss every PBR pixel.
+#ifdef SSFX_FLORAFIX
+ if (abs(m - MAT_FLORA) <= 0.05)
+ {
+     _N.rgb = lerp( _N.rgb, -normalize(_P.xyz - Ldynamic_pos.xyz), 0.5f );
+     gbd.N = _N.rgb;
+     gbd.gloss *= 0.5f;
+ }
+#endif
+
+ // ----- light-model
+ float rsqr;
+float4 light;
+
+if (gbd.pbr > 0.5f)
+{
+    light =
+        plight_local_pbr(
+            gbd,
+            Ldynamic_pos.xyz,
+            Ldynamic_pos.w,
+            rsqr
+        );
+}
+else
+{
+#ifdef SSFX_ENHANCED_SHADERS
+    // Screen Space Shaders: the pseudo-PBR module. The Enhanced Shaders light model also takes the
+    // pixel's albedo and gloss ( SSFX accum_base.ps:36, 55 ). Built here, after the flora fix above, so it carries
+    // the halved gloss exactly as the donor's _C.w does.
+    float4 _C = float4( gbd.C, gbd.gloss );
+
+    light =
+        plight_local(
+            m,
+            _P.xyz,
+            _N.xyz,
+            _C,
+            Ldynamic_pos.xyz,
+            Ldynamic_pos.w,
+            rsqr
+        );
+#else
+    light =
+        plight_local(
+            m,
+            _P.xyz,
+            _N.xyz,
+            Ldynamic_pos.xyz,
+            Ldynamic_pos.w,
+            rsqr
+        );
+#endif
+}
+
+ // ----- shadow
+ // SSFX_SHADOWS: move the shadow lookup off the surface along the normal, by an amount that
+ // grows as the light gets more grazing. Removes the self-shadow acne the softer PCSS filter
+ // in shadow.h would otherwise show. ssfx_shadow_bias is declared in shadow.h.
+ float3 Offset = 0;
+#ifdef SSFX_SHADOWS
+ float bias_int = (1.0 - saturate(dot(_N.xyz, -normalize(_P.xyz - Ldynamic_pos.xyz)))) * rsqr * Ldynamic_pos.w;
+ Offset = _N.xyz * (0.025f + bias_int * ssfx_shadow_bias.x);
+#endif
+
+ float4 P4 = float4( _P.xyz + Offset, 1);
+ float4 PS = mul( m_shadow, P4 );
+ float s = 1.h;
+ #ifdef USE_SHADOW
+ // The USE_SJITTER branch called shadowtest(), which the SSFX shadow.h does not carry - its
+ // jittered sampling is folded into shadow_pcss(). The renderer never compiles that branch
+ // anyway ( r4.cpp only sets o.sjitter for a -sjitter command line ), so it is dropped rather
+ // than left as a call that cannot resolve. The reference file has the same single line here.
+ s = shadow( PS );
+ #endif
+
+ // ----- lightmap
+ float4 lightmap= 1.h;
+ #ifdef USE_LMAP
+ #ifdef USE_LMAPXFORM
+ PS.x = dot( P4, m_lmap[0] );
+ PS.y = dot( P4, m_lmap[1] );
+ #endif
+ //lightmap= tex2Dproj (s_lmap, PS); //
+ // Can use linear with mip point
+ lightmap = s_lmap.Sample( smp_rtlinear, PS.xy / PS.w ); //
+ #endif
+
+ // SSFX_SSS: the subsurface pass writes one channel per local light into a half-width target;
+ // sss_id picks the light's lane. Multiplying it into the shadow term lets light bleed through
+ // thin surfaces - leaves, cloth, skin - instead of stopping at the shadow edge.
+#ifdef SSFX_SSS
+ if (sss_id > -1)
+ {
+     float2 offset = (sss_id < 4 ? float2(0,0) : float2(0.5f,0));
+     float4 SSS_Sample = s_ssfx_sss.Sample( smp_rtlinear, tcProj * float2(0.5f, 1.0f) + offset );
+     s *= SSS_Sample[sss_id % 4];
+ }
+#endif
+
+#if IE_PBR_STAGE247_LOCAL_SPLIT_MODE == 1
+ if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+ {
+     float3 rawPbr =
+         ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
+         light.rgb;
+     float rawSignal =
+         saturate(ie_pbr_stage247_luminance(rawPbr) * 8.0f);
+     float visibilitySignal =
+         saturate(
+             s *
+             ie_pbr_stage247_luminance(lightmap.rgb)
+         );
+
+     // Red = raw local GGX before visibility.
+     // Green = shadow/projected-light visibility.
+     // Yellow = both are present; black = neither is present.
+     return blendp(
+         float4(rawSignal, visibilitySignal, 0.0f, 0.0f),
+         I.tc
+     );
+ }
+#endif
+
+ // Infernis PBR Stage 2.6: radiance and all local-light
+ // modulation are converted only for PBR pixels.
+ if (gbd.pbr > 0.5f)
+ {
+     float3 pbrVisibility =
+         ie_pbr_prepare_light_factor(s * lightmap.rgb);
+
+#if IE_PBR_STAGE247_LOCAL_SPLIT_MODE == 2
+     if (ie_pbr_stage246_hud_weight(gbd) > 0.5f)
+     {
+         pbrVisibility = float3(1.0f, 1.0f, 1.0f);
+     }
+#endif
+
+     float3 pbrTransport =
+         ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
+         light.rgb *
+         pbrVisibility;
+
+     return blendp(
+         float4(pbrTransport, 0.0f),
+         I.tc
+     );
+ }
+
+#ifdef SSFX_ENHANCED_SHADERS
+ // Screen Space Shaders: the pseudo-PBR module - linear light ( SSFX accum_base.ps:96-97 ).
+ return blendp ( float4( SRGBToLinear( Ldynamic_color.rgb * lightmap.rgb * s.xxx ), 1 ) * light, I.tc );
+#else
+ return blendp ( Ldynamic_color * light * s * lightmap, I.tc );
+#endif
+}
+#else
 #include "common.h"
 #include "lmodel.h"
 #include "shadow.h"
@@ -177,3 +437,4 @@ else
 
  return blendp ( Ldynamic_color * light * s * lightmap, I.tc );
 }
+#endif

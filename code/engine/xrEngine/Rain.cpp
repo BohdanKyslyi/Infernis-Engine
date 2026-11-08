@@ -2,9 +2,11 @@
 #include "Rain.h"
 #include "igame_persistent.h"
 #include "environment.h"
+#include "perlin.h"
+#include "ssfx_console_vars.h"
 #include <algorithm>
 #include <io.h>
-#include "RainConfigEdit.h"
+#include "WeatherEffectConfig.h"
 
 #ifdef _EDITOR
 #include "ui_toolscustom.h"
@@ -32,6 +34,52 @@ const int max_particles = 1000;
 const int particles_cache = 400;
 const float particles_time = .3f;
 
+// Screen Space Shaders - the rain of Monolith Rain.cpp: a drop is born 20 m above the camera instead
+// of 40 and is tilted by the wind up to 35 degrees, with gusts from a Perlin noise ( :22-28, :37 ),
+// and the rain has one sound, half by the rain and half by the wind ( :187-253 ). It runs while SSS
+// runs ( switched on, DX11 ); otherwise this engine's own rain, unchanged. dxRainRender.cpp takes
+// the same three distances.
+extern int g_current_renderer; // EngineAPI.cpp
+static const float ssfx_source_offset = 20.f;
+static const float ssfx_max_distance = ssfx_source_offset * 1.5f;
+static const float ssfx_drop_angle = deg2rad(15.0f);
+static const float ssfx_drop_max_angle = deg2rad(35.f);
+static CPerlinNoise1D* ssfx_rain_perlin = nullptr;
+
+static bool ssfx_rain_runs() { return ssfx_session_enable && g_current_renderer == 4; }
+
+// Monolith Rain.cpp:81-105 ( CEffect_Rain::Prepare ): the angle the wind gives a drop, and the
+// offset that brings a drop born 20 m above down to the player. _sin / _cos of the donor are
+// std::sin / std::cos here ( this xrCore has no _sin ).
+static void ssfx_rain_prepare(Fvector2& offset, Fvector3& axis, float W_Velocity,
+                              float W_Direction, float W_Tilt) {
+    // Wind gust, to add variation.
+    float Wind_Gust = ssfx_rain_perlin->GetContinious(Device.fTimeGlobal * 0.3f) * 2.0f;
+
+    // Wind velocity [ 0 ~ 1 ]
+    float Wind_Velocity = W_Velocity + Wind_Gust;
+
+    clamp(Wind_Velocity, 0.0f, 1.0f);
+
+    // Wind velocity controles the angle
+    // W_Tilt is the weather editor's rain tilt ( 1 = the donor's angle, 0 = straight down ); the
+    // angle stays within the donor's 35 degrees - the drop born 20 m above and its 30 m path
+    // ( ssfx_source_offset, ssfx_max_distance ) are made for them.
+    float pitch = ssfx_drop_max_angle * std::min(Wind_Velocity * W_Tilt, 1.0f);
+    axis.setHP(W_Direction, pitch - PI_DIV_2);
+
+    // Get distance
+    float dist = std::sin(pitch) * ssfx_source_offset;
+    float C = PI_DIV_2 - pitch;
+    dist /= std::sin(C);
+
+    // 0 is North
+    float fixNorth = W_Direction - PI_DIV_2;
+
+    // Set offset
+    offset.set(dist * std::cos(fixNorth), dist * std::sin(fixNorth));
+}
+
 // Rain sounds may be omitted by a mod or supplied only by a language pack.
 // Do not create a sound source for an asset that cannot be opened later.
 
@@ -42,34 +90,6 @@ static bool rain_sound_available(LPCSTR name) {
     if (snd_localized_exists(localized)) return true;
     Msg("! [Rain] Sound is missing, disabling it: %s", localized);
     return false;
-}
-
-// Read the physical override first. FS.r_open alone cannot recover an
-// unindexed .ltx, while .ogg/.xml have a special fallback in LocatorAPI.
-static bool rain_read_config(LPCSTR path, std::string& bytes, bool& exists) {
-    exists = false;
-    const auto result = rain_config::read_loose_file(path, bytes);
-    if (result == rain_config::ReadResult::loaded) {
-        exists = true;
-    } else if (result == rain_config::ReadResult::error) {
-        Msg("! Weather editor: rain config disk read failed [%s], errno=%d", path, errno);
-        return false;
-    } else {
-        if (!FS.exist(path)) return true;
-        exists = true; // A packed config is still a valid source.
-        IReader* reader = FS.r_open(path);
-        if (!reader) {
-            Msg("! Weather editor: rain config archive read failed [%s]", path);
-            return false;
-        }
-        bytes.assign(static_cast<const char*>(reader->pointer()), reader->length());
-        FS.r_close(reader);
-    }
-    if (bytes.size() > 0x7fffffffU) {
-        Msg("! Weather editor: rain config is too large [%s]", path);
-        return false;
-    }
-    return true;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -158,7 +178,7 @@ CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
     FS.update_path(wex_path, "$game_config$", "environment\\noirWeatherEffect.ltx");
     std::string config_bytes;
     bool config_exists = false;
-    if (rain_read_config(wex_path, config_bytes, config_exists) && config_exists) {
+    if (weather_effect_config::read(wex_path, config_bytes, config_exists) && config_exists) {
         IReader config_reader(config_bytes.data(), static_cast<int>(config_bytes.size()));
         string_path config_directory;
         FS.update_path(config_directory, "$game_config$", "environment\\");
@@ -226,15 +246,30 @@ CEffect_Rain::CEffect_Rain() : drops(max_desired_items) {
 
     // Створюємо звуки ПІСЛЯ того, як зчитали їх імена з конфігу
 	
+    // Screen Space Shaders: while SSS runs the rain has the donor's one sound, the game's
+    // ambient\rain ( Monolith Rain.cpp:47 ), and no doorway sound ( OnFrame ).
+    if (ssfx_rain_runs()) {
+        snd_name_2d = "ambient\\rain";
+        snd_name_portal = shared_str();
+    }
     if (rain_sound_available(snd_name_2d.c_str()))
         snd_Ambient2D.create(snd_name_2d.c_str(), st_Effect, sg_Undefined);
     if (rain_sound_available(snd_name_portal.c_str()))
         snd_AmbientPortal.create(snd_name_portal.c_str(), st_Effect, sg_Undefined);
 
+    // Screen Space Shaders: Monolith Rain.cpp:50-52. Only while SSS runs, so the game's own rain
+    // takes nothing from ::Random here.
+    if (ssfx_rain_runs() && !ssfx_rain_perlin) {
+        ssfx_rain_perlin = xr_new<CPerlinNoise1D>(Random.randI(0, 0xFFFF));
+        ssfx_rain_perlin->SetOctaves(2);
+        ssfx_rain_perlin->SetAmplitude(0.66666f);
+    }
+
     p_create();
 }
 
 CEffect_Rain::~CEffect_Rain() {
+    xr_delete(ssfx_rain_perlin); // Screen Space Shaders, Monolith Rain.cpp:71 ( null is fine )
     snd_Ambient2D.destroy();
     snd_AmbientPortal.destroy();
     for (auto& rhs : m_HitSounds) {
@@ -275,7 +310,7 @@ bool CEffect_Rain::SaveWindSettings() {
     FS.update_path(path, "$game_config$", "environment\\noirWeatherEffect.ltx");
     std::string text;
     bool has_original = false;
-    if (!rain_read_config(path, text, has_original)) return false;
+    if (!weather_effect_config::read(path, text, has_original)) return false;
     const std::string original = text;
     string32 value;
     if (save_tilt) {
@@ -287,42 +322,7 @@ bool CEffect_Rain::SaveWindSettings() {
         text = rain_config::set_dynamic_wind_value(text, "speed_wind_multiplier", value);
     }
 
-    string_path temporary, backup;
-    xr_strcpy(temporary, path);
-    xr_strcat(temporary, ".weather_editor.tmp");
-    createPath(temporary);
-    const char* stage = nullptr;
-    if (!rain_config::write_verified_file(temporary, text, stage)) {
-        Msg("! Weather editor: rain config %s failed [%s], errno=%d", stage, temporary, errno);
-        return false;
-    }
-    xr_strcpy(backup, path);
-    xr_strcat(backup, ".weather_editor.bak");
-    if (has_original && _access(backup, 0) != 0) {
-        if (!rain_config::write_verified_file(backup, original, stage)) {
-            Msg("! Weather editor: rain backup %s failed [%s], errno=%d", stage, backup, errno);
-            return false;
-        }
-    }
-    const DWORD attributes = GetFileAttributesA(path);
-    const bool read_only = attributes != INVALID_FILE_ATTRIBUTES &&
-        (attributes & FILE_ATTRIBUTE_READONLY);
-    if (read_only && !SetFileAttributesA(path, attributes & ~FILE_ATTRIBUTE_READONLY)) {
-        Msg("! Weather editor: cannot make rain config writable [%s], win_error=%lu", path, GetLastError());
-        return false;
-    }
-    // Replace without unlinking the original first. A failed replacement keeps it intact.
-    if (!MoveFileExA(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        const DWORD error = GetLastError();
-        if (read_only) SetFileAttributesA(path, attributes);
-        Msg("! Weather editor: rain config replacement failed [%s], win_error=%lu", path, error);
-        return false;
-    }
-    // Native writes must be made visible to subsequent CInifile/VFS reads.
-    string_path directory;
-    FS.update_path(directory, "$game_config$", "environment\\");
-    FS.rescan_path(directory, FALSE);
-    Msg("* Weather editor: saved rain settings [%s]", path);
+    if (!weather_effect_config::write(path, text, original, has_original)) return false;
     m_fSavedWindTiltMultiplier = m_fWindTiltMultiplier;
     m_fSavedWindSpeedMultiplier = m_fWindSpeedMultiplier;
     m_bHasTiltConfig = true;
@@ -330,7 +330,65 @@ bool CEffect_Rain::SaveWindSettings() {
     return true;
 }
 
-void CEffect_Rain::Born(u32 id, float radius) {
+void CEffect_Rain::Born(u32 id, float radius, float speed) {
+    if (ssfx_rain_runs() && ssfx_rain_perlin) {
+        // Screen Space Shaders: Monolith Rain.cpp:108-144 ( CEffect_Rain::Born ) on this engine's
+        // drop arrays. The wind tilts the drop and its gusts vary it; the drop is born 20 m above
+        // the camera, 5 m ahead of where it looks, in a square as wide as rain_radius ( the SSS
+        // setting, dxRainRender.cpp ).
+
+        // Prepare correct angle and distance to hit the player
+        Fvector Rain_Axis = {0, -1, 0};
+        Fvector2 Rain_Offset;
+
+        float Wind_Direction = -g_pGamePersistent->Environment().CurrentEnv->wind_direction;
+
+        // Wind Velocity [ From 0 ~ 1000 to 0 ~ 1 ]
+        float Wind_Velocity = g_pGamePersistent->Environment().CurrentEnv->wind_velocity * 0.001f;
+        clamp(Wind_Velocity, 0.0f, 1.0f);
+
+        ssfx_rain_prepare(Rain_Offset, Rain_Axis, Wind_Velocity, Wind_Direction, m_fWindTiltMultiplier);
+
+        // Camera Position
+        Fvector& view = Device.vCameraPosition;
+
+        // Random Position
+        float r = radius * 0.5f;
+        Fvector2 RandomP = {::Random.randF(-r, r), ::Random.randF(-r, r)};
+
+        // Aim ahead of where the player is facing
+        Fvector FinalView = Fvector().mad(view, Device.vCameraDirection, 5.0f);
+
+        // Random direction. Higher angle at lower velocity
+        Fvector D;
+        D.random_dir(Rain_Axis,
+                     ::Random.randF(-ssfx_drop_angle, ssfx_drop_angle) * (1.5f - Wind_Velocity));
+        drops.dx[id] = D.x;
+        drops.dy[id] = D.y;
+        drops.dz[id] = D.z;
+
+        // Set final destination
+        drops.px[id] = Rain_Offset.x + FinalView.x + RandomP.x;
+        drops.py[id] = ssfx_source_offset + view.y;
+        drops.pz[id] = Rain_Offset.y + FinalView.z + RandomP.y;
+
+        // Set speed. The donor's 1.5 is the weather editor's rain speed-up from wind
+        // ( speed_wind_multiplier, noirWeatherEffect.ltx, 1.5 there ): at 1.5 this is the donor's
+        // clampr( Wind_Velocity * 1.5, 0.5, 1 ); more makes the wind drive the drops faster
+        // ( 3 = up to twice ), less slower.
+        drops.speed[id] = ::Random.randF(drop_speed_min, drop_speed_max) * speed *
+                          clampr(Wind_Velocity * m_fWindSpeedMultiplier, 0.5f,
+                                 std::max(0.5f, m_fWindSpeedMultiplier / 1.5f));
+
+        // Born
+        float height = ssfx_max_distance;
+        u16 mat_idx = GAMEMTL_NONE_IDX;
+        Fvector s = {drops.px[id], drops.py[id], drops.pz[id]};
+        BOOL bHit = RayPick(s, D, height, collide::rqtBoth, mat_idx);
+        RenewItem(id, height, bHit, mat_idx);
+        return;
+    }
+
     Fvector axis;
     axis.set(0, -1, 0);
 
@@ -349,6 +407,12 @@ void CEffect_Rain::Born(u32 id, float radius) {
     } else {
         drops.speed[id] = ::Random.randF(drop_speed_min, drop_speed_max);
     }
+
+    // Screen Space Shaders. Monolith Rain.cpp:139 folds its own speed argument into the same
+    // expression; this engine computes the base speed in two branches, so the multiply happens
+    // once, after them. Both reduce to the donor's randF( min, max ) * speed. The wind handling
+    // above is this engine's own and is left alone.
+    drops.speed[id] *= speed;
 
     Fvector& view = Device.vCameraPosition;
     float angle = ::Random.randF(0.f, PI_MUL_2);
@@ -524,6 +588,67 @@ void CEffect_Rain::OnFrame() {
     }
 #endif
 
+    // Screen Space Shaders: while SSS runs, the donor's rain sound - Monolith Rain.cpp:187-253.
+    // One sound, the game's ambient\rain ( the constructor ); half of its volume is the rain and
+    // half the wind, and less sky lighting the player makes it quieter. The donor's OnRainSound
+    // hook does not exist here, so its factor is 1, and its rain_hemi is not kept: this engine's
+    // level.rain_hemi reads the sky itself ( xrGame level_script.cpp ). A level load and a forced
+    // weather change start the sound again ( InvalidateState ). This engine's doorway sound and its
+    // drip after the rain do not run; the roof test above still does, for m_fViewRainExposure.
+    if (ssfx_rain_runs()) {
+        // Parse states
+        float rain_density = factor;
+        float wind_velocity = g_pGamePersistent->Environment().CurrentEnv->wind_velocity * 0.001f;
+        clamp(wind_velocity, 0.0f, 1.0f);
+
+        wind_velocity *= (rain_density > 0.0f ? 1.0f : 0.0f); // Only when raining
+
+        // 50% of the volume is by rain_density and 50% wind_velocity;
+        const float sound_factor = rain_density * 0.5f + wind_velocity * 0.5f;
+        static float hemi_factor = 0.f;
+#ifndef _EDITOR
+        if (E && E->renderable_ROS()) {
+            float* hemi_cube = E->renderable_ROS()->get_luminocity_hemi_cube();
+            float hemi_val = std::max(hemi_cube[0], hemi_cube[1]);
+            hemi_val = std::max(hemi_val, hemi_cube[2]);
+            hemi_val = std::max(hemi_val, hemi_cube[3]);
+            hemi_val = std::max(hemi_val, hemi_cube[5]);
+
+            float f = hemi_val;
+            float t = Device.fTimeDelta;
+            clamp(t, 0.001f, 1.0f);
+            hemi_factor = hemi_factor * (1.0f - t) + f * t;
+        }
+#endif
+
+        switch (state) {
+        case stIdle:
+            if (sound_factor < EPS_L) return;
+            state = stWorking;
+            if (snd_Ambient2D._handle()) {
+                snd_Ambient2D.play(0, sm_Looped);
+                snd_Ambient2D.set_position(Fvector().set(0, 0, 0));
+                snd_Ambient2D.set_range(ssfx_source_offset, ssfx_source_offset * 2.f);
+            }
+            break;
+        case stWorking:
+            if (sound_factor < EPS_L) {
+                state = stIdle;
+                snd_Ambient2D.stop();
+                return;
+            }
+            break;
+        }
+
+        // ambient sound
+        if (snd_Ambient2D._feedback()) {
+            float rain_volume = sound_factor * hemi_factor;
+            clamp(rain_volume, .1f, 1.f);
+            snd_Ambient2D.set_volume(rain_volume);
+        }
+        return;
+    }
+
     switch (state) {
     case stIdle:
         if (factor < EPS_L) return;
@@ -577,6 +702,16 @@ void CEffect_Rain::OnFrame() {
             snd_AmbientPortal.set_volume(volPortal);
         }
     }
+}
+
+// Screen Space Shaders: Monolith Rain.h:109-114, its InvalidateState ( the donor's rain_volume is
+// left out: this engine has no level.get_rain_volume and no script here calls it ). It does
+// nothing unless SSS runs: this engine's own rain sound ( OnFrame ) does not use it.
+void CEffect_Rain::InvalidateState() {
+    if (!ssfx_rain_runs())
+        return;
+    if (state != stIdle) snd_Ambient2D.stop();
+    state = stIdle;
 }
 
 void CEffect_Rain::Render() {

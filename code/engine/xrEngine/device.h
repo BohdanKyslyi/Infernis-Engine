@@ -81,6 +81,13 @@ public:
     Fmatrix mProject_saved;
     Fmatrix mFullTransform_saved;
 
+    // SSFX: previous frame matrices ( Motion vectors )
+    Fmatrix mView_prev;
+    Fmatrix mProject_prev;
+
+    Fvector4 wind_anim_prev;
+    Fvector4 wind_anim_saved;
+
     float fFOV;
     float fASPECT;
 

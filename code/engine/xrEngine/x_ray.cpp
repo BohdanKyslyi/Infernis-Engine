@@ -18,6 +18,8 @@
 #include "GameFont.h"
 #include "resource.h"
 #include "LightAnimLibrary.h"
+#include "infernis_pbr_console_vars.h"
+#include "ssfx_console_vars.h"
 #include "../xrcdb/ispatial.h"
 #include "Text_Console.h"
 #include <process.h>
@@ -128,6 +130,12 @@ PROTECT_API void InitSettings() {
     tmp_functor.bind([](LPCSTR) { return true; });
     pSettingsAuth = xr_new<CInifile>(fname, TRUE, TRUE, FALSE, 0, tmp_functor);
 
+    // Infernis PBR: the two settings that are compiled into the shaders start from the game
+    // settings, before user.ltx has its say.
+    pbr_settings_config_loaded();
+    // SSS on or off starts from the game settings the same way ( ssfx_console_vars.h ).
+    ssfx_settings_config_loaded();
+
     FS.update_path(fname, "$game_config$", "game.ltx");
     pGameIni = xr_new<CInifile>(fname, TRUE);
     CHECK_OR_EXIT(
@@ -167,6 +175,7 @@ void destroySettings() {
 
 void destroyConsole() {
     Console->Execute("cfg_save");
+    ssfx_profile_backup(); // Screen Space Shaders: a copy of both profiles
     Console->Destroy();
     xr_delete(Console);
 }
@@ -181,9 +190,20 @@ void execUserScript() {
     Console->ExecuteScript(Console->ConfigFile);
 }
 
+extern int g_current_renderer; // EngineAPI.cpp
+
 void Startup() {
     InitSound1();
     execUserScript();
+    // Infernis PBR: user.ltx is in, no shader is built yet - this is what the session runs with.
+    pbr_settings_user_config_loaded();
+    // And the SSS switch the session runs with.
+    ssfx_settings_user_config_loaded();
+    // The addon packs that belong to SSS ( [shader_extensions] ssfx_addons of engine_external.ltx )
+    // come in only if SSS runs: switched on, on the DX11 renderer ( g_current_renderer 4, set by
+    // Engine.External.Initialize before Startup ). Nothing has read their files yet: the weathers,
+    // their sounds and skies are loaded from here on.
+    FS.ssfx_addons(ssfx_session_enable && g_current_renderer == 4);
     InitSound2();
 
     // ...command line for auto start
@@ -594,6 +614,8 @@ int APIENTRY WinMain_impl(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lp
         InitInput();
 
         InitConsole();
+        // Screen Space Shaders: which of the two profiles this start runs with
+        ssfx_profile_select();
 
         Engine.External.CreateRendererList();
 
@@ -621,10 +643,13 @@ int APIENTRY WinMain_impl(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lp
             CCC_LoadCFG_custom* pTmp = xr_new<CCC_LoadCFG_custom>("renderer ");
             pTmp->Execute(Console->ConfigFile);
             xr_delete(pTmp);
+            ssfx_profile_renderer(); // Screen Space Shaders: with SSS, DX11
         }
 
         //.		InitInput					( );
         Engine.External.Initialize();
+        // Screen Space Shaders: the shader cache of another renderer or SSS setting goes
+        ssfx_profile_cache_check();
         Console->Execute("stat_memory");
 
         Startup();

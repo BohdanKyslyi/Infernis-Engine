@@ -1,0 +1,709 @@
+-- @ Description: Screen Space Shaders - script bridge for the Infernis engine
+-- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+
+--[[
+	The SSFX gameplay scripts are written for Anomaly and use its Lua framework: RegisterScriptCallback,
+	SendScriptCallback, CreateTimeEvent and the events it fires (on_game_load, actor_on_first_update,
+	actor_on_update, on_key_press, ...). Call of Pripyat scripts have none of that, so this file
+	supplies it:
+	  - Anomaly's callback and time event functions, installed as globals only under names that are
+	    still free, so nothing the game already defines is replaced;
+	  - the engine_* functions, called by the engine (xrGame\ssfx_script_bridge.cpp), which turn
+	    engine events into those callbacks.
+	The engine only calls into this file when it exists, so without the addon none of it runs.
+
+	Differences from Anomaly, on purpose:
+	  - a callback or time event that raises an error is removed and the error goes to the engine
+	    log, instead of the whole game stopping on a Lua error;
+	  - any callback name may be registered; names the engine doesn't fire yet simply never fire.
+--]]
+
+-- SSFX scripts started here, in this order. A listed script that isn't installed is skipped.
+--
+-- ssfx_001_mcm goes first and is not optional: its MCM part is eight lines, the rest is
+-- ssfx_get_setting(), which every other SSFX script calls to read its values. With no MCM present -
+-- which is always the case here - that function falls back to <module>_settings.ssfx_default_settings,
+-- so the *_settings.script tables are the values SSFX runs on. Those tables need no starting; the
+-- engine's autoloader pulls each one in the first time a module script names it.
+--
+-- The settings appliers are listed too. Each one reads its module's values and writes them to the
+-- console variables the shaders read, so without them the shaders run on the engine's built-in
+-- defaults instead of the reference ones. An earlier version of this list left them out on the
+-- grounds that the Video menu would write those variables directly; that is not how SSFX is built -
+-- the menu writes where ssfx_get_setting reads, and these scripts carry the value the rest of the
+-- way, including the conversions they apply before sending it.
+local runtime_scripts = {
+	"ssfx_001_mcm",				-- ssfx_get_setting / ssfx_module_installed: needed by all of the below
+
+	-- Settings appliers: module values -> console variables
+	"ssfx_ao",					-- 01 AO
+	"ssfx_florafixes",			-- 09 Flora
+	"ssfx_fog",					-- 08 Fog
+	"ssfx_il",					-- 07 Indirect light
+	"ssfx_interactive_grass",	-- 10 Interactive grass
+	"ssfx_parallax",			-- 02 Parallax
+	"ssfx_pp_0taa",				-- 53 TAA
+	"ssfx_pp_bloom",			-- 51 Bloom
+	"ssfx_pp_mblur",			-- 52 Motion blur
+	"ssfx_rain",				-- 05 Rain
+	"ssfx_shadow_cascades",		-- 92 Shadow cascades
+	"ssfx_shadows",				-- 91 Shadows and volumetric light
+	"ssfx_ssr",					-- 03 Screen space reflections
+	"ssfx_sss",					-- 93 Screen space shadows
+	"ssfx_terrain",				-- 11 Terrain
+	"ssfx_water",				-- 04 Water
+	"ssfx_wind",				-- 10 Wind
+
+	-- Scripts that keep working while the game runs
+	"ssfx_underground_check",	-- 03/04 SSR: underground flag per level
+	"ssfx_terrain_parallax",	-- 11 Terrain: parallax offsets per level
+	"ssfx_lut",					-- 50 LUT: per-level table and transitions
+	"ssfx_rain_hud_raindrops",	-- 05 Rain: raindrops on the HUD
+	"ssfx_rain_footsteps",		-- 05 Rain: wet footstep sounds
+	"ssfx_wetness",				-- 94 Gloss: follows rain wetness
+	"ssfx_weapons_dof",			-- 06 Weapon DOF states
+}
+
+--------------------------------------------------------------------------------------------------
+-- Engine log
+--------------------------------------------------------------------------------------------------
+
+-- Lines for the engine log. Every engine_* function hands them over as its return value.
+local reports = {}
+
+-- The string last handed to the engine. Holding it here keeps it alive while the engine reads it,
+-- until the next engine_* call.
+local last_report = ""
+
+local function report(fmt, ...)
+	reports[#reports + 1] = string.format(fmt, ...)
+end
+
+local function flush_reports()
+	if #reports == 0 then
+		last_report = ""
+	else
+		last_report = table.concat(reports, "\n")
+		reports = {}
+	end
+	return last_report
+end
+
+--------------------------------------------------------------------------------------------------
+-- Callbacks (Anomaly: RegisterScriptCallback, UnregisterScriptCallback, SendScriptCallback)
+--------------------------------------------------------------------------------------------------
+
+-- [name] = { list = { in registration order }, set = { [function or object] = true } }
+local intercepts = {}
+
+local function intercept(name)
+	local t = intercepts[name]
+	if not t then
+		t = { list = {}, set = {} }
+		intercepts[name] = t
+	end
+	return t
+end
+
+local function register_callback(name, func_or_userdata)
+	if name == nil or func_or_userdata == nil then
+		return
+	end
+	local t = intercept(name)
+	if not t.set[func_or_userdata] then
+		t.set[func_or_userdata] = true
+		t.list[#t.list + 1] = func_or_userdata
+	end
+end
+
+local function unregister_callback(name, func_or_userdata)
+	local t = intercepts[name]
+	if not (t and func_or_userdata ~= nil and t.set[func_or_userdata]) then
+		return
+	end
+	t.set[func_or_userdata] = nil
+	for i = #t.list, 1, -1 do
+		if t.list[i] == func_or_userdata then
+			table.remove(t.list, i)
+			break
+		end
+	end
+end
+
+-- A plain function gets the event's arguments; an object gets its method of the same name called,
+-- with itself first (Anomaly's rule).
+local function invoke(func_or_userdata, name, ...)
+	if type(func_or_userdata) == "function" then
+		func_or_userdata(...)
+	else
+		local method = func_or_userdata[name]
+		if method then
+			method(func_or_userdata, ...)
+		end
+	end
+end
+
+local function send_callback(name, ...)
+	local t = intercepts[name]
+	if not (t and #t.list > 0) then
+		return
+	end
+	-- Walk a copy: callbacks register and unregister each other while this runs (the weapon DOF
+	-- script does both from actor_on_update). One removed earlier in this pass is skipped.
+	local list = { unpack(t.list) }
+	for i = 1, #list do
+		local f = list[i]
+		if t.set[f] then
+			local ok, err = pcall(invoke, f, name, ...)
+			if not ok then
+				-- Removed, or a broken actor_on_update would write the same error every frame.
+				unregister_callback(name, f)
+				report("! SSS: script error in %s, callback removed: %s", tostring(name), tostring(err))
+			end
+		end
+	end
+end
+
+--------------------------------------------------------------------------------------------------
+-- Time events (Anomaly: CreateTimeEvent, RemoveTimeEvent, ResetTimeEvent, ProcessEventQueue)
+-- f(...) runs once its timer is up, then again on every update until it returns true.
+--------------------------------------------------------------------------------------------------
+
+-- [ev_id] = { [act_id] = { timer = <time_global() ms>, f = <function>, p = { arguments } } }
+local ev_queue = {}
+
+local function create_time_event(ev_id, act_id, timer, f, ...)
+	local ev = ev_queue[ev_id]
+	if not ev then
+		ev = {}
+		ev_queue[ev_id] = ev
+	end
+	-- An event that already exists is kept as it is (Anomaly's rule).
+	if not ev[act_id] then
+		ev[act_id] = { timer = time_global() + timer * 1000, f = f, p = { ... } }
+	end
+end
+
+local function remove_time_event(ev_id, act_id)
+	local ev = ev_queue[ev_id]
+	if ev and ev[act_id] then
+		ev[act_id] = nil
+		if next(ev) == nil then
+			ev_queue[ev_id] = nil
+		end
+	end
+end
+
+local function reset_time_event(ev_id, act_id, timer)
+	local ev = ev_queue[ev_id]
+	local act = ev and ev[act_id]
+	if act then
+		act.timer = time_global() + timer * 1000
+	end
+end
+
+local function process_event_queue(force)
+	if next(ev_queue) == nil then
+		return false
+	end
+	-- Collect first, run after: a running event may create or remove others.
+	local now = time_global()
+	local due = {}
+	for ev_id, ev in pairs(ev_queue) do
+		for act_id, act in pairs(ev) do
+			if force or now >= act.timer then
+				due[#due + 1] = { ev_id, act_id, act }
+			end
+		end
+	end
+	for i = 1, #due do
+		local ev_id, act_id, act = due[i][1], due[i][2], due[i][3]
+		local ev = ev_queue[ev_id]
+		-- Skipped if an event that ran before it in this pass removed or replaced it.
+		if ev and ev[act_id] == act then
+			local ok, done = pcall(act.f, unpack(act.p))
+			if not ok then
+				remove_time_event(ev_id, act_id)
+				report("! SSS: script error in time event %s/%s, event removed: %s", tostring(ev_id), tostring(act_id), tostring(done))
+			elseif done == true then
+				remove_time_event(ev_id, act_id)
+			end
+		end
+	end
+	return false
+end
+
+--------------------------------------------------------------------------------------------------
+-- Globals for the SSFX scripts
+--------------------------------------------------------------------------------------------------
+
+local function clamp(val, min, max)
+	return (val < min and min) or (val > max and max) or val
+end
+
+--------------------------------------------------------------------------------------------------
+-- db.actor
+--
+-- Seven places in the SSFX scripts read db.actor, and so does this bridge. In Anomaly the table is
+-- kept up to date by db.script from the actor binder.
+--
+-- Call of Pripyat ships its own db.script, and it is reached through the mounted resources archives
+-- rather than the loose gamedata\scripts folder, so looking for the file on disk says nothing about
+-- whether it is there. The module is therefore asked for the normal way first, which lets the
+-- engine's script autoloader load it; only if there is genuinely no such module is an empty table
+-- put in its place. Creating the table outright would take the name before the autoloader could,
+-- and every db.script function the game itself uses would be gone.
+--------------------------------------------------------------------------------------------------
+
+-- Set once, in db_table(): true only when the bridge had to make the table itself. While it is
+-- false the game's own db.script owns db.actor and the bridge only reads it - writing there would
+-- fight the actor binder over the same field.
+local db_owned_by_bridge = false
+
+local function db_table()
+	local t = rawget(_G, "db")
+	if type(t) ~= "table" then
+		-- Normal index, in pcall: this is what triggers the autoloader, and it raises if the module
+		-- does not exist instead of returning nil.
+		local ok, loaded = pcall(function() return _G["db"] end)
+		if ok and type(loaded) == "table" then
+			t = loaded
+		else
+			t = {}
+			rawset(_G, "db", t)
+			db_owned_by_bridge = true
+			report("* SSS: no db.script in this build, db.actor served by the bridge")
+		end
+	end
+	return t
+end
+
+local function refresh_actor()
+	local t = db_table()
+	if t.actor ~= nil then
+		return t.actor
+	end
+	if not db_owned_by_bridge then
+		-- db.script is there and has not filled it in yet: the actor binder has not spawned. Nothing
+		-- to do but wait for it.
+		return nil
+	end
+	local sim = alife()
+	local se_actor = sim and sim:actor() or nil
+	if se_actor then
+		t.actor = level.object_by_id(se_actor.id)
+	end
+	return t.actor
+end
+
+--------------------------------------------------------------------------------------------------
+-- The Anomaly framework functions the SSFX scripts call
+--
+-- ssfx_weapons_dof.script is written against Anomaly's _g.script and uses six things from it that
+-- neither this engine nor Call of Pripyat provides. Below is Anomaly's own _g.script code with the
+-- line it came from named. In plain terms: without this block the weapon depth of field dies the
+-- first time the player reloads, and takes its actor_on_update with it.
+--
+-- The only changes are the ones this game forces:
+--   - Anomaly's printe() and callstack() do not exist here, so a complaint goes to the engine log
+--     through the bridge's own report();
+--   - Anomaly's clsid list for IsWeapon names both the client and the server class of every weapon.
+--     Call of Pripyat registers only the server ones (class_registrator.script:1-139), so the other
+--     names come back nil - and a nil key in a table constructor is a Lua error, not a skipped
+--     entry. The list is therefore walked by name and the names this game does not have are left
+--     out. An in-world weapon answers :clsid() with its server class, so the remaining entries are
+--     the ones that can ever match.
+--------------------------------------------------------------------------------------------------
+
+-- Anomaly _g.script:1398-1420, unchanged.
+local actor_move_states = {
+	['mcFwd']			= 1,
+	['mcBack']			= 2,
+	['mcLStrafe']		= 4,
+	['mcRStrafe']		= 8,
+	['mcCrouch']		= 16,
+	['mcAccel']			= 32,
+	['mcTurn']			= 64,
+	['mcJump']			= 128,
+	['mcFall']			= 256,
+	['mcLanding']		= 512,
+	['mcLanding2']		= 1024,
+	['mcClimb']			= 2048,
+	['mcSprint']		= 4096,
+	['mcLLookout']		= 8192,
+	['mcRLookout']		= 16384,
+
+	['mcAnyMove']		= 15,
+	['mcAnyAction']		= 1935,
+	['mcAnyState']		= 6192,
+	['mcLookout']		= 24576,
+}
+
+-- Anomaly _g.script:1421-1433. bit_and and level.actor_moving_state() are both exported by this
+-- engine (script_engine_script.cpp:175, level_script.cpp:1164).
+local function is_move_state(state, compare_state)
+	local mask = actor_move_states[state]
+	if (not mask) then
+		report("~ SSS: IsMoveState | state (%s) not found", tostring(state))
+		return false
+	end
+
+	if (not compare_state) then
+		compare_state = level.actor_moving_state()
+	end
+
+	return (bit_and(compare_state, mask) ~= 0)
+end
+
+-- Anomaly _g.script:3086-3119, as a name list for the reason given above.
+local weapon_clsid_names = {
+	"wpn_vintorez_s", "wpn_ak74_s", "wpn_lr300_s", "wpn_hpsa_s", "wpn_pm_s",
+	"wpn_shotgun_s", "wpn_auto_shotgun_s", "wpn_bm16_s", "wpn_svd_s", "wpn_svu_s",
+	"wpn_rg6_s", "wpn_rpg7_s", "wpn_val_s", "wpn_walther_s", "wpn_usp45_s",
+	"wpn_groza_s", "wpn_knife_s",
+	"wpn_vintorez", "wpn_ak74", "wpn_lr300", "wpn_hpsa", "wpn_pm",
+	"wpn_shotgun", "wpn_bm16", "wpn_svd", "wpn_svu",
+	"wpn_rg6", "wpn_rpg7", "wpn_val", "wpn_walther", "wpn_usp45",
+	"wpn_groza", "wpn_knife",
+}
+
+local weapon_classes = nil
+
+-- Anomaly _g.script:3081-3123.
+local function is_weapon(o, c)
+	if not (c) then
+		c = o and o:clsid()
+	end
+	if not (weapon_classes) then
+		weapon_classes = {}
+		local missing = 0
+		for i = 1, #weapon_clsid_names do
+			-- pcall: clsid is a luabind enum, and a name this game never registered may raise here
+			-- rather than answer nil.
+			local ok, id = pcall(function() return clsid[weapon_clsid_names[i]] end)
+			if ok and id ~= nil then
+				weapon_classes[id] = true
+			else
+				missing = missing + 1
+			end
+		end
+		report("* SSS: IsWeapon: %d weapon classes of %d known to this game",
+			#weapon_clsid_names - missing, #weapon_clsid_names)
+	end
+	return c and weapon_classes[c] or false
+end
+
+-- Anomaly _g.script:1538-1547 and 1548-1556, the plain branch: a line that is not there answers
+-- nil instead of stopping the game, which is the whole reason SSFX reads through these. Installed
+-- onto the engine's ini_file class, the way Anomaly does it, so ini_sys:r_string_ex(...) works on
+-- any ini object.
+local function install_ini_readers()
+	local cls = rawget(_G, "ini_file")
+	if cls == nil then
+		report("! SSS: no ini_file class to extend; r_string_ex / r_float_ex unavailable")
+		return false
+	end
+
+	local ok, err = pcall(function()
+		if cls.r_string_ex == nil then
+			function cls.r_string_ex(ini, s, k)
+				return ini:section_exist(s) and ini:line_exist(s, k) and ini:r_string(s, k) or nil
+			end
+		end
+		if cls.r_float_ex == nil then
+			function cls.r_float_ex(ini, s, k)
+				return ini:section_exist(s) and ini:line_exist(s, k) and ini:r_float(s, k) or nil
+			end
+		end
+		if cls.r_bool_ex == nil then
+			function cls.r_bool_ex(ini, s, k, def)
+				if not (ini:section_exist(s) and ini:line_exist(s, k)) then
+					return def
+				end
+				local v = ini:r_string(s, k)
+				return v == nil and def or v == "true" or v == "1" or false
+			end
+		end
+	end)
+	if not ok then
+		report("! SSS: could not extend the ini_file class: %s", tostring(err))
+		return false
+	end
+
+	-- Proved rather than assumed: a section that cannot exist must come back nil, not raise.
+	local probe_ok, probe = pcall(function()
+		return system_ini():r_string_ex("ssfx_probe_no_such_section", "x")
+	end)
+	if not (probe_ok and probe == nil) then
+		report("! SSS: r_string_ex installed but does not answer: %s", tostring(probe))
+		return false
+	end
+	return true
+end
+
+-- Anomaly _g.script:1715-1736. Only typ 0 is reached from SSFX (ssfx_weapons_dof.script:309 asks a
+-- weapon section for its "kind"), the other two are Anomaly's and are kept as they are.
+local INISYS_CACHE = {}
+
+local function sys_get_param(typ, sec, param, def)
+	if not (sec and param) then
+		report("! SSS: SYS_GetParam(%s, %s, %s) | what is missing?",
+			tostring(typ), tostring(sec), tostring(param))
+		return
+	end
+
+	if (INISYS_CACHE[sec] == nil) then
+		INISYS_CACHE[sec] = {}
+	end
+	if (INISYS_CACHE[sec][param] == nil) then
+		local ini = rawget(_G, "ini_sys") or system_ini()
+		if typ == 0 then
+			INISYS_CACHE[sec][param] = ini:r_string_ex(sec, param) or def
+		elseif typ == 1 then
+			INISYS_CACHE[sec][param] = ini:r_bool_ex(sec, param)
+		elseif typ == 2 then
+			INISYS_CACHE[sec][param] = ini:r_float_ex(sec, param) or def
+		end
+	end
+	return INISYS_CACHE[sec][param]
+end
+
+--------------------------------------------------------------------------------------------------
+-- itms_manager and actor_menu
+--
+-- ssfx_weapons_dof.script replaces itms_manager.actor_on_item_before_use at file scope, which in
+-- Anomaly is how it learns that the player has used a bandage or a medkit and blurs the background
+-- for the length of that animation. Call of Pripyat has no itms_manager, and reading a field off a
+-- missing one is an error that stops the whole script from loading - so an empty one is put there
+-- for the script to replace. Nothing calls it here, because nothing in this game announces item
+-- use that way, so that one part of the weapon DOF stays idle; every other part of the script runs.
+--
+-- actor_menu is Call of Pripyat's own, and the engine calls actor_menu.actor_menu_mode(mode) each
+-- time the inventory, trade, upgrade or loot screen opens or closes (UIActorMenu_script.cpp:84-89).
+-- The modes are already numbered the way SSFX expects (1 = inventory). Anomaly keeps the last one
+-- in actor_menu.last_mode; Call of Pripyat keeps it in a local, where no other script can see it.
+-- The function is therefore wrapped: the mode is written to the field SSFX reads, then the game's
+-- own function is called with it, unchanged.
+--------------------------------------------------------------------------------------------------
+
+local function install_itms_manager()
+	if rawget(_G, "itms_manager") ~= nil then
+		return
+	end
+	local ok, loaded = pcall(function() return _G["itms_manager"] end)
+	if ok and type(loaded) == "table" then
+		return
+	end
+	rawset(_G, "itms_manager", { actor_on_item_before_use = function(obj, flags) end })
+end
+
+local function install_actor_menu_last_mode()
+	local ok, menu = pcall(function() return _G["actor_menu"] end)
+	if not (ok and type(menu) == "table") then
+		-- Nothing to wrap. SSFX reads actor_menu.last_mode; with no module at all that read is an
+		-- error, so an empty one is left behind and the inventory blur simply never triggers.
+		rawset(_G, "actor_menu", { last_mode = 0 })
+		report("! SSS: no actor_menu.script; the inventory part of the weapon DOF stays off")
+		return
+	end
+
+	if menu.last_mode == nil then
+		menu.last_mode = 0
+	end
+
+	local original = menu.actor_menu_mode
+	if type(original) ~= "function" then
+		report("! SSS: actor_menu.actor_menu_mode is not a function; last_mode will not follow")
+		return
+	end
+	if menu.ssfx_last_mode_wrapped then
+		return
+	end
+	menu.ssfx_last_mode_wrapped = true
+
+	menu.actor_menu_mode = function(mode)
+		menu.last_mode = mode
+		return original(mode)
+	end
+end
+
+local api = {
+	-- ssfx_get_setting() asks "if ui_mcm then" before every read, and every module reads its
+	-- values through it. There is no MCM here, and a bare read of an undefined global sends the
+	-- engine looking for a ui_mcm.script that does not exist - once per setting, per read, each
+	-- one a line in the log. Defined as false instead: the test fails cleanly and the value comes
+	-- from the module's own *_settings.script table, which is what SSFX treats as its reference.
+	ui_mcm						= false,
+
+	RegisterScriptCallback		= register_callback,
+	UnregisterScriptCallback	= unregister_callback,
+	SendScriptCallback			= send_callback,
+	AddScriptCallback			= function(name) if name ~= nil then intercept(name) end end,
+	CreateTimeEvent				= create_time_event,
+	RemoveTimeEvent				= remove_time_event,
+	ResetTimeEvent				= reset_time_event,
+	ProcessEventQueue			= process_event_queue,
+	clamp						= clamp,
+
+	-- Anomaly's _g.script globals that this game does not have. Installed under the same names the
+	-- SSFX scripts call them by, and, like everything else here, only if the name is still free.
+	IsMoveState					= is_move_state,
+	IsWeapon					= is_weapon,
+	SYS_GetParam				= sys_get_param,
+	actor_move_states			= actor_move_states,
+}
+
+-- rawget / rawset: a plain _G[name] makes the engine go looking for a script file of that name.
+local function install_api()
+	-- Made before any SSFX script starts: a module that reads db.actor from its own on_game_start
+	-- must find the table already there, empty rather than missing.
+	db_table()
+
+	local taken = {}
+	for name, f in pairs(api) do
+		local current = rawget(_G, name)
+		if current == nil then
+			rawset(_G, name, f)
+		elseif current ~= f then
+			taken[#taken + 1] = name
+		end
+	end
+	if #taken > 0 then
+		table.sort(taken)
+		report("! SSS: already defined by another script, left as they are: %s", table.concat(taken, ", "))
+	end
+
+	-- Anomaly _g.script:50. Cached the same way, and the _ex readers below hang off the same class,
+	-- so this has to come first.
+	if rawget(_G, "ini_sys") == nil then
+		rawset(_G, "ini_sys", system_ini())
+	end
+	if not install_ini_readers() then
+		report("! SSS: without r_string_ex the reload part of the weapon DOF cannot run")
+	end
+
+	install_itms_manager()
+	install_actor_menu_last_mode()
+end
+
+local function start_runtime_scripts()
+	local fs = getFS()
+	local started = {}
+	for i = 1, #runtime_scripts do
+		local name = runtime_scripts[i]
+		if fs:exist("$game_scripts$", name .. ".script") then
+			-- The first access to _G[name] loads the file (the engine's script autoloader).
+			local ok, module = pcall(function() return _G[name] end)
+			if not ok then
+				report("! SSS: %s.script failed to load: %s", name, tostring(module))
+			elseif type(module) ~= "table" then
+				report("! SSS: %s.script failed to load", name)
+			elseif module.on_game_start then
+				local started_ok, err = pcall(module.on_game_start)
+				if started_ok then
+					started[#started + 1] = name
+				else
+					report("! SSS: script error in %s.on_game_start: %s", name, tostring(err))
+				end
+			end
+		end
+	end
+	return started
+end
+
+--------------------------------------------------------------------------------------------------
+-- Called by the engine (xrGame\ssfx_script_bridge.cpp). Each returns the lines for the engine log.
+--------------------------------------------------------------------------------------------------
+
+local first_update_pending = false
+
+-- A new or loaded game, right after the game's own start callback.
+function engine_game_start()
+	install_api()
+	local started = start_runtime_scripts()
+
+	-- Every applier registers its on_option_change and then waits to be asked. In Anomaly the MCM
+	-- menu asks, once, after it has loaded its pages; with no MCM here nothing ever would, and the
+	-- module values would never leave the *_settings.script tables. So the event is sent once, after
+	-- all of them have registered.
+	send_callback("on_option_change")
+
+	table.insert(reports, 1, "* SSS: script bridge on, scripts started: " .. (#started > 0 and table.concat(started, ", ") or "none"))
+	first_update_pending = false
+	return flush_reports()
+end
+
+-- The player actor spawned: new game, loaded save or level change.
+function engine_actor_spawn()
+	if db_owned_by_bridge then
+		-- Only the bridge's own table is cleared here. A level change or a loaded save must not leave
+		-- the previous actor behind; the game's db.script, when it is the one holding the field, does
+		-- that for itself from the actor binder.
+		db_table().actor = nil
+	end
+	refresh_actor()
+	first_update_pending = true
+	send_callback("on_game_load", nil)
+	return flush_reports()
+end
+
+-- Every update of the player actor. As with Anomaly's actor binder, nothing runs while the actor is
+-- dead.
+function engine_actor_update(delta)
+	local actor = refresh_actor()
+	if not (actor and actor:alive()) then
+		return flush_reports()
+	end
+	if first_update_pending then
+		first_update_pending = false
+		send_callback("actor_on_first_update", nil, delta)
+		report("* SSS: script bridge: actor updates running")
+	end
+	send_callback("actor_on_update", nil, delta)
+	process_event_queue()
+	return flush_reports()
+end
+
+-- The player's weapon zoomed in or out. Anomaly fires the UIZoom pair from the same place
+-- (axr_main.script:351-366), and the weapon DOF script listens for it, so it is sent here too.
+-- The weapon object is passed on so a listener can ask what is in the player's hands.
+function engine_weapon_zoom(zoom_in)
+	local actor = refresh_actor()
+	local wpn = actor and actor:active_item() or nil
+	if zoom_in then
+		send_callback("actor_on_weapon_zoom_in", wpn)
+		send_callback("GUI_on_show", "UIZoom")
+	else
+		send_callback("actor_on_weapon_zoom_out", wpn)
+		send_callback("GUI_on_hide", "UIZoom")
+	end
+	return flush_reports()
+end
+
+-- A key press that reached the game: not taken by a UI dialog, game not paused.
+function engine_key_press(key)
+	send_callback("on_key_press", key)
+	return flush_reports()
+end
+
+-- One footstep of the player. Anomaly hands the listeners a flags table and lets one of them refuse
+-- the step sound by clearing ret_value (_g.script:1259-1263); that contract is kept here, and the
+-- answer goes back to the engine as the return value. Anything the listeners logged stays in the
+-- report list and goes out with the next actor update, which is the following frame.
+function engine_actor_footstep(material, power, hud_view)
+	local flags = { ret_value = true }
+	send_callback("actor_on_footstep", material, power, hud_view, flags)
+	return flags.ret_value ~= false
+end
+
+-- The player jumped.
+function engine_actor_jump()
+	send_callback("actor_on_jump")
+	return flush_reports()
+end
+
+-- The player landed, with the speed of the impact.
+function engine_actor_land(landing_speed)
+	send_callback("actor_on_land", landing_speed)
+	return flush_reports()
+end

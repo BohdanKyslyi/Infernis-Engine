@@ -6,6 +6,14 @@
 extern ECORE_API u32 ps_r_sun_shafts; //=	0;
 extern ECORE_API xr_token qsun_shafts_token[];
 
+// Which sun-shaft technique runs. r2_sun_shafts above stays the quality.
+extern ECORE_API u32 ps_sunshafts_mode;
+extern ECORE_API xr_token sunshafts_mode_token[];
+
+// Read by the OGSE screen-space phase only. Monolith xrRender_console.cpp:289-290.
+extern ECORE_API float ps_r2_ss_sunshafts_length;
+extern ECORE_API float ps_r2_ss_sunshafts_radius;
+
 extern ECORE_API u32 ps_r_ssao; //	=	0;
 extern ECORE_API xr_token qssao_token[];
 
@@ -30,6 +38,8 @@ extern ECORE_API int ps_r__LightSleepFrames;
 extern ECORE_API float ps_r__Detail_l_ambient;
 extern ECORE_API float ps_r__Detail_l_aniso;
 extern ECORE_API float ps_r__Detail_density;
+extern ECORE_API float ps_r__Detail_height;
+extern ECORE_API float ps_r__Detail_radius;
 
 extern ECORE_API float ps_r__Tree_w_rot;
 extern ECORE_API float ps_r__Tree_w_speed;
@@ -195,12 +205,24 @@ enum {
     R2FLAGEXT_SUN_OLD = (1 << 9),
 };
 
+// Monolith xrRender_console.h:346-351, unchanged. 0 is off and has no name here, exactly as there.
+enum {
+    R2SS_VOLUMETRIC = 1,
+    R2SS_SCREEN_SPACE,
+    R2SS_COMBINE_SUNSHAFTS,
+};
+
 extern ECORE_API Flags32 ps_r2_rain_drops_flags;
 
 enum {
     R2FLAG_RAIN_DROPS = (1 << 0),
     R2FLAG_RAIN_DROPS_CONTROL = (1 << 0),
 };
+
+// Screen Space Shaders
+// Defined in xrEngine/xr_ioc_cmd.cpp, not in xrRender_console.cpp: xrEngine reads and writes part
+// of this set itself, and this file is compiled once per renderer DLL.
+#include "xrEngine/ssfx_console_vars.h"
 
 extern void xrRender_initconsole();
 extern BOOL xrRender_test_hw();

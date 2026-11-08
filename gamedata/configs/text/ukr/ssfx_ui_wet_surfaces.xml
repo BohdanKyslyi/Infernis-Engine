@@ -1,0 +1,138 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 18
+- @ Description: Wet Surfaces - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Wet Surfaces Title -->
+	<string id="ui_mcm_ssfx_module_wet_surf_title">
+		<text>Намокання поверхонь - налаштування</text>
+	</string>
+
+	<!-- Намокання поверхонь - налаштування -->
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_buildup_speed_mcm">
+		<text>Швидкість намокання</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_buildup_speed_mcm_desc">
+		<text>Налаштування швидкості прояву ефекту намокання та появи калюж</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_dry_speed_mcm">
+		<text>Швидкість висихання</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_dry_speed_mcm_desc">
+		<text>Налаштування швидкості висихання. Чим вище значення - тим швидше зникає ефект намокання і калюжі</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_ripples_size_mcm">
+		<text>Брижі від дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_ripples_size_mcm_desc">
+		<text>Розмір брижів від крапель дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_ripples_speed_mcm">
+		<text>Швидкість брижів</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_ripples_speed_mcm_desc">
+		<text>Налаштування швидкості анімації брижів на воді/калюжах. Пряма залежність від сили дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_ripples_min_speed_mcm">
+		<text>Мінімальна швидкість анімації</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_ripples_min_speed_mcm_desc">
+		<text>Налаштування мінімального значення швидкості анімації брижів від крапель</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_ripples_intensity_mcm">
+		<text>Інтенсивність брижів</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_ripples_intensity_mcm_desc">
+		<text>Налаштування інтенсивності відображення брижів від крапель дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_waterfall_size_mcm">
+		<text>Розмір краплі дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_waterfall_size_mcm_desc">
+		<text>Чим вище значення - тим більший розмір краплі</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_waterfall_speed_mcm">
+		<text>Швидкість дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_waterfall_speed_mcm_desc">
+		<text>Налаштування швидкості падіння краплі дощу. Залежить від базового значення в конфігу погоди</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_waterfall_min_speed_mcm">
+		<text>Мінімальна швидкість падіння крапель</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_waterfall_min_speed_mcm_desc">
+		<text>Нижче цього значення швидкість опускатись не буде</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_waterfall_intensity_mcm">
+		<text>Інтенсивність дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_waterfall_intensity_mcm_desc">
+		<text>Загальна інтенсивність ефекту дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_cover_res_mcm">
+		<text>Якість ефекту дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_cover_res_mcm_desc">
+		<text>Загальна роздільна здатність падаючих крапель і бризок при попаданні на землю. Чим вище значення - тим виразніший дощ, але більше навантаження на систему</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_cover_distance_mcm">
+		<text>Дистанція промальовування дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_wet_surf_cover_distance_mcm_desc">
+		<text>На яку відстань рендериться дощ. Вище значення - більше навантаження на систему</text>
+	</string>
+
+	<!-- Resolution Combobox -->
+	<string id="ui_mcm_lst_ssfx_cover_64">
+		<text>64</text>
+	</string>
+
+	<string id="ui_mcm_lst_ssfx_cover_128">
+		<text>128 ( рекомендовано )</text>
+	</string>
+
+	<string id="ui_mcm_lst_ssfx_cover_256">
+		<text>256</text>
+	</string>
+
+	<string id="ui_mcm_lst_ssfx_cover_512">
+		<text>512</text>
+	</string>
+
+	<string id="ui_mcm_lst_ssfx_cover_1024">
+		<text>1024</text>
+	</string>
+
+	<string id="ui_mcm_lst_ssfx_cover_2048">
+		<text>2048</text>
+	</string>
+
+</string_table>

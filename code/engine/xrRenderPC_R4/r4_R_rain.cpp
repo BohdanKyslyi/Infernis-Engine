@@ -23,7 +23,21 @@ static int facetable[6][4] = {
 //////////////////////////////////////////////////////////////////////////
 void CRender::render_rain() {
     // return;
-    float fRainFactor = g_pGamePersistent->Environment().CurrentEnv->rain_density;
+    // Monolith r4_R_rain.cpp:33-37, unchanged. With the wetness module driving the gloss
+    // ( ssfx_gloss_method 1 ) this gate has to follow wetness_factor, not rain_density.
+    // rain_density is zero the moment the weather stops raining, so the rain shadow map stopped
+    // being rendered in that same frame and every wet surface went dry at once. wetness_factor is
+    // the accumulator in Environment_misc.cpp:648-652 - it builds up with the rain and then decays
+    // at ssfx_wetness_multiplier.y, which is the drying time the player actually sees.
+    //
+    // With SSS switched off ( ssfx_session_enable ) the game's own gate whatever the gloss
+    // method, Infernis r4_R_rain.cpp:26: the rain density.
+    float fRainFactor = 0;
+    if (ps_ssfx_gloss_method == 0 || !ssfx_session_enable)
+        fRainFactor = g_pGamePersistent->Environment().CurrentEnv->rain_density;
+    else
+        fRainFactor = g_pGamePersistent->Environment().wetness_factor;
+
     if (fRainFactor < EPS_L)
         return;
 

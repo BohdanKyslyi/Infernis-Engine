@@ -114,6 +114,13 @@ public:
         u32 bEmissive : 1;
         u32 bDistort : 1;
         u32 bWmark : 1;
+        // Screen Space Shaders mark the terrain surface so the renderer can pick its own quality
+        // tier for it - see rimp_select_sh_static in r4.cpp. Monolith carries a second, unrelated
+        // bLandscape here for its terrain depth-prepass, which this engine has no equivalent of.
+        u32 isLandscape : 1;
+        // Screen Space Shaders render water through their own bucket so it can be drawn twice,
+        // once into the reflection buffer and once for real.
+        u32 isWater : 1;
     };
 
 public:

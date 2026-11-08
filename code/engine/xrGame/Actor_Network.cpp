@@ -29,6 +29,7 @@
 #include "WeaponKnife.h"
 #include "CustomOutfit.h"
 #include "ItemUseController.h"
+#include "ssfx_script_bridge.h"
 
 #include "actor_anim_defs.h"
 
@@ -406,7 +407,7 @@ void CActor::net_Import_Base(NET_Packet& P) {
 
 void CActor::net_Import_Base_proceed() {
     if (g_Alive()) {
-        setVisible((BOOL)!HUDview());
+        setVisible((BOOL)(!HUDview() || AllowActorShadow())); // Monolith: actor shadow
         setEnabled(TRUE);
     };
     //---------------------------------------------
@@ -691,6 +692,10 @@ BOOL CActor::net_Spawn(CSE_Abstract* DC) {
     if (Level().IsDemoPlay() && OnClient()) {
         setLocal(FALSE);
     };
+
+    // Screen Space Shaders - the addon scripts' on_game_load.
+    if (g_actor == this)
+        ssfx_script_bridge::on_actor_spawn();
     return TRUE;
 }
 
@@ -1759,6 +1764,9 @@ void CActor::net_Save(NET_Packet& P) {
     m_pPhysics_support->in_NetSave(P);
     P.w_u16(m_holderID);
 #endif
+    // Screen Space Shaders: the actor's script binder has saved ( inherited::net_Save above ), the
+    // point Anomaly sends on_level_changing from ( ssfx_script_bridge.h ). Nothing without SSS.
+    ssfx_script_bridge::on_actor_save();
 }
 
 BOOL CActor::net_SaveRelevant() { return TRUE; }

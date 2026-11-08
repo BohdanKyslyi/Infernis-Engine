@@ -1,0 +1,83 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 22
+- @ Description: Bloom PP - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Bloom Title -->
+	<string id="ui_mcm_ssfx_module_bloom_title">
+		<text>Блюм - налаштування</text>
+	</string>
+
+	<!-- Bloom Settings -->
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_use_weather_mcm">
+		<text>Використовувати погодні пресети</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_use_weather_mcm_desc">
+		<text>Перезаписати `Пороговий рівень`, `Експозиція` та `Інтенсивність неба` значеннями з погодних пресетів.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_threshold_mcm">
+		<text>Пороговий рівень</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_threshold_mcm_desc">
+		<text>Наскільки яскравим має бути піксель для застосування ефекту. [ 1.0 = всі пікселі матимуть ефект ]</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_exposure_mcm">
+		<text>Експозиція</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_exposure_mcm_desc">
+		<text>Налаштування інтенсивності блюму.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_blur_mcm">
+		<text>Радіус</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_blur_mcm_desc">
+		<text>Радіус поширення ефекту розмиття.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_vibrance_mcm">
+		<text>Кольоровість</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_vibrance_mcm_desc">
+		<text>Налаштування рівня кольоровості ефекту. [ 0.0 = сірий ~ 1.0 = кольоровий ]</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_sky_mcm">
+		<text>Інтенсивність неба</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_sky_mcm_desc">
+		<text>Налаштування інтенсивності ефекту блюму на небі.</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_lens_mcm">
+		<text>Відблиски від скла</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_lens_mcm_desc">
+		<text>Налаштування інтенсивності відблисків на склі при носінні протигазу.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_dirt_mcm">
+		<text>Бруд</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_pp_ssfx_bloom_dirt_mcm_desc">
+		<text>Налаштування інтенсивності ефекту бруду на склі при носінні протигазу.</text>
+	</string>
+
+</string_table>

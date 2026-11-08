@@ -16,6 +16,7 @@
 #include "actoreffector.h"
 #include "static_cast_checked.hpp"
 #include "player_hud.h"
+#include "ssfx_script_bridge.h" // Screen Space Shaders
 
 #ifdef DEBUG
 #include "phdebug.h"
@@ -62,6 +63,12 @@ void CActor::g_cl_ValidateMState(float dt, u32 mstate_wf) {
                     mstate_real |= mcLanding2;
                 }
             }
+
+            // Screen Space Shaders. Monolith Actor_Movement.cpp:92-94 puts the call here, inside the
+            // falling test and outside the impact-speed test, so every landing is reported and not
+            // only the hard ones. ssfx_rain_footsteps.script plays the wet landing sound from it.
+            ssfx_script_bridge::on_actor_land(
+                character_physics_support()->movement()->GetContactSpeed());
         }
         m_bJumpKeyPressed = TRUE;
         m_fJumpTime = s_fJumpTime;
@@ -173,6 +180,10 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector& vControlAccel, float& Ju
             m_bJumpKeyPressed = TRUE;
             Jump = m_fJumpSpeed;
             m_fJumpTime = s_fJumpTime;
+
+            // Screen Space Shaders. Monolith Actor_Movement.cpp:231-233, in the same place: after
+            // the jump has been committed and before the stamina cost is taken.
+            ssfx_script_bridge::on_actor_jump();
 
             if (!GodMode())
                 conditions().ConditionJump(inventory().TotalWeight() / MaxCarryWeight());

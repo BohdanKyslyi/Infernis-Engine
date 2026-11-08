@@ -1,0 +1,72 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 22
+- @ Description: SSS - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Button -->
+	<string id="ui_mcm_ssfx_module_sss">
+		<text>SSS</text>
+	</string>
+
+	<!-- SSR Settings -->
+	<string id="ui_mcm_ssfx_module_sss_title">
+		<text>Налаштування тіней екранного простору</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_sss_quality_dir_mcm">
+		<text>Якість прямих джерел світла</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_quality_dir_mcm_desc">
+		<text>Якість джерел світла, таких як Місяць або Сонце. Вищі значення впливають на відмальовування тіней. [ 6 - 12 - 18 - 24 ]</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_quality_point_mcm">
+		<text>Якість Omni-джерел</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_quality_point_mcm_desc">
+		<text>Якість джерел світла, таких як вогнища, лампи тощо. Вищі значення впливають на відмальовування тіней. [ 2 - 4 - 6 - 8 ]</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_sss_enable_dir_mcm">
+		<text>Активувати Screen Space тіні для прямих джерел світла</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_enable_dir_mcm_desc">
+		<text>Вмикає/вимикає Screen Space тіні для прямих джерел світла. ( Сонце та Місяць )</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_enable_point_mcm">
+		<text>Активувати Screen Space тіні для Omni-джерел</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_enable_point_mcm_desc">
+		<text>Вмикає/вимикає Screen Space тіні для Omni-джерел світла. ( Лампи, вогнища тощо )</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_sss_len_dir_mcm">
+		<text>Довжина тіней від прямих джерел</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_len_dir_mcm_desc">
+		<text>Налаштування максимальної довжини тіней від прямих джерел світла (Сонце та Місяць).</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_len_point_mcm">
+		<text>Довжина тіней від Omni-джерел</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_sss_len_point_mcm_desc">
+		<text>Налаштування максимальної довжини тіней від Omni-джерел світла. (Лампи, вогнища тощо)</text>
+	</string>
+
+</string_table>

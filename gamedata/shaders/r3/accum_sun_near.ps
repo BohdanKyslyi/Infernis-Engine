@@ -1,3 +1,210 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+#include "lmodel.h"
+
+#ifdef USE_MINMAX_SM
+#define SM_MINMAX
+#endif
+
+#if SUN_QUALITY>2
+#define ULTRA_SHADOWS_ON
+#endif //	SUN_QUALITY>2
+
+#ifdef ULTRA_SHADOWS_ON
+#define USE_ULTRA_SHADOWS
+#endif
+
+#include "shadow.h"
+
+// Check Screen Space Shaders modules & addons
+#include "check_screenspace.h"
+
+#ifdef SSFX_SSS
+	#include "screenspace_shadows.h"
+	Texture2D s_ssfx_sss;
+	uniform float4 ssfx_issvp;
+#endif
+
+#ifdef USE_SUNFILTER
+#ifdef MSAA_OPTIMIZATION
+float4 main ( v2p_volume I, uint iSample : SV_SAMPLEINDEX  ) : SV_Target
+#else
+float4 main ( v2p_volume I  ) : SV_Target
+#endif
+{
+	//float4 _P = tex2D( s_position, tc );
+
+	// Infernis PBR Stage 2.20: derive the G-buffer UV from the exact raster
+	// pixel. Interpolated light-volume UVs can disagree with SV_Position at
+	// cascade edges and make position.w (the PBR marker) come from a neighbour.
+	float2 gbufferTC = I.hpos.xy / pos_decompression_params2.xy;
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.hpos, ISAMPLE) );
+
+#if IE_PBR_SUN_PASS_MODE == 1
+	// Red: near/middle directional cascade.
+	return float4(0.35f, 0.0f, 0.0f, 0.0f);
+#endif
+
+#ifdef	GBUFFER_OPTIMIZATION
+	//	Emulate virtual offset
+	gbd.P += gbd.N*0.015f;
+#endif	//	GBUFFER_OPTIMIZATION
+
+	float4 _P = float4( gbd.P, 1.f);
+
+	float4 PS = mul( m_shadow,  _P );
+
+	float s = shadowtest_sun(PS, I.tcJ) * sunmask(_P);
+
+	return s;
+}
+#else
+#ifdef MSAA_OPTIMIZATION
+float4 main ( v2p_volume I,  uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#else
+float4 main ( v2p_volume I ) : SV_Target
+#endif
+{
+	//float4 	_P	= tex2D( s_position, tc );
+	//float4	_N	= tex2D( s_normal, tc );
+
+	// Infernis PBR Stage 2.20: derive the G-buffer UV from the exact raster
+	// pixel. Interpolated light-volume UVs can disagree with SV_Position at
+	// cascade edges and make position.w (the PBR marker) come from a neighbour.
+	float2 gbufferTC = I.hpos.xy / pos_decompression_params2.xy;
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.hpos, ISAMPLE) );
+
+#if IE_PBR_SUN_PASS_MODE == 1
+	// Red: near/middle directional cascade.
+	return float4(0.35f, 0.0f, 0.0f, 0.0f);
+#endif
+
+#ifdef	GBUFFER_OPTIMIZATION
+	//	Emulate virtual offset
+	gbd.P += gbd.N*0.015f;
+#endif	//	GBUFFER_OPTIMIZATION
+
+	float4 _P = float4( gbd.P, gbd.mtl );
+	float4  _N = float4( gbd.N, gbd.hemi );
+
+	// ----- light-model
+	float	m	= xmaterial;
+# ifndef USE_R2_STATIC_SUN
+			m 	= _P.w;
+# endif
+	float4 light;
+
+if (gbd.pbr > 0.5f)
+{
+    light =
+        plight_infinity_pbr(
+            gbd,
+            Ldynamic_dir.xyz
+        );
+}
+else
+{
+#ifdef SSFX_ENHANCED_SHADERS
+    // Screen Space Shaders: the pseudo-PBR module. The Enhanced Shaders light model also takes the
+    // pixel's albedo and gloss and returns the complete lit colour ( SSFX accum_sun_near.ps:56, 63 ).
+    float4 _C = float4( gbd.C, gbd.gloss );
+
+    light =
+        plight_infinity(
+            m,
+            _P.xyz,
+            _N.xyz,
+            _C,
+            Ldynamic_dir.xyz
+        );
+#else
+    light =
+        plight_infinity(
+            m,
+            _P.xyz,
+            _N.xyz,
+            Ldynamic_dir.xyz
+        );
+#endif
+}
+
+	// ----- shadow
+	// SHADOWS FIXES - SSS Update 19
+	// Normal offset for biasing. Without SSFX_SHADOWS a small fixed offset is still applied, as
+	// in the reference: it cleans up vanilla acne without changing the look.
+	float3 NormalOffset = 0;
+#ifdef SSFX_SHADOWS
+	NormalOffset = _N.xyz * ssfx_shadow_bias.y;
+#else
+	NormalOffset = _N.xyz * 0.01f;
+#endif
+
+  	float4 	P4 	= float4( _P.xyz + NormalOffset, 1.f);
+	float4 	PS	= mul( m_shadow, P4 );
+	float 	s 	= sunmask( P4 );
+	// The quality fan-out that stood here called shadow_high() and shadow_dx10_1(). Neither
+	// survives: shadow_dx10_1 is gone from the SSFX shadow.h, its work now being inside
+	// shadow_pcss(), and shadow_high() is declared in no shader file of any of the three trees -
+	// so the SUN_QUALITY==2 branch could never have compiled. shadow() picks the filter itself,
+	// which is what the reference calls here too.
+			s *= shadow( PS );
+
+	// SSFX_SSS: the subsurface buffer's blue channel is the sun's through-surface term.
+	// ssfx_issvp lifts it back to 1 while the scope lens renders, where the pass does not run.
+#ifdef SSFX_SSS
+	s *= saturate(s_ssfx_sss.Sample( smp_nofilter, I.tc.xy / I.tc.w ).b + ssfx_issvp.x);
+#endif
+
+	// Infernis PBR Stage 2.6: sun radiance and shadow are
+	// converted only for the PBR branch.
+	if (gbd.pbr > 0.5f)
+	{
+#if IE_PBR_SUN_ROUTE_MODE == 1
+	    // Prove whether the white contribution belongs to this PBR sun pass.
+	    return float4(0.0f, 0.0f, 0.0f, 0.0f);
+#elif IE_PBR_SUN_ROUTE_MODE == 2
+	    // Magenta means the runtime G-buffer classified this pixel as PBR.
+	    return float4(0.35f, 0.0f, 0.35f, 0.0f);
+#else
+	    float3 pbrTransport =
+	        ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
+	        light.rgb *
+	        ie_pbr_prepare_light_factor(s);
+
+	    return blend(
+	        float4(pbrTransport, 0.0f),
+	        I.tc.xy / I.tc.w
+	    );
+#endif
+	}
+
+#if IE_PBR_SUN_ROUTE_MODE == 2
+	// Green means the runtime G-buffer classified this pixel as legacy.
+	return blend(
+	    float4(0.0f, 0.35f, 0.0f, 0.0f),
+	    I.tc.xy / I.tc.w
+	);
+#else
+#ifdef SSFX_ENHANCED_SHADERS
+	// Screen Space Shaders: the pseudo-PBR module - light colour and shadow in linear light, as the
+	// donor returns them ( SSFX accum_sun_near.ps:84-85 ).
+	return blend(
+	    float4( SRGBToLinear( Ldynamic_color.rgb * s.xxx ), 1 ) * light,
+	    I.tc.xy / I.tc.w
+	);
+#else
+	return blend(
+	    Ldynamic_color * light * s,
+	    I.tc.xy / I.tc.w
+	);
+#endif
+#endif
+}
+#endif
+#else
 #include "common.h"
 #include "lmodel.h"
 
@@ -157,4 +364,5 @@ else
 	);
 #endif
 }
+#endif
 #endif

@@ -295,6 +295,9 @@ void CCustomDetector::OnMoveToSlot(const SInvItemPlace& prev) { inherited::OnMov
 
 void CCustomDetector::TurnDetectorInternal(bool b) {
     m_bWorking = b;
+    // SSFX: detector screen glow ( pda_params.x in models_selflight_det_emissive )
+    if (smart_cast<CActor*>(H_Parent()))
+        g_pGamePersistent->pda_shader_data.pda_display_factor = b ? 1.f : 0.f;
     if (b && m_ui == NULL) {
         CreateUI();
     } else {

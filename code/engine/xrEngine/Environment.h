@@ -167,6 +167,15 @@ public:
     float m_fSunShaftsIntensity;
     float m_fWaterIntensity;
 
+    // Screen Space Shaders: the weather's tree_amplitude_intensity, with SSS the strength of the
+    // tree sway the engine gives the shaders ( the constant wind, FTreeVisual.cpp ). Monolith
+    // keeps it under TREE_WIND_EFFECT ( its Environment.h:195-197 ), which no file here defines.
+    float m_fTreeAmplitudeIntensity;
+
+    float bloom_threshold;
+    float bloom_exposure;
+    float bloom_sky_intensity;
+
     //	int					lens_flare_id;
     //	int					tb_id;
     std::string lens_flare_id;
@@ -196,7 +205,9 @@ public:
     bool set_ambient(CEnvironment& environment, LPCSTR ambient_name);
     bool set_sun(CEnvironment& environment, LPCSTR sun_name);
     bool set_thunderbolt_collection(CEnvironment& environment, LPCSTR collection_name);
-    void save(CInifile& config) const;
+    // Screen Space Shaders: sun_direction false - no sun_altitude / sun_longitude, while the sun
+    // follows the table of sun_positions.ltx ( CEnvironment::m_ssfx_sun_positions, SaveWeather )
+    void save(CInifile& config, bool sun_direction = true) const;
 
     std::string m_identifier;
 };
@@ -220,6 +231,9 @@ public:
                                     float f, CEnvModifier& M, float m_power);
     void clear();
     void destroy();
+    // Screen Space Shaders: Monolith Environment_misc.cpp:534-589 - adds the brightness boosts of
+    // CEnvironment::env_boost ( weather.boost_value ) to the mixed weather, at the end of lerp().
+    void boost(CEnvironment* env);
 };
 
 class ENGINE_API CEnvironment {
@@ -262,6 +276,10 @@ public:
 
     float wind_strength_factor;
     float wind_gust_factor;
+
+    float wetness_factor;
+
+    Fvector4 wind_anim;
 
     // wind blast params
     float wind_blast_strength;
@@ -316,7 +334,7 @@ public:
     void OnFrame();
     void lerp(float& current_weight);
 
-    void RenderSky();
+    void RenderSky(bool only_MV = false);
     void RenderClouds();
     void RenderFlares();
     void RenderLast();
@@ -400,6 +418,37 @@ public:
     float p_sky_color;
     float p_sun_color;
     float p_fog_color;
+
+    // Screen Space Shaders: Monolith Environment.h:396-405 - the brightness boosts that the
+    // Anomaly weather scripts of the Weather_ATMOS addon set with weather.boost_value() and
+    // weather.boost_reset() ( level_weathers.script ) and CEnvDescriptorMixer::boost() adds to the
+    // mixed weather. Last in the class, so that no member the other renderers read moves. 0 ( no
+    // boost ) from the constructor on; the two script functions exist only while SSS runs.
+    struct boost_values {
+        float ambient;
+        float hemi;
+        float clouds_color;
+        float fog_color;
+        float rain_color;
+        float sky_color;
+        float sun_color;
+    } env_boost;
+
+    // Screen Space Shaders: Monolith Environment.h:279, 407, 415, 421 - the sun of the Anomaly
+    // weathers ( Weather_ATMOS ): it follows the table of environment\sun_positions.ltx, a point an
+    // hour ( load_sun ), by the game time ( calculate_config_sun_dir, OnFrame ), and their weather
+    // files carry no sun direction. m_ssfx_sun_positions: the table is in use - only while SSS runs
+    // and the file is there ( the constructor ); otherwise the game's sun. Last in the class, as
+    // env_boost above.
+    Fvector2 sun_hp[24];
+    CInifile* m_sun_pos_config;
+    bool m_ssfx_sun_positions;
+
+protected:
+    void load_sun();
+
+private:
+    void calculate_config_sun_dir();
 };
 
 #undef INGAME_EDITOR_VIRTUAL

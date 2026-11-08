@@ -100,6 +100,26 @@ public:
         u32 forcegloss : 1;
         u32 forceskinw : 1;
         float forcegloss_v;
+
+        // Screen Space Shaders - detected at startup from the installed shader set
+        u32 ssfx_core : 1;
+        u32 ssfx_branches : 1;
+        u32 ssfx_blood : 1;
+        u32 ssfx_rain : 1;
+        u32 ssfx_hud_raindrops : 1;
+        u32 ssfx_ssr : 1;
+        u32 ssfx_terrain : 1;
+        u32 ssfx_volumetric : 1;
+        u32 ssfx_ao : 1;
+        u32 ssfx_il : 1;
+        u32 ssfx_bloom : 1;
+        u32 ssfx_taa : 1;
+        u32 ssfx_motionvectors : 1;
+        u32 ssfx_water : 1;
+        u32 ssfx_sss : 1;
+        u32 ssfx_fog : 1;
+        u32 ssfx_motionblur : 1;
+        u32 ssfx_glass : 1;
     } o;
     struct _stats {
         u32 l_total, l_visible;
@@ -110,6 +130,11 @@ public:
     } stats;
 
 public:
+    // Screen Space Shaders. Monolith r4.h:151 / r4.cpp:62-67. True while the sun is actually
+    // lighting the scene, which the grass uses to decide whether its visibility list is still
+    // needed for a shadow pass.
+    bool is_sun();
+
     // Sector detection and visibility
     CSector* pLastSector;
     Fvector vLastCameraPos;
@@ -342,6 +367,7 @@ public:
     virtual void rmNear();
     virtual void rmFar();
     virtual void rmNormal();
+    virtual u32 active_phase() override { return phase; } // Monolith (Swartz): actor shadow
 
     // Constructor/destructor/loader
     CRender();

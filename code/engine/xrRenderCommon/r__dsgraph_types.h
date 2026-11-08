@@ -143,6 +143,11 @@ typedef mapSorted_T::TNode mapSorted_Node;
 typedef FixedMAP<float, _MatrixItemS, render_allocator> mapHUD_T;
 typedef mapHUD_T::TNode mapHUD_Node;
 
+// Screen Space Shaders keep water in a bucket of its own, so it can be drawn once into the
+// reflection buffer at reduced resolution and once normally.
+typedef FixedMAP<float, _MatrixItemS, render_allocator> mapWater_T;
+typedef mapWater_T::TNode mapWater_Node;
+
 typedef FixedMAP<float, _LodItem, render_allocator> mapLOD_T;
 typedef mapLOD_T::TNode mapLOD_Node;
 }; // namespace R_dsgraph

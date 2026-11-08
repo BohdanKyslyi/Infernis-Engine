@@ -1,0 +1,101 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+
+// Screen Space Shaders - DELIBERATE DEVIATION, forced by this engine's tonemapping.
+// common.h now pulls anomaly_shaders.h, which defines LUMINANCE_VECTOR with Anomaly's Rec.709
+// weights, and every SSFX file wants exactly those. This pass is the one exception: it measures
+// scene brightness for the auto-exposure this engine's PBR tonemapping is tuned against, so it
+// keeps Call of Pripyat's weights. Without this pin the whole image changes brightness the moment
+// the addon is mounted. The donor does not ship this file at all - it exists here only to hold
+// the exposure weights steady, and it is byte-identical to the base file otherwise.
+#undef  LUMINANCE_VECTOR
+#define LUMINANCE_VECTOR	float3(0.3f, 0.38f, 0.22f)
+
+/*
+struct 	v2p
+{
+  float4 tc0: 		TEXCOORD0;	// Central
+  float4 tc1: 		TEXCOORD1;	// -1,+1
+  float4 tc2: 		TEXCOORD2;	// -2,+2
+  float4 tc3: 		TEXCOORD3;	// -3,+3
+  float4 tc4: 		TEXCOORD4;	// -4,+4
+  float4 tc5: 		TEXCOORD5;	// -5,+5
+  float4 tc6: 		TEXCOORD6;	// -6,+6
+  float4 tc7: 		TEXCOORD7;	// -7,+7
+};
+*/
+
+//////////////////////////////////////////////////////////////////////////////////////////
+#define	LUMINANCE_BASE		0.0001h
+
+float	luminance	(float2	tc)
+{
+	//float3	source 	= tex2D(s_image,tc);
+	float3	source 	= s_image.Sample( smp_rtlinear, tc );
+	return 	dot( source, LUMINANCE_VECTOR*def_hdr );
+}
+//////////////////////////////////////////////////////////////////////////////////////////
+// 	perform 2x2=4s convolution, working on 4x4=16p area
+//	that means 256x256 source will be scaled to (256/4)x(256/4) = 64x64p
+//	a):	256x256 => 64x64p	with log
+//	b):	64x64p	=> 8x8p
+//	c):	8x8p	=> 1x1p		with exp
+float4 main( p_build I ) : SV_Target
+{
+	// first 8 bilinear samples (8x4 = 32 pixels)
+	float4 	final;
+		final.x =	luminance(I.Tex0);
+		final.y = 	luminance(I.Tex1);
+		final.z = 	luminance(I.Tex2);
+		final.w =	luminance(I.Tex3);
+
+	// OK
+	return 		final	;
+}
+#else
+#include "common.h"
+/*
+struct 	v2p
+{
+  float4 tc0: 		TEXCOORD0;	// Central
+  float4 tc1: 		TEXCOORD1;	// -1,+1
+  float4 tc2: 		TEXCOORD2;	// -2,+2
+  float4 tc3: 		TEXCOORD3;	// -3,+3
+  float4 tc4: 		TEXCOORD4;	// -4,+4
+  float4 tc5: 		TEXCOORD5;	// -5,+5
+  float4 tc6: 		TEXCOORD6;	// -6,+6
+  float4 tc7: 		TEXCOORD7;	// -7,+7
+};
+*/
+
+//////////////////////////////////////////////////////////////////////////////////////////
+#define	LUMINANCE_BASE		0.0001h
+
+float	luminance	(float2	tc)	
+{
+	//float3	source 	= tex2D(s_image,tc);
+	float3	source 	= s_image.Sample( smp_rtlinear, tc );
+	return 	dot( source, LUMINANCE_VECTOR*def_hdr );
+}
+//////////////////////////////////////////////////////////////////////////////////////////
+// 	perform 2x2=4s convolution, working on 4x4=16p area
+//	that means 256x256 source will be scaled to (256/4)x(256/4) = 64x64p
+//	a):	256x256 => 64x64p	with log 
+//	b):	64x64p	=> 8x8p
+//	c):	8x8p	=> 1x1p		with exp
+float4 main( p_build I ) : SV_Target
+{
+	// first 8 bilinear samples (8x4 = 32 pixels)
+	float4 	final;
+		final.x =	luminance(I.Tex0);
+		final.y = 	luminance(I.Tex1);
+		final.z = 	luminance(I.Tex2);
+		final.w =	luminance(I.Tex3);
+
+	// OK
+	return 		final	;
+}
+#endif

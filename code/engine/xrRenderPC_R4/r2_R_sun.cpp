@@ -1040,15 +1040,38 @@ void CRender::init_cacades() {
 
     float fBias = -0.0000025f;
     //	float size = MAP_SIZE_START;
+    // Screen Space Shaders. Monolith r2_R_sun.cpp:1096-1103, unchanged: the three sun shadow
+    // cascade sizes come from the console instead of being fixed here, which is what makes
+    // ssfx_shadow_cascades and its three sliders do anything at all. The command that writes it
+    // calls back into this function ( CCC_ssfx_cascades in xrRender_console.cpp ), so a change
+    // takes effect at once.
+    //
+    // Monolith changes this in R4 only; R2 and R3 keep their own fixed sizes there and here.
+    // The near cascade was 9 in this engine and the console default is 20, so with SSS on the
+    // nearest shadow cascade covers 20 metres, as it does in the donor.
     m_sun_cascades[0].reset_chain = true;
-    m_sun_cascades[0].size = 9;
+    m_sun_cascades[0].size = ps_ssfx_shadow_cascades.x; //20
     m_sun_cascades[0].bias = m_sun_cascades[0].size * fBias;
 
-    m_sun_cascades[1].size = 40;
+    m_sun_cascades[1].size = ps_ssfx_shadow_cascades.y; //40
     m_sun_cascades[1].bias = m_sun_cascades[1].size * fBias;
 
-    m_sun_cascades[2].size = 160;
+    m_sun_cascades[2].size = ps_ssfx_shadow_cascades.z; //160
     m_sun_cascades[2].bias = m_sun_cascades[2].size * fBias;
+
+    // With SSS switched off ( ssfx_session_enable ) the game's own fixed sizes, Infernis
+    // r2_R_sun.cpp:1044-1051. The constructor and the ssfx_shadow_cascades line of user.ltx both
+    // get here before the switch is known, so CRender::create() calls this once more after it is.
+    if (!ssfx_session_enable) {
+        m_sun_cascades[0].size = 9;
+        m_sun_cascades[0].bias = m_sun_cascades[0].size * fBias;
+
+        m_sun_cascades[1].size = 40;
+        m_sun_cascades[1].bias = m_sun_cascades[1].size * fBias;
+
+        m_sun_cascades[2].size = 160;
+        m_sun_cascades[2].bias = m_sun_cascades[2].size * fBias;
+    }
 
     // 	for( u32 i = 0; i < cascade_count; ++i )
     // 	{
@@ -1324,8 +1347,21 @@ void CRender::render_sun_cascade(u32 cascade_ind) {
             RCache.set_xform_view(Fidentity);
             RCache.set_xform_project(fuckingsun->X.D.combine);
             r_dsgraph_render_graph(0);
-            if (ps_r2_ls_flags.test(R2FLAG_SUN_DETAILS))
+            // Screen Space Shaders. Monolith r2_R_sun.cpp:1387-1391. Grass is drawn into the sun's
+            // shadow map so it casts a shadow of its own. ssfx_grass_shadows.x says how many
+            // cascades get it - the nearer the cascade, the cheaper - and .y pulls the fade
+            // distance in so only the grass close enough to matter is drawn.
+            //
+            // With SSS switched off ( ssfx_session_enable ) the game's own test, Infernis
+            // r2_R_sun.cpp:1327-1328: r2_sun_details decides, in every cascade.
+            if (!ssfx_session_enable) {
+                if (ps_r2_ls_flags.test(R2FLAG_SUN_DETAILS))
+                    Details->Render();
+            } else if (psDeviceFlags2.test(rsGrassShadow) &&
+                       cascade_ind <= ps_ssfx_grass_shadows.x) {
+                Details->fade_distance = dm_fade * dm_fade * ps_ssfx_grass_shadows.y;
                 Details->Render();
+            }
             fuckingsun->X.D.transluent = FALSE;
             if (bSpecial) {
                 fuckingsun->X.D.transluent = TRUE;

@@ -589,9 +589,198 @@ IReader* CLocatorAPI::setup_fs_ltx(LPCSTR fs_name) {
     return result;
 }
 
+// The test the game's own folders use ( ProcessOne ): a ".db*" or ".xdb*" file is an archive.
+static bool addon_archive_name(LPCSTR file_name) {
+    LPCSTR ext = strext(file_name);
+    return ext && (0 == _strnicmp(ext, ".db", 3) || 0 == _strnicmp(ext, ".xdb", 4));
+}
+
+// The folders of the game that hold archives besides its root ( fsgame.ltx: $game_arch_mp$,
+// $arch_dir_levels$, $arch_dir_resources$, $arch_dir_localization$, $arch_dir_patches$ ).
+static bool game_archive_folder(LPCSTR name) {
+    static const char* folders[] = {"mp", "levels", "resources", "localization", "patches"};
+    for (const char* folder : folders)
+        if (0 == _stricmp(name, folder))
+            return true;
+    return false;
+}
+
+// The archives of one addon pack, where the game keeps its own: the root of the pack and the
+// game's archive folders in it ( game_archive_folder ), one level each, in name order. An archive
+// in any other folder of the pack ( a spare copy in folder 1 ) is not mounted: it would go into
+// gamedata by the entry point of its header wherever it lies. Changed 2026-11-05 on his word that
+// folder 1 was never in the game; before, every folder of the pack was searched.
+static void collect_addon_archives(const xr_string& disk_path, xr_vector<xr_string>& archives,
+                                   bool pack_root = true) {
+    if (disk_path.size() + 2 >= sizeof(string_path))
+        return;
+
+    string_path pattern;
+    strconcat(sizeof(pattern), pattern, disk_path.c_str(), "*.*");
+
+    _finddata_t entry;
+    intptr_t handle = _findfirst(pattern, &entry);
+    if (handle == -1)
+        return;
+
+    xr_vector<_finddata_t> entries;
+    do {
+        if (xr_strcmp(entry.name, ".") && xr_strcmp(entry.name, "..") &&
+            !(entry.attrib & _A_HIDDEN) && !(entry.attrib & FILE_ATTRIBUTE_REPARSE_POINT))
+            entries.push_back(entry);
+    } while (_findnext(handle, &entry) == 0);
+    _findclose(handle);
+
+    std::sort(entries.begin(), entries.end(), [](const _finddata_t& left, const _finddata_t& right) {
+        return _stricmp(left.name, right.name) < 0;
+    });
+
+    for (const auto& item : entries) {
+        if (disk_path.size() + xr_strlen(item.name) + 2 >= sizeof(string_path))
+            continue;
+
+        string_path disk_file;
+        strconcat(sizeof(disk_file), disk_file, disk_path.c_str(), item.name);
+        xr_strlwr(disk_file);
+
+        if (item.attrib & _A_SUBDIR) {
+            if (pack_root && game_archive_folder(item.name)) {
+                xr_strcat(disk_file, "\\");
+                collect_addon_archives(disk_file, archives, false);
+            }
+        } else if (addon_archive_name(item.name)) {
+            archives.emplace_back(disk_file);
+        }
+    }
+}
+
+// Takes the entry point out of the header of an addon archive. LoadArchive stops the game on an
+// archive it cannot mount; a file of an addon folder that is not such an archive gets a line in
+// the log instead.
+static bool addon_archive_entry_point(LPCSTR path, xr_string& entry_point) {
+    HANDLE file =
+        CreateFile(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, 0, 0);
+    if (file == INVALID_HANDLE_VALUE) {
+        Msg("! Addon archive skipped (cannot open): %s", path);
+        return false;
+    }
+
+    // open_chunk trusts every size it reads, so the chunks are walked against the file size first
+    LARGE_INTEGER size;
+    bool valid = GetFileSizeEx(file, &size) && size.QuadPart > 0 && size.QuadPart < 0x100000000ll;
+    bool has_header = false, has_table = false;
+    u64 pos = 0;
+    for (u32 n = 0; valid && !(has_header && has_table) && pos + 8 <= u64(size.QuadPart); ++n) {
+        u32 chunk[2] = {0, 0};
+        DWORD got = 0;
+        LARGE_INTEGER at;
+        at.QuadPart = LONGLONG(pos);
+        valid = n < 16 && SetFilePointerEx(file, at, 0, FILE_BEGIN) &&
+                ReadFile(file, chunk, sizeof(chunk), &got, 0) && got == sizeof(chunk) &&
+                chunk[1] < 0x80000000 && pos + 8 + chunk[1] <= u64(size.QuadPart);
+        if (!valid)
+            break;
+        const u32 id = chunk[0] & ~CFS_CompressMark;
+        if (id == u32(CFS_HeaderChunkID))
+            has_header = true;
+        if (id == 1)
+            has_table = true;
+        pos += 8 + u64(chunk[1]);
+    }
+
+    LPCSTR problem = nullptr;
+    if (!valid)
+        problem = "not an X-Ray archive, or 4 Gb and larger";
+    else if (!has_header)
+        problem = "no header chunk: an archive of the old format";
+    else if (!has_table)
+        problem = "no file table";
+
+    IReader* hdr = problem ? nullptr : open_chunk(file, CFS_HeaderChunkID);
+    CloseHandle(file);
+    if (!hdr) {
+        Msg("! Addon archive skipped (%s): %s", problem ? problem : "unreadable header", path);
+        return false;
+    }
+
+    CInifile header(hdr, "archive_header");
+    hdr->close();
+    LPCSTR value = header.line_exist("header", "entry_point")
+                       ? header.r_string("header", "entry_point")
+                       : nullptr;
+    if (!value || !value[0] || !header.line_exist("header", "auto_load")) {
+        Msg("! Addon archive skipped (its header lacks entry_point or auto_load): %s", path);
+        return false;
+    }
+    entry_point = value;
+    return true;
+}
+
+// Screen Space Shaders: the packs that belong to SSS ( [shader_extensions] ssfx_addons ). ScanAddons
+// leaves them out and keeps here what ssfx_addons needs to mount them later.
+struct ssfx_late_pack {
+    xr_string name;
+    xr_string root;
+    u32 archives; // m_archives.size() when the pack was left out: the next ones are later packs'
+};
+static xr_vector<ssfx_late_pack> ssfx_late_packs;
+static xr_string ssfx_late_game_path;
+static xr_string ssfx_late_addons_path; // in lower case, as the disk paths in m_addon_files
+static bool ssfx_late_decided = false;
+static bool ssfx_late_mounted = false; // SSS runs, so the packs above are in the index
+// ssfx_addons: the end of the archives mounted at start. From a late pack's archives ( see
+// ssfx_late_pack ) up to here they are the later packs', from here on the late packs' own.
+static u32 ssfx_late_archives_end = u32(-1);
+// ScanAddons: the first archive of the addons. Their entries win over loose gamedata, also after
+// rescan_path, where Recurse registers gamedata's loose files over them.
+static u32 addon_archives_begin = u32(-1);
+
+// One of the comma separated folder names of ssfx_addons is pack ( in any case ).
+static bool ssfx_addon_listed(LPCSTR list, LPCSTR pack) {
+    const int count = _GetItemCount(list);
+    for (int i = 0; i < count; ++i) {
+        string_path item;
+        _GetItem(list, i, item);
+        if (item[0] && 0 == _stricmp(item, pack))
+            return true;
+    }
+    return false;
+}
+
+// The pack of an addon file ( a value of m_addon_files ) sorts after late_pack.
+static bool ssfx_later_pack(const xr_string& disk_file, LPCSTR late_pack) {
+    const xr_string& root = ssfx_late_addons_path;
+    if (root.empty() || disk_file.compare(0, root.size(), root) != 0)
+        return false;
+    const auto end = disk_file.find('\\', root.size());
+    if (end == xr_string::npos)
+        return false;
+    return _stricmp(disk_file.substr(root.size(), end - root.size()).c_str(), late_pack) > 0;
+}
+
+// The folders of the files of the archives from first_archive on, below game_path, with the
+// archive of each: an archive need not list its folders, and file_list lists nothing under a
+// folder without an entry of its own ( see ScanAddonDirectory ).
+template <typename Files>
+static xr_vector<std::pair<xr_string, u32>> addon_archive_folders(const Files& files,
+                                                                  u32 first_archive,
+                                                                  const xr_string& game_path) {
+    xr_vector<std::pair<xr_string, u32>> folders;
+    for (const auto& item : files) {
+        if (item.vfs == 0xffffffff || item.vfs < first_archive ||
+            _strnicmp(item.name, game_path.c_str(), game_path.size()) != 0)
+            continue;
+        for (LPCSTR slash = strchr(item.name + game_path.size(), '\\'); slash;
+             slash = strchr(slash + 1, '\\'))
+            folders.emplace_back(xr_string(item.name, size_t(slash + 1 - item.name)), item.vfs);
+    }
+    return folders;
+}
+
 // Index addon resources under their normal gamedata paths while keeping their bytes
 // in separate addon directories. Later (alphabetical) packs replace earlier files.
-void CLocatorAPI::ScanAddonDirectory(const xr_string& disk_path, const xr_string& game_path) {
+void CLocatorAPI::ScanAddonDirectory(const xr_string& disk_path, const xr_string& game_path,
+                                     LPCSTR late_pack, u32 late_archives) {
     if (disk_path.size() + 2 >= sizeof(string_path) || game_path.size() + 2 >= sizeof(string_path))
         return;
 
@@ -631,12 +820,31 @@ void CLocatorAPI::ScanAddonDirectory(const xr_string& disk_path, const xr_string
         if (item.attrib & _A_SUBDIR) {
             xr_strcat(disk_file, "\\");
             xr_strcat(game_file, "\\");
-            ScanAddonDirectory(disk_file, game_file);
+            // A folder only addons have goes into the index too, as Recurse puts gamedata's in:
+            // file_list lists nothing under a folder without an entry of its own ( the particles
+            // folder of Weather_ATMOS: "Loaded particles :0", the game stopped on graupel/dust ).
+            if (!exist(game_file))
+                Register(game_file, 0xffffffff, 0, 0, 0, 0, (u32)item.time_write);
+            ScanAddonDirectory(disk_file, game_file, late_pack, late_archives);
         } else {
-            // X-Ray archives require their own mount points; addon packs contain loose files.
-            LPCSTR ext = strext(game_file);
-            if (ext && (!xr_strcmp(ext, ".db") || !xr_strcmp(ext, ".xdb")))
+            // X-Ray archives are not loose files: ScanAddons has mounted them before this pass.
+            if (addon_archive_name(item.name))
                 continue;
+
+            // Screen Space Shaders: a pack mounted late ( ssfx_addons ) keeps its alphabetical
+            // place. A file that a pack after it gives, loose or from its archives, stays that
+            // pack's, as when every pack was mounted at start.
+            if (late_pack) {
+                const auto given = m_addon_files.find(game_file);
+                if (given != m_addon_files.end() && ssfx_later_pack(given->second, late_pack))
+                    continue;
+                file key;
+                key.name = game_file;
+                const auto current = m_files.find(key);
+                if (current != m_files.end() && current->vfs != 0xffffffff &&
+                    current->vfs >= late_archives && current->vfs < ssfx_late_archives_end)
+                    continue;
+            }
 
             if (m_addon_files.find(game_file) != m_addon_files.end())
                 Msg("! Addon file overridden: %s (by %s)", game_file, disk_file);
@@ -686,13 +894,245 @@ void CLocatorAPI::ScanAddons() {
         return _stricmp(left.c_str(), right.c_str()) < 0;
     });
 
+    // Screen Space Shaders: the packs that belong to SSS, [shader_extensions] ssfx_addons of
+    // configs\infernis_engine\engine_external.ltx ( comma separated folder names ). They are left
+    // out here; Startup mounts them only if SSS runs ( ssfx_addons below, x_ray.cpp ). pSettings
+    // does not exist yet, so the file is read on its own: the game's files are indexed by now.
+    string_path ssfx_list = "";
+    if (path_exist("$game_config$")) {
+        string_path ini_folder, ini_name;
+        update_path(ini_folder, "$game_config$", "infernis_engine\\");
+        strconcat(sizeof(ini_name), ini_name, ini_folder, "engine_external.ltx");
+        if (IReader* F = r_open(ini_name)) {
+            CInifile ini(F, ini_folder);
+            r_close(F);
+            LPCSTR value = ini.line_exist("shader_extensions", "ssfx_addons")
+                               ? ini.r_string("shader_extensions", "ssfx_addons")
+                               : nullptr;
+            if (value)
+                xr_strcpy(ssfx_list, value);
+        }
+    }
+    {
+        string_path lower;
+        xr_strcpy(lower, addons_path.c_str());
+        xr_strlwr(lower);
+        ssfx_late_addons_path = lower;
+        ssfx_late_game_path = game_path;
+    }
+
+    const u32 first_addon_archive = u32(m_archives.size());
+    addon_archives_begin = first_addon_archive;
     for (const auto& pack : packs) {
         if (addons_path.size() + pack.size() + 2 >= sizeof(string_path))
             continue;
         xr_string root = addons_path + pack + "\\";
+        if (ssfx_addon_listed(ssfx_list, pack.c_str())) {
+            ssfx_late_packs.push_back({pack, root, u32(m_archives.size())});
+            Msg("FS: addon %s waits for the SSS switch", root.c_str());
+            continue;
+        }
         Msg("FS: loading addon %s", root.c_str());
+
+        // Archives first, loose files second: inside one pack a loose file replaces the same file
+        // of the pack's archives, the way loose gamedata replaces the game's own archives. An
+        // archive is mounted by the entry point of its own header, like those archives.
+        xr_vector<xr_string> pack_archives;
+        collect_addon_archives(root, pack_archives);
+        const u32 first_archive = u32(m_archives.size());
+        for (const auto& archive_path : pack_archives) {
+            xr_string entry_point;
+            if (!addon_archive_entry_point(archive_path.c_str(), entry_point))
+                continue;
+            // LoadArchive takes "gamedata" or "$path$\...", and stops the game on anything else
+            const auto slash = entry_point.find('\\');
+            if (_stricmp(entry_point.c_str(), "gamedata") &&
+                (entry_point[0] != '$' || slash == xr_string::npos ||
+                 !path_exist(entry_point.substr(0, slash).c_str()))) {
+                Msg("! Addon archive skipped (entry point '%s' is not gamedata or $path$\\...): %s",
+                    entry_point.c_str(), archive_path.c_str());
+                continue;
+            }
+            Msg("FS: addon archive %s -> %s", archive_path.c_str(), entry_point.c_str());
+            ProcessArchive(archive_path.c_str());
+        }
+        if (m_archives.size() != first_archive) {
+            u32 archived = 0;
+            for (const auto& item : m_files)
+                if (item.vfs != 0xffffffff && item.vfs >= first_archive)
+                    ++archived;
+            // a loose file of an earlier pack that these archives have replaced is no longer read
+            // from that pack's folder
+            for (auto it = m_addon_files.begin(); it != m_addon_files.end();) {
+                file key;
+                key.name = it->first.c_str();
+                const auto current = m_files.find(key);
+                if (current != m_files.end() && current->vfs != 0xffffffff)
+                    it = m_addon_files.erase(it);
+                else
+                    ++it;
+            }
+            Msg("FS: addon %s: %d archives, %d entries in them", pack.c_str(),
+                u32(m_archives.size()) - first_archive, archived);
+        }
+
         ScanAddonDirectory(root, game_path);
     }
+
+    // every folder of the addon archives gets an entry of its own ( addon_archive_folders )
+    for (const auto& folder : addon_archive_folders(m_files, first_addon_archive, game_path))
+        if (!exist(folder.first.c_str()))
+            Register(folder.first.c_str(), folder.second, 0, 0, 0, 0, 0);
+}
+
+void CLocatorAPI::ssfx_addons(bool mount) {
+    // Startup runs once more for a benchmark re-run: the decision of the first run stays
+    if (ssfx_late_decided)
+        return;
+    ssfx_late_decided = true;
+    ssfx_late_mounted = mount && !ssfx_late_packs.empty();
+
+    for (const auto& pack : ssfx_late_packs) {
+        if (!mount) {
+            Msg("FS: addon %s left out: SSS is off", pack.root.c_str());
+            continue;
+        }
+        Msg("FS: loading addon %s ( SSS is on )", pack.root.c_str());
+        // Its archives are mounted as ScanAddons mounts those of the other packs ( the user,
+        // 2026-10-29: every folder and file of the xdb in addons must be read ). Mounted now, they
+        // replace the files of the packs after this one too, so those are put back: the archived
+        // ones as they were, the loose ones from their folders.
+        if (ssfx_late_archives_end == u32(-1))
+            ssfx_late_archives_end = u32(m_archives.size());
+        xr_vector<std::pair<xr_string, file>> later;
+        for (const auto& item : m_files)
+            if (item.vfs != 0xffffffff && item.vfs >= pack.archives &&
+                item.vfs < ssfx_late_archives_end)
+                later.emplace_back(item.name, item);
+        xr_vector<xr_string> pack_archives;
+        collect_addon_archives(pack.root, pack_archives);
+        const u32 first_archive = u32(m_archives.size());
+        for (const auto& archive_path : pack_archives) {
+            xr_string entry_point;
+            if (!addon_archive_entry_point(archive_path.c_str(), entry_point))
+                continue;
+            const auto slash = entry_point.find('\\');
+            if (_stricmp(entry_point.c_str(), "gamedata") &&
+                (entry_point[0] != '$' || slash == xr_string::npos ||
+                 !path_exist(entry_point.substr(0, slash).c_str()))) {
+                Msg("! Addon archive skipped (entry point '%s' is not gamedata or $path$\\...): %s",
+                    entry_point.c_str(), archive_path.c_str());
+                continue;
+            }
+            Msg("FS: addon archive %s -> %s", archive_path.c_str(), entry_point.c_str());
+            ProcessArchive(archive_path.c_str());
+        }
+        if (m_archives.size() != first_archive) {
+            for (const auto& item : later)
+                Register(item.first.c_str(), item.second.vfs, item.second.crc, item.second.ptr,
+                         item.second.size_real, item.second.size_compressed, item.second.modif);
+            for (auto it = m_addon_files.begin(); it != m_addon_files.end();) {
+                file key;
+                key.name = it->first.c_str();
+                const auto current = m_files.find(key);
+                struct _stat st;
+                if (current == m_files.end() || current->vfs == 0xffffffff) {
+                    ++it;
+                } else if (ssfx_later_pack(it->second, pack.name.c_str()) &&
+                           _stat(it->second.c_str(), &st) == 0) {
+                    Register(it->first.c_str(), 0xffffffff, 0, 0, st.st_size, st.st_size,
+                             (u32)st.st_mtime);
+                    ++it;
+                } else {
+                    // a loose file of an earlier pack that these archives have replaced
+                    it = m_addon_files.erase(it);
+                }
+            }
+            u32 archived = 0;
+            for (const auto& item : m_files)
+                if (item.vfs != 0xffffffff && item.vfs >= first_archive)
+                    ++archived;
+            Msg("FS: addon %s: %d archives, %d entries in them", pack.name.c_str(),
+                u32(m_archives.size()) - first_archive, archived);
+        }
+        ScanAddonDirectory(pack.root, ssfx_late_game_path, pack.name.c_str(), pack.archives);
+    }
+    for (const auto& folder :
+         addon_archive_folders(m_files, ssfx_late_archives_end, ssfx_late_game_path))
+        if (!exist(folder.first.c_str()))
+            Register(folder.first.c_str(), folder.second, 0, 0, 0, 0, 0);
+}
+
+// The packs ScanAddons left out for ssfx_addons: those of the list that are on the disk, mounted or
+// not ( SSS off ). The shader cache check ( xrEngine, ssfx_profile_cache_check ) runs before
+// ssfx_addons and keeps them with the SSS switch, so a pack put in or taken out empties the cache
+// as a switch of SSS does ( the user, 2026-10-28 ).
+void CLocatorAPI::ssfx_addon_names(string_path& names) {
+    names[0] = 0;
+    for (const auto& pack : ssfx_late_packs) {
+        if (xr_strlen(names) + pack.name.size() + 2 > sizeof(names))
+            break;
+        if (names[0])
+            xr_strcat(names, " ");
+        xr_strcat(names, pack.name.c_str());
+    }
+}
+
+bool CLocatorAPI::ssfx_addon_target(LPCSTR game_file, string_path& disk_file) {
+    disk_file[0] = 0;
+    const xr_string& game_path = ssfx_late_game_path;
+    if (!ssfx_late_mounted || game_path.empty() ||
+        _strnicmp(game_file, game_path.c_str(), game_path.size()) != 0)
+        return false;
+    LPCSTR relative = game_file + game_path.size();
+    // the last pack mounted wins for a file that two packs give, so a new file goes there too
+    for (auto it = ssfx_late_packs.rbegin(); it != ssfx_late_packs.rend(); ++it) {
+        string_path folder;
+        strconcat(sizeof(folder), folder, it->root.c_str(), relative);
+        if (LPSTR slash = strrchr(folder, '\\'))
+            *slash = 0;
+        if (_access(folder, 0) == 0) {
+            strconcat(sizeof(disk_file), disk_file, it->root.c_str(), relative);
+            return true;
+        }
+    }
+    return false;
+}
+
+LPCSTR CLocatorAPI::addon_file(LPCSTR game_file) {
+    string_path name;
+    xr_strcpy(name, game_file);
+    xr_strlwr(name);
+    const auto addon = m_addon_files.find(name);
+    return addon != m_addon_files.end() ? addon->second.c_str() : nullptr;
+}
+
+bool CLocatorAPI::addon_file_replace(LPCSTR game_file, LPCSTR new_file, LPCSTR disk_file) {
+    if (!MoveFileEx(new_file, disk_file, MOVEFILE_REPLACE_EXISTING))
+        return false;
+
+    // new_file is gone, and so is the entry w_close gave it
+    string_path name;
+    xr_strcpy(name, new_file);
+    xr_strlwr(name);
+    const files_it I = file_find_it(name);
+    if (I != m_files.end()) {
+        char* str = LPSTR(I->name);
+        xr_free(str);
+        m_files.erase(I);
+    }
+
+    // from now on the game reads disk_file for game_file, with its new size
+    string_path disk_name;
+    xr_strcpy(disk_name, disk_file);
+    xr_strlwr(disk_name);
+    xr_strcpy(name, game_file);
+    xr_strlwr(name);
+    m_addon_files[name] = disk_name;
+    struct _stat st;
+    if (_stat(disk_file, &st) == 0)
+        Register(name, 0xffffffff, 0, 0, st.st_size, st.st_size, (u32)st.st_mtime);
+    return true;
 }
 
 void CLocatorAPI::_initialize(u32 flags, LPCSTR target_folder, LPCSTR fs_name) {
@@ -1601,8 +2041,50 @@ void CLocatorAPI::rescan_path(LPCSTR full_path, BOOL bRecurse) {
         xr_free(str);
         m_files.erase(cur_item);
     }
+    // Addon archives win over loose gamedata ( ScanAddons, ssfx_addons ), but Recurse registers
+    // gamedata's loose files over them: their entries go back after it as they were.
+    xr_vector<std::pair<xr_string, file>> addon_archived;
+    {
+        file key;
+        key.name = full_path;
+        for (auto it = m_files.lower_bound(key);
+             it != m_files.end() && 0 == strncmp(it->name, full_path, base_len); ++it)
+            if (it->vfs != 0xffffffff && it->vfs >= addon_archives_begin &&
+                (bRecurse || !strstr(it->name + base_len, "\\")))
+                addon_archived.emplace_back(it->name, *it);
+    }
     bNoRecurse = !bRecurse;
     Recurse(full_path);
+    for (const auto& item : addon_archived)
+        Register(item.first.c_str(), item.second.vfs, item.second.crc, item.second.ptr,
+                 item.second.size_real, item.second.size_compressed, item.second.modif);
+
+    // Addons: their files are in the index under gamedata paths, but their bytes are in the
+    // addon's folder, which Recurse does not scan, so the loop above has dropped them ( and with
+    // each the archived file it replaces ). The sound options list $game_config$ and $game_sounds$
+    // ( ui_mm_opt_sound.script ): after them a level stopped the game on game_maps_single.ltx of
+    // Weather_ATMOS, an include of game.ltx. They go back into the index as ScanAddonDirectory put
+    // them there; m_addon_files holds the file that won for each path.
+    for (auto it = m_addon_files.lower_bound(full_path);
+         it != m_addon_files.end() && 0 == strncmp(it->first.c_str(), full_path, base_len); ++it) {
+        LPCSTR name = it->first.c_str();
+        if (!bRecurse && strstr(name + base_len, "\\"))
+            continue;
+        struct _stat st;
+        if (_stat(it->second.c_str(), &st) != 0)
+            continue;
+        Register(name, 0xffffffff, 0, 0, st.st_size, st.st_size, (u32)st.st_mtime);
+        // and its folders from full_path on, which the loop above has dropped as well when only
+        // addons have them ( see ScanAddonDirectory )
+        for (size_t i = base_len ? base_len - 1 : 0; name[i]; ++i) {
+            if (name[i] != '\\')
+                continue;
+            string_path folder;
+            strncpy_s(folder, sizeof(folder), name, i + 1);
+            if (!exist(folder))
+                Register(folder, 0xffffffff, 0, 0, 0, 0, 0);
+        }
+    }
 }
 
 void CLocatorAPI::rescan_pathes() {

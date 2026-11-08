@@ -46,6 +46,11 @@ dx10ConstantBuffer::dx10ConstantBuffer(ID3DShaderReflectionConstantBuffer* pTabl
     VERIFY(m_pBuffer);
     m_pBufferData = xr_malloc(Desc.Size);
     VERIFY(m_pBufferData);
+    // NOT FROM MONOLITH - the donor leaves this memory as the allocator returned it. A constant the
+    // engine never writes then holds whatever was on the heap, different on every launch, and the
+    // shader that reads it works on one start and breaks on the next. Zeroed, such a constant reads
+    // 0 every time.
+    std::memset(m_pBufferData, 0, Desc.Size);
 }
 
 bool dx10ConstantBuffer::Similar(dx10ConstantBuffer& _in) {

@@ -70,6 +70,7 @@ bool det_render_debug = false;
 #endif
 
 #include "xrEngine/gamemtllib.h"
+#include "xrEngine/ssfx_console_vars.h"
 
 void CDetailManager::cache_Decompress(Slot* S) {
     VERIFY(S);
@@ -124,7 +125,15 @@ void CDetailManager::cache_Decompress(Slot* S) {
     }
 
     // Prepare to selection
+#if RENDER == R_R4
+    // With SSS switched off ( ssfx_session_enable ) the game's own range of r__detail_density,
+    // 0.2 .. 0.6 ( Infernis xrRender_console.cpp:644 ). The console here allows 0.04 .. 1.0
+    // ( xrRender_console.cpp:741 ), so the game's limits are applied where the value is used.
+    const float density =
+        ssfx_session_enable ? ps_r__Detail_density : std::clamp(ps_r__Detail_density, 0.2f, 0.6f);
+#else
     const float density = ps_r__Detail_density;
+#endif
     const float jitter = density / 1.7f;
     const u32 d_size = iCeil(dm_slot_size / density);
     svector<int, dm_obj_in_slot> selected;
@@ -170,6 +179,21 @@ void CDetailManager::cache_Decompress(Slot* S) {
             float y = D.vis.box.min.y - 5.f;
             const Fvector dir{ 0.f, -1.f, 0.f };
 
+            // Screen Space Shaders: the terrain normal under this blade, handed to the grass
+            // shader as "exdata".
+            //
+            // Deviation from the donor, and the only one here: Monolith
+            // DetailManager_Decompress.cpp:202 declares this without an initialiser, yet the
+            // slope test below reads it before anything is guaranteed to have written it - the
+            // write only happens when the downward ray hits one of this slot's triangles. On a
+            // miss the test, and then the terrain alignment further down, work on whatever was
+            // left in that stack slot. A garbage normal makes generate_orthonormal_basis build a
+            // garbage rotation, and the blade is stretched away from the map: the black vertical
+            // streaks. Starting from straight up costs nothing - a hit overwrites it with the
+            // real normal on the next line, so every blade the donor draws is drawn identically -
+            // and a miss now means flat ground instead of undefined behaviour.
+            Fvector terrain_normal{0.f, 1.f, 0.f};
+
             float r_u, r_v, r_range;
             for (u32 tid = 0; tid < triCount; tid++) {
 #ifdef _EDITOR
@@ -190,24 +214,77 @@ void CDetailManager::cache_Decompress(Slot* S) {
                 if (CDB::TestRayTri(Item_P, dir, valid_tris[tid].data(), r_u, r_v, r_range, TRUE)) {
                     if (r_range >= 0.f) {
                         float y_test = Item_P.y - r_range;
-                        if (y_test > y) y = y_test;
+                        if (y_test > y)
+                            y = y_test;
+                        terrain_normal.mknormal(valid_tris[tid][0], valid_tris[tid][1],
+                                                valid_tris[tid][2]);
                     }
                 }
 #endif
             }
+#if RENDER == R_R4
+            if (ssfx_session_enable) {
+                // Screen Space Shaders: slope limit - no grass on steep ground.
+                // Monolith DetailManager_Decompress.cpp:242-247. The donor runs the slope test
+                // before the height test and rejects with a bare continue, leaving the pooled item
+                // behind; both are the donor's and are reproduced here unchanged.
+                float DotP = terrain_normal.dotproduct(dir);
+                if (DotP > -(1.0f - r_scale.randF(ps_ssfx_terrain_grass_slope * 0.8f,
+                                                  ps_ssfx_terrain_grass_slope)))
+                    continue;
+
+                if (y < D.vis.box.min.y)
+                    continue;
+            } else {
+                // With SSS switched off ( ssfx_session_enable ) the game's own test, Infernis
+                // DetailManager_Decompress.cpp:198-201: no slope limit, and a blade below the
+                // slot goes back to the pool.
+                if (y < D.vis.box.min.y) {
+                    poolSI.destroy(ItemP);
+                    continue;
+                }
+            }
+#else
+            // The other renderers: the game's own test, Infernis
+            // DetailManager_Decompress.cpp:198-201.
             if (y < D.vis.box.min.y) {
                 poolSI.destroy(ItemP); // Не забуваємо повернути пам'ять, якщо трава під картою
                 continue;
             }
+#endif
             Item_P.y = y;
+
+            // Save terrain normal here to feed the grass shader later.
+            Item.normal = terrain_normal;
 
             // Angles and scale
             Item.scale = r_scale.randF(Dobj->m_fMinScale * 0.5f, Dobj->m_fMaxScale * 0.9f);
+            // Screen Space Shaders: grass height ( r__detail_height ) is NOT applied here.
+            // Monolith multiplies Item.scale at this point ( DetailManager_Decompress.cpp:257 ) and
+            // then destroys and rebuilds the whole detail manager whenever the value changes
+            // ( r4.cpp:601-608 ). Infernis has no such rebuild hook, so a multiply here would only
+            // ever reach slots unpacked after the change and the menu slider would look dead until
+            // the player walked away and came back. It is applied per frame in
+            // DetailManager.cpp::UpdateVisibleM instead, which is immediate for every blade.
 
             Fmatrix mScale, mXform;
             Fbox ItemBB;
 
             Item.mRotY.rotateY(r_yaw.randF(0.f, PI_MUL_2));
+
+#if RENDER == R_R4
+            // Screen Space Shaders: optional terrain alignment ( ssfx_terrain_grass_align ).
+            // Ported from Monolith DetailManager_Decompress.cpp:268-280.
+            // ... and only with SSS switched on ( ssfx_session_enable ): Infernis has no alignment,
+            // and the other renderers keep that.
+            if (ssfx_session_enable && ps_ssfx_terrain_grass_align > 0) {
+                const Fmatrix CurrMatrix = Item.mRotY;
+                Item.mRotY.j.set(terrain_normal);
+                Fvector::generate_orthonormal_basis(Item.mRotY.j, Item.mRotY.i, Item.mRotY.k);
+                Item.mRotY.mulB_43(CurrMatrix);
+            }
+#endif
+
             Item.mRotY.translate_over(Item_P);
             
             mScale.scale(Item.scale, Item.scale, Item.scale);

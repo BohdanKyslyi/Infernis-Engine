@@ -15,6 +15,7 @@
 #include "mainmenu.h"
 #include "object_factory.h"
 #include "alife_object_registry.h"
+#include "ssfx_script_bridge.h"
 //#include "../xrEngine/xr_ioconsole.h"
 
 #ifdef DEBUG
@@ -68,6 +69,10 @@ CALifeSimulator::CALifeSimulator(xrServer* server, shared_str* command_line)
     R_ASSERT2(ai().script_engine().functor(start_game_callback, functor),
               "failed to get start game callback");
     functor();
+
+    // Screen Space Shaders - starts the addon's scripts where Anomaly does: right after the game's
+    // own start callback, before the save is loaded.
+    ssfx_script_bridge::on_game_start();
 
     load(p.m_game_or_spawn, !xr_strcmp(p.m_new_or_load, "load") ? false : true,
          !xr_strcmp(p.m_new_or_load, "new"));

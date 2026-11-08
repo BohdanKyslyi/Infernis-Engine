@@ -36,6 +36,8 @@ static u32 const tips_scroll_pos_color = color_rgba(70, 70, 70, 240);
 
 ENGINE_API CConsole* Console = NULL;
 
+static thread_local string256 s_script_caller;
+
 extern char const* const ioc_prompt;
 char const* const ioc_prompt = ">>> ";
 
@@ -516,15 +518,19 @@ void CConsole::ExecuteCommand(LPCSTR cmd_str, bool record_cmd) {
     xr_strcpy(edt, str_size + 1, cmd_str);
     edt[str_size] = 0;
 
-    scroll_delta = 0;
-    reset_cmd_history_idx();
-    reset_selected_tip();
-
     text_editor::remove_spaces(edt);
     if (edt[0] == 0) {
         return;
     }
     if (record_cmd) {
+        // Monolith XR_IOConsole.cpp:599-608: only a command the player typed resets the console's
+        // scroll, history position and selected tip. A command a script runs ( get_console():execute )
+        // leaves them alone - the SSFX scripts run some every frame, and in a loaded game the arrows
+        // could not move through the tip list.
+        scroll_delta = 0;
+        reset_cmd_history_idx();
+        reset_selected_tip();
+
         char c[2];
         c[0] = mark2;
         c[1] = 0;
@@ -626,6 +632,19 @@ void CConsole::SelectCommand() {
 }
 
 void CConsole::Execute(LPCSTR cmd) { ExecuteCommand(cmd, false); }
+
+LPCSTR CConsole::ScriptCaller() const { return s_script_caller; }
+
+CConsole::ScriptCallerScope::ScriptCallerScope(LPCSTR src) {
+    xr_strcpy(prev, s_script_caller);
+
+    if (src && src[0])
+        strncpy_s(s_script_caller, sizeof(s_script_caller), src, _TRUNCATE);
+    else
+        s_script_caller[0] = 0;
+}
+
+CConsole::ScriptCallerScope::~ScriptCallerScope() { xr_strcpy(s_script_caller, prev); }
 
 void CConsole::ExecuteScript(LPCSTR str) {
     u32 str_size = xr_strlen(str);

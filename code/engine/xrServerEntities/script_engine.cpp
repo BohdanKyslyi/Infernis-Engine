@@ -155,27 +155,89 @@ void CScriptEngine::unload() {
 }
 
 int CScriptEngine::lua_panic(lua_State* L) {
+    // Monolith ( script_engine.cpp:179-184 )
+    ai().script_engine().print_stack();
     print_output(L, "PANIC", LUA_ERRRUN);
     return (0);
 }
 
+// Monolith ( script_engine.cpp:186-209, demonized ): the Lua stack as lines, for the first script
+// line in the crash report
+xr_vector<xr_string> get_lua_stack(lua_State* L) {
+    xr_vector<xr_string> res;
+    lua_Debug l_tDebugInfo;
+    for (int i = 0; lua_getstack(L, i, &l_tDebugInfo); ++i) {
+        lua_getinfo(L, "nSlu", &l_tDebugInfo);
+        if (!l_tDebugInfo.name) {
+            res.push_back(make_string("%2d : [%s] %s(%d) : %s", i, l_tDebugInfo.what,
+                                      l_tDebugInfo.short_src, l_tDebugInfo.currentline, "")
+                              .c_str());
+        } else {
+            if (!xr_strcmp(l_tDebugInfo.what, "C")) {
+                res.push_back(make_string("%2d : [C  ] %s", i, l_tDebugInfo.name).c_str());
+            } else {
+                res.push_back(make_string("%2d : [%s] %s(%d) : %s", i, l_tDebugInfo.what,
+                                          l_tDebugInfo.short_src, l_tDebugInfo.currentline,
+                                          l_tDebugInfo.name)
+                                  .c_str());
+            }
+        }
+    }
+    return res;
+}
+
 void CScriptEngine::lua_error(lua_State* L) {
+    // Monolith ( script_engine.cpp:211-235 ): the stack to the log, the first script line ( file,
+    // line, function ) into the crash report
+    ai().script_engine().print_stack();
     print_output(L, "", LUA_ERRRUN);
     ai().script_engine().on_error(L);
 
+    auto stack = get_lua_stack(L);
+    xr_string lua_error_line = "";
+    for (auto const& s : stack) {
+        if (s.find("[Lua]") != xr_string::npos) {
+            lua_error_line = s;
+            break;
+        }
+    }
+
+    auto error_str = make_string("\n%s\n\nLUA error: %s\n\nCheck log for details",
+                                 lua_error_line.c_str(), lua_tostring(L, -1));
+    LPCSTR error_msg = error_str.c_str();
+
 #if !XRAY_EXCEPTIONS
-    Debug.fatal(DEBUG_INFO, "LUA error: %s", lua_tostring(L, -1));
+    // through "%s": Monolith passes the text as the format, a '%' in it would break the report
+    Debug.fatal(DEBUG_INFO, "%s", error_msg);
 #else
     throw lua_tostring(L, -1);
 #endif
 }
 
 int CScriptEngine::lua_pcall_failed(lua_State* L) {
+    // Monolith ( script_engine.cpp:266-291 ): the stack to the log, the first script line ( file,
+    // line, function ) into the crash report
+    ai().script_engine().print_stack();
     print_output(L, "", LUA_ERRRUN);
     ai().script_engine().on_error(L);
 
+    auto stack = get_lua_stack(L);
+    xr_string lua_error_line = "";
+    for (auto const& s : stack) {
+        if (s.find("[Lua]") != xr_string::npos) {
+            lua_error_line = s;
+            break;
+        }
+    }
+
+    auto error_str = make_string("\n%s\n\nLUA error: %s\n\nCheck log for details",
+                                 lua_error_line.c_str(),
+                                 lua_isstring(L, -1) ? lua_tostring(L, -1) : "");
+    LPCSTR error_msg = error_str.c_str();
+
 #if !XRAY_EXCEPTIONS
-    Debug.fatal(DEBUG_INFO, "LUA error: %s", lua_isstring(L, -1) ? lua_tostring(L, -1) : "");
+    // through "%s": Monolith passes the text as the format, a '%' in it would break the report
+    Debug.fatal(DEBUG_INFO, "%s", error_msg);
 #endif
     if (lua_isstring(L, -1))
         lua_pop(L, 1);
@@ -206,9 +268,9 @@ void CScriptEngine::setup_callbacks() {
         luabind::set_error_callback(CScriptEngine::lua_error);
 #endif
 
-#ifndef MASTER_GOLD
+        // Monolith ( script_engine.cpp:320 ): in every build - this handler runs where the error is,
+        // while the stack still holds the script line
         luabind::set_pcall_callback(CScriptEngine::lua_pcall_failed);
-#endif // MASTER_GOLD
     }
 
 #if !XRAY_EXCEPTIONS

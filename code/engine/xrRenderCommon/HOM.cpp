@@ -51,6 +51,7 @@ inline float Area(const Fvector& v0, const Fvector& v1, const Fvector& v2) {
 }
 
 void CHOM::Load() {
+    std::lock_guard<std::recursive_mutex> lock(MT);
     string_path fName;
     FS.update_path(fName, "$level$", "level.hom");
     if (!FS.exist(fName)) {
@@ -103,6 +104,8 @@ void CHOM::Load() {
 }
 
 void CHOM::Unload() {
+    // MT_RENDER works on m_pModel/m_pTris in another thread: wait for it before freeing
+    std::lock_guard<std::recursive_mutex> lock(MT);
     xr_delete(m_pModel);
     xr_free(m_pTris);
     bEnabled = FALSE;

@@ -1,0 +1,5 @@
+// NOT IN THE SSFX FOLDER, and needed: the SSFX folder ships deffer_base_hud_bump_d-hq.ps but not its alpha-ref twin.
+// uber_deffer.cpp:89-95 writes _d after _aref_bump, then -hq at line 100-102.
+// A name uber_deffer() can build and ResourceManager_Resources.cpp:268 asserts on.
+#define USE_PARALLAX
+#include "deffer_base_hud_aref_bump_d.ps"

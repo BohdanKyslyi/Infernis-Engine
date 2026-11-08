@@ -10,6 +10,8 @@
 #include "blender_bloom_build.h"
 #include "blender_luminance.h"
 #include "blender_ssao.h"
+#include "blender_ssfx.h"
+#include "blender_ss_sunshafts.h"
 #include "dx11MinMaxSMBlender.h"
 #include "dx11HDAOCSBlender.h"
 #include "../xrRenderDX10/msaa/dx10MSAABlender.h"
@@ -18,6 +20,61 @@
 #include "xrRenderCommon/dxRenderDeviceRender.h"
 
 #include <D3DX10Tex.h>
+
+D3D_VIEWPORT custom_viewport[1] = { 0, 0, 0, 0, 0.f, 1.f };
+
+void CRenderTarget::set_viewport_size(ID3DDeviceContext* dev, float w, float h) {
+    custom_viewport[0].Width = w;
+    custom_viewport[0].Height = h;
+    dev->RSSetViewports(1, custom_viewport);
+}
+
+void CRenderTarget::u_setrt(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, const ref_rt& _4,
+                            ID3DDepthStencilView* zb) {
+    VERIFY(_1 || zb);
+    if (_1) {
+        dwWidth = _1->dwWidth;
+        dwHeight = _1->dwHeight;
+    } else {
+        D3D_DEPTH_STENCIL_VIEW_DESC desc;
+        zb->GetDesc(&desc);
+
+        if (!RImplementation.o.dx10_msaa)
+            VERIFY(desc.ViewDimension == D3D_DSV_DIMENSION_TEXTURE2D);
+
+        ID3DResource* pRes;
+
+        zb->GetResource(&pRes);
+
+        ID3DTexture2D* pTex = (ID3DTexture2D*)pRes;
+
+        D3D_TEXTURE2D_DESC TexDesc;
+
+        pTex->GetDesc(&TexDesc);
+
+        dwWidth = TexDesc.Width;
+        dwHeight = TexDesc.Height;
+        _RELEASE(pRes);
+    }
+
+    if (_1)
+        RCache.set_RT(_1->pRT, 0);
+    else
+        RCache.set_RT(NULL, 0);
+    if (_2)
+        RCache.set_RT(_2->pRT, 1);
+    else
+        RCache.set_RT(NULL, 1);
+    if (_3)
+        RCache.set_RT(_3->pRT, 2);
+    else
+        RCache.set_RT(NULL, 2);
+    if (_4)
+        RCache.set_RT(_4->pRT, 3);
+    else
+        RCache.set_RT(NULL, 3);
+    RCache.set_ZB(zb);
+}
 
 void CRenderTarget::u_setrt(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3,
                             ID3DDepthStencilView* zb) {
@@ -308,12 +365,33 @@ CRenderTarget::CRenderTarget() {
     b_luminance = xr_new<CBlender_luminance>();
     b_combine = xr_new<CBlender_combine>();
     b_ssao = xr_new<CBlender_SSAO_noMSAA>();
+    b_sunshafts = xr_new<CBlender_sunshafts>();
 
     // HDAO
     b_hdao_cs = xr_new<CBlender_CS_HDAO>();
     if (RImplementation.o.dx10_msaa) {
         b_hdao_msaa_cs = xr_new<CBlender_CS_HDAO_MSAA>();
     }
+
+    // Screen Space Shaders
+    // A blender object on its own touches no files - only the shader creation further down does,
+    // and that part is gated on the modules actually installed.
+    b_ssfx_ssr = xr_new<CBlender_ssfx_ssr>();
+    b_ssfx_volumetric_blur = xr_new<CBlender_ssfx_volumetric_blur>();
+    b_ssfx_ao = xr_new<CBlender_ssfx_ao>();
+    b_ssfx_sss = xr_new<CBlender_ssfx_sss>();
+    b_ssfx_sss_ext = xr_new<CBlender_ssfx_sss_ext>();
+    b_ssfx_rain = xr_new<CBlender_ssfx_rain>();
+    b_ssfx_water_blur = xr_new<CBlender_ssfx_water_blur>();
+    b_ssfx_motion_blur = xr_new<CBlender_ssfx_motion_blur>();
+    b_ssfx_fog_scattering = xr_new<CBlender_ssfx_fog_scattering>();
+    b_ssfx_taa = xr_new<CBlender_ssfx_taa>();
+    b_ssfx_bloom = xr_new<CBlender_ssfx_bloom_build>();
+    b_ssfx_bloom_lens = xr_new<CBlender_ssfx_bloom_lens>();
+    b_ssfx_bloom_downsample = xr_new<CBlender_ssfx_bloom_downsample>();
+    b_ssfx_bloom_upsample = xr_new<CBlender_ssfx_bloom_upsample>();
+    b_blur = xr_new<CBlender_blur>();
+    b_dof = xr_new<CBlender_dof>();
 
     if (RImplementation.o.dx10_msaa) {
         int bound = RImplementation.o.dx10_msaa_samples;
@@ -406,12 +484,164 @@ CRenderTarget::CRenderTarget() {
         //	Igor: for volumetric lights
         // rt_Generic_2.create			(r2_RT_generic2,w,h,D3DFMT_A8R8G8B8		);
         //	temp: for higher quality blends
-        if (RImplementation.o.advancedpp)
+        if (RImplementation.o.advancedpp) {
             rt_Generic_2.create(r2_RT_generic2, w, h, D3DFMT_A16B16G16R16F, SampleCount);
+
+            // OGSE screen-space sun shafts. Monolith creates these two unconditionally
+            // ( r4_rendertarget.cpp:570-571 ). Here they follow advancedpp, which is what
+            // need_to_render_sunshafts() demands anyway, so a machine that can never run the
+            // phase does not pay for two full-screen buffers. phase_sunshafts() opens with that
+            // same test, so nothing can reach them while they do not exist.
+            // Both also follow the SSS core: the phase is part of SSS, its shaders compile only
+            // with SSS on ( with SSS off ogse_sunshafts_mask.ps fails at start ), and phase_combine
+            // calls it only with SSS on.
+            if (RImplementation.o.ssfx_core) {
+                rt_sunshafts_0.create(r2_RT_sunshafts0, w, h, D3DFMT_A8R8G8B8, 1);
+                rt_sunshafts_1.create(r2_RT_sunshafts1, w, h, D3DFMT_A8R8G8B8, 1);
+            }
+        }
+
+        // Screen Space Shaders
+        // Nothing is allocated unless the shader set is actually installed, so a stock install
+        // carries no extra video memory.
+        if (RImplementation.o.ssfx_core) {
+            // The scene copy is a CopyResource destination, so it has to match whichever generic
+            // RT it is copied from - 1 sample without MSAA, SampleCount with it.
+            rt_Generic_temp.create(r2_RT_generic0_temp, w, h, D3DFMT_A8R8G8B8,
+                                   RImplementation.o.dx10_msaa ? SampleCount : 1);
+
+            rt_ssfx.create(r2_RT_ssfx, w, h, D3DFMT_A8R8G8B8);             // Generic RT
+            rt_ssfx_temp.create(r2_RT_ssfx_temp, w, h, D3DFMT_A8R8G8B8);   // Temp RT
+            rt_ssfx_temp2.create(r2_RT_ssfx_temp2, w, h, D3DFMT_A8R8G8B8); // Temp RT
+            rt_ssfx_temp3.create(r2_RT_ssfx_temp3, w, h, D3DFMT_A8R8G8B8); // Temp RT
+            rt_ssfx_accum.create(r2_RT_ssfx_accum, w, h, D3DFMT_A16B16G16R16F,
+                                 SampleCount);                         // Volumetric Acc
+            rt_ssfx_ao.create(r2_RT_ssfx_ao, w, h, D3DFMT_A8R8G8B8);   // AO Acc
+            rt_ssfx_il.create(r2_RT_ssfx_il, w, h, D3DFMT_A8R8G8B8);   // IL Acc
+            rt_ssfx_prevPos.create(r2_RT_ssfx_prevPos, w, h, D3DFMT_A16B16G16R16F, SampleCount);
+            rt_ssfx_water_waves.create(r2_RT_ssfx_water_waves, 512, 512, D3DFMT_A8R8G8B8);
+
+            rt_ssfx_ssr.create(r2_RT_ssfx_ssr, w, h, D3DFMT_A8R8G8B8);     // SSR Acc
+            rt_ssfx_water.create(r2_RT_ssfx_water, w, h, D3DFMT_A8R8G8B8); // Water Acc
+
+            // Volumetric light and rain refraction always run at 1/8 resolution.
+            rt_ssfx_volumetric.create(r2_RT_ssfx_volumetric, w / 8, h / 8, D3DFMT_A16B16G16R16F);
+            rt_ssfx_volumetric_tmp.create(r2_RT_ssfx_volumetric_tmp, w / 8, h / 8,
+                                          D3DFMT_A16B16G16R16F);
+            rt_ssfx_rain.create(r2_RT_ssfx_rain, w / 8, h / 8, D3DFMT_A8R8G8B8);
+
+            // Blur chain, Monolith r4_rendertarget.cpp:574-581. phase_blur fills it every frame.
+            rt_blur_h_2.create(r2_RT_blur_h_2, w / 2, h / 2, D3DFMT_A8R8G8B8);
+            rt_blur_2.create(r2_RT_blur_2, w / 2, h / 2, D3DFMT_A8R8G8B8);
+            rt_blur_h_4.create(r2_RT_blur_h_4, w / 4, h / 4, D3DFMT_A8R8G8B8);
+            rt_blur_4.create(r2_RT_blur_4, w / 4, h / 4, D3DFMT_A8R8G8B8);
+            rt_blur_h_8.create(r2_RT_blur_h_8, w / 8, h / 8, D3DFMT_A8R8G8B8);
+            rt_blur_8.create(r2_RT_blur_8, w / 8, h / 8, D3DFMT_A8R8G8B8);
+
+            // Depth of field scratch, Monolith r4_rendertarget.cpp:553. Monolith switches this to
+            // a 16 bit float format when its HDR10 output is on; this engine has no HDR10 output,
+            // so the other branch of that line is the only one that applies.
+            rt_dof.create(r2_RT_dof, w, h, D3DFMT_A8R8G8B8);
+
+            // TAA history is a CopyResource destination from rt_Generic / rt_Color, both of which
+            // are single-sampled here, so it is created without MSAA.
+            rt_ssfx_taa.create(r2_RT_ssfx_taa, w, h, D3DFMT_A16B16G16R16F, SampleCount);
+            rt_ssfx_prev_frame.create(r2_RT_ssfx_prev_frame, w, h, D3DFMT_A8R8G8B8);
+
+            if (RImplementation.o.ssfx_sss) {
+                rt_ssfx_sss.create(r2_RT_ssfx_sss, w, h, D3DFMT_A8R8G8B8);           // SSS Acc
+                rt_ssfx_sss_ext.create(r2_RT_ssfx_sss_ext, w, h, D3DFMT_A8R8G8B8);   // slots 0..3
+                rt_ssfx_sss_ext2.create(r2_RT_ssfx_sss_ext2, w, h, D3DFMT_A8R8G8B8); // slots 4..7
+                rt_ssfx_sss_tmp.create(r2_RT_ssfx_sss_tmp, w, h, D3DFMT_A8R8G8B8);   // scratch
+            }
+
+            if (RImplementation.o.ssfx_motionvectors)
+                rt_ssfx_motion_vectors.create(r2_RT_ssfx_motion_vectors, w, h, D3DFMT_A16B16G16R16F,
+                                              SampleCount); // HUD mask & Velocity buffer
+
+            if (RImplementation.o.ssfx_bloom) {
+                rt_ssfx_bloom1.create(r2_RT_ssfx_bloom1, w / 2, h / 2,
+                                      D3DFMT_A16B16G16R16F); // Bloom
+                rt_ssfx_bloom_emissive.create(r2_RT_ssfx_bloom_emissive, w, h, D3DFMT_A8R8G8B8,
+                                              SampleCount); // Emissive
+                rt_ssfx_bloom_lens.create(r2_RT_ssfx_bloom_lens, w / 4, h / 4,
+                                          D3DFMT_A8R8G8B8); // Lens
+                rt_ssfx_bloom_tmp2.create(r2_RT_ssfx_bloom_tmp2, w / 2, h / 2,
+                                          D3DFMT_A16B16G16R16F); // Bloom / 2
+                rt_ssfx_bloom_tmp4.create(r2_RT_ssfx_bloom_tmp4, w / 4, h / 4,
+                                          D3DFMT_A16B16G16R16F); // Bloom / 4
+                rt_ssfx_bloom_tmp8.create(r2_RT_ssfx_bloom_tmp8, w / 8, h / 8,
+                                          D3DFMT_A16B16G16R16F); // Bloom / 8
+                rt_ssfx_bloom_tmp16.create(r2_RT_ssfx_bloom_tmp16, w / 16, h / 16,
+                                           D3DFMT_A16B16G16R16F); // Bloom / 16
+                rt_ssfx_bloom_tmp32.create(r2_RT_ssfx_bloom_tmp32, w / 32, h / 32,
+                                           D3DFMT_A16B16G16R16F); // Bloom / 32
+                rt_ssfx_bloom_tmp64.create(r2_RT_ssfx_bloom_tmp64, w / 64, h / 64,
+                                           D3DFMT_A16B16G16R16F); // Bloom / 64
+                rt_ssfx_bloom_tmp32_2.create(r2_RT_ssfx_bloom_tmp32_2, w / 32, h / 32,
+                                             D3DFMT_A16B16G16R16F); // Bloom / 32
+                rt_ssfx_bloom_tmp16_2.create(r2_RT_ssfx_bloom_tmp16_2, w / 16, h / 16,
+                                             D3DFMT_A16B16G16R16F); // Bloom / 16
+                rt_ssfx_bloom_tmp8_2.create(r2_RT_ssfx_bloom_tmp8_2, w / 8, h / 8,
+                                            D3DFMT_A16B16G16R16F); // Bloom / 8
+                rt_ssfx_bloom_tmp4_2.create(r2_RT_ssfx_bloom_tmp4_2, w / 4, h / 4,
+                                            D3DFMT_A16B16G16R16F); // Bloom / 4
+            }
+        }
     }
 
     // OCCLUSION
     s_occq.create(b_occq, "r2\\occq");
+
+    // Screen Space Shaders
+    // Each shader is built only when its module is present on disk, so a stock install without the
+    // addon never goes looking for a shader file that is not there.
+    if (RImplementation.o.ssfx_core) {
+        if (RImplementation.o.ssfx_ssr)
+            s_ssfx_ssr.create(b_ssfx_ssr, "ssfx_ssr");
+
+        if (RImplementation.o.ssfx_volumetric)
+            s_ssfx_volumetric_blur.create(b_ssfx_volumetric_blur, "ssfx_volumetric_blur");
+
+        if (RImplementation.o.ssfx_ao)
+            s_ssfx_ao.create(b_ssfx_ao, "ssfx_ao"); // elements 0..2 AO, 3..5 indirect light
+
+        if (RImplementation.o.ssfx_sss) {
+            s_ssfx_sss.create(b_ssfx_sss, "ssfx_sss");
+            s_ssfx_sss_ext.create(b_ssfx_sss_ext, "ssfx_sss_ext");
+        }
+
+        if (RImplementation.o.ssfx_rain)
+            s_ssfx_rain.create(b_ssfx_rain, "ssfx_rain");
+
+        if (RImplementation.o.ssfx_water) {
+            s_ssfx_water.create("ssfx_water");
+            s_ssfx_water_ssr.create("ssfx_water_ssr");
+            s_ssfx_water_blur.create(b_ssfx_water_blur, "ssfx_water_blur");
+        }
+
+        if (RImplementation.o.ssfx_motionblur)
+            s_ssfx_motion_blur.create(b_ssfx_motion_blur, "ssfx_motion_blur");
+
+        if (RImplementation.o.ssfx_fog)
+            s_ssfx_fog_scattering.create(b_ssfx_fog_scattering, "ssfx_fog_scattering");
+
+        if (RImplementation.o.ssfx_taa)
+            s_ssfx_taa.create(b_ssfx_taa, "ssfx_taa");
+
+        if (RImplementation.o.ssfx_bloom) {
+            s_ssfx_bloom.create(b_ssfx_bloom, "ssfx_bloom");
+            s_ssfx_bloom_lens.create(b_ssfx_bloom_lens, "ssfx_bloom_flares");
+            s_ssfx_bloom_downsample.create(b_ssfx_bloom_downsample, "ssfx_bloom_downsample");
+            s_ssfx_bloom_upsample.create(b_ssfx_bloom_upsample, "ssfx_bloom_upsample");
+        }
+
+        // Monolith r4_rendertarget.cpp:665 and :667. Monolith builds both unconditionally; here
+        // they are built whenever the shader set is installed, because pp_blur.ps,
+        // depth_of_field.ps and post_processing.ps ship with it.
+        s_blur.create(b_blur, "r2\\blur");
+        s_dof.create(b_dof, "r2\\dof");
+    }
 
     // DIRECT (spot)
     D3DFORMAT depth_format = (D3DFORMAT)RImplementation.o.HW_smap_FORMAT;
@@ -659,6 +889,10 @@ CRenderTarget::CRenderTarget() {
                                                 D3DDECLUSAGE_POSITION, 0 }, // pos+uv
                                               D3DDECL_END() };
         s_combine.create(b_combine, "r2\\combine");
+
+        // OGSE screen-space sun shafts. Same condition as the two render targets above.
+        if (RImplementation.o.advancedpp && RImplementation.o.ssfx_core)
+            s_sunshafts.create(b_sunshafts, "r2\\sunshafts");
         s_combine_volumetric.create("combine_volumetric");
         s_combine_dbg_0.create("effects\\screen_set", r2_RT_smap_surf);
         s_combine_dbg_1.create("effects\\screen_set", r2_RT_luminance_t8);
@@ -1045,6 +1279,7 @@ CRenderTarget::~CRenderTarget() {
     xr_delete(b_accum_point);
     xr_delete(b_accum_direct);
     xr_delete(b_ssao);
+    xr_delete(b_sunshafts);
 
     if (RImplementation.o.dx10_msaa) {
         int bound = RImplementation.o.dx10_msaa_samples;
@@ -1067,10 +1302,29 @@ CRenderTarget::~CRenderTarget() {
     }
     xr_delete(b_accum_mask);
     xr_delete(b_occq);
+
     xr_delete(b_hdao_cs);
     if (RImplementation.o.dx10_msaa) {
         xr_delete(b_hdao_msaa_cs);
     }
+
+    // Screen Space Shaders
+    xr_delete(b_ssfx_ssr);
+    xr_delete(b_ssfx_volumetric_blur);
+    xr_delete(b_ssfx_ao);
+    xr_delete(b_ssfx_sss);
+    xr_delete(b_ssfx_sss_ext);
+    xr_delete(b_ssfx_rain);
+    xr_delete(b_ssfx_water_blur);
+    xr_delete(b_ssfx_motion_blur);
+    xr_delete(b_ssfx_fog_scattering);
+    xr_delete(b_ssfx_taa);
+    xr_delete(b_ssfx_bloom);
+    xr_delete(b_ssfx_bloom_lens);
+    xr_delete(b_ssfx_bloom_downsample);
+    xr_delete(b_ssfx_bloom_upsample);
+    xr_delete(b_blur);
+    xr_delete(b_dof);
 }
 
 void CRenderTarget::reset_light_marker(bool bResetStencil) {
@@ -1110,7 +1364,13 @@ void CRenderTarget::increment_light_marker() {
 }
 
 bool CRenderTarget::need_to_render_sunshafts() {
+    // Monolith r4_rendertarget.cpp:1486 tests ps_sunshafts_mode alone, because over there
+    // r2_sun_shafts is quality only and cannot be switched off. Here it can, so both have to be on.
+    // r2_sunshafts_mode belongs to SSS: with SSS off the game's own test, Infernis
+    // r4_rendertarget.cpp:1113, where only advancedpp and r2_sun_shafts count.
     if (!(RImplementation.o.advancedpp && ps_r_sun_shafts))
+        return false;
+    if (RImplementation.o.ssfx_core && !ps_sunshafts_mode)
         return false;
 
     {

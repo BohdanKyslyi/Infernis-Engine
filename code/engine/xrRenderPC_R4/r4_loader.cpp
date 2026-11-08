@@ -110,6 +110,7 @@ void CRender::level_Load(IReader* fs) {
     lstLODs.clear();
     lstLODgroups.clear();
     mapLOD.clear();
+    mapWater.clear(); // Screen Space Shaders, Monolith r4_loader.cpp
 
     // signal loaded
     b_loaded = TRUE;
@@ -120,6 +121,10 @@ void CRender::level_Unload() {
         return;
     if (!b_loaded)
         return;
+
+    // Screen Space Shaders: mapWater keeps nodes between frames (inserted in the forward pass,
+    // drawn in the next frame), so it must be emptied before the visuals are released.
+    mapWater.clear();
 
     u32 I;
 

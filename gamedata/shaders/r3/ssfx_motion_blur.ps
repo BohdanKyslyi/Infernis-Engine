@@ -1,0 +1,116 @@
+/**
+ * @ Version: SCREEN SPACE SHADERS - UPDATE 23
+ * @ Description: Motion Blur
+ * @ Modified time: 2025-05-08 05:34:14
+ * @ Author: https://www.moddb.com/members/ascii1457
+ * @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+ */
+
+#include "common.h"
+
+uniform float4 ssfx_timedelta;
+uniform float4 ssfx_motionblur;
+
+Texture2D ssfx_motion_vectors;
+Texture2D ssfx_motion_blur;
+
+float4x4 m_current; // Current projection matrix
+float4x4 m_previous; // Previous projection matrix
+
+sampler smp_point;
+
+float4 main(p_screen I) : SV_Target
+{
+
+#ifndef USE_MSAA
+		float4 Pos = s_position.Sample( smp_nofilter, I.tc0.xy );
+#else
+		float4 Pos = s_position.Load( int3( I.hpos.xy, 0), 0);
+#endif
+
+	float Depth = Pos.z < 0.001f ? 100000 : Pos.z;
+
+	float3 img = s_image.SampleLevel(smp_nofilter, I.tc0.xy, 0);
+
+	// Per-Pixel Motion Blur
+	float3 MotionBlur = img;
+
+	int weight = 1;
+	float2 pixelsize = (1.0f / screen_res.xy);
+
+	float2 cam_rp = 0;
+
+	// Camera matrices
+	if (ssfx_motionblur.w < 1)
+	{
+		float4 P = float4( Pos.z * ( I.hpos.xy * pos_decompression_params.zw - pos_decompression_params.xy ), Pos.z, 1.0f );
+
+		// Get current
+		float4 p_current = mul(m_current, P);
+		
+		// Get previous
+		float4 p_previous = mul(m_previous, P);
+
+		float2 current = p_current.xy / p_current.w;
+		float2 previous = p_previous.xy / p_previous.w;
+
+		// Reprojection UV
+		cam_rp = current.xy - previous.xy;
+		cam_rp = float2(cam_rp.x, -cam_rp.y) * 0.5f;
+	}
+
+	// Motion Vectors
+	float4 MotionV = ssfx_motion_vectors.SampleLevel(smp_nofilter, I.tc0.xy, 0);
+
+	if (MotionV.w >= 1.5f)
+		return float4( img, 0 );
+
+	MotionV.xy = MotionV.xy - cam_rp * (1.0f - MotionV.z) * (1.0f - ssfx_motionblur.w);
+
+	if (ssfx_motionblur.z > 0 && MotionV.z <= 0)
+		return float4(img, 0);
+		
+	// Framerate independent ( 60 fps )
+	MotionV.xy *= ((1.0f / ssfx_timedelta.x) / 60) * ssfx_motionblur.y;
+
+	// Dynamic samples
+	int mbSamples = clamp(int(length(MotionV.xy / pixelsize)), 1, clamp(ssfx_motionblur.x, 1, 16));
+
+	// Some noise to improve the stepping
+	float2 noise = 0;
+
+	// Blur
+	for (int i = 1; i <= mbSamples; ++i)
+	{
+		if(mbSamples == 1) // Early exit
+			continue;
+
+		float2 offset = MotionV.xy * (float(i) / float(mbSamples) - 0.5f);
+
+		// Some noise to improve the stepping
+		noise = hash22(I.tc0.xy * 100 + timers.xx + i) * 2.0f - 1.0f;
+		noise *= pixelsize;
+
+		offset += noise * MotionV.xy * 100;
+
+		// Offset Depth
+#ifndef USE_MSAA
+		float SDepth = s_position.Sample( smp_nofilter, I.tc0.xy + offset ).z;
+#else
+		float SDepth = s_position.Load( int3((I.tc0.xy + offset) * screen_res.xy, 0), 0).z;
+#endif
+
+		// Sample with offset tc
+		float3 mvblur = s_image.SampleLevel(smp_nofilter, I.tc0.xy + offset, 0);
+
+		// Discard incorrect samples
+		//MotionBlur += lerp( mvblur, img, MotionV.z < 1 ? saturate(abs(Depth - SDepth)) : saturate(Depth - SDepth) );
+		MotionBlur += lerp( mvblur, img,  saturate(abs(Depth - SDepth)) );
+
+		weight += 1;
+	}
+	MotionBlur /= weight;
+
+	return float4( MotionBlur, 0);
+
+}

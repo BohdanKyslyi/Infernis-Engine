@@ -196,6 +196,13 @@ static void put_function(lua_State* state, u8 const* buffer, u32 const buffer_si
 }
 #endif // #ifndef DEBUG
 
+// Monolith checks its debug switch -dbg for the script lines below; the developer switch of this
+// engine is -dev_mode / -developer_mode ( is_dev_mode, xrGame\console_commands.cpp:182 ).
+static bool script_dev_mode() {
+    return strstr(Core.Params, "-dev_mode") != nullptr ||
+           strstr(Core.Params, "-developer_mode") != nullptr;
+}
+
 void CScriptStorage::reinit() {
     if (m_virtual_machine)
         lua_close(m_virtual_machine);
@@ -226,6 +233,10 @@ void CScriptStorage::reinit() {
 
 #ifdef DEBUG
     luajit::open_lib(lua(), LUA_DBLIBNAME, luaopen_debug);
+#else  // #ifdef DEBUG
+    // Monolith ( script_storage.cpp:427-433 ): with its debug switch, -dev_mode here
+    if (script_dev_mode())
+        luajit::open_lib(lua(), LUA_DBLIBNAME, luaopen_debug);
 #endif // #ifdef DEBUG
 
     if (!strstr(Core.Params, "-nojit")) {
@@ -252,12 +263,19 @@ int CScriptStorage::vscript_log(ScriptStorage::ELuaMessageType tLuaMessageType, 
 #endif
 #endif
 
-#ifndef PRINT_CALL_STACK
+    // Monolith ( script_storage.cpp:500-519 ): the game writes these lines in a release build too,
+    // with its debug switch ( -dev_mode here ); without the game's script engine as before
+#if !defined(PRINT_CALL_STACK) && defined(NO_XRGAME_SCRIPT_ENGINE)
     return (0);
-#else // #ifdef PRINT_CALL_STACK
+#else  // #if !defined(PRINT_CALL_STACK) && defined(NO_XRGAME_SCRIPT_ENGINE)
 #ifndef NO_XRGAME_SCRIPT_ENGINE
+#ifdef DEBUG
     if (!psAI_Flags.test(aiLua) && (tLuaMessageType != ScriptStorage::eLuaMessageTypeError))
         return (0);
+#else  // #ifdef DEBUG
+    if (!script_dev_mode())
+        return (0);
+#endif // #ifdef DEBUG
 #endif // #ifndef NO_XRGAME_SCRIPT_ENGINE
 
     LPCSTR S = "", SS = "";
@@ -275,7 +293,7 @@ int CScriptStorage::vscript_log(ScriptStorage::ELuaMessageType tLuaMessageType, 
         break;
     }
     case ScriptStorage::eLuaMessageTypeMessage: {
-        S = "[LUA] ";
+        S = "~ [LUA] "; // Monolith ( script_storage.cpp:540 )
         SS = "[MESSAGE]     ";
         break;
     }
@@ -325,10 +343,11 @@ int CScriptStorage::vscript_log(ScriptStorage::ELuaMessageType tLuaMessageType, 
 #endif // #ifdef DEBUG
 
     return (l_iResult);
-#endif // #ifdef PRINT_CALL_STACK
+#endif // #if !defined(PRINT_CALL_STACK) && defined(NO_XRGAME_SCRIPT_ENGINE)
 }
 
-#ifdef PRINT_CALL_STACK
+// Monolith ( script_storage.cpp:597-633 ): in every build; its lines go out through
+// script_log_no_stack, so a line does not print the whole stack again
 void CScriptStorage::print_stack() {
 #ifdef DEBUG
     if (!m_stack_is_ready)
@@ -342,17 +361,28 @@ void CScriptStorage::print_stack() {
     for (int i = 0; lua_getstack(L, i, &l_tDebugInfo); ++i) {
         lua_getinfo(L, "nSlu", &l_tDebugInfo);
         if (!l_tDebugInfo.name)
-            script_log(ScriptStorage::eLuaMessageTypeError, "%2d : [%s] %s(%d) : %s", i,
-                       l_tDebugInfo.what, l_tDebugInfo.short_src, l_tDebugInfo.currentline, "");
+            script_log_no_stack(ScriptStorage::eLuaMessageTypeError, "%2d : [%s] %s(%d) : %s", i,
+                                l_tDebugInfo.what, l_tDebugInfo.short_src,
+                                l_tDebugInfo.currentline, "");
         else if (!xr_strcmp(l_tDebugInfo.what, "C"))
-            script_log(ScriptStorage::eLuaMessageTypeError, "%2d : [C  ] %s", i, l_tDebugInfo.name);
+            script_log_no_stack(ScriptStorage::eLuaMessageTypeError, "%2d : [C  ] %s", i,
+                                l_tDebugInfo.name);
         else
-            script_log(ScriptStorage::eLuaMessageTypeError, "%2d : [%s] %s(%d) : %s", i,
-                       l_tDebugInfo.what, l_tDebugInfo.short_src, l_tDebugInfo.currentline,
-                       l_tDebugInfo.name);
+            script_log_no_stack(ScriptStorage::eLuaMessageTypeError, "%2d : [%s] %s(%d) : %s", i,
+                                l_tDebugInfo.what, l_tDebugInfo.short_src,
+                                l_tDebugInfo.currentline, l_tDebugInfo.name);
     }
 }
-#endif // #ifdef PRINT_CALL_STACK
+
+// Monolith ( script_storage.cpp:637-645 ): a line without the stack after it
+int __cdecl CScriptStorage::script_log_no_stack(ScriptStorage::ELuaMessageType tLuaMessageType,
+                                                LPCSTR caFormat, ...) {
+    va_list marker;
+    va_start(marker, caFormat);
+    int result = vscript_log(tLuaMessageType, caFormat, marker);
+    va_end(marker);
+    return (result);
+}
 
 int __cdecl CScriptStorage::script_log(ScriptStorage::ELuaMessageType tLuaMessageType,
                                        LPCSTR caFormat, ...) {
@@ -361,7 +391,7 @@ int __cdecl CScriptStorage::script_log(ScriptStorage::ELuaMessageType tLuaMessag
     int result = vscript_log(tLuaMessageType, caFormat, marker);
     va_end(marker);
 
-#ifdef PRINT_CALL_STACK
+    // Monolith ( script_storage.cpp:656-663 ): the stack after an error line in every build
 #ifndef ENGINE_BUILD
     static bool reenterability = false;
     if (!reenterability) {
@@ -371,7 +401,6 @@ int __cdecl CScriptStorage::script_log(ScriptStorage::ELuaMessageType tLuaMessag
         reenterability = false;
     }
 #endif // #ifndef ENGINE_BUILD
-#endif // #ifdef PRINT_CALL_STACK
 
     return (result);
 }
@@ -461,7 +490,11 @@ bool CScriptStorage::load_buffer(lua_State* L, LPCSTR caBuffer, size_t tSize, LP
     if (l_iErrorCode) {
 #ifdef DEBUG
         print_output(L, caScriptName, l_iErrorCode);
-#endif
+#else  // #ifdef DEBUG
+        // Monolith ( script_storage.cpp:778-783 ): with its debug switch, -dev_mode here
+        if (script_dev_mode())
+            print_output(L, caScriptName, l_iErrorCode);
+#endif // #ifdef DEBUG
         on_error(L);
         return (false);
     }
@@ -519,7 +552,11 @@ bool CScriptStorage::do_file(LPCSTR caScriptName, LPCSTR caNameSpaceName) {
     if (l_iErrorCode) {
 #ifdef DEBUG
         print_output(lua(), caScriptName, l_iErrorCode);
-#endif
+#else  // #ifdef DEBUG
+        // Monolith ( script_storage.cpp:1041-1046 ): with its debug switch, -dev_mode here
+        if (script_dev_mode())
+            print_output(lua(), caScriptName, l_iErrorCode);
+#endif // #ifdef DEBUG
         on_error(lua());
         lua_settop(lua(), start);
         return (false);
@@ -650,7 +687,9 @@ struct raii_guard {
 #ifdef DEBUG
             static bool const break_on_assert = !!strstr(Core.Params, "-break_on_assert");
 #else  // #ifdef DEBUG
-            static bool const break_on_assert = true;
+            // Monolith ( script_storage.cpp:1199-1208 ): no assert in a release build - it would stop
+            // the game before the caller reports the script line; the error goes to the log
+            static bool const break_on_assert = false;
 #endif // #ifdef DEBUG
             if (!m_error_code)
                 return;
@@ -658,7 +697,7 @@ struct raii_guard {
             if (break_on_assert)
                 R_ASSERT2(!m_error_code, m_error_description);
             else
-                Msg("! SCRIPT ERROR: %s", m_error_description);
+                Msg("! [SCRIPT ERROR]: %s", m_error_description);
         }
     }
 }; // struct raii_guard

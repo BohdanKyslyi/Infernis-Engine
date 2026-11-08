@@ -189,10 +189,7 @@ public:
     CCC_WeatherEditor(LPCSTR name) : IConsole_Command(name) { bEmptyArgsHandled = true; }
 
     virtual void Execute(LPCSTR args) {
-        if (!is_dev_mode()) {
-            Msg("! Weather editor is available only in -dev_mode");
-            return;
-        }
+        // The weather editor opens with and without -dev_mode ( F11 too, Level_input.cpp ).
         if (!g_pGameLevel || !CurrentGameUI()) {
             Msg("! Weather editor requires a loaded level");
             return;
@@ -1902,6 +1899,9 @@ void CCC_RegisterCommands() {
 #endif //#ifdef DEBUG
     // game
     CMD3(CCC_Mask, "g_crouch_toggle", &psActorFlags, AF_CROUCH_TOGGLE);
+    // Ported from Monolith ( console_commands.cpp:2490 ): the lean keys toggle instead of being
+    // held. The flag starts cleared ( psActorFlags, Actor.cpp ), as Monolith sets it.
+    CMD3(CCC_Mask, "g_lookout_toggle", &psActorFlags, AF_LOOKOUT_TOGGLE);
     CMD1(CCC_GameDifficulty, "g_game_difficulty");
     CMD1(CCC_GlobalTimeFactorDev, "time_factor");
     CMD1(CCC_TimeFactorDev, "al_time_factor");

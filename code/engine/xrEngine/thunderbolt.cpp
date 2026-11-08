@@ -7,6 +7,9 @@
 #include "Thunderbolt.h"
 #include "igame_persistent.h"
 #include "LightAnimLibrary.h"
+#include "Environment.h"
+#include "WeatherEffectConfig.h"
+#include "xrRender/particles_systems_library_interface.hpp"
 
 #ifdef _EDITOR
 #include "ui_toolscustom.h"
@@ -94,71 +97,47 @@ CEffect_Thunderbolt::CEffect_Thunderbolt() {
         m_bEnableCustomLightning =
             pSettings->r_bool("environment", "enable_custom_lightning");
 
-    if (m_bEnableCustomLightning) {
-        string_path wex_path;
-        if (FS.exist(wex_path, "$game_config$", "environment\\noirWeatherEffect.ltx")) {
-            CInifile wex_ini(wex_path);
-            if (wex_ini.section_exist("custom_lightning")) {
-                
-                // MULTI STRIKE CONFIG
-                if (wex_ini.line_exist("custom_lightning", "enable_multi_strikes"))
-                    m_bEnableMultiStrikes = wex_ini.r_bool("custom_lightning", "enable_multi_strikes");
-                if (wex_ini.line_exist("custom_lightning", "multi_strike_chance"))
-                    m_iMultiStrikeChance = wex_ini.r_s32("custom_lightning", "multi_strike_chance");
-                if (wex_ini.line_exist("custom_lightning", "max_simultaneous"))
-                    m_iMaxSimultaneous = wex_ini.r_s32("custom_lightning", "max_simultaneous");
-                if (wex_ini.line_exist("custom_lightning", "same_location_chance"))
-                    m_iSameLocationChance = wex_ini.r_s32("custom_lightning", "same_location_chance");
-                if (wex_ini.line_exist("custom_lightning", "branching_chance"))
-                    m_iBranchingChance = wex_ini.r_s32("custom_lightning", "branching_chance");
-
-                m_fHeightFactor = wex_ini.r_float("custom_lightning", "height_factor");
-                m_fSizeMultiplier = wex_ini.r_float("custom_lightning", "size_multiplier");
-                m_iProbNear = wex_ini.r_s32("custom_lightning", "prob_near");
-                m_iProbMedium = wex_ini.r_s32("custom_lightning", "prob_medium");
-                m_fDistNearMin = wex_ini.r_float("custom_lightning", "dist_near_min");
-                m_fDistNearMax = wex_ini.r_float("custom_lightning", "dist_near_max");
-                m_fDistMediumMin = wex_ini.r_float("custom_lightning", "dist_medium_min");
-                m_fDistMediumMax = wex_ini.r_float("custom_lightning", "dist_medium_max");
-                m_fDistFarMin = wex_ini.r_float("custom_lightning", "dist_far_min");
-                m_fDistFarMax = wex_ini.r_float("custom_lightning", "dist_far_max");
-                
-                if (wex_ini.line_exist("custom_lightning", "strike_particle")) {
-                    m_sStrikeParticle = wex_ini.r_string("custom_lightning", "strike_particle");
+    string_path path;
+    FS.update_path(path, "$game_config$", "environment\\noirWeatherEffect.ltx");
+    std::string bytes;
+    bool exists=false;
+    if (weather_effect_config::read(path,bytes,exists) && exists) {
+        IReader reader(bytes.data(),static_cast<int>(bytes.size()));
+        string_path directory;
+        FS.update_path(directory,"$game_config$","environment\\");
+        CInifile config(&reader,directory);
+        auto settings=GetEditorSettings();
+        if(config.section_exist("custom_lightning")) {
+            for(unsigned i=0;i<lightning_editor::count;++i) {
+                const auto& p=lightning_editor::parameters[i];
+                if(config.line_exist("custom_lightning",p.key)) {
+                    LPCSTR value=config.r_string("custom_lightning",p.key);
+                    if(value && value[0]) settings.values[i]= i==0
+                        ? float(config.r_bool("custom_lightning",p.key))
+                        : config.r_float("custom_lightning",p.key);
                 }
-
-                if (wex_ini.line_exist("custom_lightning", "strike_sound")) {
-                    LPCSTR snd_name = wex_ini.r_string("custom_lightning", "strike_sound");
-                    if (snd_name && snd_name[0]) {
-                        m_StrikeSound.create(snd_name, st_Effect, sg_Undefined); 
-                    }
-                }
-
-                if (wex_ini.line_exist("custom_lightning", "thunder_range_min")) 
-                    m_fThunderRangeMin = wex_ini.r_float("custom_lightning", "thunder_range_min");
-                if (wex_ini.line_exist("custom_lightning", "thunder_range_max")) 
-                    m_fThunderRangeMax = wex_ini.r_float("custom_lightning", "thunder_range_max");
-                if (wex_ini.line_exist("custom_lightning", "thunder_fade_dist")) 
-                    m_fThunderFadeDist = wex_ini.r_float("custom_lightning", "thunder_fade_dist");
-                if (wex_ini.line_exist("custom_lightning", "thunder_pitch_drop")) 
-                    m_fThunderPitchDrop = wex_ini.r_float("custom_lightning", "thunder_pitch_drop");
-                if (wex_ini.line_exist("custom_lightning", "thunder_vol_drop")) 
-                    m_fThunderVolDrop = wex_ini.r_float("custom_lightning", "thunder_vol_drop");
-
-                if (wex_ini.line_exist("custom_lightning", "strike_snd_range_min")) 
-                    m_fStrikeSndRangeMin = wex_ini.r_float("custom_lightning", "strike_snd_range_min");
-                if (wex_ini.line_exist("custom_lightning", "strike_snd_range_max")) 
-                    m_fStrikeSndRangeMax = wex_ini.r_float("custom_lightning", "strike_snd_range_max");
-
-                if (wex_ini.line_exist("custom_lightning", "strike_damage_power")) 
-                    m_fStrikeDamagePower = wex_ini.r_float("custom_lightning", "strike_damage_power");
-                if (wex_ini.line_exist("custom_lightning", "strike_damage_radius")) 
-                    m_fStrikeDamageRadius = wex_ini.r_float("custom_lightning", "strike_damage_radius");
-            } else {
-                m_bEnableCustomLightning = false;
             }
-        } else {
-            m_bEnableCustomLightning = false;
+            if(config.line_exist("custom_lightning","strike_particle")) {
+                LPCSTR v=config.r_string("custom_lightning","strike_particle");
+                settings.particle=v?v:"";
+            }
+            if(config.line_exist("custom_lightning","strike_sound")) {
+                LPCSTR v=config.r_string("custom_lightning","strike_sound");
+                settings.sound=v?v:"";
+            }
+            // Retain the configured particle name, including legacy single effects
+            // which are not enumerated by the group-only particles library UI.
+            m_sStrikeParticle=settings.particle.c_str();
+            m_sConfiguredStrikeParticle=m_sStrikeParticle;
+            if(!settings.sound.empty() && !snd_localized_exists((settings.sound+".ogg").c_str())) {
+                Msg("! Lightning: strike sound is missing [%s]",settings.sound.c_str());
+                settings.sound.clear();
+            }
+            if (!ApplyEditorSettings(settings)) {
+                Msg("! Lightning: invalid strike asset; keeping numeric settings without strike assets");
+                settings.particle.clear(); settings.sound.clear();
+                ApplyEditorSettings(settings);
+            }
         }
     }
 
@@ -172,6 +151,131 @@ CEffect_Thunderbolt::CEffect_Thunderbolt() {
         }
     }
 #endif
+}
+
+lightning_editor::Settings CEffect_Thunderbolt::GetEditorSettings() const {
+    lightning_editor::Settings s;
+    s.values[0]=static_cast<float>(m_bEnableMultiStrikes);
+    s.values[1]=static_cast<float>(m_iMultiStrikeChance);
+    s.values[2]=static_cast<float>(m_iMaxSimultaneous);
+    s.values[3]=static_cast<float>(m_iSameLocationChance);
+    s.values[4]=static_cast<float>(m_iBranchingChance);
+    s.values[5]=static_cast<float>(m_fHeightFactor);
+    s.values[6]=static_cast<float>(m_fSizeMultiplier);
+    s.values[7]=static_cast<float>(m_iProbNear);
+    s.values[8]=static_cast<float>(m_iProbMedium);
+    s.values[9]=static_cast<float>(m_fDistNearMin);
+    s.values[10]=static_cast<float>(m_fDistNearMax);
+    s.values[11]=static_cast<float>(m_fDistMediumMin);
+    s.values[12]=static_cast<float>(m_fDistMediumMax);
+    s.values[13]=static_cast<float>(m_fDistFarMin);
+    s.values[14]=static_cast<float>(m_fDistFarMax);
+    s.values[15]=static_cast<float>(m_fThunderRangeMin);
+    s.values[16]=static_cast<float>(m_fThunderRangeMax);
+    s.values[17]=static_cast<float>(m_fThunderFadeDist);
+    s.values[18]=static_cast<float>(m_fThunderPitchDrop);
+    s.values[19]=static_cast<float>(m_fThunderVolDrop);
+    s.values[20]=static_cast<float>(m_fStrikeSndRangeMin);
+    s.values[21]=static_cast<float>(m_fStrikeSndRangeMax);
+    s.values[22]=static_cast<float>(m_fStrikeDamagePower);
+    s.values[23]=static_cast<float>(m_fStrikeDamageRadius);
+    s.particle=m_sStrikeParticle.size()?m_sStrikeParticle.c_str():"";
+    s.sound=m_sStrikeSoundName.size()?m_sStrikeSoundName.c_str():"";
+    return s;
+}
+
+bool CEffect_Thunderbolt::ApplyEditorSettings(const lightning_editor::Settings& requested) {
+    const auto s=lightning_editor::normalize(requested);
+    const auto clean=[](const std::string& value) {
+        return value.size()<240 && value.find_first_of("\r\n;#=[]") == std::string::npos;
+    };
+    if(!clean(s.particle) || !clean(s.sound)) return false;
+    const auto old=GetEditorSettings();
+    if(!s.particle.empty() && s.particle!=old.particle &&
+       s.particle!=(m_sConfiguredStrikeParticle.size()?m_sConfiguredStrikeParticle.c_str():"")) {
+        bool found=false;
+        const auto& library=g_pGamePersistent->Environment().m_pRender->particles_systems_library();
+        auto i=library.particles_group_begin();
+        const auto end=library.particles_group_end();
+        for(;i!=end;library.particles_group_next(i))
+            if(s.particle==library.particles_group_id(**i).c_str()) {found=true;break;}
+        if(!found) return false;
+    }
+    if(!s.sound.empty() && s.sound!=old.sound) {
+        const std::string name=s.sound+".ogg";
+        if(!snd_localized_exists(name.c_str())) return false;
+    }
+    if(s.sound!=old.sound) {
+        m_StrikeSound.destroy();
+        m_sStrikeSoundName=s.sound.c_str();
+        if(!s.sound.empty()) m_StrikeSound.create(s.sound.c_str(),st_Effect,sg_Undefined);
+    }
+    m_sStrikeParticle=s.particle.c_str();
+    m_bEnableMultiStrikes=s.values[0]>.5f;
+    m_iMultiStrikeChance=static_cast<int>(s.values[1]);
+    m_iMaxSimultaneous=static_cast<int>(s.values[2]);
+    m_iSameLocationChance=static_cast<int>(s.values[3]);
+    m_iBranchingChance=static_cast<int>(s.values[4]);
+    m_fHeightFactor=s.values[5];
+    m_fSizeMultiplier=s.values[6];
+    m_iProbNear=static_cast<int>(s.values[7]);
+    m_iProbMedium=static_cast<int>(s.values[8]);
+    m_fDistNearMin=s.values[9];
+    m_fDistNearMax=s.values[10];
+    m_fDistMediumMin=s.values[11];
+    m_fDistMediumMax=s.values[12];
+    m_fDistFarMin=s.values[13];
+    m_fDistFarMax=s.values[14];
+    m_fThunderRangeMin=s.values[15];
+    m_fThunderRangeMax=s.values[16];
+    m_fThunderFadeDist=s.values[17];
+    m_fThunderPitchDrop=s.values[18];
+    m_fThunderVolDrop=s.values[19];
+    m_fStrikeSndRangeMin=s.values[20];
+    m_fStrikeSndRangeMax=s.values[21];
+    m_fStrikeDamagePower=s.values[22];
+    m_fStrikeDamageRadius=s.values[23];
+    return true;
+}
+
+bool CEffect_Thunderbolt::SaveEditorSettings() {
+    string_path path;
+    FS.update_path(path,"$game_config$","environment\\noirWeatherEffect.ltx");
+    std::string text; bool exists=false;
+    if(!weather_effect_config::read(path,text,exists)) return false;
+    const std::string original=text;
+    const auto s=GetEditorSettings();
+    for(unsigned i=0;i<lightning_editor::count;++i) {
+        const auto& p=lightning_editor::parameters[i];
+        string64 value;
+        if(i==0) xr_strcpy(value,s.values[i]>.5f?"true":"false");
+        else if(p.integral) xr_sprintf(value,"%d",static_cast<int>(s.values[i]));
+        else xr_sprintf(value,"%.6f",s.values[i]);
+        text=rain_config::set_section_value(text,"custom_lightning",p.key,value);
+    }
+    text=rain_config::set_section_value(text,"custom_lightning","strike_particle",s.particle);
+    text=rain_config::set_section_value(text,"custom_lightning","strike_sound",s.sound);
+    return weather_effect_config::write(path,text,original,exists);
+}
+
+bool CEffect_Thunderbolt::PreviewEditor(LPCSTR id,float duration) {
+    CEnvironment& environment=g_pGamePersistent->Environment();
+    if(!m_bEnableCustomLightning || !id || !id[0] ||
+       !environment.m_thunderbolt_collections_config ||
+       !environment.m_thunderbolt_collections_config->section_exist(id) || state!=stIdle) return false;
+    // A collection no loaded weather uses is not in "collection" yet, and thunderbolt_collection()
+    // has no "not found" result in a release build ( NODEFAULT = __assume(0) ): the test crashed
+    // here. It is loaded first, as CEnvDescriptor::set_thunderbolt_collection does; a loaded one
+    // comes back as it is. The weather keeps its own collection.
+    if(AppendDef(environment,environment.m_thunderbolt_collections_config,
+                 environment.m_thunderbolts_config,id).empty()) return false;
+    const auto* selected=environment.thunderbolt_collection(collection,id);
+    if(!selected || selected->palette.empty()) return false;
+    if(!std::isfinite(duration)) duration=.5f;
+    m_editor_safe_preview=true;
+    Bolt(id,std::max(1.f,environment.CurrentEnv->bolt_period),std::clamp(duration,.1f,5.f));
+    m_editor_safe_preview=false;
+    return true;
 }
 
 CEffect_Thunderbolt::~CEffect_Thunderbolt() {
@@ -233,6 +337,11 @@ BOOL CEffect_Thunderbolt::RayPick(const Fvector& s, const Fvector& d, float& dis
 
 void CEffect_Thunderbolt::Bolt(const std::string& id, const float period, const float lt) {
     VERIFY(!id.empty());
+    const float thunder_min=m_bEnableCustomLightning?m_fThunderRangeMin:120.f;
+    const float thunder_max=m_bEnableCustomLightning?m_fThunderRangeMax:1000.f;
+    const float fade_distance=m_bEnableCustomLightning?m_fThunderFadeDist:300.f;
+    const float pitch_drop=m_bEnableCustomLightning?m_fThunderPitchDrop:.35f;
+    const float volume_drop=m_bEnableCustomLightning?m_fThunderVolDrop:.25f;
     state = stWorking;
     
     int strikes_to_spawn = 1;
@@ -323,7 +432,9 @@ void CEffect_Thunderbolt::Bolt(const std::string& id, const float period, const 
                 strike_dist = R; 
                 float dist = std::hypot(height, R);
                 float alt = atan2(height, R); 
-                float lng = Random.randF(0.f, PI_MUL_2); 
+                float lng = m_editor_safe_preview
+                    ? Device.vCameraDirection.getH()
+                    : Random.randF(0.f, PI_MUL_2);
 
                 strike->direction.setHP(lng, alt);
                 pos.mad(Device.vCameraPosition, strike->direction, dist);
@@ -380,12 +491,12 @@ void CEffect_Thunderbolt::Bolt(const std::string& id, const float period, const 
             float snd_vol = 1.0f;
             float snd_freq = 1.0f; 
             Fvector2 snd_range;
-            snd_range.set(m_fThunderRangeMin, m_fThunderRangeMax);
+            snd_range.set(thunder_min, thunder_max);
 
-            if (strike_dist > m_fThunderRangeMin) {
-                float dist_factor = std::clamp((strike_dist - m_fThunderRangeMin) / m_fThunderFadeDist, 0.0f, 1.0f);
-                snd_freq = std::max(0.1f, 1.0f - (dist_factor * m_fThunderPitchDrop)); 
-                snd_vol = std::max(0.1f, 1.0f - (dist_factor * m_fThunderVolDrop));  
+            if (strike_dist > thunder_min) {
+                float dist_factor = std::clamp((strike_dist - thunder_min) / fade_distance, 0.0f, 1.0f);
+                snd_freq = std::max(0.1f, 1.0f - (dist_factor * pitch_drop));
+                snd_vol = std::max(0.1f, 1.0f - (dist_factor * volume_drop));
             }
 
             strike->desc->snd.play_no_feedback(0, 0, strike_dist / 300.f, &pos, &snd_vol, &snd_freq, &snd_range);
@@ -393,20 +504,20 @@ void CEffect_Thunderbolt::Bolt(const std::string& id, const float period, const 
 
 #ifndef _EDITOR
         if (bHit && (!use_base || i == 0 || is_branch)) { // Гілки також створюють спалахи на землі
-            if (m_sStrikeParticle.size()) g_pGamePersistent->PlayParticle(m_sStrikeParticle.c_str(), hit_pos);
+            if (m_bEnableCustomLightning && m_sStrikeParticle.size()) g_pGamePersistent->PlayParticle(m_sStrikeParticle.c_str(), hit_pos);
             
-            if (m_StrikeSound._handle()) {
+            if (m_bEnableCustomLightning && m_StrikeSound._handle()) {
                 Fvector2 strike_range;
                 strike_range.set(m_fStrikeSndRangeMin, m_fStrikeSndRangeMax);
                 m_StrikeSound.play_no_feedback(0, 0, strike_dist / 300.f, &hit_pos, 0, 0, &strike_range);
             }
 
-            if (m_fStrikeDamagePower > 0.f && m_fStrikeDamageRadius > 0.f) {
+            if (m_bEnableCustomLightning && !m_editor_safe_preview && m_fStrikeDamagePower > 0.f && m_fStrikeDamageRadius > 0.f) {
                 g_pGamePersistent->ApplyLightningDamage(hit_pos, m_fStrikeDamageRadius, m_fStrikeDamagePower);
             }
         }
 
-        if (strike->light && strike_dist < m_fDistMediumMax && (!use_base || is_branch)) {
+        if (strike->light && strike_dist < (m_bEnableCustomLightning?m_fDistMediumMax:40.f) && (!use_base || is_branch)) {
             strike->using_light = true;
             Fvector light_pos = hit_pos;
             light_pos.mad(light_dir, -10.f); 
@@ -526,6 +637,21 @@ void CEffect_Thunderbolt::Render() {
 // --- SCRIPT‑DRIVEN LIGHTNING STRIKE ---
 void CEffect_Thunderbolt::ForceStrike(LPCSTR id, const Fvector& target_pos) {
     if (!m_bEnableCustomLightning || !id || id[0] == '\0') return;
+
+    // The collection is checked before a strike slot is taken: thunderbolt_collection() has no
+    // "not found" result in a release build ( NODEFAULT = __assume(0) ), GetRandomDesc() divides by
+    // zero on an empty palette, and a slot left active without a description crashes OnFrame. A
+    // collection no loaded weather uses is loaded first, as in PreviewEditor.
+    CEnvironment& environment = g_pGamePersistent->Environment();
+    if (!environment.m_thunderbolt_collections_config ||
+        !environment.m_thunderbolt_collections_config->section_exist(id) ||
+        AppendDef(environment, environment.m_thunderbolt_collections_config,
+                  environment.m_thunderbolts_config, id).empty())
+        return;
+    const SThunderboltCollection* selected = environment.thunderbolt_collection(collection, id);
+    if (selected->palette.empty()) return;
+    SThunderboltDesc* desc = selected->GetRandomDesc();
+    if (!desc) return;
     
     SStrike* strike = nullptr;
     for (int j = 0; j < MAX_STRIKES; ++j) {
@@ -541,8 +667,7 @@ void CEffect_Thunderbolt::ForceStrike(LPCSTR id, const Fvector& target_pos) {
     strike->life_time = 2.0f + Random.randF(-0.5f, 0.5f); 
     strike->current_time = 0.f;
 
-    strike->desc = g_pGamePersistent->Environment().thunderbolt_collection(collection, id)->GetRandomDesc();
-    if (!strike->desc) return;
+    strike->desc = desc;
 
     Fmatrix XF, S;
     float height = FAR_DIST * m_fHeightFactor;
@@ -589,7 +714,7 @@ void CEffect_Thunderbolt::ForceStrike(LPCSTR id, const Fvector& target_pos) {
         m_StrikeSound.play_no_feedback(0, 0, dist_to_strike / 300.f, &snd_pos, 0, 0, &strike_range);
     }
 
-    if (m_fStrikeDamagePower > 0.f && m_fStrikeDamageRadius > 0.f) {
+    if (!m_editor_safe_preview && m_fStrikeDamagePower > 0.f && m_fStrikeDamageRadius > 0.f) {
         g_pGamePersistent->ApplyLightningDamage(target_pos, m_fStrikeDamageRadius, m_fStrikeDamagePower);
     }
 

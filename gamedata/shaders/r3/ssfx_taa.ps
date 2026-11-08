@@ -1,0 +1,230 @@
+/**
+ * @ Version: SCREEN SPACE SHADERS - UPDATE 23
+ * @ Description: TAA Implementation
+ * @ Modified time: 2025-06-11 07:54:33
+ * @ Author: https://www.moddb.com/members/ascii1457
+ * @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+ */
+
+// http://advances.realtimerendering.com/s2014/epic/TemporalAA.pptx
+// https://github.com/playdeadgames/temporal/
+// https://www.elopezr.com/temporal-aa-and-the-quest-for-the-holy-trail/
+
+#include "common.h"
+
+Texture2D s_current;
+Texture2D s_previous;
+
+Texture2D s_motion_vectors;
+Texture2D s_mv;
+
+Texture2D s_depth;
+
+sampler smp_point;
+
+static const float3 kdop_axes[16] = {
+	// k-DOP axes
+	float3(1, 0, 0),
+	float3(0, 1, 0),
+	float3(0, 0, 1),
+	float3(0.820081, 0.456727, -0.344773),
+	float3(0.540295, 0.829202, 0.143195),
+	float3(0.255800, 0.841084, -0.476597),
+	float3(-0.406935, -0.389062, 0.826459),
+	float3(-0.826708, -0.382923, -0.412219),
+	float3(0.260942, -0.577482, 0.773578),
+	float3(0.254398, 0.637821, 0.726957),
+	float3(0.310900, -0.728083, -0.610930),
+	float3(0.798513, -0.556827, -0.228738),
+	float3(0.673383, -0.163602, -0.720964),
+	float3(-0.813922, 0.369658, -0.448201),
+	float3(0.477650, -0.853722, 0.207384),
+	float3(-0.554854, -0.041550, -0.830910)
+};
+
+// "k-DOP Clipping: Robust Ghosting Mitigation in Temporal Antialiasing"
+// https://webpages.tuni.fi/vga/publications/k_DOP_Clipping.html
+float3 kdop_clipping(float3 cur_color, float3 prev_color, float3 colors[9])
+{
+	const float epsilon = 1e-5f;
+
+	float3 dir = prev_color - cur_color;
+	float near = -1e9f, far = 1e9f;
+	[unroll (16)] 
+	for(int a = 0; a < 16; ++a)
+	{
+		float3 axis = kdop_axes[a];
+		// Construct color extent along this axis
+		float2 extent = float2(1e9f, -1e9f);
+		[unroll (9)] 
+		for(int n = 0; n < 9; ++n)
+		{
+			float t = dot(colors[n], axis);
+			extent.x = min(t, extent.x);
+			extent.y = max(t, extent.y);
+		}
+		// Some extra padding to prevent issues with otherwise zero-volume
+		// k-DOPs in corner cases.
+		extent += float2(-epsilon, +epsilon);
+
+		// Compute intersections to the planes of the current slab
+		float proj_pos = dot(cur_color, axis);
+		float inv_dir = 1.0f / dot(dir, axis);
+		float t0 = (extent.x - proj_pos) * inv_dir;
+		float t1 = (extent.y - proj_pos) * inv_dir;
+
+		// Accumulate with previous plane intersections.
+		near = max(near, min(t0, t1));
+		far = min(far, max(t0, t1));
+	}
+	if(near <= far && (near > 0.0f || far > 0.0f))
+	{ // Hit
+		float t = clamp(near > 0.0f ? near : far, 0.0f, 1.0f);
+		return cur_color + t * dir;
+	}
+	// Missed??? This shouldn't happen as the ray should start from inside the
+	// k-DOP hull, but just in case.
+	return cur_color;
+}
+
+// https://github.com/playdeadgames/temporal/blob/master/Assets/Shaders/IncDepth.cginc
+float4 find_closest_fragment_3x3(Texture2D Tex, float2 uv)
+{
+	// Neighborhood 3x3 with 4 Gathers
+	float4 z_gather_0 = Tex.GatherBlue(smp_point, uv, int2( 0,  0));
+	float4 z_gather_1 = Tex.GatherBlue(smp_point, uv, int2(-1,  0));
+	float4 z_gather_2 = Tex.GatherBlue(smp_point, uv, int2( 0, -1));
+	float4 z_gather_3 = Tex.GatherBlue(smp_point, uv, int2(-1, -1));
+
+	// Grather return ( w = sample )
+	// w  z
+	// x  y
+	float3 tap_tl = float3(-1, -1, z_gather_3.w); // 3 = tl : w = c
+	float3 tap_tc = float3( 0, -1, z_gather_2.w); // 2 = t  : w = c
+	float3 tap_tr = float3( 1, -1, z_gather_2.z); // 2 = t  : z = r
+
+	float3 tap_l  = float3(-1,  0, z_gather_1.w); // 1 = l  : w = c
+	float3 tap_c  = float3( 0,  0, z_gather_0.w); // 0 = c  : w = c
+	float3 tap_r  = float3( 1,  0, z_gather_0.z); // 0 = c  : z = r
+
+	float3 tap_bl = float3(-1,  1, z_gather_1.x); // 1 = l  : x = b
+	float3 tap_bc = float3( 0,  1, z_gather_0.x); // 0 = c  : x = b
+	float3 tap_br = float3( 1,  1, z_gather_0.y); // 0 = c  : y = br
+
+	float3 dmin = tap_tl;
+
+	if (dmin.z > tap_tc.z) dmin = tap_tc;
+	if (dmin.z > tap_tr.z) dmin = tap_tr;
+
+	if (dmin.z > tap_l.z) dmin = tap_l;
+	if (dmin.z > tap_c.z) dmin = tap_c;
+	if (dmin.z > tap_r.z) dmin = tap_r;
+
+	if (dmin.z > tap_bl.z) dmin = tap_bl;
+	if (dmin.z > tap_bc.z) dmin = tap_bc;
+	if (dmin.z > tap_br.z) dmin = tap_br;
+
+	float z_min = min(min(min(min(min(min(min(min(1000000, tap_tc.z), tap_tr.z), tap_l.z), tap_c.z), tap_r.z), tap_bl.z), tap_bc.z), tap_br.z);
+
+	float z_all = tap_tc.z + tap_tr.z + tap_l.z + tap_c.z + tap_r.z + tap_bl.z + tap_bc.z + tap_br.z + tap_tl.z;
+
+	return float4(uv + dmin.xy * screen_res.zw, z_min, z_all);
+}
+
+// https://www.activision.com/cdn/research/Dynamic_Temporal_Antialiasing_and_Upsampling_in_Call_of_Duty_v4.pdf
+float3 SMAABicubicFilter(
+	float3 current_top,
+	float3 current_bottom,
+	float3 current_left,
+	float3 current_right,
+	float3 current_center,
+	float3 previous_center,
+	float2 texcoord,
+	float4 rt_metrics, 
+	float sharpness_scale
+)
+{
+	float2 f = frac(rt_metrics.zw * texcoord - 0.5);
+	float c = 0.8 * sharpness_scale / 100.0;
+	float2 w = c * (f*f-f);
+	float4 color = 
+		float4(lerp(current_left, current_right, f.x), 1.0) * w.x +
+		float4(lerp(current_top, current_bottom, f.y), 1.0) * w.y;
+	color += float4((1.0 + color.w) * previous_center - color.w * current_center, 1.0);
+	return color.xyz / color.w;
+}
+
+
+float4 main(p_screen I) : SV_Target
+{
+	// Motion vectors ( Dilated )
+	float4 motion_vectors = s_motion_vectors.SampleLevel(smp_point, find_closest_fragment_3x3(s_motion_vectors, I.tc0.xy).xy, 0);
+
+	// Skip mask ( w == 1.0 )
+	float mask = saturate(s_mv.SampleLevel(smp_point, I.tc0.xy, 0).w);
+
+	// UV Reprojection
+	float2 uv_rp = I.tc0.xy - motion_vectors.xy;
+
+	// Unjitter UV ( Remove texture blurring )
+	float2 tc_unjitter = I.tc0.xy - ddx_fine(I.tc0.xy) * ssfx_jitter.x + ddy_fine(I.tc0.xy) * ssfx_jitter.y;
+
+	// Current frame
+	float3 current_color = s_current.Sample(smp_point, tc_unjitter).xyz;
+
+	// Early exit
+	if(any(uv_rp != saturate(uv_rp)) || mask >= 0.25f)
+		return float4(current_color, 1.0);
+
+	// Neighborhood 3x3
+	float3 Neighborhood[9];
+
+	Neighborhood[0] = current_color;
+	Neighborhood[1] = s_current.SampleLevel(smp_rtlinear, tc_unjitter, 0, int2(-1, -1)).xyz; // Top Left
+	Neighborhood[2] = s_current.SampleLevel(smp_rtlinear, tc_unjitter, 0, int2( 0, -1)).xyz; // Top
+	Neighborhood[3] = s_current.SampleLevel(smp_rtlinear, tc_unjitter, 0, int2( 1, -1)).xyz; // Top Right
+	Neighborhood[4] = s_current.SampleLevel(smp_rtlinear, tc_unjitter, 0, int2(-1,  0)).xyz; // Left
+	Neighborhood[5] = s_current.SampleLevel(smp_rtlinear, tc_unjitter, 0, int2( 1,  0)).xyz; // Right
+	Neighborhood[6] = s_current.SampleLevel(smp_rtlinear, tc_unjitter, 0, int2(-1,  1)).xyz; // Bottom Left
+	Neighborhood[7] = s_current.SampleLevel(smp_rtlinear, tc_unjitter, 0, int2( 0,  1)).xyz; // Bottom
+	Neighborhood[8] = s_current.SampleLevel(smp_rtlinear, tc_unjitter, 0, int2( 1,  1)).xyz; // Bottom Right
+
+	// Clipping
+	float3 minCol_3x3  = min(min(min(min(min(min(min(min(Neighborhood[0], Neighborhood[1]), Neighborhood[2]), Neighborhood[3]), Neighborhood[4]), Neighborhood[5]), Neighborhood[6]), Neighborhood[7]), Neighborhood[8]);
+	float3 maxCol_3x3  = max(max(max(max(max(max(max(max(Neighborhood[0], Neighborhood[1]), Neighborhood[2]), Neighborhood[3]), Neighborhood[4]), Neighborhood[5]), Neighborhood[6]), Neighborhood[7]), Neighborhood[8]);
+	float3 minCol_5tap = min(min(min(min(Neighborhood[0], Neighborhood[2]), Neighborhood[4]), Neighborhood[5]), Neighborhood[7]);
+	float3 maxCol_5tap = max(max(max(max(Neighborhood[0], Neighborhood[2]), Neighborhood[4]), Neighborhood[5]), Neighborhood[7]);
+	float3 minCol = (minCol_3x3 + minCol_5tap) * 0.5;
+	float3 maxCol = (maxCol_3x3 + maxCol_5tap) * 0.5;
+
+	// Filter History ( Reprojected )
+	float3 history_color = SMAABicubicFilter(
+		Neighborhood[2], Neighborhood[7], Neighborhood[4], Neighborhood[5], Neighborhood[0],
+		(s_previous.Sample(smp_rtlinear, uv_rp).xyz),
+		uv_rp,
+		screen_res.zwxy, 
+		65.0
+	);
+
+	// k-DOP Clipping
+	float3 history_clip = kdop_clipping(current_color, history_color, Neighborhood);
+
+	// Current and previous depth ( Dilated )
+	float4 closest = find_closest_fragment_3x3(s_depth, I.tc0.xy);
+
+	// If 1 or more samples are from the skybox but not all. ( z = min depth 3x3 | w = all depth sum )
+	bool skybox_border = closest.z <= SKY_EPS && closest.w > SKY_EPS;
+
+	float vel_acc = s_motion_vectors.SampleLevel(smp_point, I.tc0.xy, 0).a;
+
+	// Velocity dissoclusion weight
+	float velocity = (skybox_border ? 0.95f : 0.9f) - clamp(vel_acc * 60, 0.0f, 0.6f);
+
+	// Clipping choice
+	float3 color_clipped = skybox_border ? lerp(history_color, clamp(history_color, minCol, maxCol), saturate(0.4 + vel_acc * 100)) : history_clip;
+
+	// Color blending
+	float3 color_blended = lerp(current_color, color_clipped, saturate(velocity - mask));
+
+	return float4(saturate(color_blended), 1);
+}

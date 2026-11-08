@@ -1,0 +1,40 @@
+/**
+ * @ Version: SCREEN SPACE SHADERS - UPDATE 23
+ * @ Description: TAA Implementation - Sharpening phase
+ * @ Modified time: 2025-05-13 03:32:44
+ * @ Author: https://www.moddb.com/members/ascii1457
+ * @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+ */
+
+// You can setup any sharpening shader here.
+
+#include "common.h"
+
+float4 taa_setup;
+
+Texture2D s_motion_vectors;
+Texture2D s_current;
+sampler smp_point;
+
+#define CoefLuma float3(0.2126, 0.7152, 0.0722) 
+
+float4 main(p_screen I) : SV_Target
+{
+	float3 ori = s_current.Sample(smp_point, I.tc0.xy).xyz;
+	float3 sharp_strength_luma = (CoefLuma * taa_setup.z);
+	float3 blur_ori;
+
+	blur_ori  = s_current.Sample(smp_point, I.tc0.xy + float2(screen_res.z, -screen_res.w) * 0.5f).rgb;
+	blur_ori += s_current.Sample(smp_point, I.tc0.xy - screen_res.zw * 0.5f).rgb;
+	blur_ori += s_current.Sample(smp_point, I.tc0.xy + screen_res.zw * 0.5f).rgb;
+	blur_ori += s_current.Sample(smp_point, I.tc0.xy - float2(screen_res.z, -screen_res.w) * 0.5f).rgb;
+	blur_ori /= 4;
+
+	float3 sharp = ori - blur_ori;
+	float4 sharp_strength_luma_clamp = float4(sharp_strength_luma * (0.5f / 0.035f), 0.5f);
+	float sharp_luma = saturate(dot(float4(sharp,1.0f), sharp_strength_luma_clamp));
+	sharp_luma = (0.035f * 2.0f) * sharp_luma - 0.035f;
+
+	return float4( saturate(ori + sharp_luma), 1 );
+
+}

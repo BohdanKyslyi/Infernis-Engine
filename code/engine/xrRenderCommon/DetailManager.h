@@ -22,7 +22,23 @@ typedef ObjectMap::iterator ObjectPairIt;
 constexpr int dm_max_decompress = 7;
 #endif
 
-constexpr int dm_size = 24;                                   
+// Screen Space Shaders: grass draw radius.
+// Half-width of the grass cache in 2 m slots, so the radius in metres is dm_size * 2 and the
+// distance at which a blade has shrunk to nothing is dm_fade below. Call of Pripyat shipped 24
+// ( 48 m ), which is why grass appeared to end a short way in front of the actor. Monolith makes
+// this a runtime variable driven by r__detail_radius ( xrRender_console.cpp:562-569, guarded by
+// DETAIL_RADIUS ) and computes it as floor( R / 4 ) * 2; 76 is what that formula returns for
+// r__detail_radius 152, so the value here is the donor's for a 152 m radius.
+// It has to stay a constant in this engine: dm_cache_line feeds a fixed array in
+// DetailManager_CACHE.cpp:145 and dm_cache_size sizes the inline svector in DetailManager.h,
+// neither of which may become runtime sized. It also has to stay even, or dm_cache1_line below
+// stops dividing exactly.
+#if RENDER == R_R4
+constexpr int dm_size = 76;
+#else
+// The other renderers keep the game's own cache, Infernis DetailManager.h:25 - 24 slots, 48 m.
+constexpr int dm_size = 24;
+#endif
 constexpr int dm_cache1_count = 4;                            
 constexpr int dm_cache1_line = dm_size * 2 / dm_cache1_count; 
 constexpr int dm_max_objects = 64;
@@ -34,13 +50,32 @@ constexpr float dm_slot_size = DETAIL_SLOT_SIZE;
 
 class ECORE_API CDetailManager {
 public:
-    struct SlotItem { 
+    // Screen Space Shaders. Monolith DetailManager.h:68-71.
+    // fade_distance is how far a blade may stand from the camera before it starts shrinking;
+    // -1 switches the measurement over to light_position, which is how grass fades inside the
+    // shadow map of a lamp. details_clear() empties the visibility lists once per frame.
+    float fade_distance = 99999;
+    Fvector light_position;
+
+    void details_clear();
+
+    struct SlotItem {
         float scale;
         float scale_calculated;
         Fmatrix mRotY;
-        u32 vis_ID; 
+        u32 vis_ID;
         float c_hemi;
         float c_sun;
+        // Screen Space Shaders: the per-blade data the grass shader reads out of "exdata".
+        // normal is the terrain normal under the blade ( grass lighting, and the alignment when
+        // ssfx_terrain_grass_align is on ), alpha is the blade's own opacity. distance and
+        // position are what the fade above is measured against.
+        // Ported from Monolith DetailManager.h:82-86.
+        float distance;
+        Fvector position;
+        Fvector normal;
+        float alpha;
+        float alpha_target;
 #if RENDER == R_R1
         Fvector c_rgb;
 #endif
@@ -66,9 +101,12 @@ public:
             u32 type : 1;
             u32 frame : 30;
         };
-        int sx, sz;                 
-        vis_data vis;               
-        SlotPart G[dm_obj_in_slot]; 
+        int sx, sz;
+        vis_data vis;
+        SlotPart G[dm_obj_in_slot];
+        // Screen Space Shaders. Monolith DetailManager.h:125. Raised when the slot drops out of
+        // fade range, so every blade in it starts from zero opacity when it comes back.
+        bool hidden;
 
         Slot() {
             frame = 0;
@@ -168,7 +206,8 @@ public:
     void hw_Unload();
     void hw_Render();
 #if defined(USE_DX10) || defined(USE_DX11)
-    void hw_Render_dump(const Fvector4& consts, const Fvector4& wave, const Fvector4& wind, u32 var_id, u32 lod_id);
+    void hw_Render_dump(const Fvector4& consts, const Fvector4& wave, const Fvector4& wind,
+                        const Fvector4& prev_wave, const Fvector4& prev_wind, u32 var_id, u32 lod_id);
 #else 
     void hw_Render_dump(ref_constant array, u32 var_id, u32 lod_id, u32 c_base);
 #endif 
@@ -196,6 +235,11 @@ public:
     std::recursive_mutex MT;
     std::atomic<u32> m_frame_calc{0};
     std::atomic<u32> m_frame_rendered{0};
+#if RENDER == R_R4
+    // The grass density ( r__detail_density ) the cache was laid out with: with SSS, MT_CALC lays
+    // the cached grass out again once the slider gives another value ( user 2026-11-04 ).
+    float m_density_laid{0.f};
+#endif
 
     void __stdcall MT_CALC();
     ICF void MT_SYNC() {
