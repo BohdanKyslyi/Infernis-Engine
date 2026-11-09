@@ -45,7 +45,7 @@ void CWeaponPistol::PlayAnimIdleMoving() {
 }
 
 void CWeaponPistol::PlayAnimIdle() {
-    if (IsMisfire()) {
+    if (IsMisfire() || IsZoomed()) {
         inherited::PlayAnimIdle();
         return;
     }
