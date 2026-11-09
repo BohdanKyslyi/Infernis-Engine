@@ -1,4 +1,5 @@
 #include "pch_script.h"
+#include "ui/LuaWorkbench.h"
 #include "../xrEngine/fdemorecord.h"
 #include "../xrEngine/fdemoplay.h"
 #include "../xrEngine/environment.h"
@@ -477,7 +478,7 @@ void CLevel::OnFrame()
     else
         m_level_sound_manager->Update();
         
-    if (g_mt_config.test(mtLUA_GC))
+    if (g_mt_config.test(mtLUA_GC) && !lua_workbench::Live().Attached())
         Device.seqParallel.push_back(fastdelegate::FastDelegate0<>(this, &CLevel::script_gc));
     else
         script_gc();

@@ -421,6 +421,8 @@ set(AI_ACOVER_SMART_COVER_STORAGE_DESCRIPTION smart_cover_description.h
 set(AI_ASCRIPT_SCRIPTCLASSES_UI_UIWINDOWS_WINDOWS ui/UIDialogWnd.h
                                                   ui/UIHudEditor.h
                                                   ui/UIWeatherEditor.h
+                                                  ui/UILuaWorkbench.h
+                                                  ui/LuaWorkbench.h
                                                   ui/WeatherEditorModel.h
                                                   ui/UIFrameLineWnd.h
                                                   ui/UIFrameWindow.h
@@ -428,6 +430,8 @@ set(AI_ASCRIPT_SCRIPTCLASSES_UI_UIWINDOWS_WINDOWS ui/UIDialogWnd.h
                                                   ui/UIDialogWnd.cpp
                                                   ui/UIHudEditor.cpp
                                                   ui/UIWeatherEditor.cpp
+                                                  ui/UILuaWorkbench.cpp
+                                                  ui/LuaWorkbench.cpp
                                                   ui/UIFrameLineWnd.cpp
                                                   ui/UIFrameWindow.cpp
                                                   ui/UIWindow.cpp
@@ -4037,6 +4041,7 @@ set_source_files_properties(ui/UIRankingWnd.cpp PROPERTIES COMPILE_FLAGS "/Yupch
 set_source_files_properties(ui/UIScriptWnd.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(ui/UIWndCallback.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(ui/UIWpnParams.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
+set_source_files_properties(ui/UILuaWorkbench.cpp ui/LuaWorkbench.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(UIGameCustom.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(UIGameSP.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(UsableScriptObject.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")

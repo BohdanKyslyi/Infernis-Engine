@@ -12,6 +12,11 @@
 #include "object_factory.h"
 #include "script_process.h"
 
+#ifndef XRSE_FACTORY_EXPORTS
+#include "../xrGame/ui/UILuaWorkbench.h"
+#include "../xrGame/ui/LuaWorkbench.h"
+#endif
+
 #ifdef USE_DEBUGGER
 #ifndef USE_LUA_STUDIO
 #include "script_debugger.h"
@@ -132,6 +137,9 @@ CScriptEngine::CScriptEngine() {
 }
 
 CScriptEngine::~CScriptEngine() {
+#ifndef XRSE_FACTORY_EXPORTS
+    ResetLuaWorkbenchRun();
+#endif
     while (!m_script_processes.empty())
         remove_script_process(m_script_processes.begin()->first);
 
@@ -149,6 +157,9 @@ CScriptEngine::~CScriptEngine() {
 }
 
 void CScriptEngine::unload() {
+#ifndef XRSE_FACTORY_EXPORTS
+    ResetLuaWorkbenchRun();
+#endif
     lua_settop(lua(), m_stack_level);
     m_last_no_file_length = 0;
     *m_last_no_file = 0;
@@ -186,7 +197,31 @@ xr_vector<xr_string> get_lua_stack(lua_State* L) {
     return res;
 }
 
+#ifndef XRSE_FACTORY_EXPORTS
+static void log_live_workbench_error(lua_State* state) {
+    auto& debugger = lua_workbench::Live();
+    if (!debugger.CaptureError(state, 1))
+        return;
+    Msg("! [Lua Workbench] %s", debugger.Message().c_str());
+    unsigned count = 0;
+    for (const auto& frame : debugger.Frames()) {
+        if (count++ == 6)
+            break;
+        Msg("!   %s:%d (%s)", frame.source.c_str(), frame.line, frame.function.c_str());
+        unsigned variables = 0;
+        for (const auto& value : frame.variables) {
+            if (variables++ == 8)
+                break;
+            Msg("!     %s", value.c_str());
+        }
+    }
+}
+#endif
+
 void CScriptEngine::lua_error(lua_State* L) {
+#ifndef XRSE_FACTORY_EXPORTS
+    log_live_workbench_error(L);
+#endif
     // Monolith ( script_engine.cpp:211-235 ): the stack to the log, the first script line ( file,
     // line, function ) into the crash report
     ai().script_engine().print_stack();
@@ -215,6 +250,9 @@ void CScriptEngine::lua_error(lua_State* L) {
 }
 
 int CScriptEngine::lua_pcall_failed(lua_State* L) {
+#ifndef XRSE_FACTORY_EXPORTS
+    log_live_workbench_error(L);
+#endif
     // Monolith ( script_engine.cpp:266-291 ): the stack to the log, the first script line ( file,
     // line, function ) into the crash report
     ai().script_engine().print_stack();
@@ -316,6 +354,9 @@ void CScriptEngine::setup_auto_load() {
 extern void export_classes(lua_State* L);
 
 void CScriptEngine::init() {
+#ifndef XRSE_FACTORY_EXPORTS
+    ResetLuaWorkbenchRun();
+#endif
 #ifdef USE_LUA_STUDIO
     bool lua_studio_connected = !!m_lua_studio_world;
     if (lua_studio_connected)
