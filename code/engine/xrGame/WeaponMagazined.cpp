@@ -7,6 +7,8 @@
 #include "silencer.h"
 #include "GrenadeLauncher.h"
 #include "inventory.h"
+#include "CustomDetector.h"
+#include "player_hud.h"
 #include "InventoryOwner.h"
 #include "xrserver_objects_alife_items.h"
 #include "ActorEffector.h"
@@ -67,7 +69,9 @@ void CWeaponMagazined::Load(LPCSTR section) {
     m_sounds.LoadSound(section, "snd_empty", "sndEmptyClick", false, m_eSoundEmptyClick);
     m_sounds.LoadSound(section, "snd_reload", "sndReload", true, m_eSoundReload);
     const LPCSTR reload_sounds[] = {"snd_reload_empty", "snd_reload_full", "snd_reload_misfire",
-                                   "snd_reload_jammed", "snd_reload_jammed_last", "snd_unjam"};
+                                   "snd_reload_jammed", "snd_reload_jammed_last", "snd_unjam",
+                                   "snd_reload_detector", "snd_reload_empty_detector",
+                                   "snd_reload_jammed_detector", "snd_reload_jammed_last_detector"};
     for (LPCSTR key : reload_sounds)
         if (pSettings->line_exist(section, key))
             m_sounds.LoadSound(section, key, key, true, m_eSoundReload);
@@ -646,11 +650,49 @@ void CWeaponMagazined::PlayReloadSound() {
         PlaySound(ReloadSound(), get_LastFP());
 }
 
+bool CWeaponMagazined::IsLastRoundJam() const {
+    return iAmmoElapsed == 0 ||
+           (iAmmoElapsed == 1 &&
+            READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_last_round_jam", false));
+}
+
+CCustomDetector* CWeaponMagazined::ReloadDetector() const {
+    if (!g_player_hud || IsGrenadeLauncherAttached())
+        return nullptr;
+
+    const auto* weapon_hud = g_player_hud->attached_item(0);
+    const auto* detector_hud = g_player_hud->attached_item(1);
+    if (!weapon_hud || weapon_hud->m_parent_hud_item != this || !detector_hud)
+        return nullptr;
+
+    return smart_cast<CCustomDetector*>(detector_hud->m_parent_hud_item);
+}
+
+LPCSTR CWeaponMagazined::DetectorReloadMotion(CCustomDetector& detector) const {
+    LPCSTR motion = IsMisfire() ? (IsLastRoundJam() ? "anm_reload_jammed_last_detector"
+                                                 : "anm_reload_jammed_detector")
+                               : (iAmmoElapsed == 0 ? "anm_reload_empty_detector"
+                                                    : "anm_reload_detector");
+    return pSettings->line_exist(HudSection(), motion) && detector.CanPlayWeaponReload(motion)
+               ? motion : nullptr;
+}
+
 LPCSTR CWeaponMagazined::ReloadSound() const {
     const shared_str weapon_section = cNameSect();
     LPCSTR section = weapon_section.c_str();
+    if (auto* detector = ReloadDetector()) {
+        if (DetectorReloadMotion(*detector)) {
+            LPCSTR sound = IsMisfire()
+                               ? (IsLastRoundJam() ? "snd_reload_jammed_last_detector"
+                                                   : "snd_reload_jammed_detector")
+                               : (iAmmoElapsed == 0 ? "snd_reload_empty_detector"
+                                                    : "snd_reload_detector");
+            if (pSettings->line_exist(section, sound))
+                return sound;
+        }
+    }
     if (IsMisfire()) {
-        if (!iAmmoElapsed && pSettings->line_exist(section, "snd_reload_jammed_last"))
+        if (IsLastRoundJam() && pSettings->line_exist(section, "snd_reload_jammed_last"))
             return "snd_reload_jammed_last";
         const LPCSTR keys[] = {"snd_unjam", "snd_reload_misfire", "snd_reload_jammed"};
         for (LPCSTR key : keys)
@@ -670,10 +712,10 @@ LPCSTR CWeaponMagazined::OptionalHudMotion(LPCSTR preferred, LPCSTR fallback) co
 LPCSTR CWeaponMagazined::ReloadMotion(bool launcher) const {
     LPCSTR section = HudSection().c_str();
     if (IsMisfire()) {
-        if (!iAmmoElapsed && launcher &&
+        if (IsLastRoundJam() && launcher &&
             pSettings->line_exist(section, "anm_reload_jammed_last_w_gl"))
             return "anm_reload_jammed_last_w_gl";
-        if (!iAmmoElapsed && pSettings->line_exist(section, "anm_reload_jammed_last"))
+        if (IsLastRoundJam() && pSettings->line_exist(section, "anm_reload_jammed_last"))
             return "anm_reload_jammed_last";
         if (launcher) {
             const LPCSTR keys[] = {"anm_unjam_w_gl", "anm_reload_misfire_w_gl",
@@ -1030,6 +1072,13 @@ void CWeaponMagazined::PlayAnimHide() {
 
 void CWeaponMagazined::PlayAnimReload() {
     VERIFY(GetState() == eReload);
+    if (auto* detector = ReloadDetector()) {
+        if (LPCSTR motion = DetectorReloadMotion(*detector)) {
+            detector->PlayWeaponReload(motion);
+            PlayHUDMotion(motion, TRUE, this, GetState());
+            return;
+        }
+    }
     PlayHUDMotion(ReloadMotion(), TRUE, this, GetState());
 }
 

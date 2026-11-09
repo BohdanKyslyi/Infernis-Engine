@@ -1,5 +1,7 @@
 #pragma once
 
+class CCustomDetector;
+
 #include "weapon.h"
 #include "hudsound.h"
 #include "ai_sounds.h"
@@ -168,6 +170,9 @@ protected:
     LPCSTR ReloadMotion(bool launcher = false) const;
     LPCSTR ReloadSound() const;
     LPCSTR OptionalHudMotion(LPCSTR preferred, LPCSTR fallback) const;
+    bool IsLastRoundJam() const;
+    CCustomDetector* ReloadDetector() const;
+    LPCSTR DetectorReloadMotion(CCustomDetector& detector) const;
     LPCSTR ShootMotion(LPCSTR fallback) const;
     virtual void PlayAnimAim();
 

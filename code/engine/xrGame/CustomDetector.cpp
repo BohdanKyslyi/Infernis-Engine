@@ -8,6 +8,7 @@
 #include "ActorEffector.h"
 #include "actor.h"
 #include "ui/UIWindow.h"
+#include "ui_base.h"
 #include "player_hud.h"
 #include "weapon.h"
 #include "ItemUseController.h"
@@ -126,6 +127,7 @@ void CCustomDetector::ToggleDetector(bool bFastMode) {
 
 void CCustomDetector::OnStateSwitch(u32 S) {
     inherited::OnStateSwitch(S);
+    m_weapon_reload_motion = false;
 
     switch (S) {
     case eShowing: {
@@ -218,6 +220,28 @@ void CCustomDetector::UpfateWork() {
     m_ui->update();
 }
 
+bool CCustomDetector::CanPlayWeaponReload(LPCSTR motion) {
+    auto* hud = HudItemData();
+    if (!hud || GetState() != eIdle || GetNextState() != eIdle ||
+        DetectorHudIsLocked(H_Parent()))
+        return false;
+
+    string128 alias;
+    xr_sprintf(alias, "%s%s", motion, UI().is_widescreen() ? "_16x9" : "");
+    const auto* animation = hud->m_hand_motions.find_motion(alias);
+    return animation && !animation->m_animations.empty();
+}
+
+void CCustomDetector::PlayWeaponReload(LPCSTR motion) {
+    m_weapon_reload_motion = true;
+    PlayHUDMotion_noCB(motion, TRUE);
+}
+
+void CCustomDetector::PlayAnimIdle() {
+    if (!m_weapon_reload_motion)
+        inherited::PlayAnimIdle();
+}
+
 void CCustomDetector::UpdateVisibility() {
     // Do not let automatic reactivation steal the controller's left hand.
     if (DetectorHudIsLocked(H_Parent()))
@@ -225,6 +249,17 @@ void CCustomDetector::UpdateVisibility() {
 
     // check visibility
     attachable_hud_item* i0 = g_player_hud->attached_item(0);
+    if (m_weapon_reload_motion) {
+        const auto* weapon = i0 ? smart_cast<CWeapon*>(i0->m_parent_hud_item) : nullptr;
+        if (weapon && weapon->GetState() == CWeapon::eReload &&
+            weapon->GetNextState() == CWeapon::eReload &&
+            !(Actor()->MovingState() & mcClimb))
+            return;
+
+        m_weapon_reload_motion = false;
+        if (GetState() == eIdle && GetNextState() == eIdle && HudItemData())
+            PlayAnimIdle();
+    }
     if (i0 && HudItemData()) {
         bool bClimb = ((Actor()->MovingState() & mcClimb) != 0);
         if (bClimb) {
@@ -275,6 +310,7 @@ void CCustomDetector::OnH_A_Chield() { inherited::OnH_A_Chield(); }
 
 void CCustomDetector::OnH_B_Independent(bool just_before_destroy) {
     m_bNeedActivation = false;
+    m_weapon_reload_motion = false;
     inherited::OnH_B_Independent(just_before_destroy);
 
     m_artefacts.clear();

@@ -111,6 +111,7 @@ protected:
     CUIArtefactDetectorBase* m_ui;
     bool m_bFastAnimMode;
     bool m_bNeedActivation;
+    bool m_weapon_reload_motion = false;
 
 public:
     CCustomDetector();
@@ -126,6 +127,9 @@ public:
     virtual void UpdateCL();
 
     bool IsWorking();
+    bool CanPlayWeaponReload(LPCSTR motion);
+    void PlayWeaponReload(LPCSTR motion);
+    void PlayAnimIdle() override;
 
     virtual void OnMoveToSlot(const SInvItemPlace& prev);
     virtual void OnMoveToRuck(const SInvItemPlace& prev);
