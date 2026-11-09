@@ -851,8 +851,7 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
         if ((flags & CMD_START) && IsGameTypeSingle() && GetState() == eIdle &&
             GetNextState() == eIdle && !IsPending() && !IsZoomed() && GetHUDmode() &&
             !hud_adj_mode && AllowBore() && !g_player_hud->attached_item(1) &&
-            (pSettings->line_exist(HudSection().c_str(), "anm_boring") ||
-             pSettings->line_exist(HudSection().c_str(), "anm_bore")))
+            InspectMotion())
             SwitchState(eInspect);
         return true;
     }
@@ -1122,13 +1121,12 @@ float CWeapon::GetConditionMisfireProbability() const {
     return mis;
 }
 
-BOOL CWeapon::CheckForMisfire() {
-    if (OnClient())
-        return FALSE;
+bool CWeapon::RollForMisfire() {
+    return !OnClient() && ::Random.randF(0.f, 1.f) < GetConditionMisfireProbability();
+}
 
-    float rnd = ::Random.randF(0.f, 1.f);
-    float mp = GetConditionMisfireProbability();
-    if (rnd < mp) {
+BOOL CWeapon::CheckForMisfire() {
+    if (RollForMisfire()) {
         FireEnd();
 
         bMisfire = true;
@@ -2041,20 +2039,34 @@ const float& CWeapon::hit_probability() const {
     return (m_hit_probability[egdNovice]);
 }
 
+LPCSTR CWeapon::InspectMotion() const {
+    const auto& section = HudSection();
+    if (IsMisfire()) {
+        if (pSettings->line_exist(section, "anm_boring_jammed"))
+            return "anm_boring_jammed";
+        if (pSettings->line_exist(section, "anm_bore_jammed"))
+            return "anm_bore_jammed";
+    }
+    if (pSettings->line_exist(section, "anm_boring"))
+        return "anm_boring";
+    return pSettings->line_exist(section, "anm_bore") ? "anm_bore" : nullptr;
+}
+
 void CWeapon::OnStateSwitch(u32 S) {
     inherited::OnStateSwitch(S);
     m_BriefInfo_CalcFrame = 0;
 
     if (S == eInspect) {
         SetPending(TRUE);
-        const bool has_inspect_motion = pSettings->line_exist(HudSection().c_str(), "anm_boring");
-        LPCSTR motion = has_inspect_motion ? "anm_boring" : "anm_bore";
-        if (!PlayHUDMotion(motion, TRUE, this, eInspect)) {
+        LPCSTR motion = InspectMotion();
+        if (!motion || !PlayHUDMotion(motion, TRUE, this, eInspect)) {
             SetPending(FALSE);
             SwitchState(eIdle);
             return;
         }
-        PlaySound(has_inspect_motion && pSettings->line_exist(cNameSect().c_str(), "snd_boring")
+        const bool custom_inspection = !xr_strcmp(motion, "anm_boring") ||
+                                       !xr_strcmp(motion, "anm_boring_jammed");
+        PlaySound(custom_inspection && pSettings->line_exist(cNameSect().c_str(), "snd_boring")
                       ? "sndInspect" : "sndBore", get_LastFP());
     }
 

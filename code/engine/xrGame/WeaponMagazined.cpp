@@ -153,7 +153,7 @@ void CWeaponMagazined::FireEnd() {
     inherited::FireEnd();
 
     CActor* actor = smart_cast<CActor*>(H_Parent());
-    if (m_pInventory && !iAmmoElapsed && actor && GetState() != eReload)
+    if (m_pInventory && !iAmmoElapsed && !IsMisfire() && actor && GetState() != eReload)
         Reload();
 }
 
@@ -444,7 +444,7 @@ void CWeaponMagazined::UpdateSounds() {
 }
 
 void CWeaponMagazined::state_Fire(float dt) {
-    if (iAmmoElapsed > 0) {
+    if (iAmmoElapsed > 0 && !IsMisfire()) {
         VERIFY(fOneShotTime > 0.f);
 
         Fvector p1, d;
@@ -475,9 +475,12 @@ void CWeaponMagazined::state_Fire(float dt) {
 
         VERIFY(!m_magazine.empty());
 
+        const bool jam_after_shot = IsGameTypeSingle() && ParentIsActor() &&
+            READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_jam_after_shot", false);
         while (!m_magazine.empty() && fShotTimeCounter < 0 && (IsWorking() || m_bFireSingleShot) &&
                (m_iQueueSize < 0 || m_iShotNum < m_iQueueSize)) {
-            if (CheckForMisfire()) {
+            const bool jam_this_shot = jam_after_shot && RollForMisfire();
+            if (!jam_after_shot && CheckForMisfire()) {
                 StopShooting();
                 return;
             }
@@ -488,12 +491,18 @@ void CWeaponMagazined::state_Fire(float dt) {
 
             ++m_iShotNum;
 
+            // The jammed shot clip needs the jam flag before FireTrace consumes the round.
+            if (jam_this_shot)
+                bMisfire = true;
             OnShot();
 
             if (m_iShotNum > m_iBaseDispersionedBulletsCount)
                 FireTrace(p1, d);
             else
                 FireTrace(m_vStartPos, m_vStartDir);
+
+            if (jam_this_shot)
+                break;
         }
 
         if (m_iShotNum == m_iQueueSize)
@@ -513,7 +522,7 @@ void CWeaponMagazined::state_Fire(float dt) {
                                                 m_iShotNum);
                         }
         */
-        if (iAmmoElapsed == 0)
+        if (iAmmoElapsed == 0 && !IsMisfire())
             OnMagazineEmpty();
 
         StopShooting();
@@ -1160,6 +1169,16 @@ LPCSTR CWeaponMagazined::ShootMotion(LPCSTR fallback) const {
             fallback = OptionalHudMotion("anm_shoot_aim_last", fallback);
             if (silenced)
                 fallback = OptionalHudMotion("anm_shoot_aim_last_sil", fallback);
+        }
+    }
+    if (IsMisfire()) {
+        fallback = OptionalHudMotion("anm_shoot_jammed", fallback);
+        if (silenced)
+            fallback = OptionalHudMotion("anm_shoot_jammed_sil", fallback);
+        if (aimed) {
+            fallback = OptionalHudMotion("anm_shoot_aim_jammed", fallback);
+            if (silenced)
+                fallback = OptionalHudMotion("anm_shoot_aim_jammed_sil", fallback);
         }
     }
     return fallback;

@@ -339,6 +339,8 @@ protected:
     virtual bool MovingAnimAllowedNow();
     virtual void OnStateSwitch(u32 S);
     virtual void OnAnimationEnd(u32 state);
+    LPCSTR InspectMotion() const;
+    bool RollForMisfire();
 
     //трассирование полета пули
     virtual void FireTrace(const Fvector& P, const Fvector& D);
