@@ -20,22 +20,6 @@ void CWeaponPistol::Load(LPCSTR section) {
 
 void CWeaponPistol::OnH_B_Chield() { inherited::OnH_B_Chield(); }
 
-void CWeaponPistol::PlayAnimShow() {
-    VERIFY(GetState() == eShowing);
-
-    if (iAmmoElapsed == 0)
-        PlayHUDMotion(OptionalHudMotion("anm_show_empty", "anm_show"), FALSE, this, GetState());
-    else
-        inherited::PlayAnimShow();
-}
-
-void CWeaponPistol::PlayAnimBore() {
-    if (iAmmoElapsed == 0)
-        PlayHUDMotion(OptionalHudMotion("anm_bore_empty", "anm_bore"), TRUE, this, GetState());
-    else
-        inherited::PlayAnimBore();
-}
-
 void CWeaponPistol::PlayAnimIdleSprint() {
     if (IsMisfire()) {
         inherited::PlayAnimIdleSprint();
@@ -93,12 +77,9 @@ void CWeaponPistol::PlayAnimReload() {
 
 void CWeaponPistol::PlayAnimHide() {
     VERIFY(GetState() == eHiding);
-    if (iAmmoElapsed == 0) {
-        if (pSettings->line_exist(cNameSect().c_str(), "snd_close"))
-            PlaySound("sndClose", get_LastFP());
-        PlayHUDMotion(OptionalHudMotion("anm_hide_empty", "anm_hide"), TRUE, this, GetState());
-    } else
-        inherited::PlayAnimHide();
+    if (iAmmoElapsed == 0 && pSettings->line_exist(cNameSect().c_str(), "snd_close"))
+        PlaySound("sndClose", get_LastFP());
+    inherited::PlayAnimHide();
 }
 
 void CWeaponPistol::PlayAnimShoot() {

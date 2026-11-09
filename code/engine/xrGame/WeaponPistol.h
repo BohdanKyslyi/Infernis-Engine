@@ -18,14 +18,12 @@ public:
     virtual void OnH_B_Chield();
 
     //анимации
-    virtual void PlayAnimShow();
     virtual void PlayAnimIdle();
     virtual void PlayAnimIdleMoving();
     virtual void PlayAnimIdleSprint();
     virtual void PlayAnimHide();
     virtual void PlayAnimReload();
     virtual void PlayAnimShoot();
-    virtual void PlayAnimBore();
     virtual void PlayAnimAim();
 
     virtual void UpdateSounds();
