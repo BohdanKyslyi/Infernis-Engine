@@ -37,6 +37,10 @@ void CWeaponPistol::PlayAnimBore() {
 }
 
 void CWeaponPistol::PlayAnimIdleSprint() {
+    if (IsMisfire()) {
+        inherited::PlayAnimIdleSprint();
+        return;
+    }
     if (iAmmoElapsed == 0) {
         PlayHUDMotion(OptionalHudMotion("anm_idle_sprint_empty", "anm_idle_sprint"), TRUE, NULL, GetState());
     } else {
@@ -45,6 +49,10 @@ void CWeaponPistol::PlayAnimIdleSprint() {
 }
 
 void CWeaponPistol::PlayAnimIdleMoving() {
+    if (IsMisfire()) {
+        inherited::PlayAnimIdleMoving();
+        return;
+    }
     if (iAmmoElapsed == 0) {
         PlayHUDMotion(OptionalHudMotion("anm_idle_moving_empty", "anm_idle_moving"), TRUE, NULL, GetState());
     } else {
@@ -53,6 +61,10 @@ void CWeaponPistol::PlayAnimIdleMoving() {
 }
 
 void CWeaponPistol::PlayAnimIdle() {
+    if (IsMisfire()) {
+        inherited::PlayAnimIdle();
+        return;
+    }
     if (TryPlayAnimIdle())
         return;
 
@@ -64,6 +76,10 @@ void CWeaponPistol::PlayAnimIdle() {
 }
 
 void CWeaponPistol::PlayAnimAim() {
+    if (IsMisfire()) {
+        inherited::PlayAnimAim();
+        return;
+    }
     if (iAmmoElapsed == 0)
         PlayHUDMotion(OptionalHudMotion("anm_idle_aim_empty", "anm_idle_aim"), TRUE, NULL, GetState());
     else

@@ -174,6 +174,7 @@ protected:
     CCustomDetector* ReloadDetector() const;
     LPCSTR DetectorReloadMotion(CCustomDetector& detector) const;
     LPCSTR ShootMotion(LPCSTR fallback) const;
+    LPCSTR IdleMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const;
     virtual void PlayAnimAim();
 
     virtual int ShotsFired() { return m_iShotNum; }

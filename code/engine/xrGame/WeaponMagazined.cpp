@@ -145,6 +145,16 @@ void CWeaponMagazined::FireStart() {
             CurrentGameUI()->AddCustomStatic("gun_jammed", true);
 
         OnEmptyClick();
+        if (GetState() == eIdle && GetNextState() == eIdle && !IsPending() && GetHUDmode()) {
+            LPCSTR motion = OptionalHudMotion("anm_fakeshoot_jammed", nullptr);
+            if (IsZoomed() && !IsRotatingToZoom())
+                motion = OptionalHudMotion("anm_fakeshoot_aim_jammed", motion);
+            if (motion) {
+                // A stop-at-end clip returns to jammed idle through OnAnimationEnd(eIdle).
+                if (!PlayHUDMotion(motion, TRUE, this, eIdle))
+                    PlayAnimIdle();
+            }
+        }
     }
 }
 
@@ -168,14 +178,14 @@ bool CWeaponMagazined::TryReload() {
             Actor()->callback(GameObject::eWeaponNoAmmoAvailable)(lua_game_object(), AC);
         }
 
-        m_pCurrentAmmo =
-            smart_cast<CWeaponAmmo*>(m_pInventory->GetAny(m_ammoTypes[m_ammoType].c_str()));
-
-        if (IsMisfire() && iAmmoElapsed) {
+        if (IsMisfire()) {
             SetPending(TRUE);
             SwitchState(eReload);
             return true;
         }
+
+        m_pCurrentAmmo =
+            smart_cast<CWeaponAmmo*>(m_pInventory->GetAny(m_ammoTypes[m_ammoType].c_str()));
 
         if (m_pCurrentAmmo || unlimited_ammo()) {
             SetPending(TRUE);
@@ -561,7 +571,13 @@ void CWeaponMagazined::OnEmptyClick() { PlaySound("sndEmptyClick", get_LastFP())
 void CWeaponMagazined::OnAnimationEnd(u32 state) {
     switch (state) {
     case eReload:
-        ReloadMagazine();
+        if (IsMisfire()) {
+            // Clearing a jam does not touch the magazine or reserve ammo.
+            bMisfire = false;
+            m_set_next_ammoType_on_reload = undefined_ammo_type;
+        } else {
+            ReloadMagazine();
+        }
         SwitchState(eIdle);
         break; // End of reload animation
     case eHiding:
@@ -1082,19 +1098,24 @@ void CWeaponMagazined::PlayAnimReload() {
     PlayHUDMotion(ReloadMotion(), TRUE, this, GetState());
 }
 
+LPCSTR CWeaponMagazined::IdleMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const {
+    LPCSTR fallback = iAmmoElapsed == 0 ? OptionalHudMotion(empty, normal) : normal;
+    return IsMisfire() ? OptionalHudMotion(jammed, fallback) : fallback;
+}
+
 void CWeaponMagazined::PlayAnimAim() {
-    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_idle_aim_empty", "anm_idle_aim")
-                                    : "anm_idle_aim", TRUE, NULL, GetState());
+    PlayHUDMotion(IdleMotion("anm_idle_aim", "anm_idle_aim_empty", "anm_idle_aim_jammed"),
+                  TRUE, NULL, GetState());
 }
 
 void CWeaponMagazined::PlayAnimIdleMoving() {
-    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_idle_moving_empty", "anm_idle_moving")
-                                    : "anm_idle_moving", TRUE, NULL, GetState());
+    PlayHUDMotion(IdleMotion("anm_idle_moving", "anm_idle_moving_empty", "anm_idle_moving_jammed"),
+                  TRUE, NULL, GetState());
 }
 
 void CWeaponMagazined::PlayAnimIdleSprint() {
-    PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_idle_sprint_empty", "anm_idle_sprint")
-                                    : "anm_idle_sprint", TRUE, NULL, GetState());
+    PlayHUDMotion(IdleMotion("anm_idle_sprint", "anm_idle_sprint_empty", "anm_idle_sprint_jammed"),
+                  TRUE, NULL, GetState());
 }
 
 void CWeaponMagazined::PlayAnimBore() {
@@ -1108,8 +1129,8 @@ void CWeaponMagazined::PlayAnimIdle() {
     if (IsZoomed()) {
         PlayAnimAim();
     } else if (!TryPlayAnimIdle()) {
-        PlayHUDMotion(iAmmoElapsed == 0 ? OptionalHudMotion("anm_idle_empty", "anm_idle")
-                                        : "anm_idle", TRUE, NULL, GetState());
+        PlayHUDMotion(IdleMotion("anm_idle", "anm_idle_empty", "anm_idle_jammed"),
+                      TRUE, NULL, GetState());
     }
 }
 
