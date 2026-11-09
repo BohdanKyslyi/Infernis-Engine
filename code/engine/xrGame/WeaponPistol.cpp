@@ -87,11 +87,10 @@ void CWeaponPistol::PlayAnimHide() {
 
 void CWeaponPistol::PlayAnimShoot() {
     VERIFY(GetState() == eFire);
-    if (iAmmoElapsed > 1) {
-        PlayHUDMotion(OptionalHudMotion("anm_shots", "anm_shoot"), FALSE, this, GetState());
-    } else {
-        PlayHUDMotion(OptionalHudMotion("anm_shot_l", OptionalHudMotion("anm_shots", "anm_shoot")), FALSE, this, GetState());
-    }
+    LPCSTR fallback = OptionalHudMotion("anm_shots", "anm_shoot");
+    if (iAmmoElapsed <= 1)
+        fallback = OptionalHudMotion("anm_shot_l", fallback);
+    PlayHUDMotion(ShootMotion(fallback), FALSE, this, GetState());
 }
 
 void CWeaponPistol::switch2_Reload() { inherited::switch2_Reload(); }

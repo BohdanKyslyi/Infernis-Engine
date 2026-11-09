@@ -1064,9 +1064,36 @@ void CWeaponMagazined::PlayAnimIdle() {
     }
 }
 
+LPCSTR CWeaponMagazined::ShootMotion(LPCSTR fallback) const {
+    // OnShot selects the motion before FireTrace consumes the cartridge.
+    const bool last_shot = iAmmoElapsed == 1;
+    const bool aimed = IsZoomed() && !IsRotatingToZoom();
+    const bool silenced = IsSilencerAttached();
+
+    if (silenced)
+        fallback = OptionalHudMotion("anm_shoot_sil", fallback);
+    if (aimed) {
+        fallback = OptionalHudMotion("anm_shoot_aim", fallback);
+        if (silenced)
+            fallback = OptionalHudMotion("anm_shoot_aim_sil", fallback);
+    }
+    if (last_shot) {
+        fallback = OptionalHudMotion("anm_shoot_last", fallback);
+        if (silenced)
+            fallback = OptionalHudMotion("anm_shoot_last_sil", fallback);
+        if (aimed) {
+            fallback = OptionalHudMotion("anm_shoot_aim_last", fallback);
+            if (silenced)
+                fallback = OptionalHudMotion("anm_shoot_aim_last_sil", fallback);
+        }
+    }
+    return fallback;
+}
+
 void CWeaponMagazined::PlayAnimShoot() {
     VERIFY(GetState() == eFire);
-    PlayHUDMotion(OptionalHudMotion("anm_shots", "anm_shoot"), FALSE, this, GetState());
+    PlayHUDMotion(ShootMotion(OptionalHudMotion("anm_shots", "anm_shoot")), FALSE, this,
+                  GetState());
 }
 
 void CWeaponMagazined::OnZoomIn() {

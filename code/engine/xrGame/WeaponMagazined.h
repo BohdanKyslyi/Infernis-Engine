@@ -168,6 +168,7 @@ protected:
     LPCSTR ReloadMotion(bool launcher = false) const;
     LPCSTR ReloadSound() const;
     LPCSTR OptionalHudMotion(LPCSTR preferred, LPCSTR fallback) const;
+    LPCSTR ShootMotion(LPCSTR fallback) const;
     virtual void PlayAnimAim();
 
     virtual int ShotsFired() { return m_iShotNum; }
