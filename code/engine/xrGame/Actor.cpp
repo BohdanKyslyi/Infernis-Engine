@@ -709,9 +709,13 @@ void CActor::g_Physics(Fvector& _accel, float jump, float dt) {
     }
 
     if (Local() && g_Alive()) {
-        if (character_physics_support()->movement()->gcontact_Was)
-            Cameras().AddCamEffector(
-                xr_new<CEffectorFall>(character_physics_support()->movement()->gcontact_Power));
+        auto* movement = character_physics_support()->movement();
+        if (movement->gcontact_Was) {
+            const bool landing = (mstate_real & (mcJump | mcFall)) ||
+                movement->OldEnvironment() == CPHMovementControl::peInAir;
+            if (!landing || !cam_OnLanding(!fis_zero(movement->gcontact_HealthLost)))
+                Cameras().AddCamEffector(xr_new<CEffectorFall>(movement->gcontact_Power));
+        }
 
         if (!fis_zero(character_physics_support()->movement()->gcontact_HealthLost)) {
             VERIFY(character_physics_support());

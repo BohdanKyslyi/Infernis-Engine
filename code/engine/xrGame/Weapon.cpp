@@ -1916,6 +1916,11 @@ void CWeapon::on_b_hud_detach() {
     m_hud_movement_frame = u32(-1);
     m_hud_stance_transition = nullptr;
     m_hud_stance_time = 0.f;
+    m_hud_lookout_pos.set(0.f, 0.f, 0.f);
+    m_hud_lookout_rot.set(0.f, 0.f, 0.f);
+    m_hud_lookout = 0;
+    m_hud_lookout_transition = nullptr;
+    m_hud_lookout_time = 0.f;
 }
 
 void CWeapon::UpdateGunslingerHudMovement(Fmatrix& trans, const CActor& actor) {
@@ -1962,8 +1967,9 @@ void CWeapon::UpdateGunslingerHudMovement(Fmatrix& trans, const CActor& actor) {
         const float dt = Device.fTimeDelta;
         const float aim = m_zoom_params.m_fZoomRotationFactor;
         const float hip = 1.f - aim;
+        const bool hiding = GetState() == eHiding;
         float factor = READ_IF_EXISTS(pSettings, r_float, section, "hud_move_stabilize_factor", 2.f);
-        if (GetState() == eHiding) {
+        if (hiding) {
             factor = READ_IF_EXISTS(pSettings, r_float, section, "hud_move_weaponhide_factor", 1.f);
             m_hud_stance_time = 0.f;
         } else {
@@ -2006,21 +2012,62 @@ void CWeapon::UpdateGunslingerHudMovement(Fmatrix& trans, const CActor& actor) {
         // Match the original response at one 8 ms step, independent of frame rate.
         const float speed_pos = READ_IF_EXISTS(pSettings, r_float, section, "hud_move_speed_pos", 0.1f);
         const float speed_rot = READ_IF_EXISTS(pSettings, r_float, section, "hud_move_speed_rot", 0.4f);
-        const auto blend = [factor, dt](float speed) {
+        const auto blend = [dt](float speed, float factor) {
             const float step = clampr(speed * factor / 100.f, 0.f, 1.f);
             return 1.f - std::pow(1.f - step, dt * 125.f);
         };
-        const float pos_blend = blend(speed_pos);
-        const float rot_blend = blend(speed_rot);
-        m_hud_movement_pos.mad(Fvector().sub(target_pos, m_hud_movement_pos), pos_blend);
-        m_hud_movement_rot.mad(Fvector().sub(target_rot, m_hud_movement_rot), rot_blend);
+        m_hud_movement_pos.mad(Fvector().sub(target_pos, m_hud_movement_pos), blend(speed_pos, factor));
+        m_hud_movement_rot.mad(Fvector().sub(target_rot, m_hud_movement_rot), blend(speed_rot, factor));
+
+        // Blend lookout separately so the lean response does not change strafe or crouch.
+        target_pos.set(0.f, 0.f, 0.f);
+        target_rot.set(0.f, 0.f, 0.f);
+        float lookout_factor = 2.8f;
+        if (hiding) {
+            m_hud_lookout = 0;
+            m_hud_lookout_time = 0.f;
+            lookout_factor = factor;
+        } else {
+            u32 lookout = movement & mcLookout;
+            if (lookout == mcLookout || (movement & mcClimb))
+                lookout = 0;
+            if (lookout != m_hud_lookout) {
+                if (lookout)
+                    m_hud_lookout_transition = lookout == mcLLookout ? "to_llookout" : "to_rlookout";
+                else
+                    m_hud_lookout_transition = m_hud_lookout == mcLLookout
+                        ? "from_llookout" : "from_rlookout";
+                string128 key;
+                xr_sprintf(key, "%s_time", m_hud_lookout_transition);
+                m_hud_lookout_time = READ_IF_EXISTS(pSettings, r_float, section, key, 0.f);
+                m_hud_lookout = lookout;
+            }
+            if (lookout) {
+                const LPCSTR side = lookout == mcLLookout ? "llookout" : "rlookout";
+                add_offset("hud_move_", side, hip);
+                add_offset("hud_aim_move_", side, aim);
+                const LPCSTR key = lookout == mcLLookout ? "hud_move_llookout_offset_speed_factor"
+                    : "hud_move_rlookout_offset_speed_factor";
+                lookout_factor = READ_IF_EXISTS(pSettings, r_float, section, key, lookout_factor);
+            }
+            if (m_hud_lookout_time > 0.f) {
+                add_offset("hud_move_", m_hud_lookout_transition, hip);
+                add_offset("hud_aim_move_", m_hud_lookout_transition, aim);
+                m_hud_lookout_time -= dt;
+            }
+        }
+        m_hud_lookout_pos.mad(Fvector().sub(target_pos, m_hud_lookout_pos), blend(speed_pos, lookout_factor));
+        m_hud_lookout_rot.mad(Fvector().sub(target_rot, m_hud_lookout_rot), blend(speed_rot, lookout_factor));
     }
 
-    Fvector angles = m_hud_movement_rot;
+    Fvector angles;
+    angles.add(m_hud_movement_rot, m_hud_lookout_rot);
     angles.mul(PI / 180.f);
     Fmatrix offset;
     offset.setHPB(angles.x, angles.y, angles.z);
-    offset.translate_over(m_hud_movement_pos);
+    Fvector position;
+    position.add(m_hud_movement_pos, m_hud_lookout_pos);
+    offset.translate_over(position);
     trans.mulB_43(offset);
 }
 

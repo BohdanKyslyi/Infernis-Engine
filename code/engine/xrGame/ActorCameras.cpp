@@ -30,6 +30,8 @@
 
 void CActor::cam_Set(EActorCameras style) {
     CCameraBase* old_cam = cam_Active();
+    if (cam_active != style)
+        cam_ResetJumpInertia();
     cam_active = style;
     old_cam->OnDeactivate();
     cam_Active()->OnActivate(old_cam);
@@ -266,12 +268,45 @@ static const float ik_cam_shift_tolerance = 0.2f;
 static const float ik_cam_shift_speed = 0.01f;
 #endif
 
-float CActor::cam_StanceHeight(float height, float dt) {
-    const auto* weapon = smart_cast<const CWeapon*>(inventory().ActiveItem());
+namespace {
+constexpr LPCSTR gunslinger_camera_section = "gunslinger_base";
+
+float camera_approach(float value, float target, float speed, float exponent, float dt) {
+    const float difference = target - value;
+    const float distance = std::fabs(difference);
+    if (distance <= 0.001f || speed <= 0.f)
+        return target;
+
+    const float step = speed * std::pow(distance, exponent > 0.f ? exponent : 1.2f) * dt;
+    return value + std::copysign(clampr(step, 0.f, distance), difference);
+}
+
+float gunslinger_camera_speed(const CWeapon& weapon) {
+    const float base_speed =
+        READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section, "default_actor_camera_speed", 18.f);
+    const float speed_factor =
+        READ_IF_EXISTS(pSettings, r_float, weapon.cNameSect(), "actor_camera_speed_factor", 1.f);
+    return base_speed * speed_factor;
+}
+
+float gunslinger_camera_exponent() {
+    return READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section, "actor_camera_speed_pow", 1.2f);
+}
+}
+
+const CWeapon* CActor::cam_GunslingerWeapon() {
     if (cam_active != eacFirstEye || this != Level().CurrentViewEntity() ||
-        (mstate_real & mcClimb) || !weapon ||
-        !READ_IF_EXISTS(pSettings, r_bool, weapon->HudSection(), "gunslinger_hud_movement", false) ||
-        !READ_IF_EXISTS(pSettings, r_bool, weapon->HudSection(), "gunslinger_camera_smoothing", true)) {
+        m_holder || (mstate_real & mcClimb) || !g_Alive())
+        return nullptr;
+
+    const auto* weapon = smart_cast<const CWeapon*>(inventory().ActiveItem());
+    if (weapon && READ_IF_EXISTS(pSettings, r_bool, weapon->HudSection(), "gunslinger_hud_movement", false))
+        return weapon;
+    return nullptr;
+}
+
+float CActor::cam_StanceHeight(const CWeapon* weapon, float height, float dt) {
+    if (!weapon || !READ_IF_EXISTS(pSettings, r_bool, weapon->HudSection(), "gunslinger_camera_smoothing", true)) {
         m_gunslinger_camera_height = 0.f;
         return height;
     }
@@ -281,27 +316,85 @@ float CActor::cam_StanceHeight(float height, float dt) {
         return height;
     }
 
-    const float base_speed =
-        READ_IF_EXISTS(pSettings, r_float, "gunslinger_base", "default_actor_camera_speed", 18.f);
-    const float speed_factor =
-        READ_IF_EXISTS(pSettings, r_float, weapon->cNameSect(), "actor_camera_speed_factor", 1.f);
-    const float speed = base_speed * speed_factor;
-    const float exponent =
-        READ_IF_EXISTS(pSettings, r_float, "gunslinger_base", "actor_camera_speed_pow", 1.2f);
-    const float difference = height - m_gunslinger_camera_height;
-    const float distance = std::fabs(difference);
-    if (distance <= 0.001f || speed <= 0.f) {
-        m_gunslinger_camera_height = height;
-    } else {
-        const float step = speed * std::pow(distance, exponent > 0.f ? exponent : 1.2f) * dt;
-        m_gunslinger_camera_height += std::copysign(clampr(step, 0.f, distance), difference);
-    }
+    m_gunslinger_camera_height = camera_approach(m_gunslinger_camera_height, height,
+        gunslinger_camera_speed(*weapon), gunslinger_camera_exponent(), dt);
     return m_gunslinger_camera_height;
+}
+
+bool CActor::cam_JumpInertiaEnabled(const CWeapon* weapon) {
+    return weapon && Local() &&
+        READ_IF_EXISTS(pSettings, r_bool, weapon->HudSection(), "gunslinger_camera_jump_inertia", true);
+}
+
+bool CActor::cam_OnLanding(bool hard) {
+    if (!cam_JumpInertiaEnabled(cam_GunslingerWeapon()))
+        return false;
+
+    const LPCSTR key = hard ? "actor_camera_landing2_time" : "actor_camera_landing_time";
+    m_jump_camera_landing_time = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section, key, 0.125f);
+    m_jump_camera_recovery_time = 0.f;
+    m_jump_camera_hard_landing = hard;
+    Cameras().RemoveCamEffector(eCEFall);
+    return true;
+}
+
+void CActor::cam_ResetJumpInertia() {
+    m_jump_camera_offset = 0.f;
+    m_jump_camera_landing_time = 0.f;
+    m_jump_camera_recovery_time = 0.f;
+    m_jump_camera_hard_landing = false;
+}
+
+float CActor::cam_JumpOffset(const CWeapon* weapon, float dt) {
+    if (!cam_JumpInertiaEnabled(weapon)) {
+        cam_ResetJumpInertia();
+        return 0.f;
+    }
+
+    auto* movement = character_physics_support()->movement();
+    float target = 0.f;
+    float speed_factor = 1.f;
+    float exponent_factor = 1.f;
+    if (m_jump_camera_landing_time > 0.f) {
+        const bool hard = m_jump_camera_hard_landing;
+        const LPCSTR offset_key = hard ? "actor_camera_landing2_offset" : "actor_camera_landing_offset";
+        const LPCSTR speed_key = hard ? "actor_camera_landing2_speed_factor" : "actor_camera_landing_speed_factor";
+        const LPCSTR exponent_key = hard ? "actor_camera_landing2_speed_pow_factor"
+            : "actor_camera_landing_speed_pow_factor";
+        target = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section, offset_key, hard ? -0.8f : -0.2f);
+        speed_factor = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section, speed_key, 0.5f);
+        exponent_factor = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section, exponent_key, 0.7f);
+        m_jump_camera_landing_time -= dt;
+        if (m_jump_camera_landing_time <= 0.f)
+            m_jump_camera_recovery_time = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section,
+                "actor_camera_finish_landing_time", 0.3f);
+    } else if (movement->Environment() == CPHMovementControl::peInAir) {
+        const float velocity_factor = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section,
+            "actor_camera_air_velocity_factor", 0.015f);
+        const float max_offset = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section,
+            "actor_camera_air_max_offset", 0.06f);
+        if (max_offset > 0.f)
+            target = clampr(-movement->GetVelocity().y * velocity_factor, -max_offset, max_offset);
+        m_jump_camera_recovery_time = 0.f;
+    } else if (m_jump_camera_recovery_time > 0.f) {
+        speed_factor = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section,
+            "actor_camera_finish_landing_speed_factor", 0.5f);
+        exponent_factor = READ_IF_EXISTS(pSettings, r_float, gunslinger_camera_section,
+            "actor_camera_finish_landing_speed_pow_factor", 0.9f);
+        m_jump_camera_recovery_time -= dt;
+    }
+
+    if (m_jump_camera_offset != target)
+        m_jump_camera_offset = camera_approach(m_jump_camera_offset, target,
+            gunslinger_camera_speed(*weapon) * speed_factor,
+            gunslinger_camera_exponent() * exponent_factor, dt);
+    return m_jump_camera_offset;
 }
 
 void CActor::cam_Update(float dt, float fFOV) {
     if (m_holder) {
         m_gunslinger_camera_height = 0.f;
+        cam_ResetJumpInertia();
         return;
     }
 
@@ -326,7 +419,11 @@ void CActor::cam_Update(float dt, float fFOV) {
     } else
         current_ik_cam_shift = 0;
 
-    Fvector point = { 0, cam_StanceHeight(CameraHeight(), dt) + current_ik_cam_shift, 0 };
+    const auto* weapon = cam_GunslingerWeapon();
+    const float height = cam_StanceHeight(weapon, CameraHeight(), dt);
+    const float jump_offset = cam_JumpOffset(weapon, dt);
+    const float min_jump_offset = std::min(0.f, 0.1f - height);
+    Fvector point = { 0, height + std::max(jump_offset, min_jump_offset) + current_ik_cam_shift, 0 };
     Fvector dangle = { 0, 0, 0 };
     Fmatrix xform;
     xform.setXYZ(0, r_torso.yaw, 0);

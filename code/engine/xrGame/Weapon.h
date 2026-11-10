@@ -302,6 +302,11 @@ private:
     u32 m_hud_movement_frame = u32(-1);
     LPCSTR m_hud_stance_transition = nullptr;
     float m_hud_stance_time = 0.f;
+    Fvector m_hud_lookout_pos{};
+    Fvector m_hud_lookout_rot{};
+    u32 m_hud_lookout = 0;
+    LPCSTR m_hud_lookout_transition = nullptr;
+    float m_hud_lookout_time = 0.f;
 
 protected:
     void on_b_hud_detach() override;
