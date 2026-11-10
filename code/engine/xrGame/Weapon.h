@@ -14,6 +14,7 @@
 
 #include "CameraRecoil.h"
 
+class CActor;
 class CEntity;
 class ENGINE_API CMotionDef;
 class CSE_ALifeItemWeapon;
@@ -293,7 +294,17 @@ public:
 private:
     firedeps m_current_firedeps;
 
+    void UpdateGunslingerHudMovement(Fmatrix& trans, const CActor& actor);
+    bool m_gunslinger_hud_movement = false;
+    Fvector m_hud_movement_pos{};
+    Fvector m_hud_movement_rot{};
+    int m_hud_movement_stance = -1;
+    u32 m_hud_movement_frame = u32(-1);
+    LPCSTR m_hud_stance_transition = nullptr;
+    float m_hud_stance_time = 0.f;
+
 protected:
+    void on_b_hud_detach() override;
     virtual void UpdateFireDependencies_internal();
     virtual void UpdatePosition(const Fmatrix& transform); //.
     virtual void UpdateXForm();

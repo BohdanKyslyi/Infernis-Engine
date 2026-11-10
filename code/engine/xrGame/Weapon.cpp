@@ -1,4 +1,6 @@
 #include "stdafx.h"
+
+#include <cmath>
 #include "Weapon.h"
 #include "ssfx_script_bridge.h" // Screen Space Shaders
 #include "ParticlesObject.h"
@@ -207,6 +209,8 @@ void CWeapon::Load(LPCSTR section) {
     m_bone_upgrade_sections.clear();
     inherited::Load(section);
     CShootingObject::Load(section);
+    m_gunslinger_hud_movement =
+        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_hud_movement", false);
     m_sounds.LoadSound(section, "snd_boring", "sndInspect", true);
 
     if (pSettings->line_exist(section, "flame_particles_2"))
@@ -1899,6 +1903,116 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
             m_fAlternativeAimFactor = 0.f;
         }
     }
+
+    if (m_gunslinger_hud_movement)
+        UpdateGunslingerHudMovement(trans, *pActor);
+}
+
+void CWeapon::on_b_hud_detach() {
+    inherited::on_b_hud_detach();
+    m_hud_movement_pos.set(0.f, 0.f, 0.f);
+    m_hud_movement_rot.set(0.f, 0.f, 0.f);
+    m_hud_movement_stance = -1;
+    m_hud_movement_frame = u32(-1);
+    m_hud_stance_transition = nullptr;
+    m_hud_stance_time = 0.f;
+}
+
+void CWeapon::UpdateGunslingerHudMovement(Fmatrix& trans, const CActor& actor) {
+    const auto* hud = HudItemData();
+    if (!hud)
+        return;
+
+    if (m_hud_movement_frame != Device.dwFrame) {
+        m_hud_movement_frame = Device.dwFrame;
+        const auto& section = HudSection();
+        const bool widescreen = hud->m_measures.m_prop_flags.test(
+            hud_item_measures::e_16x9_mode_now);
+        const u32 movement = actor.MovingState();
+        const bool slow = (movement & mcAccel) != 0;
+        const int stance = (movement & mcCrouch) ? (slow ? 2 : 1) : 0;
+
+        if (m_hud_movement_stance >= 0 && m_hud_movement_stance != stance) {
+            m_hud_stance_transition = stance == 2 ? "to_slow_crouch"
+                : stance == 0 ? "from_crouch"
+                : m_hud_movement_stance == 2 ? "from_slow_crouch" : "to_crouch";
+            string128 key;
+            xr_sprintf(key, "%s_time", m_hud_stance_transition);
+            m_hud_stance_time = READ_IF_EXISTS(pSettings, r_float, section, key, 0.f);
+        }
+        m_hud_movement_stance = stance;
+
+        Fvector target_pos, target_rot;
+        target_pos.set(0.f, 0.f, 0.f);
+        target_rot.set(0.f, 0.f, 0.f);
+        const auto add_offset = [&](LPCSTR prefix, LPCSTR action, float scale) {
+            string128 pos_key, rot_key;
+            xr_sprintf(pos_key, "%s%s_offset_pos%s", prefix, action, widescreen ? "_16x9" : "");
+            xr_sprintf(rot_key, "%s%s_offset_rot%s", prefix, action, widescreen ? "_16x9" : "");
+            if (widescreen && !pSettings->line_exist(section, pos_key))
+                xr_sprintf(pos_key, "%s%s_offset_pos", prefix, action);
+            if (widescreen && !pSettings->line_exist(section, rot_key))
+                xr_sprintf(rot_key, "%s%s_offset_rot", prefix, action);
+            if (pSettings->line_exist(section, pos_key))
+                target_pos.mad(pSettings->r_fvector3(section, pos_key), scale);
+            if (pSettings->line_exist(section, rot_key))
+                target_rot.mad(pSettings->r_fvector3(section, rot_key), scale);
+        };
+
+        const float dt = Device.fTimeDelta;
+        const float aim = m_zoom_params.m_fZoomRotationFactor;
+        const float hip = 1.f - aim;
+        float factor = READ_IF_EXISTS(pSettings, r_float, section, "hud_move_stabilize_factor", 2.f);
+        if (GetState() == eHiding) {
+            factor = READ_IF_EXISTS(pSettings, r_float, section, "hud_move_weaponhide_factor", 1.f);
+            m_hud_stance_time = 0.f;
+        } else {
+            const char* stance_scale_key = stance == 2 ? "hud_move_slow_crouch_factor"
+                : stance == 1 ? "hud_move_crouch_factor" : slow ? "hud_move_slow_factor" : nullptr;
+            const float stance_scale = stance_scale_key
+                ? READ_IF_EXISTS(pSettings, r_float, section, stance_scale_key, 1.f) : 1.f;
+            const float direction_scale = hip * stance_scale;
+            if (!(movement & (mcClimb | mcJump | mcFall)) && (movement & mcAnyMove)) {
+                const bool left = (movement & mcLStrafe) != 0;
+                const bool right = (movement & mcRStrafe) != 0;
+                const bool forward = (movement & mcFwd) != 0;
+                const bool back = (movement & mcBack) != 0;
+                if (left != right)
+                    add_offset("hud_move_", left ? "left" : "right", direction_scale);
+                if (forward != back)
+                    add_offset("hud_move_", forward ? "forward" : "back", direction_scale);
+                factor = 1.f;
+            }
+            if (m_hud_stance_time > 0.f) {
+                add_offset("hud_move_", m_hud_stance_transition, direction_scale);
+                add_offset("hud_aim_move_", m_hud_stance_transition, aim);
+                m_hud_stance_time -= dt;
+                factor = 1.f;
+            }
+            const float aim_factor =
+                READ_IF_EXISTS(pSettings, r_float, section, "hud_move_unzoom_factor", 1.f);
+            factor += (aim_factor - factor) * aim;
+        }
+
+        // Match the original response at one 8 ms step, independent of frame rate.
+        const float speed_pos = READ_IF_EXISTS(pSettings, r_float, section, "hud_move_speed_pos", 0.1f);
+        const float speed_rot = READ_IF_EXISTS(pSettings, r_float, section, "hud_move_speed_rot", 0.4f);
+        const auto blend = [factor, dt](float speed) {
+            const float step = clampr(speed * factor / 100.f, 0.f, 1.f);
+            return 1.f - std::pow(1.f - step, dt * 125.f);
+        };
+        const float pos_blend = blend(speed_pos);
+        const float rot_blend = blend(speed_rot);
+        m_hud_movement_pos.mad(Fvector().sub(target_pos, m_hud_movement_pos), pos_blend);
+        m_hud_movement_rot.mad(Fvector().sub(target_rot, m_hud_movement_rot), rot_blend);
+    }
+
+    Fvector angles = m_hud_movement_rot;
+    angles.mul(PI / 180.f);
+    Fmatrix offset;
+    offset.setHPB(angles.x, angles.y, angles.z);
+    offset.translate_over(m_hud_movement_pos);
+    trans.mulB_43(offset);
 }
 
 void CWeapon::SetAmmoElapsed(int ammo_count) {

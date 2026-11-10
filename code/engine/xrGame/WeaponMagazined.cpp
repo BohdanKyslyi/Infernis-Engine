@@ -71,6 +71,11 @@ void CWeaponMagazined::Load(LPCSTR section) {
         READ_IF_EXISTS(pSettings, r_bool, HudSection(), "enable_directions_anm_idle_aim", false);
 
     // Sounds
+    if (m_gunslinger_movement_idles && pSettings->line_exist(section, "snd_sprint_start"))
+        m_sounds.LoadSound(section, "snd_sprint_start", "sndSprintStart", false, m_eSoundShow);
+    if (m_gunslinger_movement_idles && pSettings->line_exist(section, "snd_sprint_end"))
+        m_sounds.LoadSound(section, "snd_sprint_end", "sndSprintEnd", false, m_eSoundHide);
+
     if (pSettings->line_exist(section, "snd_aim_start"))
         m_sounds.LoadSound(section, "snd_aim_start", "sndAimStart", false, m_eSoundShow);
     if (pSettings->line_exist(section, "snd_aim_end"))
@@ -1315,16 +1320,28 @@ void CWeaponMagazined::UpdateGunslingerMovementIdle() {
         (mcAnyMove | mcSprint | mcCrouch | mcAccel | mcClimb | mcJump | mcFall);
     const u32 changed = movement ^ m_previous_hud_movement;
     m_previous_hud_movement = movement;
-    if (!changed || GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
-        m_bStopAtEndAnimIsRunning)
+    if (!changed || GetState() != eIdle || GetNextState() != eIdle || IsPending())
         return;
 
-    if ((changed & mcSprint) && !IsZoomed() && MovingAnimAllowedNow()) {
-        LPCSTR motion = (movement & mcSprint)
+    const bool sprint_changed = (changed & mcSprint) && !IsZoomed() && MovingAnimAllowedNow();
+    LPCSTR current = m_current_motion.c_str();
+    const bool sprint_transition = current &&
+        std::strncmp(current, "anm_idle_sprint_", sizeof("anm_idle_sprint_") - 1) == 0;
+    if (m_bStopAtEndAnimIsRunning && !(sprint_changed && sprint_transition))
+        return;
+
+    if (sprint_changed) {
+        const bool entering = (movement & mcSprint) != 0;
+        LPCSTR motion = entering
             ? StateMotion("anm_idle_sprint_start", "anm_idle_sprint_start_empty", "anm_idle_sprint_start_jammed")
             : StateMotion("anm_idle_sprint_end", "anm_idle_sprint_end_empty", "anm_idle_sprint_end_jammed");
-        if (pSettings->line_exist(HudSection(), motion) && PlayHUDMotion(motion, TRUE, this, eIdle))
+        if (pSettings->line_exist(HudSection(), motion) && PlayHUDMotion(motion, TRUE, this, eIdle)) {
+            if (pSettings->line_exist(cNameSect(), entering ? "snd_sprint_start" : "snd_sprint_end"))
+                PlaySound(entering ? "sndSprintStart" : "sndSprintEnd", get_LastFP());
             return;
+        }
+        if (sprint_transition)
+            StopCurrentAnimWithoutCallback();
     }
 
     PlayAnimIdle();
