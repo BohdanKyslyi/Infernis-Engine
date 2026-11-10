@@ -52,6 +52,7 @@ void CWeapon::FireTrace(const Fvector& P, const Fvector& D) {
     VERIFY(m_magazine.size());
 
     CCartridge& l_cartridge = m_magazine.back();
+    UpdateHudAmmoBones(&l_cartridge);
     //	Msg("ammo - %s", l_cartridge.m_ammoSect.c_str());
     VERIFY(u16(-1) != l_cartridge.bullet_material_idx);
     //-------------------------------------------------------------

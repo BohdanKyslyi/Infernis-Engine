@@ -16,6 +16,7 @@ public:
     virtual void net_Import(NET_Packet& P);
 
     virtual void Reload();
+    void UpdateCL() override;
     void switch2_StartReload();
     void switch2_AddCartgidge();
     void switch2_EndReload();
@@ -40,4 +41,21 @@ protected:
     ESoundTypes m_eSoundClose;
 
     DECLARE_SCRIPT_REGISTER_FUNCTION
+
+private:
+    bool UsesGunslingerTubeReload() const;
+    void StartTubeReloadPhase();
+    void PlayTubeReloadPhase(LPCSTR motion, LPCSTR sound, bool inserts_shell);
+    void CommitTubeReloadShell();
+    void FinishTubeReloadPhase();
+    void ResetTubeReload();
+
+    bool m_add_cartridge_in_open = false;
+    bool m_empty_preload_mode = false;
+    bool m_keep_chambered_cartridge = true;
+    bool m_tube_preloaded = false;
+    bool m_tube_insert_pending = false;
+    bool m_tube_stop_requested = false;
+    u32 m_tube_insert_at_ms = 0;
+    u32 m_tube_interrupt_at_ms = 0;
 };

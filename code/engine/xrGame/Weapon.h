@@ -308,6 +308,10 @@ private:
     LPCSTR m_hud_lookout_transition = nullptr;
     float m_hud_lookout_time = 0.f;
 
+    bool m_advanced_ammo_bones = false;
+    shared_str m_last_shot_ammo_section;
+    void UpdateHudAmmoBones(const CCartridge* fired = nullptr);
+
 protected:
     void on_b_hud_detach() override;
     virtual void UpdateFireDependencies_internal();

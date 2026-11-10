@@ -84,6 +84,21 @@ void CWeaponMagazined::Load(LPCSTR section) {
     m_sounds.LoadSound(section, "snd_draw", "sndShow", false, m_eSoundShow);
     m_sounds.LoadSound(section, "snd_holster", "sndHide", false, m_eSoundHide);
     m_sounds.LoadSound(section, "snd_shoot", "sndShot", false, m_eSoundShot);
+    const auto load_action_sound = [&](LPCSTR key, LPCSTR alias) {
+        const LPCSTR value = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
+        if (!value || !value[0])
+            return false;
+
+        string256 path;
+        _GetItem(value, 0, path);
+        if (!path[0] || xr_strcmp(path, "$silent") == 0)
+            return false;
+
+        m_sounds.LoadSound(section, key, alias, true, m_eSoundReload);
+        return true;
+    };
+    m_has_breechblock_sound = load_action_sound("snd_breechblock", "sndBreechblock");
+    m_has_shot_jam_sound = load_action_sound("snd_jam", "sndShotJam");
     m_sounds.LoadSound(section, "snd_empty", "sndEmptyClick", false, m_eSoundEmptyClick);
     if (pSettings->line_exist(section, "snd_light_misfire"))
         m_sounds.LoadSound(section, "snd_light_misfire", "sndLightMisfire", false, m_eSoundEmptyClick);
@@ -463,6 +478,10 @@ void CWeaponMagazined::UpdateSounds() {
     m_sounds.SetPosition("sndHide", P);
     //. nah	m_sounds.SetPosition("sndShot", P);
     m_sounds.SetPosition("sndReload", P);
+    if (m_has_breechblock_sound)
+        m_sounds.SetPosition("sndBreechblock", P);
+    if (m_has_shot_jam_sound)
+        m_sounds.SetPosition("sndShotJam", P);
     //. nah	m_sounds.SetPosition("sndEmptyClick", P);
 }
 
@@ -628,6 +647,12 @@ void CWeaponMagazined::OnShot() {
 
     // Animation
     PlayAnimShoot();
+    if (IsMisfire()) {
+        if (m_has_shot_jam_sound)
+            PlaySound("sndShotJam", get_LastFP());
+    } else if (m_has_breechblock_sound) {
+        PlaySound("sndBreechblock", get_LastFP());
+    }
 
     // Shell Drop
     Fvector vel;

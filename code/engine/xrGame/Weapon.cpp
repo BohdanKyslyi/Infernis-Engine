@@ -1,6 +1,8 @@
 #include "stdafx.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include "Weapon.h"
 #include "ssfx_script_bridge.h" // Screen Space Shaders
 #include "ParticlesObject.h"
@@ -211,6 +213,8 @@ void CWeapon::Load(LPCSTR section) {
     CShootingObject::Load(section);
     m_gunslinger_hud_movement =
         READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_hud_movement", false);
+    m_advanced_ammo_bones =
+        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "use_advanced_ammo_bones", false);
     m_sounds.LoadSound(section, "snd_boring", "sndInspect", true);
 
     if (pSettings->line_exist(section, "flame_particles_2"))
@@ -1329,15 +1333,27 @@ shared_str wpn_silencer = "wpn_silencer";
 shared_str wpn_grenade_launcher = "wpn_launcher";
 
 namespace {
-void ApplyBoneList(IKinematics* model, LPCSTR section, LPCSTR key, BOOL visible) {
+bool BoneListContains(LPCSTR list, int count, LPCSTR name) {
+    string128 candidate;
+    for (int i = 0; i < count; ++i) {
+        _GetItem(list, i, candidate);
+        if (xr_strcmp(candidate, name) == 0)
+            return true;
+    }
+    return false;
+}
+
+void ApplyBoneList(IKinematics* model, LPCSTR section, LPCSTR key, BOOL visible,
+                   LPCSTR exclude = nullptr) {
     if (!section || !pSettings->section_exist(section) || !pSettings->line_exist(section, key))
         return;
 
     LPCSTR names = pSettings->r_string(section, key);
+    const int exclude_count = exclude ? _GetItemCount(exclude) : 0;
     string128 name;
     for (int i = 0, count = _GetItemCount(names); i < count; ++i) {
         _GetItem(names, i, name);
-        if (!name[0])
+        if (!name[0] || BoneListContains(exclude, exclude_count, name))
             continue;
         const u16 bone = model->LL_BoneID(name);
         // World and HUD visuals may use different skeletons.
@@ -1398,6 +1414,81 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) const {
     }
 }
 
+void CWeapon::UpdateHudAmmoBones(const CCartridge* fired) {
+    if (!m_advanced_ammo_bones || IsGrenadeLauncherAttached())
+        return;
+
+    if (fired)
+        m_last_shot_ammo_section = fired->m_ammoSect;
+    if (!GetHUDmode())
+        return;
+
+    const auto& hud = HudSection();
+    if (!fired && GetState() == eFire &&
+        READ_IF_EXISTS(pSettings, r_bool, hud, "ammo_params_toggle_shooting", false))
+        return;
+
+    const LPCSTR motion = m_current_motion.c_str();
+    const bool reloading = GetState() == eReload && !IsMisfire();
+    if (reloading && IsTriStateReload() && motion && m_bStopAtEndAnimIsRunning &&
+        std::strncmp(motion, "anm_open", sizeof("anm_open") - 1) == 0) {
+        string256 key;
+        xr_sprintf(key, "ejection_delay_%s", motion);
+        const u32 delay = READ_IF_EXISTS(pSettings, r_u32, hud, key, 0);
+        if (Device.dwTimeGlobal - m_dwMotionStartTm < delay)
+            return;
+    }
+
+    u8 ammo_type = m_ammoType;
+    if (reloading) {
+        if (m_set_next_ammoType_on_reload < m_ammoTypes.size() &&
+            (IsTriStateReload() ||
+             READ_IF_EXISTS(pSettings, r_bool, hud, "ammo_params_changing_when_reload_starts", false)))
+            ammo_type = m_set_next_ammoType_on_reload;
+    } else {
+        const shared_str* ammo_section = nullptr;
+        if (fired)
+            ammo_section = &fired->m_ammoSect;
+        else if (m_last_shot_ammo_section.c_str() &&
+                 READ_IF_EXISTS(pSettings, r_bool, hud, "ammo_params_use_previous_shot_type", false))
+            ammo_section = &m_last_shot_ammo_section;
+        else if (!m_magazine.empty() &&
+                 READ_IF_EXISTS(pSettings, r_bool, hud, "ammo_params_use_last_cartridge_type", false))
+            ammo_section = &m_magazine.back().m_ammoSect;
+
+        if (ammo_section) {
+            const auto it = std::find(m_ammoTypes.begin(), m_ammoTypes.end(), *ammo_section);
+            if (it != m_ammoTypes.end())
+                ammo_type = static_cast<u8>(it - m_ammoTypes.begin());
+        }
+    }
+
+    string64 key;
+    xr_sprintf(key, "ammo_params_section_%u", static_cast<unsigned>(ammo_type));
+    LPCSTR section = READ_IF_EXISTS(pSettings, r_string, hud, key, nullptr);
+    if (!section || !pSettings->section_exist(section))
+        section = READ_IF_EXISTS(pSettings, r_string, hud, "ammo_params_section", nullptr);
+    if (!section || !pSettings->section_exist(section))
+        return;
+
+    int count = static_cast<int>(m_magazine.size());
+    if (count > 0 &&
+        ((reloading && !IsTriStateReload() && motion && !std::strstr(motion, "_empty") &&
+          READ_IF_EXISTS(pSettings, r_bool, hud, "minus_ammo_in_usual_reloads", false)) ||
+         (motion && std::strncmp(motion, "anm_bore", sizeof("anm_bore") - 1) == 0 &&
+          READ_IF_EXISTS(pSettings, r_bool, hud, "minus_ammo_in_bore", false))))
+        --count;
+    if (IsMisfire() &&
+        READ_IF_EXISTS(pSettings, r_bool, section, "additional_ammo_bone_when_jammed", false))
+        ++count;
+
+    xr_sprintf(key, "configuration_%d", count);
+    auto* model = HudItemData()->m_model;
+    const LPCSTR visible = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
+    ApplyBoneList(model, section, "all_bones", FALSE, visible);
+    ApplyBoneList(model, section, key, TRUE);
+}
+
 void CWeapon::UpdateHUDAddonsVisibility() { // actor only
     if (!GetHUDmode() || !HudItemData())
         return;
@@ -1429,6 +1520,7 @@ void CWeapon::UpdateHUDAddonsVisibility() { // actor only
     } else if (m_eGrenadeLauncherStatus == ALife::eAddonPermanent)
         HudItemData()->set_bone_visible(wpn_grenade_launcher, TRUE, TRUE);
     ApplyConfiguredBoneVisibility(HudItemData()->m_model);
+    UpdateHudAmmoBones();
 }
 
 void CWeapon::UpdateAddonsVisibility() {
@@ -1627,6 +1719,7 @@ void CWeapon::OnMagazineEmpty() { VERIFY((u32)iAmmoElapsed == m_magazine.size())
 void CWeapon::reinit() {
     CShootingObject::reinit();
     CHudItemObject::reinit();
+    m_last_shot_ammo_section = shared_str();
 }
 
 void CWeapon::reload(LPCSTR section) {

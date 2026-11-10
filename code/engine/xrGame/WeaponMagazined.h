@@ -19,6 +19,8 @@ private:
 protected:
     //звук текущего выстрела
     shared_str m_sSndShotCurrent;
+    bool m_has_breechblock_sound = false;
+    bool m_has_shot_jam_sound = false;
 
     //дополнительная информация о глушителе
     LPCSTR m_sSilencerFlameParticles;
