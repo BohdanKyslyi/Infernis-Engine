@@ -69,6 +69,7 @@ public:
     virtual void PlayAnimBore();
 
 protected:
+    bool UsesScopeZoom() const override;
     shared_str InspectMotion() const override;
     shared_str SelectDryFireMotion(LPCSTR normal, LPCSTR aimed) const override;
     shared_str HudStateVariant(LPCSTR base, LPCSTR fallback) const override;

@@ -1139,9 +1139,11 @@ void CWeaponMagazined::LoadAddons()
 }
 */
 void CWeaponMagazined::InitAddons() {
-    m_zoom_params.m_fIronSightZoomFactor =
-        READ_IF_EXISTS(pSettings, r_float, cNameSect(), "ironsight_zoom_factor", 50.0f);
-    m_zoom_params.m_fScopeZoomFactor = pSettings->r_float(cNameSect(), "scope_zoom_factor");
+    const float scope_fallback = m_gunslinger_zoom ? 1.f : 50.f;
+    m_zoom_params.m_fScopeZoomFactor = READ_IF_EXISTS(pSettings, r_float, cNameSect(),
+        "scope_zoom_factor", scope_fallback);
+    m_zoom_params.m_fIronSightZoomFactor = READ_IF_EXISTS(pSettings, r_float, cNameSect(),
+        "ironsight_zoom_factor", m_gunslinger_zoom ? m_zoom_params.m_fScopeZoomFactor : 50.f);
     m_zoom_params.m_bUseDynamicZoom = READ_IF_EXISTS(pSettings, r_bool, cNameSect(),
         "scope_dynamic_zoom", FALSE);
     m_zoom_params.m_sUseZoomPostprocess = 0;
@@ -1180,10 +1182,8 @@ void CWeaponMagazined::InitAddons() {
             xr_delete(m_UIScope);
         }
 
-        if (IsZoomEnabled()) {
-            m_zoom_params.m_fIronSightZoomFactor =
-                pSettings->r_float(cNameSect(), "scope_zoom_factor");
-        }
+        if (IsZoomEnabled() && !m_gunslinger_zoom)
+            m_zoom_params.m_fIronSightZoomFactor = m_zoom_params.m_fScopeZoomFactor;
     }
 
     if (IsSilencerAttached() /* && SilencerAttachable() */) {

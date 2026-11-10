@@ -238,6 +238,11 @@ protected:
     float m_fAlternativeAimFactor;
     float m_fZoomFactorBeforeAlternativeAim;
 
+    bool m_gunslinger_zoom = false;
+    bool UsesGunslingerZoom() const;
+    virtual bool UsesScopeZoom() const;
+    void ChangeZoomStep(bool increase);
+
     float m_fRTZoomFactor; // run-time zoom factor
     CUIWindow* m_UIScope;
 
@@ -256,6 +261,7 @@ public:
     IC void SetZoomFactor(float f) { m_zoom_params.m_fCurrentZoomFactor = f; }
 
     virtual float CurrentZoomFactor();
+    float ZoomCameraFov(float base_fov) const;
     //показывает, что оружие находится в соостоянии поворота для приближенного прицеливания
     bool IsRotatingToZoom() const { return (m_zoom_params.m_fZoomRotationFactor < 1.f); }
 

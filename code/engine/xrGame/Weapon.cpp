@@ -380,7 +380,12 @@ void CWeapon::Load(LPCSTR section) {
         (ALife::EWeaponAddonStatus)pSettings->r_s32(section, "grenade_launcher_status");
 
     m_zoom_params.m_bZoomEnabled = !!pSettings->r_bool(section, "zoom_enabled");
-    m_zoom_params.m_fZoomRotateTime = pSettings->r_float(section, "zoom_rotate_time");
+    m_gunslinger_zoom = READ_IF_EXISTS(pSettings, r_bool, section, "gunslinger_zoom", false);
+    m_zoom_params.m_fCurrentZoomFactor = m_gunslinger_zoom ? 1.f : g_fov;
+    m_zoom_params.m_fZoomRotateTime =
+        READ_IF_EXISTS(pSettings, r_float, section, "zoom_rotate_time", 0.25f);
+    if (!std::isfinite(m_zoom_params.m_fZoomRotateTime) || m_zoom_params.m_fZoomRotateTime <= 0.f)
+        m_zoom_params.m_fZoomRotateTime = 0.25f;
 
     if (m_eScopeStatus == ALife::eAddonAttachable) {
         if (pSettings->line_exist(section, "scopes_sect")) {
@@ -395,7 +400,8 @@ void CWeapon::Load(LPCSTR section) {
         }
     } else if (m_eScopeStatus == ALife::eAddonPermanent) {
         shared_str scope_tex_name = pSettings->r_string(cNameSect(), "scope_texture");
-        m_zoom_params.m_fScopeZoomFactor = pSettings->r_float(cNameSect(), "scope_zoom_factor");
+        m_zoom_params.m_fScopeZoomFactor = READ_IF_EXISTS(pSettings, r_float, section,
+            "scope_zoom_factor", m_gunslinger_zoom ? 1.f : 50.f);
         if (UseScopeTexture() && scope_tex_name.size()) {
             m_UIScope = xr_new<CUIWindow>();
             if (!pWpnScopeXml) {
@@ -1238,15 +1244,29 @@ bool CWeapon::Is3DScopeEnabled() const {
     return enabled && fov >= 5.f && fov <= 90.f;
 }
 
+namespace {
+float FovWithMagnification(float base_fov, float magnification) {
+    if (!std::isfinite(magnification) || magnification <= 0.f)
+        return base_fov;
+
+    return rad2deg(2.f * std::atan(std::tan(deg2rad(base_fov * 0.5f)) / magnification));
+}
+
+float MinScopeMagnification(float maximum) {
+    return 1.f + 0.3f * (maximum - 1.f);
+}
+} // namespace
+
 float CWeapon::ScopeLensFov() const {
     if (!IsScopeAttached())
         return 0.f;
 
     float fov = READ_IF_EXISTS(pSettings, r_float,
         ScopeSettingSection("scope_lens_fov"), "scope_lens_fov", 0.f);
-    if (fov >= 5.f && fov <= 90.f && m_zoom_params.m_bUseDynamicZoom &&
-        m_zoom_params.m_fScopeZoomFactor > 0.f && IsZoomed()) {
-        fov *= GetZoomFactor() / m_zoom_params.m_fScopeZoomFactor;
+    if (fov >= 5.f && fov <= 90.f && IsZoomed() && UsesScopeZoom() &&
+        m_zoom_params.m_bUseDynamicZoom && m_zoom_params.m_fScopeZoomFactor > 0.f) {
+        const float ratio = GetZoomFactor() / m_zoom_params.m_fScopeZoomFactor;
+        fov = UsesGunslingerZoom() ? FovWithMagnification(fov, ratio) : fov * ratio;
         clamp(fov, 5.f, 90.f);
     }
     return fov;
@@ -1589,11 +1609,35 @@ void CWeapon::UpdateAddonsVisibility() {
 
 void CWeapon::InitAddons() {}
 
+bool CWeapon::UsesScopeZoom() const {
+    return IsScopeAttached() && !m_bAlternativeAimActive;
+}
+
+bool CWeapon::UsesGunslingerZoom() const {
+    return UsesScopeZoom()
+        ? READ_IF_EXISTS(pSettings, r_bool, ScopeSettingSection("gunslinger_zoom"),
+                         "gunslinger_zoom", m_gunslinger_zoom)
+        : m_gunslinger_zoom;
+}
+
+float CWeapon::ZoomCameraFov(float base_fov) const {
+    return UsesGunslingerZoom() ? FovWithMagnification(base_fov, GetZoomFactor())
+                                : GetZoomFactor() * 0.75f;
+}
+
 float CWeapon::CurrentZoomFactor() {
-    return IsScopeAttached() && !m_bAlternativeAimActive
-        ? m_zoom_params.m_fScopeZoomFactor
-        : m_zoom_params.m_fIronSightZoomFactor;
-};
+    if (UsesScopeZoom())
+        return m_zoom_params.m_fScopeZoomFactor;
+    if (m_gunslinger_zoom && m_bAlternativeAimActive) {
+        const shared_str section = AlternativeAimSettingSection("alter_scope_zoom_factor");
+        return section.size() ? pSettings->r_float(section, "alter_scope_zoom_factor") : 1.f;
+    }
+
+    const float ironsight = m_zoom_params.m_fIronSightZoomFactor;
+    if (m_gunslinger_zoom && !IsScopeAttached())
+        return READ_IF_EXISTS(pSettings, r_float, cNameSect(), "nonscoped_zoom_factor", ironsight);
+    return ironsight;
+}
 void GetZoomData(const float scope_factor, float& delta, float& min_zoom_factor);
 void CWeapon::OnZoomIn() {
     m_zoom_params.m_bIsZoomModeNow = true;
@@ -1619,10 +1663,15 @@ void CWeapon::OnZoomIn() {
                 ? m_zoom_params.m_sUseZoomPostprocess.c_str() : "none",
             (u32)ScopeLensMode());
     }
-    if (m_zoom_params.m_bUseDynamicZoom && !m_bAlternativeAimActive)
+    const float zoom = CurrentZoomFactor();
+    if (!m_zoom_params.m_bUseDynamicZoom || !UsesScopeZoom()) {
+        SetZoomFactor(zoom);
+    } else if (UsesGunslingerZoom()) {
+        SetZoomFactor(std::isfinite(zoom) && zoom > 1.f
+            ? clampr(m_fRTZoomFactor, MinScopeMagnification(zoom), zoom) : zoom);
+    } else {
         SetZoomFactor(m_fRTZoomFactor);
-    else
-        m_zoom_params.m_fCurrentZoomFactor = CurrentZoomFactor();
+    }
 
     EnableHudInertion(FALSE);
 
@@ -1655,15 +1704,15 @@ void CWeapon::OnZoomOut() {
     if (H_Parent() == static_cast<CObject*>(Actor()))
         ssfx_script_bridge::on_weapon_zoom(false);
     const bool was_alternative_aim = m_bAlternativeAimActive;
+    if (IsZoomed() && UsesScopeZoom() && m_zoom_params.m_bUseDynamicZoom)
+        m_fRTZoomFactor = GetZoomFactor();
     m_zoom_params.m_bIsZoomModeNow = false;
-    if (!was_alternative_aim)
-        m_fRTZoomFactor = GetZoomFactor(); // store current dynamic scope zoom
     if (!was_alternative_aim || fis_zero(m_zoom_params.m_fZoomRotationFactor))
         m_bAlternativeAimActive = false;
     if (fis_zero(m_zoom_params.m_fZoomRotationFactor))
         m_fAlternativeAimFactor = 0.f;
     m_bAlternativeAimOwnsZoom = false;
-    m_zoom_params.m_fCurrentZoomFactor = g_fov;
+    SetZoomFactor(UsesGunslingerZoom() ? 1.f : g_fov);
     EnableHudInertion(TRUE);
 
     // 	GamePersistent().RestoreEffectorDOF	();
@@ -2374,31 +2423,29 @@ bool CWeapon::MovingAnimAllowedNow() { return !IsZoomed(); }
 
 bool CWeapon::IsHudModeNow() { return (HudItemData() != NULL); }
 
-void CWeapon::ZoomInc() {
-    if (!IsScopeAttached() || m_bAlternativeAimActive)
+void CWeapon::ChangeZoomStep(bool increase) {
+    if (!UsesScopeZoom() || !m_zoom_params.m_bUseDynamicZoom)
         return;
-    if (!m_zoom_params.m_bUseDynamicZoom)
-        return;
-    float delta, min_zoom_factor;
-    GetZoomData(m_zoom_params.m_fScopeZoomFactor, delta, min_zoom_factor);
 
-    float f = GetZoomFactor() - delta;
-    clamp(f, m_zoom_params.m_fScopeZoomFactor, min_zoom_factor);
-    SetZoomFactor(f);
+    const float scope = m_zoom_params.m_fScopeZoomFactor;
+    if (UsesGunslingerZoom()) {
+        if (!std::isfinite(scope) || scope <= 1.f)
+            return;
+
+        const float minimum = MinScopeMagnification(scope);
+        const float step = (scope - minimum) / 3.f;
+        SetZoomFactor(clampr(GetZoomFactor() + (increase ? step : -step), minimum, scope));
+        return;
+    }
+
+    float step, minimum;
+    GetZoomData(scope, step, minimum);
+    SetZoomFactor(clampr(GetZoomFactor() + (increase ? -step : step), scope, minimum));
 }
 
-void CWeapon::ZoomDec() {
-    if (!IsScopeAttached() || m_bAlternativeAimActive)
-        return;
-    if (!m_zoom_params.m_bUseDynamicZoom)
-        return;
-    float delta, min_zoom_factor;
-    GetZoomData(m_zoom_params.m_fScopeZoomFactor, delta, min_zoom_factor);
+void CWeapon::ZoomInc() { ChangeZoomStep(true); }
 
-    float f = GetZoomFactor() + delta;
-    clamp(f, m_zoom_params.m_fScopeZoomFactor, min_zoom_factor);
-    SetZoomFactor(f);
-}
+void CWeapon::ZoomDec() { ChangeZoomStep(false); }
 u32 CWeapon::Cost() const {
     u32 res = CInventoryItem::Cost();
     if (IsGrenadeLauncherAttached() && GetGrenadeLauncherName().size()) {

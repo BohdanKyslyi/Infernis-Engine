@@ -760,7 +760,7 @@ float CActor::currentFOV() {
         // Only the optic magnifies the world; the first-person camera stays at its normal FOV.
         if (pWeapon->Is3DScopeEnabled())
             return g_fov;
-        return pWeapon->GetZoomFactor() * (0.75f);
+        return pWeapon->ZoomCameraFov(g_fov);
     } else {
         return g_fov;
     }

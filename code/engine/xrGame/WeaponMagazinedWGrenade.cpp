@@ -526,10 +526,20 @@ bool CWeaponMagazinedWGrenade::UseScopeTexture() {
     return inherited::UseScopeTexture();
 };
 
+bool CWeaponMagazinedWGrenade::UsesScopeZoom() const {
+    return !m_bGrenadeMode && inherited::UsesScopeZoom();
+}
+
 float CWeaponMagazinedWGrenade::CurrentZoomFactor() {
-    if (IsGrenadeLauncherAttached() && m_bGrenadeMode)
-        return m_zoom_params.m_fIronSightZoomFactor;
-    return inherited::CurrentZoomFactor();
+    if (!m_bGrenadeMode)
+        return inherited::CurrentZoomFactor();
+
+    const float ironsight = m_zoom_params.m_fIronSightZoomFactor;
+    if (!UsesGunslingerZoom())
+        return ironsight;
+
+    return READ_IF_EXISTS(pSettings, r_float, ScopeSettingSection("gl_zoom_factor"),
+                          "gl_zoom_factor", ironsight);
 }
 
 //виртуальные функции для проигрывания анимации HUD
