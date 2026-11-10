@@ -1977,14 +1977,23 @@ void CWeapon::UpdateGunslingerHudMovement(Fmatrix& trans, const CActor& actor) {
                 const bool right = (movement & mcRStrafe) != 0;
                 const bool forward = (movement & mcFwd) != 0;
                 const bool back = (movement & mcBack) != 0;
-                if (left != right)
-                    add_offset("hud_move_", left ? "left" : "right", direction_scale);
+                if (left != right) {
+                    const LPCSTR direction = left ? "left" : "right";
+                    const float strafe_scale = stance == 2
+                        ? READ_IF_EXISTS(pSettings, r_float, section, "hud_move_slow_crouch_strafe_factor", 0.65f)
+                        : stance == 1
+                            ? READ_IF_EXISTS(pSettings, r_float, section, "hud_move_crouch_strafe_factor", 0.8f)
+                            : stance_scale;
+                    add_offset("hud_move_", direction, hip * strafe_scale);
+                    if (aim > 0.f)
+                        add_offset("hud_aim_move_", direction, aim * strafe_scale);
+                }
                 if (forward != back)
                     add_offset("hud_move_", forward ? "forward" : "back", direction_scale);
                 factor = 1.f;
             }
             if (m_hud_stance_time > 0.f) {
-                add_offset("hud_move_", m_hud_stance_transition, direction_scale);
+                add_offset("hud_move_", m_hud_stance_transition, hip);
                 add_offset("hud_aim_move_", m_hud_stance_transition, aim);
                 m_hud_stance_time -= dt;
                 factor = 1.f;

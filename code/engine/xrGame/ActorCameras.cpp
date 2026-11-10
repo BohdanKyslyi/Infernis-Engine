@@ -1,4 +1,6 @@
 #include "stdafx.h"
+
+#include <cmath>
 #include "Actor.h"
 #include "../xrEngine/CameraBase.h"
 #ifdef DEBUG
@@ -264,9 +266,44 @@ static const float ik_cam_shift_tolerance = 0.2f;
 static const float ik_cam_shift_speed = 0.01f;
 #endif
 
+float CActor::cam_StanceHeight(float height, float dt) {
+    const auto* weapon = smart_cast<const CWeapon*>(inventory().ActiveItem());
+    if (cam_active != eacFirstEye || this != Level().CurrentViewEntity() ||
+        (mstate_real & mcClimb) || !weapon ||
+        !READ_IF_EXISTS(pSettings, r_bool, weapon->HudSection(), "gunslinger_hud_movement", false) ||
+        !READ_IF_EXISTS(pSettings, r_bool, weapon->HudSection(), "gunslinger_camera_smoothing", true)) {
+        m_gunslinger_camera_height = 0.f;
+        return height;
+    }
+
+    if (m_gunslinger_camera_height <= 0.f) {
+        m_gunslinger_camera_height = height;
+        return height;
+    }
+
+    const float base_speed =
+        READ_IF_EXISTS(pSettings, r_float, "gunslinger_base", "default_actor_camera_speed", 18.f);
+    const float speed_factor =
+        READ_IF_EXISTS(pSettings, r_float, weapon->cNameSect(), "actor_camera_speed_factor", 1.f);
+    const float speed = base_speed * speed_factor;
+    const float exponent =
+        READ_IF_EXISTS(pSettings, r_float, "gunslinger_base", "actor_camera_speed_pow", 1.2f);
+    const float difference = height - m_gunslinger_camera_height;
+    const float distance = std::fabs(difference);
+    if (distance <= 0.001f || speed <= 0.f) {
+        m_gunslinger_camera_height = height;
+    } else {
+        const float step = speed * std::pow(distance, exponent > 0.f ? exponent : 1.2f) * dt;
+        m_gunslinger_camera_height += std::copysign(clampr(step, 0.f, distance), difference);
+    }
+    return m_gunslinger_camera_height;
+}
+
 void CActor::cam_Update(float dt, float fFOV) {
-    if (m_holder)
+    if (m_holder) {
+        m_gunslinger_camera_height = 0.f;
         return;
+    }
 
     if ((mstate_real & mcClimb) && (cam_active != eacFreeLook))
         camUpdateLadder(dt);
@@ -289,7 +326,7 @@ void CActor::cam_Update(float dt, float fFOV) {
     } else
         current_ik_cam_shift = 0;
 
-    Fvector point = { 0, CameraHeight() + current_ik_cam_shift, 0 };
+    Fvector point = { 0, cam_StanceHeight(CameraHeight(), dt) + current_ik_cam_shift, 0 };
     Fvector dangle = { 0, 0, 0 };
     Fmatrix xform;
     xform.setXYZ(0, r_torso.yaw, 0);

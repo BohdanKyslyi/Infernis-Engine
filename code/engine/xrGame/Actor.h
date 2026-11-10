@@ -333,6 +333,7 @@ public:
 protected:
     virtual void cam_Set(EActorCameras style);
     void cam_Update(float dt, float fFOV);
+    float cam_StanceHeight(float height, float dt);
     void cam_Lookout(const Fmatrix& xform, float camera_height);
     void camUpdateLadder(float dt);
     void cam_SetLadder();
@@ -344,6 +345,7 @@ protected:
     CCameraBase* cameras[eacMaxCam] = {nullptr};
     EActorCameras cam_active = eacFirstEye;
     float fPrevCamPos = 0.0f;
+    float m_gunslinger_camera_height = 0.f;
     float current_ik_cam_shift = 0.0f;
     Fvector vPrevCamDir = {0.f, 0.f, 1.f};
     float fCurAVelocity = 0.0f;
