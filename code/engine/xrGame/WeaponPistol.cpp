@@ -72,7 +72,7 @@ void CWeaponPistol::PlayAnimShoot() {
     LPCSTR fallback = OptionalHudMotion("anm_shots", "anm_shoot");
     if (iAmmoElapsed <= 1)
         fallback = OptionalHudMotion("anm_shot_l", fallback);
-    PlayHUDMotion(ShootMotion(fallback), FALSE, this, GetState());
+    PlayHUDMotion(ShootMotion(fallback), MixShootAfterIdle(), this, GetState());
 }
 
 void CWeaponPistol::switch2_Reload() { inherited::switch2_Reload(); }

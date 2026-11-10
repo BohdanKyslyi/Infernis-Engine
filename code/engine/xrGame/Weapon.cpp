@@ -757,7 +757,8 @@ void CWeapon::UpdateCL() {
             if (hud_adj_mode == 0 && GetState() == eIdle &&
                 (Device.dwTimeGlobal - m_dw_curr_substate_time > 20000) && !IsZoomed() &&
                 g_player_hud->attached_item(1) == NULL) {
-                if (AllowBore())
+                if (AllowBore() &&
+                    !READ_IF_EXISTS(pSettings, r_bool, HudSection(), "disable_bore", false))
                     SwitchState(eBore);
 
                 ResetSubStateTime();

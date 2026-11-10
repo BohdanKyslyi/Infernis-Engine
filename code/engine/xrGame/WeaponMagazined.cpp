@@ -63,7 +63,12 @@ void CWeaponMagazined::net_Destroy() { inherited::net_Destroy(); }
 
 void CWeaponMagazined::Load(LPCSTR section) {
     inherited::Load(section);
-    m_chamber_round = READ_IF_EXISTS(pSettings, r_bool, section, "chamber_round", false);
+    m_chamber_round = pSettings->line_exist(section, "chamber_round")
+                          ? pSettings->r_bool(section, "chamber_round")
+                          : READ_IF_EXISTS(pSettings, r_bool, section, "ammo_in_chamber", false);
+    m_gunslinger_movement_idles =
+        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_movement_idles", false) ||
+        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "enable_directions_anm_idle_aim", false);
 
     // Sounds
     if (pSettings->line_exist(section, "snd_aim_start"))
@@ -437,6 +442,8 @@ void CWeaponMagazined::UpdateCL() {
         }
     }
 
+    if (m_gunslinger_movement_idles)
+        UpdateGunslingerMovementIdle();
     UpdateSounds();
 }
 
@@ -801,7 +808,11 @@ LPCSTR CWeaponMagazined::ReloadSound() const {
                                                    : "snd_reload_jammed_detector")
                                : (iAmmoElapsed == 0 ? "snd_reload_empty_detector"
                                                     : "snd_reload_detector");
-            if (pSettings->line_exist(section, sound))
+            const bool use_detector_sound = !IsMisfire() ||
+                READ_IF_EXISTS(pSettings, r_bool, HudSection(),
+                               IsLastRoundJam() ? "use_jammed_last_detector_snd" : "use_jammed_detector_snd",
+                               true);
+            if (use_detector_sound && pSettings->line_exist(section, sound))
                 return sound;
         }
     }
@@ -1260,6 +1271,65 @@ void CWeaponMagazined::PlayAimTransition(bool entering) {
         PlaySound(entering ? "sndAimStart" : "sndAimEnd", get_LastFP());
 }
 
+shared_str CWeaponMagazined::GunslingerMovementIdle(u32 movement) const {
+    if (movement & (mcSprint | mcClimb | mcJump | mcFall))
+        return {};
+
+    string128 base;
+    if (IsZoomed()) {
+        if (!(movement & mcAnyMove) ||
+            !READ_IF_EXISTS(pSettings, r_bool, HudSection(), "enable_directions_anm_idle_aim", false))
+            return {};
+
+        const char* longitudinal = (movement & mcFwd) ? "_forward" : (movement & mcBack) ? "_back" : "";
+        const char* lateral = (movement & mcLStrafe) ? "_left" : (movement & mcRStrafe) ? "_right" : "";
+        xr_sprintf(base, "anm_idle_aim_moving%s%s", longitudinal, lateral);
+    } else {
+        const bool crouching = (movement & mcCrouch) != 0;
+        const bool slow = (movement & mcAccel) != 0;
+        if (!crouching && !slow)
+            return {};
+        xr_sprintf(base, "anm_idle%s%s%s", (movement & mcAnyMove) ? "_moving" : "",
+                   crouching ? "_crouch" : "", slow ? "_slow" : "");
+    }
+
+    string256 variant;
+    if (IsMisfire() || iAmmoElapsed == 0) {
+        xr_sprintf(variant, "%s%s", base, IsMisfire() ? "_jammed" : "_empty");
+        if (pSettings->line_exist(HudSection(), variant))
+            return shared_str(variant);
+        // A normal variant may put the slide in the wrong pose.
+        return {};
+    }
+    return pSettings->line_exist(HudSection(), base) ? shared_str(base) : shared_str();
+}
+
+void CWeaponMagazined::UpdateGunslingerMovementIdle() {
+    const auto* actor = smart_cast<CActor*>(H_Parent());
+    if (!actor || !GetHUDmode() || IsGrenadeLauncherAttached()) {
+        m_previous_hud_movement = 0;
+        return;
+    }
+
+    const u32 movement = actor->MovingState() &
+        (mcAnyMove | mcSprint | mcCrouch | mcAccel | mcClimb | mcJump | mcFall);
+    const u32 changed = movement ^ m_previous_hud_movement;
+    m_previous_hud_movement = movement;
+    if (!changed || GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
+        m_bStopAtEndAnimIsRunning)
+        return;
+
+    if ((changed & mcSprint) && !IsZoomed() && MovingAnimAllowedNow()) {
+        LPCSTR motion = (movement & mcSprint)
+            ? StateMotion("anm_idle_sprint_start", "anm_idle_sprint_start_empty", "anm_idle_sprint_start_jammed")
+            : StateMotion("anm_idle_sprint_end", "anm_idle_sprint_end_empty", "anm_idle_sprint_end_jammed");
+        if (pSettings->line_exist(HudSection(), motion) && PlayHUDMotion(motion, TRUE, this, eIdle))
+            return;
+    }
+
+    PlayAnimIdle();
+}
+
 void CWeaponMagazined::PlayAnimIdle() {
     if (GetState() != eIdle)
         return;
@@ -1270,6 +1340,21 @@ void CWeaponMagazined::PlayAnimIdle() {
     if (m_bStopAtEndAnimIsRunning && motion &&
         std::strncmp(motion, transition, std::strlen(transition)) == 0)
         return;
+    if (m_gunslinger_movement_idles && GetHUDmode() && !IsGrenadeLauncherAttached() &&
+        MovingAnimAllowedNow()) {
+        if (m_bStopAtEndAnimIsRunning && motion &&
+            std::strncmp(motion, "anm_idle_sprint_", sizeof("anm_idle_sprint_") - 1) == 0)
+            return;
+        if (const auto* actor = smart_cast<CActor*>(H_Parent())) {
+            const shared_str movement_motion = GunslingerMovementIdle(actor->MovingState());
+            if (movement_motion.c_str()) {
+                if (!m_current_motion_def || m_current_motion != movement_motion)
+                    PlayHUDMotion(movement_motion, TRUE, this, eIdle);
+                return;
+            }
+        }
+    }
+
     if (IsZoomed()) {
         PlayAnimAim();
     } else if (!TryPlayAnimIdle()) {
@@ -1314,9 +1399,15 @@ LPCSTR CWeaponMagazined::ShootMotion(LPCSTR fallback) const {
     return fallback;
 }
 
+BOOL CWeaponMagazined::MixShootAfterIdle() const {
+    LPCSTR motion = m_current_motion.c_str();
+    return motion && std::strncmp(motion, "anm_idle", sizeof("anm_idle") - 1) == 0 &&
+           READ_IF_EXISTS(pSettings, r_bool, HudSection(), "mix_shoot_after_idle", false);
+}
+
 void CWeaponMagazined::PlayAnimShoot() {
     VERIFY(GetState() == eFire);
-    PlayHUDMotion(ShootMotion(OptionalHudMotion("anm_shots", "anm_shoot")), FALSE, this,
+    PlayHUDMotion(ShootMotion(OptionalHudMotion("anm_shots", "anm_shoot")), MixShootAfterIdle(), this,
                   GetState());
 }
 

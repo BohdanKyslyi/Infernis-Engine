@@ -138,6 +138,8 @@ protected:
     //только разных типов патронов
     bool m_bLockType;
     bool m_chamber_round;
+    bool m_gunslinger_movement_idles = false;
+    u32 m_previous_hud_movement = 0;
     int m_reload_target_capacity;
 
 public:
@@ -181,6 +183,9 @@ protected:
     void PlayLightMisfire();
     virtual void PlayAnimAim();
     void PlayAimTransition(bool entering);
+    void UpdateGunslingerMovementIdle();
+    shared_str GunslingerMovementIdle(u32 movement) const;
+    BOOL MixShootAfterIdle() const;
 
     virtual int ShotsFired() { return m_iShotNum; }
     virtual float GetWeaponDeterioration();
