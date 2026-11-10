@@ -1,6 +1,7 @@
 #include "pch_script.h"
 
 #include <algorithm>
+#include <cstring>
 
 #include "WeaponMagazined.h"
 #include "actor.h"
@@ -65,6 +66,11 @@ void CWeaponMagazined::Load(LPCSTR section) {
     m_chamber_round = READ_IF_EXISTS(pSettings, r_bool, section, "chamber_round", false);
 
     // Sounds
+    if (pSettings->line_exist(section, "snd_aim_start"))
+        m_sounds.LoadSound(section, "snd_aim_start", "sndAimStart", false, m_eSoundShow);
+    if (pSettings->line_exist(section, "snd_aim_end"))
+        m_sounds.LoadSound(section, "snd_aim_end", "sndAimEnd", false, m_eSoundHide);
+
     m_sounds.LoadSound(section, "snd_draw", "sndShow", false, m_eSoundShow);
     m_sounds.LoadSound(section, "snd_holster", "sndHide", false, m_eSoundHide);
     m_sounds.LoadSound(section, "snd_shoot", "sndShot", false, m_eSoundShot);
@@ -658,7 +664,8 @@ void CWeaponMagazined::OnAnimationEnd(u32 state) {
         SwitchState(eIdle);
         break; // End of Show
     case eIdle:
-        switch2_Idle();
+        if (GetState() == eIdle && GetNextState() == eIdle)
+            switch2_Idle();
         break; // Keep showing idle
     }
     inherited::OnAnimationEnd(state);
@@ -894,6 +901,14 @@ void CWeaponMagazined::switch2_Showing() {
 }
 
 bool CWeaponMagazined::Action(u16 cmd, u32 flags) {
+    if (cmd == kWPN_ZOOM) {
+        const bool was_zoomed = IsZoomed();
+        const bool handled = inherited::Action(cmd, flags);
+        if (handled && was_zoomed != IsZoomed())
+            PlayAimTransition(IsZoomed());
+        return handled;
+    }
+
     if (inherited::Action(cmd, flags))
         return true;
 
@@ -1225,8 +1240,35 @@ void CWeaponMagazined::PlayAnimBore() {
                   TRUE, this, GetState());
 }
 
+void CWeaponMagazined::PlayAimTransition(bool entering) {
+    if (GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
+        !GetHUDmode() || IsGrenadeLauncherAttached())
+        return;
+
+    LPCSTR motion = entering
+        ? StateMotion("anm_idle_aim_start", "anm_idle_aim_start_empty", "anm_idle_aim_start_jammed")
+        : StateMotion("anm_idle_aim_end", "anm_idle_aim_end_empty", "anm_idle_aim_end_jammed");
+    if (!pSettings->line_exist(HudSection(), motion))
+        return;
+
+    if (!PlayHUDMotion(motion, TRUE, this, eIdle)) {
+        PlayAnimIdle();
+        return;
+    }
+
+    if (pSettings->line_exist(cNameSect(), entering ? "snd_aim_start" : "snd_aim_end"))
+        PlaySound(entering ? "sndAimStart" : "sndAimEnd", get_LastFP());
+}
+
 void CWeaponMagazined::PlayAnimIdle() {
     if (GetState() != eIdle)
+        return;
+
+    // Movement can request idle again while a stop-at-end ADS clip is playing.
+    LPCSTR motion = m_current_motion.c_str();
+    LPCSTR transition = IsZoomed() ? "anm_idle_aim_start" : "anm_idle_aim_end";
+    if (m_bStopAtEndAnimIsRunning && motion &&
+        std::strncmp(motion, transition, std::strlen(transition)) == 0)
         return;
     if (IsZoomed()) {
         PlayAnimAim();

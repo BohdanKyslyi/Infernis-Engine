@@ -180,6 +180,7 @@ protected:
     bool RollForLightMisfire() const;
     void PlayLightMisfire();
     virtual void PlayAnimAim();
+    void PlayAimTransition(bool entering);
 
     virtual int ShotsFired() { return m_iShotNum; }
     virtual float GetWeaponDeterioration();

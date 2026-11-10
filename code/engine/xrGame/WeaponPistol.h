@@ -18,7 +18,6 @@ public:
     virtual void OnH_B_Chield();
 
     //анимации
-    virtual void PlayAnimIdle();
     virtual void PlayAnimIdleMoving();
     virtual void PlayAnimIdleSprint();
     virtual void PlayAnimHide();

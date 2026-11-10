@@ -44,21 +44,6 @@ void CWeaponPistol::PlayAnimIdleMoving() {
     }
 }
 
-void CWeaponPistol::PlayAnimIdle() {
-    if (IsMisfire() || IsZoomed()) {
-        inherited::PlayAnimIdle();
-        return;
-    }
-    if (TryPlayAnimIdle())
-        return;
-
-    if (iAmmoElapsed == 0) {
-        PlayHUDMotion(OptionalHudMotion("anm_idle_empty", "anm_idle"), TRUE, NULL, GetState());
-    } else {
-        inherited::PlayAnimIdle();
-    }
-}
-
 void CWeaponPistol::PlayAnimAim() {
     if (IsMisfire()) {
         inherited::PlayAnimAim();
