@@ -648,13 +648,17 @@ void CWeaponMagazined::PlayDryFireMotion(LPCSTR normal, LPCSTR aimed) {
     if (GetState() != eIdle || GetNextState() != eIdle || IsPending() || !GetHUDmode())
         return;
 
+    const shared_str motion = SelectDryFireMotion(normal, aimed);
+    // Stop-at-end clips return to idle through OnAnimationEnd(eIdle).
+    if (motion.c_str() && !PlayHUDMotion(motion, TRUE, this, eIdle))
+        PlayAnimIdle();
+}
+
+shared_str CWeaponMagazined::SelectDryFireMotion(LPCSTR normal, LPCSTR aimed) const {
     LPCSTR motion = OptionalHudMotion(normal, nullptr);
     if (IsZoomed() && !IsRotatingToZoom())
         motion = OptionalHudMotion(aimed, motion);
-
-    // Stop-at-end clips return to idle through OnAnimationEnd(eIdle).
-    if (motion && !PlayHUDMotion(motion, TRUE, this, eIdle))
-        PlayAnimIdle();
+    return shared_str(motion);
 }
 
 void CWeaponMagazined::OnAnimationEnd(u32 state) {
@@ -1256,15 +1260,20 @@ void CWeaponMagazined::PlayAnimBore() {
                   TRUE, this, GetState());
 }
 
+shared_str CWeaponMagazined::HudStateVariant(LPCSTR, LPCSTR fallback) const {
+    return shared_str(fallback);
+}
+
 void CWeaponMagazined::PlayAimTransition(bool entering) {
-    if (GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
-        !GetHUDmode() || IsGrenadeLauncherAttached())
+    if (GetState() != eIdle || GetNextState() != eIdle || IsPending() || !GetHUDmode())
         return;
 
-    LPCSTR motion = entering
-        ? StateMotion("anm_idle_aim_start", "anm_idle_aim_start_empty", "anm_idle_aim_start_jammed")
-        : StateMotion("anm_idle_aim_end", "anm_idle_aim_end_empty", "anm_idle_aim_end_jammed");
-    if (!pSettings->line_exist(HudSection(), motion))
+    const LPCSTR base = entering ? "anm_idle_aim_start" : "anm_idle_aim_end";
+    const LPCSTR fallback = entering
+        ? StateMotion(base, "anm_idle_aim_start_empty", "anm_idle_aim_start_jammed")
+        : StateMotion(base, "anm_idle_aim_end_empty", "anm_idle_aim_end_jammed");
+    const shared_str motion = HudStateVariant(base, IsGrenadeLauncherAttached() ? nullptr : fallback);
+    if (!motion.c_str() || !pSettings->line_exist(HudSection(), motion.c_str()))
         return;
 
     if (!PlayHUDMotion(motion, TRUE, this, eIdle)) {
@@ -1298,6 +1307,9 @@ shared_str CWeaponMagazined::GunslingerMovementIdle(u32 movement) const {
                    crouching ? "_crouch" : "", slow ? "_slow" : "");
     }
 
+    if (IsGrenadeLauncherAttached())
+        return HudStateVariant(base, nullptr);
+
     string256 variant;
     if (IsMisfire() || iAmmoElapsed == 0) {
         xr_sprintf(variant, "%s%s", base, IsMisfire() ? "_jammed" : "_empty");
@@ -1311,7 +1323,7 @@ shared_str CWeaponMagazined::GunslingerMovementIdle(u32 movement) const {
 
 void CWeaponMagazined::UpdateGunslingerMovementIdle() {
     const auto* actor = smart_cast<CActor*>(H_Parent());
-    if (!actor || !GetHUDmode() || IsGrenadeLauncherAttached()) {
+    if (!actor || !GetHUDmode()) {
         m_previous_hud_movement = 0;
         return;
     }
@@ -1332,10 +1344,13 @@ void CWeaponMagazined::UpdateGunslingerMovementIdle() {
 
     if (sprint_changed) {
         const bool entering = (movement & mcSprint) != 0;
-        LPCSTR motion = entering
-            ? StateMotion("anm_idle_sprint_start", "anm_idle_sprint_start_empty", "anm_idle_sprint_start_jammed")
-            : StateMotion("anm_idle_sprint_end", "anm_idle_sprint_end_empty", "anm_idle_sprint_end_jammed");
-        if (pSettings->line_exist(HudSection(), motion) && PlayHUDMotion(motion, TRUE, this, eIdle)) {
+        const LPCSTR base = entering ? "anm_idle_sprint_start" : "anm_idle_sprint_end";
+        const LPCSTR fallback = entering
+            ? StateMotion(base, "anm_idle_sprint_start_empty", "anm_idle_sprint_start_jammed")
+            : StateMotion(base, "anm_idle_sprint_end_empty", "anm_idle_sprint_end_jammed");
+        const shared_str motion = HudStateVariant(base, IsGrenadeLauncherAttached() ? nullptr : fallback);
+        if (motion.c_str() && pSettings->line_exist(HudSection(), motion.c_str()) &&
+            PlayHUDMotion(motion, TRUE, this, eIdle)) {
             if (pSettings->line_exist(cNameSect(), entering ? "snd_sprint_start" : "snd_sprint_end"))
                 PlaySound(entering ? "sndSprintStart" : "sndSprintEnd", get_LastFP());
             return;
@@ -1347,16 +1362,18 @@ void CWeaponMagazined::UpdateGunslingerMovementIdle() {
     PlayAnimIdle();
 }
 
-void CWeaponMagazined::PlayAnimIdle() {
-    if (GetState() != eIdle)
-        return;
-
-    // Movement can request idle again while a stop-at-end ADS clip is playing.
+bool CWeaponMagazined::IsAimTransitionPlaying() const {
     LPCSTR motion = m_current_motion.c_str();
     LPCSTR transition = IsZoomed() ? "anm_idle_aim_start" : "anm_idle_aim_end";
-    if (m_bStopAtEndAnimIsRunning && motion &&
-        std::strncmp(motion, transition, std::strlen(transition)) == 0)
+    return m_bStopAtEndAnimIsRunning && motion &&
+        std::strncmp(motion, transition, std::strlen(transition)) == 0;
+}
+
+void CWeaponMagazined::PlayAnimIdle() {
+    if (GetState() != eIdle || IsAimTransitionPlaying())
         return;
+
+    LPCSTR motion = m_current_motion.c_str();
     if (m_gunslinger_movement_idles && GetHUDmode() && !IsGrenadeLauncherAttached() &&
         MovingAnimAllowedNow()) {
         if (m_bStopAtEndAnimIsRunning && motion &&

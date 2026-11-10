@@ -856,7 +856,7 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
         if ((flags & CMD_START) && IsGameTypeSingle() && GetState() == eIdle &&
             GetNextState() == eIdle && !IsPending() && !IsZoomed() && GetHUDmode() &&
             !hud_adj_mode && AllowBore() && !g_player_hud->attached_item(1) &&
-            InspectMotion())
+            InspectMotion().c_str())
             SwitchState(eInspect);
         return true;
     }
@@ -2210,7 +2210,7 @@ const float& CWeapon::hit_probability() const {
     return (m_hit_probability[egdNovice]);
 }
 
-LPCSTR CWeapon::InspectMotion() const {
+shared_str CWeapon::InspectMotion() const {
     const auto& section = HudSection();
     if (IsMisfire()) {
         if (pSettings->line_exist(section, "anm_boring_jammed"))
@@ -2220,7 +2220,7 @@ LPCSTR CWeapon::InspectMotion() const {
     }
     if (pSettings->line_exist(section, "anm_boring"))
         return "anm_boring";
-    return pSettings->line_exist(section, "anm_bore") ? "anm_bore" : nullptr;
+    return pSettings->line_exist(section, "anm_bore") ? shared_str("anm_bore") : shared_str();
 }
 
 void CWeapon::OnStateSwitch(u32 S) {
@@ -2229,14 +2229,14 @@ void CWeapon::OnStateSwitch(u32 S) {
 
     if (S == eInspect) {
         SetPending(TRUE);
-        LPCSTR motion = InspectMotion();
-        if (!motion || !PlayHUDMotion(motion, TRUE, this, eInspect)) {
+        const shared_str motion = InspectMotion();
+        if (!motion.c_str() || !PlayHUDMotion(motion, TRUE, this, eInspect)) {
             SetPending(FALSE);
             SwitchState(eIdle);
             return;
         }
-        const bool custom_inspection = !xr_strcmp(motion, "anm_boring") ||
-                                       !xr_strcmp(motion, "anm_boring_jammed");
+        const bool custom_inspection = !xr_strcmp(motion.c_str(), "anm_boring") ||
+                                       !xr_strcmp(motion.c_str(), "anm_boring_jammed");
         PlaySound(custom_inspection && pSettings->line_exist(cNameSect().c_str(), "snd_boring")
                       ? "sndInspect" : "sndBore", get_LastFP());
     }

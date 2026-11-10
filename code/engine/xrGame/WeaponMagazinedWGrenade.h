@@ -42,6 +42,8 @@ public:
     virtual void OnShot();
     virtual void OnEvent(NET_Packet& P, u16 type);
     virtual void ReloadMagazine();
+    void UnloadMagazine(bool spawn_ammo = true) override;
+    BOOL IsMisfire() const override { return !m_bGrenadeMode && inherited::IsMisfire(); }
     bool HasChamberRound() const override { return !m_bGrenadeMode && inherited::HasChamberRound(); }
 
     virtual bool Action(u16 cmd, u32 flags);
@@ -66,7 +68,18 @@ public:
     virtual void PlayAnimModeSwitch();
     virtual void PlayAnimBore();
 
+protected:
+    shared_str InspectMotion() const override;
+    shared_str SelectDryFireMotion(LPCSTR normal, LPCSTR aimed) const override;
+    shared_str HudStateVariant(LPCSTR base, LPCSTR fallback) const override;
+
 private:
+    LPCSTR RifleHudState() const;
+    shared_str FindLauncherMotion(LPCSTR base, LPCSTR variant) const;
+    shared_str LauncherReloadMotion() const;
+    void FinishGrenadeShot();
+    bool m_has_switch_sound = false;
+    shared_str m_current_switch_sound;
     virtual void net_Spawn_install_upgrades(Upgrades_type saved_upgrades);
     virtual bool install_upgrade_impl(LPCSTR section, bool test);
     virtual bool install_upgrade_ammo_class(LPCSTR section, bool test);

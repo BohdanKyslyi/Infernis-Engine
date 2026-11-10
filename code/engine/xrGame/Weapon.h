@@ -121,7 +121,7 @@ public:
     // Does weapon need's update?
     BOOL IsUpdating();
 
-    BOOL IsMisfire() const;
+    virtual BOOL IsMisfire() const;
     BOOL CheckForMisfire();
 
     BOOL AutoSpawnAmmo() const { return m_bAutoSpawnAmmo; };
@@ -355,7 +355,7 @@ protected:
     virtual bool MovingAnimAllowedNow();
     virtual void OnStateSwitch(u32 S);
     virtual void OnAnimationEnd(u32 state);
-    LPCSTR InspectMotion() const;
+    virtual shared_str InspectMotion() const;
     bool RollForMisfire();
 
     //трассирование полета пули
