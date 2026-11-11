@@ -283,6 +283,7 @@ void CWeapon::ApplyPendingUpgradeHud() {
 
 void CWeapon::Load(LPCSTR section) {
     m_bone_upgrade_sections.clear();
+    LoadUpgradeBoneDefaults(section);
     m_hud_upgrade_bones = UpgradeBoneMask();
     m_world_upgrade_bones = UpgradeBoneMask();
     m_icon_upgrade_sections.clear();
@@ -1467,7 +1468,57 @@ void ApplyBoneList(IKinematics* model, LPCSTR section, LPCSTR key, BOOL visible,
             model->LL_SetBoneVisible(bone, visible, TRUE);
     }
 }
+void CollectUpgradeBoneDefaults(LPCSTR group, xr_vector<shared_str>& visited,
+                                xr_vector<shared_str>& effects) {
+    if (!pSettings->section_exist(group) ||
+        std::find(visited.begin(), visited.end(), shared_str(group)) != visited.end())
+        return;
+
+    visited.emplace_back(group);
+    const LPCSTR elements = READ_IF_EXISTS(pSettings, r_string, group, "elements", nullptr);
+    if (!elements || !elements[0])
+        return;
+
+    string128 node;
+    for (int i = 0, count = _GetItemCount(elements); i < count; ++i) {
+        _GetItem(elements, i, node);
+        if (!node[0] || !pSettings->section_exist(node))
+            continue;
+
+        const LPCSTR effect = READ_IF_EXISTS(pSettings, r_string, node, "section", nullptr);
+        if (effect && effect[0] && pSettings->section_exist(effect) &&
+            pSettings->line_exist(effect, "show_bones") &&
+            std::find(effects.begin(), effects.end(), shared_str(effect)) == effects.end())
+            effects.emplace_back(effect);
+
+        const LPCSTR next = READ_IF_EXISTS(pSettings, r_string, node, "effects", nullptr);
+        if (!next || !next[0])
+            continue;
+
+        string128 child;
+        for (int j = 0, children = _GetItemCount(next); j < children; ++j) {
+            _GetItem(next, j, child);
+            if (child[0])
+                CollectUpgradeBoneDefaults(child, visited, effects);
+        }
+    }
+}
 } // namespace
+
+void CWeapon::LoadUpgradeBoneDefaults(LPCSTR section) {
+    m_upgrade_bone_defaults.clear();
+    const LPCSTR groups = READ_IF_EXISTS(pSettings, r_string, section, "upgrades", nullptr);
+    if (!groups || !groups[0])
+        return;
+
+    xr_vector<shared_str> visited;
+    string128 group;
+    for (int i = 0, count = _GetItemCount(groups); i < count; ++i) {
+        _GetItem(groups, i, group);
+        if (group[0])
+            CollectUpgradeBoneDefaults(group, visited, m_upgrade_bone_defaults);
+    }
+}
 
 void CWeapon::UpgradeBoneMask::Restore(IKinematics* current) {
     if (current && current == model)
@@ -1504,8 +1555,22 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
     const shared_str weapon_section = cNameSect();
     ApplyBoneList(model, weapon_section.c_str(), "def_hide_bones", FALSE);
 
-    // Hide every detachable visual first, including one left visible by a
-    // previously equipped weapon sharing the cached HUD model.
+    ApplyBoneList(model, m_sSilencerName.c_str(), "bones", FALSE);
+    ApplyBoneList(model, m_sGrenadeLauncherName.c_str(), "bones", FALSE);
+    ApplyBoneList(model, weapon_section.c_str(), "def_show_bones", TRUE);
+
+    // Reset upgrade-only meshes even on models that show them by default.
+    for (const shared_str& effect : m_upgrade_bone_defaults)
+        ApplyBoneList(model, effect.c_str(), "show_bones", FALSE);
+
+    // Installed upgrades are replayed in order when a save is loaded.
+    for (const shared_str& section : m_bone_upgrade_sections) {
+        ApplyBoneList(model, section.c_str(), "hide_bones", FALSE);
+        ApplyBoneList(model, section.c_str(), "show_bones", TRUE);
+    }
+
+    // A mount upgrade can list scope meshes in show_bones. The attachment
+    // state owns those meshes and must be applied after all upgrade effects.
     for (const shared_str& scope : m_scopes) {
         if (!pSettings->section_exist(scope.c_str()))
             continue;
@@ -1514,15 +1579,6 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
         const LPCSTR section = pSettings->line_exist(scope.c_str(), "bones") ?
             scope.c_str() : optic.c_str();
         ApplyBoneList(model, section, "bones", FALSE);
-    }
-    ApplyBoneList(model, m_sSilencerName.c_str(), "bones", FALSE);
-    ApplyBoneList(model, m_sGrenadeLauncherName.c_str(), "bones", FALSE);
-    ApplyBoneList(model, weapon_section.c_str(), "def_show_bones", TRUE);
-
-    // Installed upgrades are replayed in order when a save is loaded.
-    for (const shared_str& section : m_bone_upgrade_sections) {
-        ApplyBoneList(model, section.c_str(), "hide_bones", FALSE);
-        ApplyBoneList(model, section.c_str(), "show_bones", TRUE);
     }
 
     // An attached optic can override a rail or sight enabled by an upgrade.
@@ -1535,8 +1591,14 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
             wrapper : optic.c_str();
         const LPCSTR show_section = pSettings->line_exist(wrapper, "bones") ?
             wrapper : optic.c_str();
-        ApplyBoneList(model, hide_section, "overriding_hide_bones", FALSE);
+        const LPCSTR extra_show_section = pSettings->line_exist(wrapper, "overriding_show_bones") ?
+            wrapper : optic.c_str();
         ApplyBoneList(model, show_section, "bones", TRUE);
+        ApplyBoneList(model, hide_section, "overriding_hide_bones", FALSE);
+        ApplyBoneList(model, extra_show_section, "overriding_show_bones", TRUE);
+    } else if (!IsScopeAttached()) {
+        ApplyBoneList(model, weapon_section.c_str(), "no_scope_overriding_hide_bones", FALSE);
+        ApplyBoneList(model, weapon_section.c_str(), "no_scope_overriding_show_bones", TRUE);
     }
     if (IsSilencerAttached() && m_eSilencerStatus == ALife::eAddonAttachable) {
         ApplyBoneList(model, m_sSilencerName.c_str(), "overriding_hide_bones", FALSE);

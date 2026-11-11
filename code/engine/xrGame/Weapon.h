@@ -205,6 +205,8 @@ protected:
     UpgradeBoneMask m_hud_upgrade_bones;
     UpgradeBoneMask m_world_upgrade_bones;
     xr_vector<shared_str> m_bone_upgrade_sections;
+    xr_vector<shared_str> m_upgrade_bone_defaults;
+    void LoadUpgradeBoneDefaults(LPCSTR section);
     xr_vector<shared_str> m_icon_upgrade_sections;
     float m_actor_camera_speed_factor = 1.f;
     xr_vector<shared_str> m_hud_upgrade_sections;
