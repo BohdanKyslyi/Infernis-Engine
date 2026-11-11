@@ -2381,7 +2381,7 @@ void CWeapon::OnStateSwitch(u32 S) {
             return;
         }
         const bool custom_inspection = !xr_strcmp(motion.c_str(), "anm_boring") ||
-                                       !xr_strcmp(motion.c_str(), "anm_boring_jammed");
+            std::strncmp(motion.c_str(), "anm_boring_", sizeof("anm_boring_") - 1) == 0;
         PlaySound(custom_inspection && pSettings->line_exist(cNameSect().c_str(), "snd_boring")
                       ? "sndInspect" : "sndBore", get_LastFP());
     }

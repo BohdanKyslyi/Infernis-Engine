@@ -108,6 +108,8 @@ shared_str CWeaponBM16::InspectMotion() const {
         return custom;
     if (fallback.c_str() && std::strncmp(fallback.c_str(), "anm_boring", sizeof("anm_boring") - 1) == 0)
         return fallback;
+    if (READ_IF_EXISTS(pSettings, r_bool, HudSection(), "disable_bore", false))
+        return {};
     return HudStateVariant("anm_bore", fallback.c_str());
 }
 
