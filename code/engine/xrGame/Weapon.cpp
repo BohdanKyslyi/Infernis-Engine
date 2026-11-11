@@ -207,14 +207,18 @@ void CWeapon::ForceUpdateFireParticles() {
     }
 }
 
-void CWeapon::Load(LPCSTR section) {
-    m_bone_upgrade_sections.clear();
-    inherited::Load(section);
-    CShootingObject::Load(section);
+void CWeapon::LoadHudFeatureFlags() {
     m_gunslinger_hud_movement =
         READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_hud_movement", false);
     m_advanced_ammo_bones =
         READ_IF_EXISTS(pSettings, r_bool, HudSection(), "use_advanced_ammo_bones", false);
+}
+
+void CWeapon::Load(LPCSTR section) {
+    m_bone_upgrade_sections.clear();
+    inherited::Load(section);
+    CShootingObject::Load(section);
+    LoadHudFeatureFlags();
     m_sounds.LoadSound(section, "snd_boring", "sndInspect", true);
 
     if (pSettings->line_exist(section, "flame_particles_2"))

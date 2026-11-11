@@ -319,6 +319,7 @@ private:
     void UpdateHudAmmoBones(const CCartridge* fired = nullptr);
 
 protected:
+    void LoadHudFeatureFlags();
     virtual void AdjustHudAmmoState(u8&, int&, const shared_str&) const {}
     void on_b_hud_detach() override;
     virtual void UpdateFireDependencies_internal();

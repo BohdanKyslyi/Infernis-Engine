@@ -9,6 +9,12 @@
 #include "WeaponAmmo.h"
 
 namespace {
+bool IsDoubleBarrelHud(const shared_str& hud) {
+    return pSettings->line_exist(hud, "anm_shoot_1") &&
+        pSettings->line_exist(hud, "anm_shoot_2") &&
+        pSettings->line_exist(hud, "anm_reload_0");
+}
+
 bool HasSound(LPCSTR section, LPCSTR key) {
     const LPCSTR value = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
     if (!value || !value[0])
@@ -24,8 +30,7 @@ CWeaponBM16::~CWeaponBM16() {}
 void CWeaponBM16::Load(LPCSTR section) {
     inherited::Load(section);
     const auto& hud = HudSection();
-    m_gunslinger_double_barrel = pSettings->line_exist(hud, "anm_shoot_1") &&
-        pSettings->line_exist(hud, "anm_shoot_2") && pSettings->line_exist(hud, "anm_reload_0");
+    m_gunslinger_double_barrel = IsDoubleBarrelHud(hud);
     m_no_jam_fire = READ_IF_EXISTS(pSettings, r_bool, hud, "no_jam_fire", false);
     m_has_legacy_reload_sound = HasSound(section, "snd_reload_1");
     if (m_has_legacy_reload_sound)
@@ -139,12 +144,24 @@ void CWeaponBM16::LoadGunslingerSounds(LPCSTR section) {
             m_sounds.LoadSound(section, key, key, true, m_eSoundReload);
     }
 
-    const LPCSTR hud = HudSection().c_str();
+    LoadHudReloadSounds();
+}
+
+void CWeaponBM16::LoadHudReloadSounds() {
+    const auto& hud = HudSection();
+    if (std::find(m_loaded_reload_sound_huds.begin(), m_loaded_reload_sound_huds.end(), hud) !=
+        m_loaded_reload_sound_huds.end())
+        return;
+
     LPCSTR key, value;
-    for (u32 i = 0; pSettings->r_line(hud, i, &key, &value); ++i) {
-        if (std::strncmp(key, "snd_anm_reload", sizeof("snd_anm_reload") - 1) == 0 && HasSound(hud, key))
-            m_sounds.LoadSound(hud, key, key, true, m_eSoundReload);
+    for (u32 i = 0; pSettings->r_line(hud.c_str(), i, &key, &value); ++i) {
+        if (std::strncmp(key, "snd_anm_reload", sizeof("snd_anm_reload") - 1) != 0 || !HasSound(hud.c_str(), key))
+            continue;
+        string512 alias;
+        xr_sprintf(alias, "%s.%s", hud.c_str(), key);
+        m_sounds.LoadSound(hud.c_str(), key, alias, true, m_eSoundReload);
     }
+    m_loaded_reload_sound_huds.push_back(hud);
 }
 
 shared_str CWeaponBM16::SelectReloadSound(LPCSTR weapon_key) const {
@@ -152,8 +169,13 @@ shared_str CWeaponBM16::SelectReloadSound(LPCSTR weapon_key) const {
         string256 key;
         xr_sprintf(key, "snd_%s", m_reload_motion.c_str());
         const LPCSTR hud = HudSection().c_str();
-        if (pSettings->line_exist(hud, key))
-            return HasSound(hud, key) ? shared_str(key) : shared_str();
+        if (pSettings->line_exist(hud, key)) {
+            if (!HasSound(hud, key))
+                return {};
+            string512 alias;
+            xr_sprintf(alias, "%s.%s", hud, key);
+            return shared_str(alias);
+        }
     }
 
     const LPCSTR section = cNameSect().c_str();
@@ -162,6 +184,77 @@ shared_str CWeaponBM16::SelectReloadSound(LPCSTR weapon_key) const {
     if (iAmmoElapsed == 1 && m_has_legacy_reload_sound)
         return "sndReload1";
     return HasSound(section, "snd_reload") ? shared_str("sndReload") : shared_str();
+}
+
+bool CWeaponBM16::install_upgrade_impl(LPCSTR section, bool test) {
+    shared_str target;
+    if (UsesGunslingerDoubleBarrel()) {
+        const LPCSTR hud = READ_IF_EXISTS(pSettings, r_string, section, "hud", nullptr);
+        if (hud && hud[0] && pSettings->section_exist(hud) &&
+            pSettings->line_exist(hud, "item_visual") &&
+            READ_IF_EXISTS(pSettings, r_u16, hud, "attach_place_idx", u16(-1)) == 0 &&
+            IsDoubleBarrelHud(hud))
+            target = hud;
+    }
+
+    const bool installed = inherited::install_upgrade_impl(section, test);
+    if (test || !UsesGunslingerDoubleBarrel())
+        return installed || target.c_str() != nullptr;
+
+    if (pSettings->line_exist(section, "ammo_class") && m_ammoType < m_ammoTypes.size()) {
+        m_DefaultCartridge.Load(m_ammoTypes[m_ammoType].c_str(), m_ammoType);
+        m_pCurrentAmmo = nullptr;
+        // A pending reload refers to indices from the previous ammo_class list.
+        m_reload_commit_pending = false;
+        m_set_next_ammoType_on_reload = undefined_ammo_type;
+        m_BriefInfo_CalcFrame = 0;
+    }
+
+    if (!target.c_str())
+        return installed;
+
+    m_pending_hud_upgrade = target;
+    ApplyPendingHudUpgrade();
+    return true;
+}
+
+void CWeaponBM16::ApplyPendingHudUpgrade() {
+    if (!m_pending_hud_upgrade.c_str())
+        return;
+    if (m_pending_hud_upgrade == HudSection()) {
+        m_pending_hud_upgrade = shared_str();
+        return;
+    }
+
+    const bool attached = HudItemData() != nullptr;
+    if (m_bStopAtEndAnimIsRunning ||
+        (attached && (GetState() != eIdle || GetNextState() != eIdle || IsPending())))
+        return;
+
+    if (attached && !g_player_hud->can_attach_controller_item(m_pending_hud_upgrade)) {
+        Msg("! Cannot apply double-barrel HUD upgrade [%s]", m_pending_hud_upgrade.c_str());
+        m_pending_hud_upgrade = shared_str();
+        return;
+    }
+
+    if (attached) {
+        StopCurrentAnimWithoutCallback();
+        g_player_hud->detach_item(this);
+    } else {
+        m_sounds.StopAllSounds();
+    }
+
+    hud_sect = m_pending_hud_upgrade;
+    m_pending_hud_upgrade = shared_str();
+    m_no_jam_fire = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "no_jam_fire", false);
+    LoadHudFeatureFlags();
+    LoadHudReloadSounds();
+
+    if (attached) {
+        g_player_hud->attach_item(this);
+        UpdateHUDAddonsVisibility();
+        PlayAnimIdle();
+    }
 }
 
 bool CWeaponBM16::PrepareReload() {
@@ -307,6 +400,7 @@ void CWeaponBM16::UpdateCL() {
         CommitReload();
 
     inherited::UpdateCL();
+    ApplyPendingHudUpgrade();
     if (GetState() == eReload && m_reload_sound.c_str())
         m_sounds.SetPosition(m_reload_sound.c_str(), get_LastFP());
 }
