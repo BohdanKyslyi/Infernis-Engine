@@ -43,7 +43,8 @@ private:
     void CommitReload();
     void LoadGunslingerSounds(LPCSTR section);
     void LoadHudReloadSounds();
-    void ApplyPendingHudUpgrade();
+    bool UpgradeHudAllowed(const shared_str& hud) const override;
+    void OnUpgradeHudChanged() override;
     shared_str SelectReloadSound(LPCSTR weapon_key) const;
 
     bool m_gunslinger_double_barrel = false;
@@ -52,7 +53,6 @@ private:
     bool m_has_legacy_reload_sound = false;
     mutable shared_str m_numbered_state_motion;
     xr_vector<shared_str> m_loaded_reload_sound_huds;
-    shared_str m_pending_hud_upgrade;
     shared_str m_reload_motion;
     shared_str m_reload_sound;
     bool m_reload_commit_pending = false;

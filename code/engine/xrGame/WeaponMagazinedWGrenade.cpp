@@ -14,6 +14,7 @@
 #include "game_base_space.h"
 #include "../xrphysics/MathUtils.h"
 #include "player_hud.h"
+#include "xrRender/Kinematics.h"
 
 #ifdef DEBUG
 #include "phdebug.h"
@@ -216,7 +217,7 @@ bool CWeaponMagazinedWGrenade::Action(u16 cmd, u32 flags) {
 void CWeaponMagazinedWGrenade::state_Fire(float dt) {
     VERIFY(fOneShotTime > 0.f);
 
-    //режим стрельбы подствольника
+    //Г°ГҐГ¦ГЁГ¬ Г±ГІГ°ГҐГ«ГјГЎГ» ГЇГ®Г¤Г±ГІГўГ®Г«ГјГ­ГЁГЄГ 
     if (m_bGrenadeMode) {
         /*
         fTime					-=dt;
@@ -242,7 +243,7 @@ void CWeaponMagazinedWGrenade::state_Fire(float dt) {
                 FireEnd();
         */
     }
-    //режим стрельбы очередями
+    //Г°ГҐГ¦ГЁГ¬ Г±ГІГ°ГҐГ«ГјГЎГ» Г®Г·ГҐГ°ГҐГ¤ГїГ¬ГЁ
     else
         inherited::state_Fire(dt);
 }
@@ -394,6 +395,7 @@ void CWeaponMagazinedWGrenade::UnloadMagazine(bool spawn_ammo) {
 }
 
 void CWeaponMagazinedWGrenade::OnStateSwitch(u32 S) {
+    const bool switching_mode = S == eSwitch || (GetState() == eSwitch && S == eIdle);
     switch (S) {
     case eSwitch: {
         if (!SwitchMode()) {
@@ -405,6 +407,8 @@ void CWeaponMagazinedWGrenade::OnStateSwitch(u32 S) {
 
     inherited::OnStateSwitch(S);
     UpdateGrenadeVisibility(m_bGrenadeMode && S == eReload);
+    if (switching_mode)
+        ApplyConfiguredBoneVisibility(smart_cast<IKinematics*>(Visual()));
     if (S == eSwitch && !m_bStopAtEndAnimIsRunning) {
         SetPending(FALSE);
         SwitchState(eIdle);
@@ -464,7 +468,7 @@ bool CWeaponMagazinedWGrenade::Attach(PIItem pIItem, bool b_send_event) {
 
         CRocketLauncher::m_fLaunchSpeed = pGrenadeLauncher->GetGrenadeVel();
 
-        //уничтожить подствольник из инвентаря
+        //ГіГ­ГЁГ·ГІГ®Г¦ГЁГІГј ГЇГ®Г¤Г±ГІГўГ®Г«ГјГ­ГЁГЄ ГЁГ§ ГЁГ­ГўГҐГ­ГІГ Г°Гї
         if (b_send_event) {
             if (OnServer())
                 pIItem->object().DestroyObject();
@@ -542,7 +546,7 @@ float CWeaponMagazinedWGrenade::CurrentZoomFactor() {
                           "gl_zoom_factor", ironsight);
 }
 
-//виртуальные функции для проигрывания анимации HUD
+//ГўГЁГ°ГІГіГ Г«ГјГ­Г»ГҐ ГґГіГ­ГЄГ¶ГЁГЁ Г¤Г«Гї ГЇГ°Г®ГЁГЈГ°Г»ГўГ Г­ГЁГї Г Г­ГЁГ¬Г Г¶ГЁГЁ HUD
 LPCSTR CWeaponMagazinedWGrenade::RifleHudState() const {
     if (bMisfire)
         return "_jammed";
@@ -872,7 +876,8 @@ bool CWeaponMagazinedWGrenade::install_upgrade_ammo_class(LPCSTR section, bool t
 
     bool result =
         process_if_exists(section, "ammo_mag_size", &CInifile::r_s32, iMagazineSize2, test);
-    iMagazineSize = m_bGrenadeMode ? 1 : iMagazineSize2;
+    if (!test)
+        iMagazineSize = m_bGrenadeMode ? 1 : iMagazineSize2;
 
     //	ammo_class = ammo_5.45x39_fmj, ammo_5.45x39_ap  // name of the ltx-section of used ammo
     bool result2 = process_if_exists_set(section, "ammo_class", &CInifile::r_string, str, test);
@@ -885,12 +890,18 @@ bool CWeaponMagazinedWGrenade::install_upgrade_ammo_class(LPCSTR section, bool t
             ammo_types.push_back(ammo_item);
         }
 
-        m_ammoType = 0;
-        m_ammoType2 = 0;
+        u8& type = m_bGrenadeMode ? m_ammoType2 : m_ammoType;
+        CCartridge& cartridge = m_bGrenadeMode ? m_DefaultCartridge2 : m_DefaultCartridge;
+        type = 0;
+        if (!ammo_types.empty())
+            cartridge.Load(ammo_types.front().c_str(), type);
+        m_pCurrentAmmo = nullptr;
+        m_set_next_ammoType_on_reload = undefined_ammo_type;
+        m_BriefInfo_CalcFrame = 0;
     }
     result |= result2;
 
-    return result2;
+    return result;
 }
 
 bool CWeaponMagazinedWGrenade::install_upgrade_impl(LPCSTR section, bool test) {
@@ -909,8 +920,14 @@ bool CWeaponMagazinedWGrenade::install_upgrade_impl(LPCSTR section, bool test) {
             ammo_types.push_back(ammo_item);
         }
 
-        m_ammoType = 0;
-        m_ammoType2 = 0;
+        u8& type = m_bGrenadeMode ? m_ammoType : m_ammoType2;
+        CCartridge& cartridge = m_bGrenadeMode ? m_DefaultCartridge : m_DefaultCartridge2;
+        type = 0;
+        if (!ammo_types.empty())
+            cartridge.Load(ammo_types.front().c_str(), type);
+        m_pCurrentAmmo = nullptr;
+        m_set_next_ammoType_on_reload = undefined_ammo_type;
+        m_BriefInfo_CalcFrame = 0;
     }
     result |= result2;
 
@@ -918,13 +935,13 @@ bool CWeaponMagazinedWGrenade::install_upgrade_impl(LPCSTR section, bool test) {
 
     result2 = process_if_exists_set(section, "snd_shoot_grenade", &CInifile::r_string, str, test);
     if (result2 && !test) {
-        m_sounds.LoadSound(section, "snd_shoot_grenade", "sndShotG", false, m_eSoundShot);
+        m_sounds.ReloadSound(section, "snd_shoot_grenade", "sndShotG", false, m_eSoundShot);
     }
     result |= result2;
 
     result2 = process_if_exists_set(section, "snd_reload_grenade", &CInifile::r_string, str, test);
     if (result2 && !test) {
-        m_sounds.LoadSound(section, "snd_reload_grenade", "sndReloadG", true, m_eSoundReload);
+        m_sounds.ReloadSound(section, "snd_reload_grenade", "sndReloadG", true, m_eSoundReload);
     }
     result |= result2;
 
@@ -932,7 +949,7 @@ bool CWeaponMagazinedWGrenade::install_upgrade_impl(LPCSTR section, bool test) {
     if (result2 && !test) {
         m_has_switch_sound = str && xr_strcmp(str, "$silent") != 0;
         if (m_has_switch_sound)
-            m_sounds.LoadSound(section, "snd_switch", "sndSwitch", true, m_eSoundReload);
+            m_sounds.ReloadSound(section, "snd_switch", "sndSwitch", true, m_eSoundReload);
     }
     result |= result2;
 

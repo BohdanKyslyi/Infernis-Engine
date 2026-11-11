@@ -9,7 +9,7 @@
 #include "UICharacterInfo.h"
 
 #include "../inventory_item.h"
-#include "UICellItem.h"
+#include "UICellCustomItems.h"
 #include "../InventoryOwner.h"
 #include "../Inventory.h"
 #include "../actor.h"
@@ -47,7 +47,7 @@ void CUIActorMenu::DeInitUpgradeMode() {
 
     if (!CurrentGameUI())
         return;
-    //только если находимся в режиме single
+    //ГІГ®Г«ГјГЄГ® ГҐГ±Г«ГЁ Г­Г ГµГ®Г¤ГЁГ¬Г±Гї Гў Г°ГҐГ¦ГЁГ¬ГҐ single
     CUIGameSP* pGameSP = smart_cast<CUIGameSP*>(CurrentGameUI());
     if (!pGameSP)
         return;
@@ -71,6 +71,11 @@ void CUIActorMenu::SetupUpgradeItem() {
     }
 
     m_pUpgradeWnd->InitInventory(item, can_upgrade);
+    if (auto* button = m_pUpgradeWnd->m_btn_disassemble) {
+        const bool available = CanDisassembleItem(item);
+        button->Show(available);
+        button->Enable(available);
+    }
     if (m_upgrade_info) {
         m_upgrade_info->Show(false);
     }
@@ -115,7 +120,7 @@ void CUIActorMenu::SeparateUpgradeItem() {
         return;
     }
     CUIDragDropListEx* list_owner = m_upgrade_selected->OwnerList();
-    if (list_owner && (GetListType(list_owner) != iActorBag)) {
+    if (!list_owner || GetListType(list_owner) != iActorBag) {
         return;
     }
 
@@ -124,6 +129,8 @@ void CUIActorMenu::SeparateUpgradeItem() {
     // PIItem item = get_upgrade_item();
     m_upgrade_selected->Mark(false);
     CUICellItem* ci = list_owner->RemoveItem(m_upgrade_selected, false);
+    if (auto* weapon_cell = smart_cast<CUIWeaponCellItem*>(ci))
+        weapon_cell->RefreshWeaponIcon();
     list_owner->SetItem(ci);
     //		m_upgrade_selected = ci;
     //		m_upgrade_selected->Mark( true );

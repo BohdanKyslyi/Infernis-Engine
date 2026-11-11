@@ -25,8 +25,22 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
     result |= install_upgrade_disp(section, test);
     result |= install_upgrade_hit(section, test);
     result |= install_upgrade_addon(section, test);
+    if (pSettings->line_exist(section, "hud")) {
+        result = true;
+        if (!test && std::find(m_hud_upgrade_sections.begin(), m_hud_upgrade_sections.end(),
+                               shared_str(section)) == m_hud_upgrade_sections.end()) {
+            m_hud_upgrade_sections.push_back(section);
+            RefreshUpgradeHud();
+        }
+    }
+
     if (pSettings->line_exist(section, "show_bones") ||
-        pSettings->line_exist(section, "hide_bones")) {
+        pSettings->line_exist(section, "hide_bones") ||
+        pSettings->line_exist(section, "hide_bones_override") ||
+        pSettings->line_exist(section, "hide_bones_override_when_silencer_attached") ||
+        pSettings->line_exist(section, "hide_bones_override_when_scope_attached") ||
+        pSettings->line_exist(section, "hide_bones_override_when_gl_attached") ||
+        pSettings->line_exist(section, "hide_bones_override_grenade")) {
         result = true;
         if (!test && std::find(m_bone_upgrade_sections.begin(), m_bone_upgrade_sections.end(),
                                shared_str(section)) == m_bone_upgrade_sections.end()) {
@@ -37,7 +51,50 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
                 UpdateHUDAddonsVisibility();
         }
     }
+    if (pSettings->line_exist(section, "upgrade_addon_icon") ||
+        pSettings->line_exist(section, "upgrade_addon_icons_hide") ||
+        pSettings->line_exist(section, "inv_addons_correction_x") ||
+        pSettings->line_exist(section, "inv_addons_correction_y") ||
+        pSettings->line_exist(section, "inv_grid_x") ||
+        pSettings->line_exist(section, "inv_grid_y") ||
+        pSettings->line_exist(section, "inv_grid_width") ||
+        pSettings->line_exist(section, "inv_grid_height")) {
+        result = true;
+        if (!test && std::find(m_icon_upgrade_sections.begin(), m_icon_upgrade_sections.end(),
+                               shared_str(section)) == m_icon_upgrade_sections.end())
+            m_icon_upgrade_sections.push_back(section);
+    }
+
+    result |= process_if_exists_set(section, "flame_particles", &CInifile::r_string_wb,
+                                    m_sFlameParticles, test);
+    result |= process_if_exists_set(section, "smoke_particles", &CInifile::r_string_wb,
+                                    m_sSmokeParticles, test);
+    result |= process_if_exists_set(section, "shell_particles", &CInifile::r_string_wb,
+                                    m_sShellParticles, test);
     return result;
+}
+
+Irect CWeapon::GetInvGridRect() const {
+    Irect rect = inherited::GetInvGridRect();
+    if (m_icon_upgrade_sections.empty())
+        return rect;
+
+    for (const shared_str& effect : m_icon_upgrade_sections) {
+        rect.x1 += READ_IF_EXISTS(pSettings, r_s32, effect, "inv_grid_x", 0);
+        rect.y1 += READ_IF_EXISTS(pSettings, r_s32, effect, "inv_grid_y", 0);
+        rect.x2 += READ_IF_EXISTS(pSettings, r_s32, effect, "inv_grid_width", 0);
+        rect.y2 += READ_IF_EXISTS(pSettings, r_s32, effect, "inv_grid_height", 0);
+    }
+    rect.x1 = (std::max)(0, rect.x1);
+    rect.y1 = (std::max)(0, rect.y1);
+    rect.x2 = (std::max)(1, rect.x2);
+    rect.y2 = (std::max)(1, rect.y2);
+    return rect;
+}
+
+float CWeapon::GetControlInertionFactor() const {
+    const float factor = m_actor_camera_speed_factor > EPS_S ? m_actor_camera_speed_factor : 1.f;
+    return inherited::GetControlInertionFactor() / factor;
 }
 
 bool CWeapon::install_upgrade_ammo_class(LPCSTR section, bool test) {
@@ -57,6 +114,11 @@ bool CWeapon::install_upgrade_ammo_class(LPCSTR section, bool test) {
             m_ammoTypes.push_back(ammoItem);
         }
         m_ammoType = 0;
+        m_set_next_ammoType_on_reload = undefined_ammo_type;
+        m_pCurrentAmmo = nullptr;
+        m_BriefInfo_CalcFrame = 0;
+        if (!m_ammoTypes.empty())
+            m_DefaultCartridge.Load(m_ammoTypes.front().c_str(), m_ammoType);
     }
     result |= result2;
 
@@ -64,7 +126,14 @@ bool CWeapon::install_upgrade_ammo_class(LPCSTR section, bool test) {
 }
 
 bool CWeapon::install_upgrade_disp(LPCSTR section, bool test) {
-    bool result = process_if_exists(section, "fire_dispersion_condition_factor", &CInifile::r_float,
+    bool result = process_if_exists_set(section, "actor_camera_speed_factor", &CInifile::r_float,
+                                        m_actor_camera_speed_factor, test);
+    result |= process_if_exists(section, "crosshair_inertion", &CInifile::r_float,
+                                m_crosshair_inertion, test);
+    if (!test && pSettings->line_exist(section, "crosshair_inertion"))
+        m_crosshair_inertion = (std::max)(0.f, m_crosshair_inertion);
+
+    result |= process_if_exists(section, "fire_dispersion_condition_factor", &CInifile::r_float,
                                     fireDispersionConditionFactor, test);
     result |= process_if_exists(section, "fire_distance", &CInifile::r_float, fireDistance, test);
 
@@ -272,14 +341,17 @@ bool CWeapon::install_upgrade_addon(LPCSTR section, bool test) {
             }
         }
     }
-    result |= process_if_exists_set(section, "scope_dynamic_zoom", &CInifile::r_bool,
-                                    m_zoom_params.m_bUseDynamicZoom, test);
-    result |= process_if_exists_set(section, "scope_nightvision", &CInifile::r_string_wb,
-                                    m_zoom_params.m_sUseZoomPostprocess, test);
-    result |= process_if_exists_set(section, "scope_alive_detector", &CInifile::r_string_wb,
-                                    m_zoom_params.m_sUseBinocularVision, test);
+    const bool scope_effect = pSettings->line_exist(section, "scope_dynamic_zoom") ||
+        pSettings->line_exist(section, "scope_nightvision") ||
+        pSettings->line_exist(section, "scope_alive_detector");
+    if (!test && scope_effect &&
+        std::find(m_scope_upgrade_sections.begin(), m_scope_upgrade_sections.end(),
+                  shared_str(section)) == m_scope_upgrade_sections.end()) {
+        m_scope_upgrade_sections.push_back(section);
+        CWeapon::InitAddons();
+    }
 
-    result |= result2;
+    result |= result2 || scope_effect;
 
     temp_int = (int)m_eSilencerStatus;
     result2 = process_if_exists_set(section, "silencer_status", &CInifile::r_s32, temp_int, test);

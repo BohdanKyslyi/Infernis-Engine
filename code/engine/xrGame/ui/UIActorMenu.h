@@ -290,6 +290,11 @@ protected:
     bool TryActiveSlot(CUICellItem* itm);
     void xr_stdcall TryRepairItem(CUIWindow* w, void* d);
     bool CanUpgradeItem(PIItem item);
+    bool CanDisassembleItem(PIItem item);
+    void xr_stdcall TryDisassembleItem(CUIWindow* w, void* d);
+    void xr_stdcall DisassembleItem(CUIWindow* w, void* d);
+    u16 m_disassemble_item = u16(-1);
+    u16 m_disassemble_mechanic = u16(-1);
 
     bool ToActorTrade(CUICellItem* itm, bool b_use_cursor_pos);
     bool ToPartnerTrade(CUICellItem* itm, bool b_use_cursor_pos);

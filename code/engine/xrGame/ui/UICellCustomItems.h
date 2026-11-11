@@ -48,6 +48,13 @@ protected:
     void CreateIcon(eAddonType);
     void DestroyIcon(eAddonType);
     void RefreshOffset();
+    Fvector2 UpgradeIconCorrection();
+    void CreateUpgradeIcons(CUIWindow* parent, bool rotate, u32 color);
+    xr_vector<CUIStatic*> m_upgrade_icons;
+    const CWeapon* m_icon_weapon = nullptr;
+    size_t m_icon_upgrade_count = 0;
+    u8 m_icon_addons = 0;
+    Fvector2 m_icon_size{};
     CUIStatic* GetIcon(eAddonType);
     void InitAddon(CUIStatic* s, LPCSTR section, Fvector2 offset, bool use_heading);
     bool is_scope();
@@ -57,6 +64,7 @@ protected:
 public:
     CUIWeaponCellItem(CWeapon* itm);
     virtual ~CUIWeaponCellItem();
+    void RefreshWeaponIcon();
     virtual void Update();
     virtual void Draw();
     virtual void SetTextureColor(u32 color);

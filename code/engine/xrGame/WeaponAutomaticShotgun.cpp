@@ -27,13 +27,10 @@ void CWeaponAutomaticShotgun::Load(LPCSTR section) {
         m_bTriStateReload = !!pSettings->r_bool(section, "tri_state_reload");
     };
     if (m_bTriStateReload) {
-        m_add_cartridge_in_open = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "add_cartridge_in_open", false);
-        m_empty_preload_mode = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "empty_preload_mode", false);
+        CWeaponAutomaticShotgun::OnUpgradeHudChanged();
         m_keep_chambered_cartridge = READ_IF_EXISTS(pSettings, r_bool, section, "save_cartridge_in_ammochange", true);
-        m_revolver_reload = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "revolver_reload", false);
         m_need_final_close_anims = READ_IF_EXISTS(pSettings, r_bool, section, "need_final_close_anims", false);
         m_need_first_shoot_anims = READ_IF_EXISTS(pSettings, r_bool, section, "need_first_shoot_anims", false);
-        LoadTubeReloadSounds();
 
         m_sounds.LoadSound(section, "snd_open_weapon", "sndOpen", false, m_eSoundOpen);
 
@@ -70,7 +67,7 @@ bool CWeaponAutomaticShotgun::Action(u16 cmd, u32 flags) {
         return true;
 
     if (m_bTriStateReload && GetState() == eReload && cmd == kWPN_FIRE && flags & CMD_START &&
-        m_sub_state == eSubstateReloadInProcess) //îñòàíîâèòü ïåðåçàãðóçêó
+        m_sub_state == eSubstateReloadInProcess) //Ã®Ã±Ã²Ã Ã­Ã®Ã¢Ã¨Ã²Ã¼ Ã¯Ã¥Ã°Ã¥Ã§Ã Ã£Ã°Ã³Ã§ÃªÃ³
     {
         AddCartridge(1);
         m_sub_state = eSubstateReloadEnd;
@@ -347,7 +344,19 @@ bool CWeaponAutomaticShotgun::RollForMisfire() {
     return inherited::RollForMisfire();
 }
 
+void CWeaponAutomaticShotgun::OnUpgradeHudChanged() {
+    inherited::OnUpgradeHudChanged();
+    if (!m_bTriStateReload)
+        return;
+
+    m_add_cartridge_in_open = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "add_cartridge_in_open", false);
+    m_empty_preload_mode = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "empty_preload_mode", false);
+    m_revolver_reload = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "revolver_reload", false);
+    LoadTubeReloadSounds();
+}
+
 void CWeaponAutomaticShotgun::LoadTubeReloadSounds() {
+    m_tube_sound_aliases.clear();
     const shared_str hud = HudSection();
     LPCSTR key, value;
     for (u32 i = 0; pSettings->r_line(hud.c_str(), i, &key, &value); ++i) {
@@ -358,7 +367,7 @@ void CWeaponAutomaticShotgun::LoadTubeReloadSounds() {
             continue;
         if (!value || !value[0] || xr_strcmp(value, "$silent") == 0)
             continue;
-        m_sounds.LoadSound(hud.c_str(), key, key, true, m_eSoundReload);
+        m_sounds.ReloadSound(hud.c_str(), key, key, true, m_eSoundReload);
         m_tube_sound_aliases.emplace_back(key);
     }
 }
@@ -632,7 +641,7 @@ u8 CWeaponAutomaticShotgun::AddCartridge(u8 cnt) {
 
     VERIFY((u32)iAmmoElapsed == m_magazine.size());
 
-    //âûêèíóòü êîðîáêó ïàòðîíîâ, åñëè îíà ïóñòàÿ
+    //Ã¢Ã»ÃªÃ¨Ã­Ã³Ã²Ã¼ ÃªÃ®Ã°Ã®Ã¡ÃªÃ³ Ã¯Ã Ã²Ã°Ã®Ã­Ã®Ã¢, Ã¥Ã±Ã«Ã¨ Ã®Ã­Ã  Ã¯Ã³Ã±Ã²Ã Ã¿
     if (m_pCurrentAmmo && !m_pCurrentAmmo->m_boxCurr && OnServer())
         m_pCurrentAmmo->SetDropManual(TRUE);
 

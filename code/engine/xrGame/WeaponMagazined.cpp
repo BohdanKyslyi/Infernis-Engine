@@ -63,17 +63,17 @@ void CWeaponMagazined::net_Destroy() { inherited::net_Destroy(); }
 
 void CWeaponMagazined::Load(LPCSTR section) {
     inherited::Load(section);
+    m_upgrade_scope_zoom = 0.f;
+    m_upgrade_ironsight_zoom = 0.f;
     m_chamber_round = pSettings->line_exist(section, "chamber_round")
                           ? pSettings->r_bool(section, "chamber_round")
                           : READ_IF_EXISTS(pSettings, r_bool, section, "ammo_in_chamber", false);
-    m_gunslinger_movement_idles =
-        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_movement_idles", false) ||
-        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "enable_directions_anm_idle_aim", false);
+    CWeaponMagazined::OnUpgradeHudChanged();
 
     // Sounds
-    if (m_gunslinger_movement_idles && pSettings->line_exist(section, "snd_sprint_start"))
+    if (pSettings->line_exist(section, "snd_sprint_start"))
         m_sounds.LoadSound(section, "snd_sprint_start", "sndSprintStart", false, m_eSoundShow);
-    if (m_gunslinger_movement_idles && pSettings->line_exist(section, "snd_sprint_end"))
+    if (pSettings->line_exist(section, "snd_sprint_end"))
         m_sounds.LoadSound(section, "snd_sprint_end", "sndSprintEnd", false, m_eSoundHide);
 
     if (pSettings->line_exist(section, "snd_aim_start"))
@@ -114,7 +114,7 @@ void CWeaponMagazined::Load(LPCSTR section) {
 
     m_sSndShotCurrent = "sndShot";
 
-    //звуки и партиклы глушителя, еслит такой есть
+    //Г§ГўГіГЄГЁ ГЁ ГЇГ Г°ГІГЁГЄГ«Г» ГЈГ«ГіГёГЁГІГҐГ«Гї, ГҐГ±Г«ГЁГІ ГІГ ГЄГ®Г© ГҐГ±ГІГј
     if (m_eSilencerStatus == ALife::eAddonAttachable ||
         m_eSilencerStatus == ALife::eAddonPermanent) {
         if (pSettings->line_exist(section, "silencer_flame_particles"))
@@ -148,6 +148,12 @@ void CWeaponMagazined::Load(LPCSTR section) {
         m_bHasDifferentFireModes = false;
     }
     LoadSilencerKoeffs();
+}
+
+void CWeaponMagazined::OnUpgradeHudChanged() {
+    m_gunslinger_movement_idles =
+        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_movement_idles", false) ||
+        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "enable_directions_anm_idle_aim", false);
 }
 
 void CWeaponMagazined::FireStart() {
@@ -304,7 +310,7 @@ void CWeaponMagazined::UnloadMagazine(bool spawn_ammo) {
 void CWeaponMagazined::ReloadMagazine() {
     m_BriefInfo_CalcFrame = 0;
 
-    //устранить осечку при перезарядке
+    //ГіГ±ГІГ°Г Г­ГЁГІГј Г®Г±ГҐГ·ГЄГі ГЇГ°ГЁ ГЇГҐГ°ГҐГ§Г Г°ГїГ¤ГЄГҐ
     if (IsMisfire())
         bMisfire = false;
 
@@ -335,12 +341,12 @@ void CWeaponMagazined::ReloadMagazine() {
         if (!tmp_sect_name)
             return;
 
-        //попытаться найти в инвентаре патроны текущего типа
+        //ГЇГ®ГЇГ»ГІГ ГІГјГ±Гї Г­Г Г©ГІГЁ Гў ГЁГ­ГўГҐГ­ГІГ Г°ГҐ ГЇГ ГІГ°Г®Г­Г» ГІГҐГЄГіГ№ГҐГЈГ® ГІГЁГЇГ 
         m_pCurrentAmmo = smart_cast<CWeaponAmmo*>(m_pInventory->GetAny(tmp_sect_name));
 
         if (!m_pCurrentAmmo && !m_bLockType) {
             for (u8 i = 0; i < u8(m_ammoTypes.size()); ++i) {
-                //проверить патроны всех подходящих типов
+                //ГЇГ°Г®ГўГҐГ°ГЁГІГј ГЇГ ГІГ°Г®Г­Г» ГўГ±ГҐГµ ГЇГ®Г¤ГµГ®Г¤ГїГ№ГЁГµ ГІГЁГЇГ®Гў
                 m_pCurrentAmmo =
                     smart_cast<CWeaponAmmo*>(m_pInventory->GetAny(m_ammoTypes[i].c_str()));
                 if (m_pCurrentAmmo) {
@@ -351,11 +357,11 @@ void CWeaponMagazined::ReloadMagazine() {
         }
     }
 
-    //нет патронов для перезарядки
+    //Г­ГҐГІ ГЇГ ГІГ°Г®Г­Г®Гў Г¤Г«Гї ГЇГҐГ°ГҐГ§Г Г°ГїГ¤ГЄГЁ
     if (!m_pCurrentAmmo && !unlimited_ammo())
         return;
 
-    //разрядить магазин, если загружаем патронами другого типа
+    //Г°Г Г§Г°ГїГ¤ГЁГІГј Г¬Г ГЈГ Г§ГЁГ­, ГҐГ±Г«ГЁ Г§Г ГЈГ°ГіГ¦Г ГҐГ¬ ГЇГ ГІГ°Г®Г­Г Г¬ГЁ Г¤Г°ГіГЈГ®ГЈГ® ГІГЁГЇГ 
     // Capture whether a round was chambered before an ammo-type change unloads
     // the old magazine. Recursive refills keep the same target capacity.
     if (!m_bLockType)
@@ -382,7 +388,7 @@ void CWeaponMagazined::ReloadMagazine() {
 
     VERIFY((u32)iAmmoElapsed == m_magazine.size());
 
-    //выкинуть коробку патронов, если она пустая
+    //ГўГ»ГЄГЁГ­ГіГІГј ГЄГ®Г°Г®ГЎГЄГі ГЇГ ГІГ°Г®Г­Г®Гў, ГҐГ±Г«ГЁ Г®Г­Г  ГЇГіГ±ГІГ Гї
     if (m_pCurrentAmmo && !m_pCurrentAmmo->m_boxCurr && OnServer())
         m_pCurrentAmmo->SetDropManual(TRUE);
 
@@ -437,8 +443,8 @@ void CWeaponMagazined::UpdateCL() {
     inherited::UpdateCL();
     float dt = Device.fTimeDelta;
 
-    //когда происходит апдейт состояния оружия
-    //ничего другого не делать
+    //ГЄГ®ГЈГ¤Г  ГЇГ°Г®ГЁГ±ГµГ®Г¤ГЁГІ Г ГЇГ¤ГҐГ©ГІ Г±Г®Г±ГІГ®ГїГ­ГЁГї Г®Г°ГіГ¦ГЁГї
+    //Г­ГЁГ·ГҐГЈГ® Г¤Г°ГіГЈГ®ГЈГ® Г­ГҐ Г¤ГҐГ«Г ГІГј
     if (GetNextState() == GetState()) {
         switch (GetState()) {
         case eShowing:
@@ -674,10 +680,10 @@ void CWeaponMagazined::OnShot() {
     PHGetLinearVell(vel);
     OnShellDrop(get_LastSP(), vel);
 
-    // Огонь из ствола
+    // ГЋГЈГ®Г­Гј ГЁГ§ Г±ГІГўГ®Г«Г 
     StartFlameParticles();
 
-    //дым из ствола
+    //Г¤Г»Г¬ ГЁГ§ Г±ГІГўГ®Г«Г 
     ForceUpdateFireParticles();
     StartSmokeParticles(get_LastFP(), vel);
 }
@@ -972,7 +978,7 @@ bool CWeaponMagazined::Action(u16 cmd, u32 flags) {
     if (inherited::Action(cmd, flags))
         return true;
 
-    //если оружие чем-то занято, то ничего не делать
+    //ГҐГ±Г«ГЁ Г®Г°ГіГ¦ГЁГҐ Г·ГҐГ¬-ГІГ® Г§Г Г­ГїГІГ®, ГІГ® Г­ГЁГ·ГҐГЈГ® Г­ГҐ Г¤ГҐГ«Г ГІГј
     if (IsPending())
         return false;
 
@@ -1081,7 +1087,7 @@ bool CWeaponMagazined::Attach(PIItem pIItem, bool b_send_event) {
 
     if (result) {
         if (b_send_event && OnServer()) {
-            //уничтожить подсоединенную вещь из инвентаря
+            //ГіГ­ГЁГ·ГІГ®Г¦ГЁГІГј ГЇГ®Г¤Г±Г®ГҐГ¤ГЁГ­ГҐГ­Г­ГіГѕ ГўГҐГ№Гј ГЁГ§ ГЁГ­ГўГҐГ­ГІГ Г°Гї
             //.			pIItem->Drop					();
             pIItem->object().DestroyObject();
         };
@@ -1201,12 +1207,21 @@ void CWeaponMagazined::InitAddons() {
             m_zoom_params.m_fIronSightZoomFactor = m_zoom_params.m_fScopeZoomFactor;
     }
 
+    if (IsScopeAttached()) {
+        m_zoom_params.m_fScopeZoomFactor += m_upgrade_scope_zoom;
+        if (m_upgrade_scope_zoom != 0.f)
+            m_fRTZoomFactor = m_zoom_params.m_fScopeZoomFactor;
+    } else if (IsZoomEnabled() && !m_gunslinger_zoom) {
+        m_zoom_params.m_fIronSightZoomFactor += m_upgrade_scope_zoom;
+    }
+    m_zoom_params.m_fIronSightZoomFactor += m_upgrade_ironsight_zoom;
+
     if (IsSilencerAttached() /* && SilencerAttachable() */) {
         m_sFlameParticlesCurrent = m_sSilencerFlameParticles;
         m_sSmokeParticlesCurrent = m_sSilencerSmokeParticles;
         m_sSndShotCurrent = "sndSilencerShot";
 
-        //подсветка от выстрела
+        //ГЇГ®Г¤Г±ГўГҐГІГЄГ  Г®ГІ ГўГ»Г±ГІГ°ГҐГ«Г 
         LoadLights(*cNameSect(), "silencer_");
         ApplySilencerKoeffs();
     } else {
@@ -1214,7 +1229,7 @@ void CWeaponMagazined::InitAddons() {
         m_sSmokeParticlesCurrent = m_sSmokeParticles;
         m_sSndShotCurrent = "sndShot";
 
-        //подсветка от выстрела
+        //ГЇГ®Г¤Г±ГўГҐГІГЄГ  Г®ГІ ГўГ»Г±ГІГ°ГҐГ«Г 
         LoadLights(*cNameSect(), "");
         ResetSilencerKoeffs();
     }
@@ -1517,7 +1532,7 @@ void CWeaponMagazined::OnZoomOut() {
         pActor->Cameras().RemoveCamEffector(eCEZoom);
 }
 
-//переключение режимов стрельбы одиночными и очередями
+//ГЇГҐГ°ГҐГЄГ«ГѕГ·ГҐГ­ГЁГҐ Г°ГҐГ¦ГЁГ¬Г®Гў Г±ГІГ°ГҐГ«ГјГЎГ» Г®Г¤ГЁГ­Г®Г·Г­Г»Г¬ГЁ ГЁ Г®Г·ГҐГ°ГҐГ¤ГїГ¬ГЁ
 bool CWeaponMagazined::SwitchMode() {
     if (eIdle != GetState() || IsPending())
         return false;
@@ -1584,6 +1599,11 @@ void CWeaponMagazined::load(IReader& input_packet) {
     SetQueueSize(m_iQueueSize);
     load_data(m_iShotNum, input_packet);
     load_data(m_iCurFireMode, input_packet);
+    if (!m_aFireModes.empty() &&
+        (m_iCurFireMode < 0 || static_cast<size_t>(m_iCurFireMode) >= m_aFireModes.size())) {
+        m_iCurFireMode = static_cast<int>(m_aFireModes.size()) - 1;
+        SetQueueSize(GetCurrentFireMode());
+    }
 }
 
 void CWeaponMagazined::net_Export(NET_Packet& P) {
@@ -1674,7 +1694,11 @@ bool CWeaponMagazined::install_upgrade_impl(LPCSTR section, bool test) {
             _GetItem(str, i, sItem);
             m_aFireModes.push_back((s8)atoi(sItem));
         }
-        m_iCurFireMode = ModesCount - 1;
+        if (m_aFireModes.empty())
+            m_aFireModes.push_back(1);
+        m_bHasDifferentFireModes = true;
+        m_iCurFireMode = static_cast<int>(m_aFireModes.size()) - 1;
+        SetQueueSize(!H_Parent() || smart_cast<CActor*>(H_Parent()) ? GetCurrentFireMode() : -1);
     }
     result |= result2;
 
@@ -1686,31 +1710,31 @@ bool CWeaponMagazined::install_upgrade_impl(LPCSTR section, bool test) {
     // sounds (name of the sound, volume (0.0 - 1.0), delay (sec))
     result2 = process_if_exists_set(section, "snd_draw", &CInifile::r_string, str, test);
     if (result2 && !test) {
-        m_sounds.LoadSound(section, "snd_draw", "sndShow", false, m_eSoundShow);
+        m_sounds.ReloadSound(section, "snd_draw", "sndShow", false, m_eSoundShow);
     }
     result |= result2;
 
     result2 = process_if_exists_set(section, "snd_holster", &CInifile::r_string, str, test);
     if (result2 && !test) {
-        m_sounds.LoadSound(section, "snd_holster", "sndHide", false, m_eSoundHide);
+        m_sounds.ReloadSound(section, "snd_holster", "sndHide", false, m_eSoundHide);
     }
     result |= result2;
 
     result2 = process_if_exists_set(section, "snd_shoot", &CInifile::r_string, str, test);
     if (result2 && !test) {
-        m_sounds.LoadSound(section, "snd_shoot", "sndShot", false, m_eSoundShot);
+        m_sounds.ReloadSound(section, "snd_shoot", "sndShot", false, m_eSoundShot);
     }
     result |= result2;
 
     result2 = process_if_exists_set(section, "snd_empty", &CInifile::r_string, str, test);
     if (result2 && !test) {
-        m_sounds.LoadSound(section, "snd_empty", "sndEmptyClick", false, m_eSoundEmptyClick);
+        m_sounds.ReloadSound(section, "snd_empty", "sndEmptyClick", false, m_eSoundEmptyClick);
     }
     result |= result2;
 
     result2 = process_if_exists_set(section, "snd_reload", &CInifile::r_string, str, test);
     if (result2 && !test) {
-        m_sounds.LoadSound(section, "snd_reload", "sndReload", true, m_eSoundReload);
+        m_sounds.ReloadSound(section, "snd_reload", "sndReload", true, m_eSoundReload);
     }
     result |= result2;
 
@@ -1728,31 +1752,35 @@ bool CWeaponMagazined::install_upgrade_impl(LPCSTR section, bool test) {
         result2 =
             process_if_exists_set(section, "snd_silncer_shot", &CInifile::r_string, str, test);
         if (result2 && !test) {
-            m_sounds.LoadSound(section, "snd_silncer_shot", "sndSilencerShot", false, m_eSoundShot);
+            m_sounds.ReloadSound(section, "snd_silncer_shot", "sndSilencerShot", false, m_eSoundShot);
         }
         result |= result2;
     }
 
-    // fov for zoom mode
-    result |= process_if_exists(section, "ironsight_zoom_factor", &CInifile::r_float,
-                                m_zoom_params.m_fIronSightZoomFactor, test);
-
-    if (IsScopeAttached()) {
-        // if ( m_eScopeStatus == ALife::eAddonAttachable )
-        {
-            result |= process_if_exists(section, "scope_zoom_factor", &CInifile::r_float,
-                                        m_zoom_params.m_fScopeZoomFactor, test);
+    if (!test) {
+        const bool silenced = IsSilencerAttached();
+        const shared_str flame =
+            silenced ? shared_str(m_sSilencerFlameParticles) : m_sFlameParticles;
+        if (m_sFlameParticlesCurrent != flame) {
+            StopFlameParticles();
+            m_sFlameParticlesCurrent = flame;
         }
-    } else {
-        if (IsZoomEnabled()) {
-            result |= process_if_exists(section, "scope_zoom_factor", &CInifile::r_float,
-                                        m_zoom_params.m_fIronSightZoomFactor, test);
-        }
+        m_sSmokeParticlesCurrent =
+            silenced ? shared_str(m_sSilencerSmokeParticles) : m_sSmokeParticles;
+        m_sSndShotCurrent = silenced ? "sndSilencerShot" : "sndShot";
     }
+
+    bool zoom_changed = process_if_exists(section, "ironsight_zoom_factor", &CInifile::r_float,
+                                          m_upgrade_ironsight_zoom, test);
+    zoom_changed |= process_if_exists(section, "scope_zoom_factor", &CInifile::r_float,
+                                      m_upgrade_scope_zoom, test);
+    if (zoom_changed && !test)
+        InitAddons();
+    result |= zoom_changed;
 
     return result;
 }
-//текущая дисперсия (в радианах) оружия с учетом используемого патрона и недисперсионных пуль
+//ГІГҐГЄГіГ№Г Гї Г¤ГЁГ±ГЇГҐГ°Г±ГЁГї (Гў Г°Г Г¤ГЁГ Г­Г Гµ) Г®Г°ГіГ¦ГЁГї Г± ГіГ·ГҐГІГ®Г¬ ГЁГ±ГЇГ®Г«ГјГ§ГіГҐГ¬Г®ГЈГ® ГЇГ ГІГ°Г®Г­Г  ГЁ Г­ГҐГ¤ГЁГ±ГЇГҐГ°Г±ГЁГ®Г­Г­Г»Гµ ГЇГіГ«Гј
 float CWeaponMagazined::GetFireDispersion(float cartridge_k, bool for_crosshair) {
     float fire_disp = GetBaseDispersion(cartridge_k);
     if (for_crosshair || !m_iBaseDispersionedBulletsCount || !m_iShotNum ||

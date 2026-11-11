@@ -56,6 +56,7 @@ private:
     bool UsesGunslingerTubeReload() const;
     bool UsesFirstShotMotion() const;
     shared_str TubeReloadMotion(LPCSTR base, bool preloaded = false, bool final = false) const;
+    void OnUpgradeHudChanged() override;
     void LoadTubeReloadSounds();
     void StartTubeReloadPhase();
     void PlayTubeReloadPhase(LPCSTR motion, LPCSTR sound, bool inserts_shell);

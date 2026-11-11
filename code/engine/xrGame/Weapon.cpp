@@ -214,9 +214,83 @@ void CWeapon::LoadHudFeatureFlags() {
         READ_IF_EXISTS(pSettings, r_bool, HudSection(), "use_advanced_ammo_bones", false);
 }
 
+void CWeapon::RefreshUpgradeHud() {
+    if (m_hud_upgrade_sections.empty())
+        return;
+
+    shared_str target = m_base_upgrade_hud;
+    const u16 slot = READ_IF_EXISTS(pSettings, r_u16, m_base_upgrade_hud, "attach_place_idx", u16(-1));
+    for (const shared_str& effect : m_hud_upgrade_sections) {
+        LPCSTR key = "hud";
+        if (IsSilencerAttached() &&
+            READ_IF_EXISTS(pSettings, r_bool, effect, "hud_when_silencer_is_attached", false))
+            key = "hud_silencer";
+        else if (IsGrenadeLauncherAttached() && GrenadeLauncherAttachable() &&
+                 READ_IF_EXISTS(pSettings, r_bool, effect, "hud_when_gl_is_attached", false))
+            key = "hud_gl";
+        else if (IsScopeAttached() &&
+                 READ_IF_EXISTS(pSettings, r_bool, effect, "hud_when_scope_is_attached", false))
+            key = "hud_scope";
+
+        const LPCSTR candidate = READ_IF_EXISTS(pSettings, r_string, effect, key, nullptr);
+        if (!candidate || !candidate[0] || xr_strcmp(candidate, "skip_reassign") == 0)
+            continue;
+        if (!pSettings->section_exist(candidate) ||
+            !pSettings->line_exist(candidate, "item_visual") ||
+            slot > 1 ||
+            READ_IF_EXISTS(pSettings, r_u16, candidate, "attach_place_idx", u16(-1)) != slot ||
+            !UpgradeHudAllowed(candidate)) {
+            Msg("! Invalid HUD [%s] in weapon upgrade [%s]", candidate, effect.c_str());
+            continue;
+        }
+        target = candidate;
+    }
+
+    m_pending_upgrade_hud = target == HudSection() ? shared_str() : target;
+    ApplyPendingUpgradeHud();
+}
+
+void CWeapon::ApplyPendingUpgradeHud() {
+    if (!m_pending_upgrade_hud.size())
+        return;
+
+    const bool attached = HudItemData() != nullptr;
+    if (m_bStopAtEndAnimIsRunning ||
+        (attached && (GetState() != eIdle || GetNextState() != eIdle || IsPending())))
+        return;
+
+    const shared_str target = m_pending_upgrade_hud;
+    m_pending_upgrade_hud = shared_str();
+    if (attached && !g_player_hud->can_attach_controller_item(target)) {
+        Msg("! Cannot apply weapon upgrade HUD [%s]", target.c_str());
+        return;
+    }
+
+    StopCurrentAnimWithoutCallback();
+    if (attached)
+        g_player_hud->detach_item(this);
+
+    hud_sect = target;
+    LoadHudFeatureFlags();
+    OnUpgradeHudChanged();
+
+    if (attached) {
+        g_player_hud->attach_item(this);
+        UpdateHUDAddonsVisibility();
+        PlayAnimIdle();
+    }
+}
+
 void CWeapon::Load(LPCSTR section) {
     m_bone_upgrade_sections.clear();
+    m_hud_upgrade_bones = UpgradeBoneMask();
+    m_world_upgrade_bones = UpgradeBoneMask();
+    m_icon_upgrade_sections.clear();
+    m_hud_upgrade_sections.clear();
+    m_scope_upgrade_sections.clear();
+    m_pending_upgrade_hud = shared_str();
     inherited::Load(section);
+    m_base_upgrade_hud = HudSection();
     CShootingObject::Load(section);
     LoadHudFeatureFlags();
     m_sounds.LoadSound(section, "snd_boring", "sndInspect", true);
@@ -240,9 +314,9 @@ void CWeapon::Load(LPCSTR section) {
     iMagazineSize = pSettings->r_s32(section, "ammo_mag_size");
 
     ////////////////////////////////////////////////////
-    // äèñïåðñèÿ ñòðåëüáû
+    // Ã¤Ã¨Ã±Ã¯Ã¥Ã°Ã±Ã¨Ã¿ Ã±Ã²Ã°Ã¥Ã«Ã¼Ã¡Ã»
 
-    //ïîäáðàñûâàíèå êàìåðû âî âðåìÿ îòäà÷è
+    //Ã¯Ã®Ã¤Ã¡Ã°Ã Ã±Ã»Ã¢Ã Ã­Ã¨Ã¥ ÃªÃ Ã¬Ã¥Ã°Ã» Ã¢Ã® Ã¢Ã°Ã¥Ã¬Ã¿ Ã®Ã²Ã¤Ã Ã·Ã¨
     u8 rm = READ_IF_EXISTS(pSettings, r_u8, section, "cam_return", 1);
     cam_recoil.ReturnMode = (rm == 1);
 
@@ -286,8 +360,8 @@ void CWeapon::Load(LPCSTR section) {
     cam_recoil.DispersionFrac =
         xr::abs(READ_IF_EXISTS(pSettings, r_float, section, "cam_dispersion_frac", 0.7f));
 
-    //ïîäáðàñûâàíèå êàìåðû âî âðåìÿ îòäà÷è â ðåæèìå zoom ==> ironsight or scope
-    // zoom_cam_recoil.Clone( cam_recoil ); ==== íåëüçÿ !!!!!!!!!!
+    //Ã¯Ã®Ã¤Ã¡Ã°Ã Ã±Ã»Ã¢Ã Ã­Ã¨Ã¥ ÃªÃ Ã¬Ã¥Ã°Ã» Ã¢Ã® Ã¢Ã°Ã¥Ã¬Ã¿ Ã®Ã²Ã¤Ã Ã·Ã¨ Ã¢ Ã°Ã¥Ã¦Ã¨Ã¬Ã¥ zoom ==> ironsight or scope
+    // zoom_cam_recoil.Clone( cam_recoil ); ==== Ã­Ã¥Ã«Ã¼Ã§Ã¿ !!!!!!!!!!
     zoom_cam_recoil.RelaxSpeed = cam_recoil.RelaxSpeed;
     zoom_cam_recoil.RelaxSpeed_AI = cam_recoil.RelaxSpeed_AI;
     zoom_cam_recoil.DispersionFrac = cam_recoil.DispersionFrac;
@@ -345,6 +419,7 @@ void CWeapon::Load(LPCSTR section) {
     m_pdm.m_fPDM_disp_crouch = pSettings->r_float(section, "PDM_disp_crouch");
     m_pdm.m_fPDM_disp_crouch_no_acc = pSettings->r_float(section, "PDM_disp_crouch_no_acc");
     m_crosshair_inertion = READ_IF_EXISTS(pSettings, r_float, section, "crosshair_inertion", 5.91f);
+    m_actor_camera_speed_factor = READ_IF_EXISTS(pSettings, r_float, section, "actor_camera_speed_factor", 1.f);
     m_first_bullet_controller.load(section);
     fireDispersionConditionFactor = pSettings->r_float(section, "fire_dispersion_condition_factor");
 
@@ -377,7 +452,7 @@ void CWeapon::Load(LPCSTR section) {
     m_fMinRadius = pSettings->r_float(section, "min_radius");
     m_fMaxRadius = pSettings->r_float(section, "max_radius");
 
-    // èíôîðìàöèÿ î âîçìîæíûõ àïãðåéäàõ è èõ âèçóàëèçàöèè â èíâåíòàðå
+    // Ã¨Ã­Ã´Ã®Ã°Ã¬Ã Ã¶Ã¨Ã¿ Ã® Ã¢Ã®Ã§Ã¬Ã®Ã¦Ã­Ã»Ãµ Ã Ã¯Ã£Ã°Ã¥Ã©Ã¤Ã Ãµ Ã¨ Ã¨Ãµ Ã¢Ã¨Ã§Ã³Ã Ã«Ã¨Ã§Ã Ã¶Ã¨Ã¨ Ã¢ Ã¨Ã­Ã¢Ã¥Ã­Ã²Ã Ã°Ã¥
     m_eScopeStatus = (ALife::EWeaponAddonStatus)pSettings->r_s32(section, "scope_status");
     m_eSilencerStatus = (ALife::EWeaponAddonStatus)pSettings->r_s32(section, "silencer_status");
     m_eGrenadeLauncherStatus =
@@ -499,7 +574,7 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
     // iAmmoCurrent					= E->a_current;
     iAmmoElapsed = E->a_elapsed;
     m_flagsAddOnState = E->m_addon_flags.get();
-    m_ammoType = E->ammo_type;
+    m_ammoType = E->ammo_type < m_ammoTypes.size() ? E->ammo_type : 0;
     SetState(E->wpn_state);
     SetNextState(E->wpn_state);
 
@@ -522,9 +597,10 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
 }
 
 void CWeapon::net_Destroy() {
+    m_world_upgrade_bones.Restore(nullptr);
     inherited::net_Destroy();
 
-    //óäàëèòü îáúåêòû ïàðòèêëîâ
+    //Ã³Ã¤Ã Ã«Ã¨Ã²Ã¼ Ã®Ã¡ÃºÃ¥ÃªÃ²Ã» Ã¯Ã Ã°Ã²Ã¨ÃªÃ«Ã®Ã¢
     StopFlameParticles();
     StopFlameParticles2();
     StopLight();
@@ -619,8 +695,13 @@ void CWeapon::load(IReader& input_packet) {
     load_data(iAmmoElapsed, input_packet);
     load_data(m_cur_scope, input_packet);
     load_data(m_flagsAddOnState, input_packet);
+    if (m_cur_scope >= m_scopes.size())
+        m_cur_scope = 0;
     UpdateAddonsVisibility();
+    InitAddons();
     load_data(m_ammoType, input_packet);
+    if (m_ammoType >= m_ammoTypes.size())
+        m_ammoType = 0;
     load_data(m_zoom_params.m_bIsZoomModeNow, input_packet);
 
     if (m_zoom_params.m_bIsZoomModeNow)
@@ -710,7 +791,7 @@ void CWeapon::OnActiveItem() {
     //-
 
     inherited::OnActiveItem();
-    //åñëè ìû çàíðóæàåìñÿ è îðóæèå áûëî â ðóêàõ
+    //Ã¥Ã±Ã«Ã¨ Ã¬Ã» Ã§Ã Ã­Ã°Ã³Ã¦Ã Ã¥Ã¬Ã±Ã¿ Ã¨ Ã®Ã°Ã³Ã¦Ã¨Ã¥ Ã¡Ã»Ã«Ã® Ã¢ Ã°Ã³ÃªÃ Ãµ
     //.	SetState					(eIdle);
     //.	SetNextState				(eIdle);
 }
@@ -757,11 +838,12 @@ bool CWeapon::AllowBore() { return true; }
 
 void CWeapon::UpdateCL() {
     inherited::UpdateCL();
+    ApplyPendingUpgradeHud();
     UpdateHUDAddonsVisibility();
-    //ïîäñâåòêà îò âûñòðåëà
+    //Ã¯Ã®Ã¤Ã±Ã¢Ã¥Ã²ÃªÃ  Ã®Ã² Ã¢Ã»Ã±Ã²Ã°Ã¥Ã«Ã 
     UpdateLight();
 
-    //íàðèñîâàòü ïàðòèêëû
+    //Ã­Ã Ã°Ã¨Ã±Ã®Ã¢Ã Ã²Ã¼ Ã¯Ã Ã°Ã²Ã¨ÃªÃ«Ã»
     UpdateFlameParticles();
     UpdateFlameParticles2();
 
@@ -823,11 +905,11 @@ bool CWeapon::need_renderable() { return !(IsZoomed() && ZoomTexture() && !IsRot
 void CWeapon::renderable_Render() {
     UpdateXForm();
 
-    //íàðèñîâàòü ïîäñâåòêó
+    //Ã­Ã Ã°Ã¨Ã±Ã®Ã¢Ã Ã²Ã¼ Ã¯Ã®Ã¤Ã±Ã¢Ã¥Ã²ÃªÃ³
 
     RenderLight();
 
-    //åñëè ìû â ðåæèìå ñíàéïåðêè, òî ñàì HUD ðèñîâàòü íå íàäî
+    //Ã¥Ã±Ã«Ã¨ Ã¬Ã» Ã¢ Ã°Ã¥Ã¦Ã¨Ã¬Ã¥ Ã±Ã­Ã Ã©Ã¯Ã¥Ã°ÃªÃ¨, Ã²Ã® Ã±Ã Ã¬ HUD Ã°Ã¨Ã±Ã®Ã¢Ã Ã²Ã¼ Ã­Ã¥ Ã­Ã Ã¤Ã®
     if (IsZoomed() && !IsRotatingToZoom() && ZoomTexture())
         RenderHud(FALSE);
     else
@@ -875,7 +957,7 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
         return true;
     }
     case kWPN_FIRE: {
-        //åñëè îðóæèå ÷åì-òî çàíÿòî, òî íè÷åãî íå äåëàòü
+        //Ã¥Ã±Ã«Ã¨ Ã®Ã°Ã³Ã¦Ã¨Ã¥ Ã·Ã¥Ã¬-Ã²Ã® Ã§Ã Ã­Ã¿Ã²Ã®, Ã²Ã® Ã­Ã¨Ã·Ã¥Ã£Ã® Ã­Ã¥ Ã¤Ã¥Ã«Ã Ã²Ã¼
         {
             if (IsPending())
                 return false;
@@ -1068,7 +1150,7 @@ int CWeapon::GetSuitableAmmoTotal(bool use_item_to_spawn) const {
         return ae_count;
     }
 
-    //÷òîá íå äåëàòü ëèøíèõ ïåðåñ÷åòîâ
+    //Ã·Ã²Ã®Ã¡ Ã­Ã¥ Ã¤Ã¥Ã«Ã Ã²Ã¼ Ã«Ã¨Ã¸Ã­Ã¨Ãµ Ã¯Ã¥Ã°Ã¥Ã±Ã·Ã¥Ã²Ã®Ã¢
     if (m_pInventory->ModifyFrame() <= m_BriefInfo_CalcFrame) {
         return ae_count + m_iAmmoCurrentTotal;
     }
@@ -1387,10 +1469,38 @@ void ApplyBoneList(IKinematics* model, LPCSTR section, LPCSTR key, BOOL visible,
 }
 } // namespace
 
-void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) const {
+void CWeapon::UpgradeBoneMask::Restore(IKinematics* current) {
+    if (current && current == model)
+        for (u16 bone : hidden)
+            current->LL_SetBoneVisible(bone, TRUE, FALSE);
+    hidden.clear();
+    model = current;
+}
+
+void CWeapon::UpgradeBoneMask::Hide(IKinematics* current, LPCSTR section, LPCSTR key) {
+    const LPCSTR names = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
+    if (!names || !names[0])
+        return;
+
+    string128 name;
+    for (int i = 0, count = _GetItemCount(names); i < count; ++i) {
+        _GetItem(names, i, name);
+        const u16 bone = current->LL_BoneID(name);
+        if (bone == BI_NONE || !current->LL_GetBoneVisible(bone))
+            continue;
+        hidden.push_back(bone);
+        current->LL_SetBoneVisible(bone, FALSE, FALSE);
+    }
+}
+
+void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
     if (!model)
         return;
 
+    const auto* hud_item = HudItemData();
+    const bool hud = hud_item && hud_item->m_model == model;
+    auto& hidden = hud ? m_hud_upgrade_bones : m_world_upgrade_bones;
+    hidden.Restore(model);
     const shared_str weapon_section = cNameSect();
     ApplyBoneList(model, weapon_section.c_str(), "def_hide_bones", FALSE);
 
@@ -1435,6 +1545,37 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) const {
     if (IsGrenadeLauncherAttached() && m_eGrenadeLauncherStatus == ALife::eAddonAttachable) {
         ApplyBoneList(model, m_sGrenadeLauncherName.c_str(), "overriding_hide_bones", FALSE);
         ApplyBoneList(model, m_sGrenadeLauncherName.c_str(), "bones", TRUE);
+    }
+
+    if (hud && pSettings->line_exist(HudSection(), "firemode_bones_total")) {
+        string64 key;
+        const int mode = FireModeForHudBones();
+        if (mode < 0)
+            xr_strcpy(key, "firemode_bones_a");
+        else
+            xr_sprintf(key, "firemode_bones_%d", mode);
+        const LPCSTR visible = READ_IF_EXISTS(pSettings, r_string, HudSection(), key, nullptr);
+        ApplyBoneList(model, HudSection().c_str(), "firemode_bones_total", FALSE, visible);
+        ApplyBoneList(model, HudSection().c_str(), key, TRUE);
+    }
+
+    const bool launcher = IsGrenadeLauncherAttached();
+    const bool grenade_pose = launcher && UpgradeGrenadeMode() && GetState() != eSwitch;
+    if (launcher)
+        hidden.Hide(model, weapon_section.c_str(), "def_hide_bones_override_when_gl_attached");
+    if (grenade_pose)
+        hidden.Hide(model, weapon_section.c_str(), "def_hide_bones_grenade");
+
+    for (const shared_str& effect : m_bone_upgrade_sections) {
+        hidden.Hide(model, effect.c_str(), "hide_bones_override");
+        if (IsSilencerAttached())
+            hidden.Hide(model, effect.c_str(), "hide_bones_override_when_silencer_attached");
+        if (IsScopeAttached())
+            hidden.Hide(model, effect.c_str(), "hide_bones_override_when_scope_attached");
+        if (launcher)
+            hidden.Hide(model, effect.c_str(), "hide_bones_override_when_gl_attached");
+        if (grenade_pose)
+            hidden.Hide(model, effect.c_str(), "hide_bones_override_grenade");
     }
 }
 
@@ -1551,6 +1692,7 @@ void CWeapon::UpdateHUDAddonsVisibility() { // actor only
 }
 
 void CWeapon::UpdateAddonsVisibility() {
+    RefreshUpgradeHud();
     IKinematics* pWeaponVisual = smart_cast<IKinematics*>(Visual());
     R_ASSERT(pWeaponVisual);
 
@@ -1614,7 +1756,16 @@ void CWeapon::UpdateAddonsVisibility() {
     pWeaponVisual->CalculateBones(TRUE);
 }
 
-void CWeapon::InitAddons() {}
+void CWeapon::InitAddons() {
+    for (const shared_str& effect : m_scope_upgrade_sections) {
+        process_if_exists_set(effect.c_str(), "scope_dynamic_zoom", &CInifile::r_bool,
+                              m_zoom_params.m_bUseDynamicZoom, false);
+        process_if_exists_set(effect.c_str(), "scope_nightvision", &CInifile::r_string_wb,
+                              m_zoom_params.m_sUseZoomPostprocess, false);
+        process_if_exists_set(effect.c_str(), "scope_alive_detector", &CInifile::r_string_wb,
+                              m_zoom_params.m_sUseBinocularVision, false);
+    }
+}
 
 bool CWeapon::UsesScopeZoom() const {
     return IsScopeAttached() && !m_bAlternativeAimActive;
@@ -2058,6 +2209,8 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
 }
 
 void CWeapon::on_b_hud_detach() {
+    if (const auto* data = HudItemData())
+        m_hud_upgrade_bones.Restore(data->m_model);
     inherited::on_b_hud_detach();
     m_hud_movement_pos.set(0.f, 0.f, 0.f);
     m_hud_movement_rot.set(0.f, 0.f, 0.f);

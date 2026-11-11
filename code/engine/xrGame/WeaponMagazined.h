@@ -8,8 +8,8 @@ class CCustomDetector;
 
 class ENGINE_API CMotionDef;
 
-//размер очереди считается бесконечность
-//заканчиваем стрельбу, только, если кончились патроны
+//Г°Г Г§Г¬ГҐГ° Г®Г·ГҐГ°ГҐГ¤ГЁ Г±Г·ГЁГІГ ГҐГІГ±Гї ГЎГҐГ±ГЄГ®Г­ГҐГ·Г­Г®Г±ГІГј
+//Г§Г ГЄГ Г­Г·ГЁГўГ ГҐГ¬ Г±ГІГ°ГҐГ«ГјГЎГі, ГІГ®Г«ГјГЄГ®, ГҐГ±Г«ГЁ ГЄГ®Г­Г·ГЁГ«ГЁГ±Гј ГЇГ ГІГ°Г®Г­Г»
 #define WEAPON_ININITE_QUEUE -1
 
 class CWeaponMagazined : public CWeapon {
@@ -17,12 +17,12 @@ private:
     typedef CWeapon inherited;
 
 protected:
-    //звук текущего выстрела
+    //Г§ГўГіГЄ ГІГҐГЄГіГ№ГҐГЈГ® ГўГ»Г±ГІГ°ГҐГ«Г 
     shared_str m_sSndShotCurrent;
     bool m_has_breechblock_sound = false;
     bool m_has_shot_jam_sound = false;
 
-    //дополнительная информация о глушителе
+    //Г¤Г®ГЇГ®Г«Г­ГЁГІГҐГ«ГјГ­Г Гї ГЁГ­ГґГ®Г°Г¬Г Г¶ГЁГї Г® ГЈГ«ГіГёГЁГІГҐГ«ГҐ
     LPCSTR m_sSilencerFlameParticles;
     LPCSTR m_sSilencerSmokeParticles;
 
@@ -33,7 +33,7 @@ protected:
     ESoundTypes m_eSoundReload;
     bool m_sounds_enabled;
     // General
-    //кадр момента пересчета UpdateSounds
+    //ГЄГ Г¤Г° Г¬Г®Г¬ГҐГ­ГІГ  ГЇГҐГ°ГҐГ±Г·ГҐГІГ  UpdateSounds
     u32 dwUpdateSounds_Frame;
 
 protected:
@@ -115,34 +115,36 @@ public:
     virtual float GetFireDispersion(float cartridge_k, bool for_crosshair = false);
 
 protected:
-    //максимальный размер очереди, которой можно стрельнуть
+    //Г¬Г ГЄГ±ГЁГ¬Г Г«ГјГ­Г»Г© Г°Г Г§Г¬ГҐГ° Г®Г·ГҐГ°ГҐГ¤ГЁ, ГЄГ®ГІГ®Г°Г®Г© Г¬Г®Г¦Г­Г® Г±ГІГ°ГҐГ«ГјГ­ГіГІГј
     int m_iQueueSize;
-    //количество реально выстреляных патронов
+    //ГЄГ®Г«ГЁГ·ГҐГ±ГІГўГ® Г°ГҐГ Г«ГјГ­Г® ГўГ»Г±ГІГ°ГҐГ«ГїГ­Г»Гµ ГЇГ ГІГ°Г®Г­Г®Гў
     int m_iShotNum;
-    //после какого патрона, при непрерывной стрельбе, начинается отдача (сделано из-за Абакана)
+    //ГЇГ®Г±Г«ГҐ ГЄГ ГЄГ®ГЈГ® ГЇГ ГІГ°Г®Г­Г , ГЇГ°ГЁ Г­ГҐГЇГ°ГҐГ°Г»ГўГ­Г®Г© Г±ГІГ°ГҐГ«ГјГЎГҐ, Г­Г Г·ГЁГ­Г ГҐГІГ±Гї Г®ГІГ¤Г Г·Г  (Г±Г¤ГҐГ«Г Г­Г® ГЁГ§-Г§Г  ГЂГЎГ ГЄГ Г­Г )
     int m_iBaseDispersionedBulletsCount;
-    //скорость вылета патронов, на которые не влияет отдача (сделано из-за Абакана)
+    //Г±ГЄГ®Г°Г®Г±ГІГј ГўГ»Г«ГҐГІГ  ГЇГ ГІГ°Г®Г­Г®Гў, Г­Г  ГЄГ®ГІГ®Г°Г»ГҐ Г­ГҐ ГўГ«ГЁГїГҐГІ Г®ГІГ¤Г Г·Г  (Г±Г¤ГҐГ«Г Г­Г® ГЁГ§-Г§Г  ГЂГЎГ ГЄГ Г­Г )
     float m_fBaseDispersionedBulletsSpeed;
-    //скорость вылета остальных патронов
+    //Г±ГЄГ®Г°Г®Г±ГІГј ГўГ»Г«ГҐГІГ  Г®Г±ГІГ Г«ГјГ­Г»Гµ ГЇГ ГІГ°Г®Г­Г®Гў
     float m_fOldBulletSpeed;
     Fvector m_vStartPos, m_vStartDir;
-    //флаг того, что мы остановились после того как выстреляли
-    //ровно столько патронов, сколько было задано в m_iQueueSize
+    //ГґГ«Г ГЈ ГІГ®ГЈГ®, Г·ГІГ® Г¬Г» Г®Г±ГІГ Г­Г®ГўГЁГ«ГЁГ±Гј ГЇГ®Г±Г«ГҐ ГІГ®ГЈГ® ГЄГ ГЄ ГўГ»Г±ГІГ°ГҐГ«ГїГ«ГЁ
+    //Г°Г®ГўГ­Г® Г±ГІГ®Г«ГјГЄГ® ГЇГ ГІГ°Г®Г­Г®Гў, Г±ГЄГ®Г«ГјГЄГ® ГЎГ»Г«Г® Г§Г Г¤Г Г­Г® Гў m_iQueueSize
     bool m_bStopedAfterQueueFired;
-    //флаг того, что хотя бы один выстрел мы должны сделать
-    //(даже если очень быстро нажали на курок и вызвалось FireEnd)
+    //ГґГ«Г ГЈ ГІГ®ГЈГ®, Г·ГІГ® ГµГ®ГІГї ГЎГ» Г®Г¤ГЁГ­ ГўГ»Г±ГІГ°ГҐГ« Г¬Г» Г¤Г®Г«Г¦Г­Г» Г±Г¤ГҐГ«Г ГІГј
+    //(Г¤Г Г¦ГҐ ГҐГ±Г«ГЁ Г®Г·ГҐГ­Гј ГЎГ»Г±ГІГ°Г® Г­Г Г¦Г Г«ГЁ Г­Г  ГЄГіГ°Г®ГЄ ГЁ ГўГ»Г§ГўГ Г«Г®Г±Гј FireEnd)
     bool m_bFireSingleShot;
-    //режимы стрельбы
+    //Г°ГҐГ¦ГЁГ¬Г» Г±ГІГ°ГҐГ«ГјГЎГ»
     bool m_bHasDifferentFireModes;
     xr_vector<s8> m_aFireModes;
     int m_iCurFireMode;
     int m_iPrefferedFireMode;
 
-    //переменная блокирует использование
-    //только разных типов патронов
+    //ГЇГҐГ°ГҐГ¬ГҐГ­Г­Г Гї ГЎГ«Г®ГЄГЁГ°ГіГҐГІ ГЁГ±ГЇГ®Г«ГјГ§Г®ГўГ Г­ГЁГҐ
+    //ГІГ®Г«ГјГЄГ® Г°Г Г§Г­Г»Гµ ГІГЁГЇГ®Гў ГЇГ ГІГ°Г®Г­Г®Гў
     bool m_bLockType;
     bool m_chamber_round;
     bool m_gunslinger_movement_idles = false;
+    float m_upgrade_scope_zoom = 0.f;
+    float m_upgrade_ironsight_zoom = 0.f;
     u32 m_previous_hud_movement = 0;
     int m_reload_target_capacity;
 
@@ -158,12 +160,14 @@ public:
     virtual void load(IReader& input_packet);
 
 protected:
+    void OnUpgradeHudChanged() override;
+    int FireModeForHudBones() const override { return GetQueueSize(); }
     virtual bool install_upgrade_impl(LPCSTR section, bool test);
 
 protected:
     virtual bool AllowFireWhileWorking() { return false; }
 
-    //виртуальные функции для проигрывания анимации HUD
+    //ГўГЁГ°ГІГіГ Г«ГјГ­Г»ГҐ ГґГіГ­ГЄГ¶ГЁГЁ Г¤Г«Гї ГЇГ°Г®ГЁГЈГ°Г»ГўГ Г­ГЁГї Г Г­ГЁГ¬Г Г¶ГЁГЁ HUD
     virtual void PlayAnimShow();
     virtual void PlayAnimHide();
     virtual void PlayAnimReload();

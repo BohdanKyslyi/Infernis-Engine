@@ -187,74 +187,21 @@ shared_str CWeaponBM16::SelectReloadSound(LPCSTR weapon_key) const {
 }
 
 bool CWeaponBM16::install_upgrade_impl(LPCSTR section, bool test) {
-    shared_str target;
-    if (UsesGunslingerDoubleBarrel()) {
-        const LPCSTR hud = READ_IF_EXISTS(pSettings, r_string, section, "hud", nullptr);
-        if (hud && hud[0] && pSettings->section_exist(hud) &&
-            pSettings->line_exist(hud, "item_visual") &&
-            READ_IF_EXISTS(pSettings, r_u16, hud, "attach_place_idx", u16(-1)) == 0 &&
-            IsDoubleBarrelHud(hud))
-            target = hud;
-    }
-
     const bool installed = inherited::install_upgrade_impl(section, test);
-    if (test || !UsesGunslingerDoubleBarrel())
-        return installed || target.c_str() != nullptr;
-
-    if (pSettings->line_exist(section, "ammo_class") && m_ammoType < m_ammoTypes.size()) {
-        m_DefaultCartridge.Load(m_ammoTypes[m_ammoType].c_str(), m_ammoType);
-        m_pCurrentAmmo = nullptr;
-        // A pending reload refers to indices from the previous ammo_class list.
+    if (!test && UsesGunslingerDoubleBarrel() && pSettings->line_exist(section, "ammo_class"))
         m_reload_commit_pending = false;
-        m_set_next_ammoType_on_reload = undefined_ammo_type;
-        m_BriefInfo_CalcFrame = 0;
-    }
-
-    if (!target.c_str())
-        return installed;
-
-    m_pending_hud_upgrade = target;
-    ApplyPendingHudUpgrade();
-    return true;
+    return installed;
 }
 
-void CWeaponBM16::ApplyPendingHudUpgrade() {
-    if (!m_pending_hud_upgrade.c_str())
-        return;
-    if (m_pending_hud_upgrade == HudSection()) {
-        m_pending_hud_upgrade = shared_str();
-        return;
-    }
+bool CWeaponBM16::UpgradeHudAllowed(const shared_str& hud) const {
+    return !UsesGunslingerDoubleBarrel() || IsDoubleBarrelHud(hud);
+}
 
-    const bool attached = HudItemData() != nullptr;
-    if (m_bStopAtEndAnimIsRunning ||
-        (attached && (GetState() != eIdle || GetNextState() != eIdle || IsPending())))
-        return;
-
-    if (attached && !g_player_hud->can_attach_controller_item(m_pending_hud_upgrade)) {
-        Msg("! Cannot apply double-barrel HUD upgrade [%s]", m_pending_hud_upgrade.c_str());
-        m_pending_hud_upgrade = shared_str();
-        return;
-    }
-
-    if (attached) {
-        StopCurrentAnimWithoutCallback();
-        g_player_hud->detach_item(this);
-    } else {
-        m_sounds.StopAllSounds();
-    }
-
-    hud_sect = m_pending_hud_upgrade;
-    m_pending_hud_upgrade = shared_str();
+void CWeaponBM16::OnUpgradeHudChanged() {
+    inherited::OnUpgradeHudChanged();
     m_no_jam_fire = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "no_jam_fire", false);
-    LoadHudFeatureFlags();
-    LoadHudReloadSounds();
-
-    if (attached) {
-        g_player_hud->attach_item(this);
-        UpdateHUDAddonsVisibility();
-        PlayAnimIdle();
-    }
+    if (UsesGunslingerDoubleBarrel())
+        LoadHudReloadSounds();
 }
 
 bool CWeaponBM16::PrepareReload() {
@@ -400,7 +347,6 @@ void CWeaponBM16::UpdateCL() {
         CommitReload();
 
     inherited::UpdateCL();
-    ApplyPendingHudUpgrade();
     if (GetState() == eReload && m_reload_sound.c_str())
         m_sounds.SetPosition(m_reload_sound.c_str(), get_LastFP());
 }

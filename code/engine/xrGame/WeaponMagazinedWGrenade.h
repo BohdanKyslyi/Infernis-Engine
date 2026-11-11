@@ -43,6 +43,7 @@ public:
     virtual void OnEvent(NET_Packet& P, u16 type);
     virtual void ReloadMagazine();
     void UnloadMagazine(bool spawn_ammo = true) override;
+    bool UpgradeGrenadeMode() const override { return m_bGrenadeMode; }
     BOOL IsMisfire() const override { return !m_bGrenadeMode && inherited::IsMisfire(); }
     bool HasChamberRound() const override { return !m_bGrenadeMode && inherited::HasChamberRound(); }
 
@@ -50,7 +51,7 @@ public:
 
     virtual void UpdateSounds();
 
-    //переключение в режим подствольника
+    //ГЇГҐГ°ГҐГЄГ«ГѕГ·ГҐГ­ГЁГҐ Гў Г°ГҐГ¦ГЁГ¬ ГЇГ®Г¤Г±ГІГўГ®Г«ГјГ­ГЁГЄГ 
     virtual bool SwitchMode();
     void PerformSwitchGL();
     void OnAnimationEnd(u32 state);
@@ -59,7 +60,7 @@ public:
 
     virtual bool IsNecessaryItem(const shared_str& item_sect);
 
-    //виртуальные функции для проигрывания анимации HUD
+    //ГўГЁГ°ГІГіГ Г«ГјГ­Г»ГҐ ГґГіГ­ГЄГ¶ГЁГЁ Г¤Г«Гї ГЇГ°Г®ГЁГЈГ°Г»ГўГ Г­ГЁГї Г Г­ГЁГ¬Г Г¶ГЁГЁ HUD
     virtual void PlayAnimShow();
     virtual void PlayAnimHide();
     virtual void PlayAnimReload();
@@ -88,8 +89,8 @@ private:
     int GetAmmoCount2(u8 ammo2_type) const;
 
 public:
-    //дополнительные параметры патронов
-    //для подствольника
+    //Г¤Г®ГЇГ®Г«Г­ГЁГІГҐГ«ГјГ­Г»ГҐ ГЇГ Г°Г Г¬ГҐГІГ°Г» ГЇГ ГІГ°Г®Г­Г®Гў
+    //Г¤Г«Гї ГЇГ®Г¤Г±ГІГўГ®Г«ГјГ­ГЁГЄГ 
     //-	CWeaponAmmo*			m_pAmmo2;
     xr_vector<shared_str> m_ammoTypes2;
     u8 m_ammoType2;

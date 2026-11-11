@@ -215,15 +215,7 @@ CUIWeaponCellItem::CUIWeaponCellItem(CWeapon* itm) : inherited(itm) {
     m_addons[eScope] = NULL;
     m_addons[eLauncher] = NULL;
 
-    if (itm->SilencerAttachable())
-        m_addon_offset[eSilencer].set(object()->GetSilencerX(), object()->GetSilencerY());
-
-    if (itm->ScopeAttachable())
-        m_addon_offset[eScope].set(object()->GetScopeX(), object()->GetScopeY());
-
-    if (itm->GrenadeLauncherAttachable())
-        m_addon_offset[eLauncher].set(object()->GetGrenadeLauncherX(),
-                                      object()->GetGrenadeLauncherY());
+    RefreshOffset();
 }
 
 #include "../xrServerEntities/object_broker.h"
@@ -269,6 +261,82 @@ void CUIWeaponCellItem::RefreshOffset() {
     if (object()->GrenadeLauncherAttachable())
         m_addon_offset[eLauncher].set(object()->GetGrenadeLauncherX(),
                                       object()->GetGrenadeLauncherY());
+
+    const Fvector2 correction = UpgradeIconCorrection();
+    if (object()->SilencerAttachable())
+        m_addon_offset[eSilencer].add(correction);
+    if (object()->ScopeAttachable())
+        m_addon_offset[eScope].add(correction);
+    if (object()->GrenadeLauncherAttachable())
+        m_addon_offset[eLauncher].add(correction);
+}
+
+Fvector2 CUIWeaponCellItem::UpgradeIconCorrection() {
+    Fvector2 correction;
+    correction.set(0.f, 0.f);
+    for (const shared_str& effect : object()->UpgradeIconSections()) {
+        correction.x += READ_IF_EXISTS(pSettings, r_float, effect, "inv_addons_correction_x", 0.f);
+        correction.y += READ_IF_EXISTS(pSettings, r_float, effect, "inv_addons_correction_y", 0.f);
+    }
+    return correction;
+}
+
+void CUIWeaponCellItem::RefreshWeaponIcon() {
+    const Irect grid = object()->GetInvGridRect();
+    m_grid_size.set(grid.rb);
+    Frect rect;
+    rect.set(grid.x1 * INV_GRID_WIDTHF, grid.y1 * INV_GRID_HEIGHTF,
+             (grid.x1 + grid.x2) * INV_GRID_WIDTHF, (grid.y1 + grid.y2) * INV_GRID_HEIGHTF);
+    SetTextureRect(rect);
+    m_icon_weapon = nullptr;
+}
+
+void CUIWeaponCellItem::CreateUpgradeIcons(CUIWindow* parent, bool rotate, u32 color) {
+    const auto& effects = object()->UpgradeIconSections();
+    if (effects.empty())
+        return;
+
+    const Fvector2 correction = UpgradeIconCorrection();
+    xr_vector<shared_str> hidden;
+    for (const shared_str& effect : effects) {
+        const LPCSTR list = READ_IF_EXISTS(pSettings, r_string, effect, "upgrade_addon_icons_hide", nullptr);
+        if (!list || !list[0])
+            continue;
+        string128 name;
+        for (int i = 0, count = _GetItemCount(list); i < count; ++i) {
+            _GetItem(list, i, name);
+            hidden.emplace_back(name);
+        }
+    }
+
+    const u8 addons = object()->GetAddonsState();
+    for (const bool front : {false, true}) {
+        for (const shared_str& effect : effects) {
+            if (front != READ_IF_EXISTS(pSettings, r_bool, effect, "upgrade_addon_always_front", false) ||
+                (addons & READ_IF_EXISTS(pSettings, r_u32, effect, "upgrade_addon_icon_banned_addons_mask", 0)))
+                continue;
+
+            const LPCSTR section = READ_IF_EXISTS(pSettings, r_string, effect, "upgrade_addon_icon", nullptr);
+            if (!section || !section[0] || !pSettings->section_exist(section) ||
+                !pSettings->line_exist(section, "inv_grid_width") ||
+                !pSettings->line_exist(section, "inv_grid_height") ||
+                !pSettings->line_exist(section, "inv_grid_x") ||
+                !pSettings->line_exist(section, "inv_grid_y") ||
+                std::find(hidden.begin(), hidden.end(), shared_str(section)) != hidden.end())
+                continue;
+
+            Fvector2 offset = correction;
+            offset.x += READ_IF_EXISTS(pSettings, r_float, effect, "upgrade_addon_icon_offset_x", 0.f);
+            offset.y += READ_IF_EXISTS(pSettings, r_float, effect, "upgrade_addon_icon_offset_y", 0.f);
+            auto* icon = xr_new<CUIStatic>();
+            icon->SetAutoDelete(true);
+            InitAddon(icon, section, offset, rotate);
+            icon->SetTextureColor(color);
+            parent->AttachChild(icon);
+            if (parent == this)
+                m_upgrade_icons.push_back(icon);
+        }
+    }
 }
 
 void CUIWeaponCellItem::Draw() {
@@ -282,7 +350,12 @@ void CUIWeaponCellItem::Update() {
     bool b = Heading();
     inherited::Update();
 
-    bool bForceReInitAddons = (b != Heading());
+    const size_t upgrade_count = object()->UpgradeIconSections().size();
+    const u8 addons = object()->GetAddonsState();
+    const Fvector2 size = GetWndSize();
+    const bool bForceReInitAddons = b != Heading() || m_icon_weapon != object() ||
+        m_icon_upgrade_count != upgrade_count || m_icon_addons != addons ||
+        m_icon_size.x != size.x || m_icon_size.y != size.y;
 
     if (object()->SilencerAttachable()) {
         if (object()->IsSilencerAttached()) {
@@ -325,10 +398,23 @@ void CUIWeaponCellItem::Update() {
                 DestroyIcon(eLauncher);
         }
     }
+
+    if (bForceReInitAddons) {
+        for (CUIStatic* icon : m_upgrade_icons)
+            DetachChild(icon);
+        m_upgrade_icons.clear();
+        CreateUpgradeIcons(this, Heading(), GetTextureColor());
+        m_icon_weapon = object();
+        m_icon_upgrade_count = upgrade_count;
+        m_icon_addons = addons;
+        m_icon_size = size;
+    }
 }
 
 void CUIWeaponCellItem::SetTextureColor(u32 color) {
     inherited::SetTextureColor(color);
+    for (CUIStatic* icon : m_upgrade_icons)
+        icon->SetTextureColor(color);
     if (m_addons[eSilencer]) {
         m_addons[eSilencer]->SetTextureColor(color);
     }
@@ -435,6 +521,7 @@ CUIDragItem* CUIWeaponCellItem::CreateDragItem() {
         s->SetTextureColor(i->wnd()->GetTextureColor());
         i->wnd()->AttachChild(s);
     }
+    CreateUpgradeIcons(i->wnd(), false, i->wnd()->GetTextureColor());
     return i;
 }
 
