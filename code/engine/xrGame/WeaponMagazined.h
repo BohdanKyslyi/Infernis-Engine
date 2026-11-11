@@ -48,6 +48,8 @@ protected:
     virtual void switch2_Showing();
 
     virtual void OnShot();
+    virtual LPCSTR ShotSound() const { return m_sSndShotCurrent.c_str(); }
+    virtual bool JamPreventsShot() const { return false; }
 
     virtual void OnEmptyClick();
 

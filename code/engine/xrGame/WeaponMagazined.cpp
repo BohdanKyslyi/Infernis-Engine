@@ -555,9 +555,10 @@ void CWeaponMagazined::state_Fire(float dt) {
         CEntity* E = smart_cast<CEntity*>(H_Parent());
         E->g_fireParams(this, p1, d);
 
-        const bool jam_after_shot = IsGameTypeSingle() && ParentIsActor() &&
-            READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_jam_after_shot", false);
-        if (!E->g_stateFire() && !(jam_after_shot && m_bFireSingleShot))
+        const bool jam_prevents_shot = JamPreventsShot();
+        const bool gunslinger_jam = IsGameTypeSingle() && ParentIsActor() &&
+            (jam_prevents_shot || READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_jam_after_shot", false));
+        if (!E->g_stateFire() && !(gunslinger_jam && m_bFireSingleShot))
             StopShooting();
 
         if (m_iShotNum == 0) {
@@ -569,12 +570,26 @@ void CWeaponMagazined::state_Fire(float dt) {
 
         while (!m_magazine.empty() && fShotTimeCounter < 0 && (IsWorking() || m_bFireSingleShot) &&
                (m_iQueueSize < 0 || m_iShotNum < m_iQueueSize)) {
-            const bool jam_this_shot = jam_after_shot && RollForMisfire();
+            const bool jam_this_shot = gunslinger_jam && RollForMisfire();
             if (jam_this_shot && RollForLightMisfire()) {
                 PlayLightMisfire();
                 return;
             }
-            if (!jam_after_shot && CheckForMisfire()) {
+            if (jam_this_shot && jam_prevents_shot) {
+                bMisfire = true;
+                m_bFireSingleShot = false;
+                CWeapon::FireEnd();
+                SetPending(TRUE);
+                PlaySound(m_has_shot_jam_sound ? "sndShotJam" : "sndEmptyClick", get_LastFP());
+                PlayAnimShoot();
+                fShotTimeCounter = fOneShotTime;
+                if (m_bStopAtEndAnimIsRunning && m_startedMotionState == eFire) {
+                    const float duration = float(m_dwMotionEndTm - m_dwMotionStartTm) * 0.001f;
+                    fShotTimeCounter = (std::max)(fShotTimeCounter, duration);
+                }
+                return;
+            }
+            if (!gunslinger_jam && CheckForMisfire()) {
                 StopShooting();
                 return;
             }
@@ -640,7 +655,7 @@ void CWeaponMagazined::SetDefaults() { CWeapon::SetDefaults(); }
 
 void CWeaponMagazined::OnShot() {
     // Sound
-    PlaySound(m_sSndShotCurrent.c_str(), get_LastFP());
+    PlaySound(ShotSound(), get_LastFP());
 
     // Camera
     AddShotEffector();
@@ -1338,10 +1353,8 @@ shared_str CWeaponMagazined::GunslingerMovementIdle(u32 movement) const {
     string256 variant;
     if (IsMisfire() || iAmmoElapsed == 0) {
         xr_sprintf(variant, "%s%s", base, IsMisfire() ? "_jammed" : "_empty");
-        if (pSettings->line_exist(HudSection(), variant))
-            return shared_str(variant);
         // A normal variant may put the slide in the wrong pose.
-        return {};
+        return HudStateVariant(base, pSettings->line_exist(HudSection(), variant) ? variant : nullptr);
     }
     return HudStateVariant(base, pSettings->line_exist(HudSection(), base) ? base : nullptr);
 }
