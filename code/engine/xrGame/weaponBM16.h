@@ -15,6 +15,7 @@ protected:
     void switch2_Reload() override;
     void OnAnimationEnd(u32 state) override;
     void OnStateSwitch(u32 state) override;
+    void AdjustHudAmmoState(u8& ammo_type, int& count, const shared_str& last_shot) const override;
     LPCSTR ShotSound() const override;
     bool JamPreventsShot() const override;
     bool HasChamberRound() const override;
@@ -54,6 +55,8 @@ private:
     bool m_reload_replace_rounds = false;
     u8 m_reload_ammo_type = 0;
     int m_reload_round_count = 0;
+    u32 m_reload_started_ms = 0;
+    u32 m_reload_visual_at_ms = 0;
     u32 m_reload_commit_at_ms = 0;
 };
 add_to_type_list(CWeaponBM16)

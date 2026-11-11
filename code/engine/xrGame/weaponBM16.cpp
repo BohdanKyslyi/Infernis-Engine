@@ -167,6 +167,8 @@ bool CWeaponBM16::PrepareReload() {
     m_reload_unjam = IsMisfire();
     m_reload_motion = shared_str();
     m_reload_sound = shared_str();
+    m_reload_started_ms = Device.dwTimeGlobal;
+    m_reload_visual_at_ms = 0;
     m_reload_commit_at_ms = 0;
 
     const int loaded = clampr(iAmmoElapsed, 0, 2);
@@ -273,10 +275,33 @@ void CWeaponBM16::CommitReload() {
     m_BriefInfo_CalcFrame = 0;
 }
 
+void CWeaponBM16::AdjustHudAmmoState(u8& ammo_type, int& count, const shared_str& last_shot) const {
+    if (!UsesGunslingerDoubleBarrel() || IsMisfire())
+        return;
+
+    const bool reloading = GetState() == eReload && m_reload_commit_pending && !m_reload_unjam;
+    if (reloading && m_bStopAtEndAnimIsRunning && m_startedMotionState == eReload &&
+        Device.dwTimeGlobal - m_reload_started_ms >= m_reload_visual_at_ms) {
+        // Show the incoming rounds while the animation finishes closing the barrels.
+        ammo_type = m_reload_ammo_type;
+        count = m_reload_round_count;
+        return;
+    }
+
+    if (!reloading && count != 0)
+        return;
+
+    // TryReload can select the reserve type before the spent cases are removed.
+    const auto& old_ammo = m_magazine.empty() ? last_shot : m_magazine.back().m_ammoSect;
+    const auto old_type = std::find(m_ammoTypes.begin(), m_ammoTypes.end(), old_ammo);
+    if (old_type != m_ammoTypes.end())
+        ammo_type = static_cast<u8>(old_type - m_ammoTypes.begin());
+}
+
 void CWeaponBM16::UpdateCL() {
     if (m_reload_commit_pending && GetState() == eReload && GetNextState() == eReload &&
         m_bStopAtEndAnimIsRunning && m_startedMotionState == eReload &&
-        Device.dwTimeGlobal - m_dwMotionStartTm >= m_reload_commit_at_ms)
+        Device.dwTimeGlobal - m_reload_started_ms >= m_reload_commit_at_ms)
         CommitReload();
 
     inherited::UpdateCL();
@@ -286,6 +311,10 @@ void CWeaponBM16::UpdateCL() {
 
 void CWeaponBM16::OnStateSwitch(u32 state) {
     if (state != eReload && m_reload_commit_pending) {
+        if (!m_reload_unjam && GetState() == eReload &&
+            Device.dwTimeGlobal - m_reload_started_ms >= m_reload_commit_at_ms)
+            CommitReload();
+
         m_reload_commit_pending = false;
         m_set_next_ammoType_on_reload = undefined_ammo_type;
     }
@@ -403,12 +432,20 @@ void CWeaponBM16::PlayAnimReload() {
             OnAnimationEnd(eReload);
             return;
         }
+        m_reload_started_ms = m_dwMotionStartTm;
+        m_reload_visual_at_ms = duration;
         m_reload_commit_at_ms = duration;
-        if (GetHUDmode()) {
+        if (GetHUDmode() && !m_reload_unjam) {
             string256 key;
             xr_sprintf(key, "lock_time_start_%s", motion);
             const float time = READ_IF_EXISTS(pSettings, r_float, HudSection(), key, float(duration) * 0.001f);
-            m_reload_commit_at_ms = static_cast<u32>(clampr(time * 1000.f, 0.f, float(duration)));
+            if (time >= 0.f)
+                m_reload_visual_at_ms = static_cast<u32>(clampr(time * 1000.f, 0.f, float(duration)));
+
+            // Keep rounds already inserted when a state change cuts off the closing frames.
+            constexpr u32 closing_window_ms = 150;
+            const u32 closing_start_ms = duration - (std::min)(duration, closing_window_ms);
+            m_reload_commit_at_ms = (std::max)(m_reload_visual_at_ms, closing_start_ms);
         }
         return;
     }

@@ -1483,6 +1483,10 @@ void CWeapon::UpdateHudAmmoBones(const CCartridge* fired) {
         }
     }
 
+    int count = static_cast<int>(m_magazine.size());
+    if (!fired)
+        AdjustHudAmmoState(ammo_type, count, m_last_shot_ammo_section);
+
     string64 key;
     xr_sprintf(key, "ammo_params_section_%u", static_cast<unsigned>(ammo_type));
     LPCSTR section = READ_IF_EXISTS(pSettings, r_string, hud, key, nullptr);
@@ -1491,7 +1495,6 @@ void CWeapon::UpdateHudAmmoBones(const CCartridge* fired) {
     if (!section || !pSettings->section_exist(section))
         return;
 
-    int count = static_cast<int>(m_magazine.size());
     if (count > 0 &&
         ((reloading && !IsTriStateReload() && motion && !std::strstr(motion, "_empty") &&
           READ_IF_EXISTS(pSettings, r_bool, hud, "minus_ammo_in_usual_reloads", false)) ||
