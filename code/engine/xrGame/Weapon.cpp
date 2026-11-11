@@ -290,6 +290,7 @@ void CWeapon::Load(LPCSTR section) {
     m_hud_upgrade_sections.clear();
     m_scope_upgrade_sections.clear();
     m_pending_upgrade_hud = shared_str();
+    m_upgrade_world_visual = shared_str();
     inherited::Load(section);
     m_base_upgrade_hud = HudSection();
     CShootingObject::Load(section);
@@ -566,6 +567,47 @@ void CWeapon::LoadFireParams(LPCSTR section) {
     CShootingObject::LoadFireParams(section);
 };
 
+LPCSTR CWeapon::visual_name(CSE_Abstract* server_entity) {
+    // Grenade-launcher weapons replay saved upgrades before GameObject spawns
+    // the visual and before PhysicItem builds the shell for a dropped weapon.
+    return m_upgrade_world_visual.size() ? m_upgrade_world_visual.c_str()
+                                         : inherited::visual_name(server_entity);
+}
+
+bool CWeapon::SetUpgradeWorldVisual(LPCSTR visual) {
+    string_path model;
+    xr_strcpy(model, visual);
+    if (auto* ext = strext(model))
+        *ext = 0;
+    xr_strlwr(model);
+    if (!model[0] || m_upgrade_world_visual == model)
+        return false;
+
+    string_path filename, resolved;
+    strconcat(sizeof(filename), filename, model, ".ogf");
+    if (!FS.exist(resolved, "$game_meshes$", filename) &&
+        !FS.exist(resolved, "$level$", filename)) {
+        Msg("! Missing weapon upgrade visual [%s] for [%s]", visual, cNameSect().c_str());
+        return false;
+    }
+
+    m_upgrade_world_visual = model;
+    return true;
+}
+
+bool CWeapon::ApplyUpgradeWorldVisual() {
+    // A physics shell can retain bone callbacks on its current visual.
+    if (!m_upgrade_world_visual.size() || !Visual() || PPhysicsShell() ||
+        cNameVisual() == m_upgrade_world_visual)
+        return false;
+
+    m_world_upgrade_bones.Restore(nullptr);
+    cNameVisual_set(m_upgrade_world_visual);
+    if (!visual_callbacks().empty())
+        SetKinematicsCallback(true);
+    return true;
+}
+
 BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
     m_fRTZoomFactor = m_zoom_params.m_fScopeZoomFactor;
     BOOL bResult = inherited::net_Spawn(DC);
@@ -599,6 +641,7 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
 
 void CWeapon::net_Destroy() {
     m_world_upgrade_bones.Restore(nullptr);
+    m_upgrade_world_visual = shared_str();
     inherited::net_Destroy();
 
     //óäàëèòü îáúåêòû ïàðòèêëîâ
@@ -753,6 +796,9 @@ void CWeapon::shedule_Update(u32 dT) {
 
 void CWeapon::OnH_B_Independent(bool just_before_destroy) {
     RemoveShotEffector();
+
+    if (!just_before_destroy && ApplyUpgradeWorldVisual())
+        UpdateAddonsVisibility();
 
     inherited::OnH_B_Independent(just_before_destroy);
 
@@ -1754,6 +1800,7 @@ void CWeapon::UpdateHUDAddonsVisibility() { // actor only
 }
 
 void CWeapon::UpdateAddonsVisibility() {
+    ApplyUpgradeWorldVisual();
     RefreshUpgradeHud();
     IKinematics* pWeaponVisual = smart_cast<IKinematics*>(Visual());
     R_ASSERT(pWeaponVisual);

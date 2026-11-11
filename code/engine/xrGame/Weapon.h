@@ -213,6 +213,10 @@ protected:
     xr_vector<shared_str> m_scope_upgrade_sections;
     shared_str m_base_upgrade_hud;
     shared_str m_pending_upgrade_hud;
+    shared_str m_upgrade_world_visual;
+    LPCSTR visual_name(CSE_Abstract* server_entity) override;
+    bool SetUpgradeWorldVisual(LPCSTR visual);
+    bool ApplyUpgradeWorldVisual();
     void RefreshUpgradeHud();
     void ApplyPendingUpgradeHud();
 

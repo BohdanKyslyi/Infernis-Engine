@@ -25,6 +25,13 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
     result |= install_upgrade_disp(section, test);
     result |= install_upgrade_hit(section, test);
     result |= install_upgrade_addon(section, test);
+
+    LPCSTR visual = nullptr;
+    const bool has_world_visual =
+        process_if_exists_set(section, "visual", &CInifile::r_string, visual, test);
+    bool refresh_visuals = has_world_visual && !test && SetUpgradeWorldVisual(visual);
+    result |= has_world_visual;
+
     if (pSettings->line_exist(section, "hud")) {
         result = true;
         if (!test && std::find(m_hud_upgrade_sections.begin(), m_hud_upgrade_sections.end(),
@@ -45,12 +52,16 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
         if (!test && std::find(m_bone_upgrade_sections.begin(), m_bone_upgrade_sections.end(),
                                shared_str(section)) == m_bone_upgrade_sections.end()) {
             m_bone_upgrade_sections.push_back(section);
-            if (Visual())
-                UpdateAddonsVisibility();
-            else
-                UpdateHUDAddonsVisibility();
+            refresh_visuals = true;
         }
     }
+    if (refresh_visuals) {
+        if (Visual())
+            UpdateAddonsVisibility();
+        else
+            UpdateHUDAddonsVisibility();
+    }
+
     if (pSettings->line_exist(section, "upgrade_addon_icon") ||
         pSettings->line_exist(section, "upgrade_addon_icons_hide") ||
         pSettings->line_exist(section, "inv_addons_correction_x") ||
