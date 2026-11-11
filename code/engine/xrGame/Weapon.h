@@ -366,7 +366,7 @@ protected:
     virtual void OnStateSwitch(u32 S);
     virtual void OnAnimationEnd(u32 state);
     virtual shared_str InspectMotion() const;
-    bool RollForMisfire();
+    virtual bool RollForMisfire();
 
     //трассирование полета пули
     virtual void FireTrace(const Fvector& P, const Fvector& D);

@@ -179,7 +179,7 @@ protected:
     CCustomDetector* ReloadDetector() const;
     LPCSTR DetectorReloadMotion(CCustomDetector& detector) const;
     LPCSTR ShootMotion(LPCSTR fallback) const;
-    LPCSTR StateMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const;
+    virtual LPCSTR StateMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const;
     void PlayDryFireMotion(LPCSTR normal, LPCSTR aimed);
     virtual shared_str SelectDryFireMotion(LPCSTR normal, LPCSTR aimed) const;
     virtual shared_str HudStateVariant(LPCSTR base, LPCSTR fallback) const;

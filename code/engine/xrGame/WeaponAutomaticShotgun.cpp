@@ -1,6 +1,7 @@
 #include "stdafx.h"
 
 #include <algorithm>
+#include <cstring>
 #include "WeaponAutomaticShotgun.h"
 #include "entity.h"
 #include "ParticlesObject.h"
@@ -29,6 +30,10 @@ void CWeaponAutomaticShotgun::Load(LPCSTR section) {
         m_add_cartridge_in_open = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "add_cartridge_in_open", false);
         m_empty_preload_mode = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "empty_preload_mode", false);
         m_keep_chambered_cartridge = READ_IF_EXISTS(pSettings, r_bool, section, "save_cartridge_in_ammochange", true);
+        m_revolver_reload = READ_IF_EXISTS(pSettings, r_bool, HudSection(), "revolver_reload", false);
+        m_need_final_close_anims = READ_IF_EXISTS(pSettings, r_bool, section, "need_final_close_anims", false);
+        m_need_first_shoot_anims = READ_IF_EXISTS(pSettings, r_bool, section, "need_first_shoot_anims", false);
+        LoadTubeReloadSounds();
 
         m_sounds.LoadSound(section, "snd_open_weapon", "sndOpen", false, m_eSoundOpen);
 
@@ -193,8 +198,184 @@ void CWeaponAutomaticShotgun::OnStateSwitch(u32 S) {
 }
 
 bool CWeaponAutomaticShotgun::UsesGunslingerTubeReload() const {
-    return m_bTriStateReload && HasChamberRound() && IsGameTypeSingle() &&
-        (m_add_cartridge_in_open || m_empty_preload_mode);
+    return m_bTriStateReload && IsGameTypeSingle() &&
+        (m_add_cartridge_in_open || m_empty_preload_mode || m_revolver_reload || m_need_final_close_anims);
+}
+
+void CWeaponAutomaticShotgun::reinit() {
+    inherited::reinit();
+    m_just_after_reload = false;
+    m_saved_reload_state = false;
+    m_saved_cartridge_types.clear();
+    ResetTubeReload();
+}
+
+BOOL CWeaponAutomaticShotgun::net_Spawn(CSE_Abstract* DC) {
+    const BOOL result = inherited::net_Spawn(DC);
+    if (result && m_saved_reload_state) {
+        if (m_saved_cartridge_types.size() == m_magazine.size()) {
+            for (u32 i = 0; i < m_magazine.size(); ++i) {
+                const u8 type = m_saved_cartridge_types[i];
+                m_magazine[i].Load(m_ammoTypes[type].c_str(), type);
+            }
+        }
+        // Resume from the saved cartridge count, never replay a pending insertion.
+        if (GetState() == eReload) {
+            StopCurrentAnimWithoutCallback();
+            SetPending(FALSE);
+            SetState(eIdle);
+            SetNextState(eIdle);
+        }
+    }
+    m_saved_reload_state = false;
+    m_saved_cartridge_types.clear();
+    return result;
+}
+
+void CWeaponAutomaticShotgun::save(NET_Packet& output_packet) {
+    inherited::save(output_packet);
+    if (!UsesGunslingerTubeReload())
+        return;
+
+    // Optional, versioned extension before the script binder payload.
+    // Old saves have no marker and are read without consuming their script data.
+    const u16 count = static_cast<u16>(m_magazine.size());
+    output_packet.w_u32(0x31415347); // GSA1
+    output_packet.w_u32(0x31444c52); // RLD1
+    output_packet.w_u16(static_cast<u16>(4 + count));
+    output_packet.w_u8(1); // version
+    output_packet.w_u8((m_just_after_reload ? 1 : 0) | (IsMisfire() ? 2 : 0));
+    output_packet.w_u16(count);
+    for (const auto& cartridge : m_magazine)
+        output_packet.w_u8(cartridge.m_LocalAmmoType);
+}
+
+void CWeaponAutomaticShotgun::load(IReader& input_packet) {
+    m_just_after_reload = false;
+    m_saved_reload_state = false;
+    m_saved_cartridge_types.clear();
+    ResetTubeReload();
+    inherited::load(input_packet);
+
+    if (input_packet.elapsed() < 10)
+        return;
+    const u32 start = input_packet.tell();
+    if (input_packet.r_u32() != 0x31415347 || input_packet.r_u32() != 0x31444c52) {
+        input_packet.seek(start);
+        return;
+    }
+    const u16 size = input_packet.r_u16();
+    if (size > input_packet.elapsed()) {
+        input_packet.seek(start);
+        return;
+    }
+    const u32 end = input_packet.tell() + size;
+    if (size >= 4 && input_packet.r_u8() == 1) {
+        const u8 flags = input_packet.r_u8();
+        const u16 count = input_packet.r_u16();
+        if (count <= size - 4 && count == iAmmoElapsed && UsesGunslingerTubeReload()) {
+            m_saved_reload_state = true;
+            m_just_after_reload = (flags & 1) != 0;
+            bMisfire = (flags & 2) != 0;
+            for (u16 i = 0; i < count; ++i) {
+                const u8 type = input_packet.r_u8();
+                m_saved_cartridge_types.push_back(type < m_ammoTypes.size() ? type : m_ammoType);
+            }
+        }
+    }
+    input_packet.seek(end);
+}
+
+bool CWeaponAutomaticShotgun::UsesFirstShotMotion() const {
+    return UsesGunslingerTubeReload() && m_need_first_shoot_anims && m_just_after_reload && iAmmoElapsed > 0;
+}
+
+shared_str CWeaponAutomaticShotgun::HudStateVariant(LPCSTR base, LPCSTR fallback) const {
+    if (UsesFirstShotMotion() && !IsMisfire()) {
+        string256 variant;
+        xr_sprintf(variant, "%s_first", base);
+        if (pSettings->line_exist(HudSection(), variant))
+            return shared_str(variant);
+    }
+    return inherited::HudStateVariant(base, fallback);
+}
+
+LPCSTR CWeaponAutomaticShotgun::StateMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const {
+    m_first_state_motion = HudStateVariant(normal, inherited::StateMotion(normal, empty, jammed));
+    return m_first_state_motion.c_str();
+}
+
+shared_str CWeaponAutomaticShotgun::InspectMotion() const {
+    return HudStateVariant("anm_bore", inherited::InspectMotion().c_str());
+}
+
+void CWeaponAutomaticShotgun::PlayAnimShoot() {
+    if (!UsesFirstShotMotion()) {
+        inherited::PlayAnimShoot();
+        return;
+    }
+    string256 variant;
+    const bool aimed = IsZoomed() && !IsRotatingToZoom();
+    xr_sprintf(variant, "anm_shoot%s%s_first%s", aimed ? "_aim" : "",
+        IsMisfire() ? "_jammed" : iAmmoElapsed == 1 ? "_last" : "",
+        IsSilencerAttached() ? "_sil" : "");
+    LPCSTR motion = OptionalHudMotion(variant, nullptr);
+    if (!motion && IsMisfire()) {
+        inherited::PlayAnimShoot();
+        return;
+    }
+    if (!motion && aimed) {
+        xr_sprintf(variant, "anm_shoot_aim_first%s", IsSilencerAttached() ? "_sil" : "");
+        motion = OptionalHudMotion(variant, nullptr);
+    }
+    if (!motion)
+        motion = OptionalHudMotion("anm_shoot_first", nullptr);
+    if (motion)
+        PlayHUDMotion(motion, MixShootAfterIdle(), this, GetState());
+    else
+        inherited::PlayAnimShoot();
+}
+
+void CWeaponAutomaticShotgun::OnShot() {
+    inherited::OnShot();
+    m_just_after_reload = false;
+}
+
+bool CWeaponAutomaticShotgun::RollForMisfire() {
+    if (UsesFirstShotMotion() && READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "no_jam_in_first_shot", false))
+        return false;
+    return inherited::RollForMisfire();
+}
+
+void CWeaponAutomaticShotgun::LoadTubeReloadSounds() {
+    const shared_str hud = HudSection();
+    LPCSTR key, value;
+    for (u32 i = 0; pSettings->r_line(hud.c_str(), i, &key, &value); ++i) {
+        if (std::strncmp(key, "snd_anm_open", 12) != 0 &&
+            std::strncmp(key, "snd_anm_add_cartridge", 21) != 0 &&
+            std::strncmp(key, "snd_anm_close", 13) != 0 &&
+            std::strncmp(key, "snd_anm_reload_jammed", 21) != 0)
+            continue;
+        if (!value || !value[0] || xr_strcmp(value, "$silent") == 0)
+            continue;
+        m_sounds.LoadSound(hud.c_str(), key, key, true, m_eSoundReload);
+        m_tube_sound_aliases.emplace_back(key);
+    }
+}
+
+shared_str CWeaponAutomaticShotgun::TubeReloadMotion(LPCSTR base, bool preloaded, bool final) const {
+    string256 variant;
+    xr_sprintf(variant, "%s%s", base, iAmmoElapsed == 0 ? "_empty" : UsesFirstShotMotion() ? "_first" : "");
+    shared_str motion = OptionalHudMotion(variant, base);
+    if (preloaded) {
+        xr_sprintf(variant, "%s_preloaded", motion.c_str());
+        motion = OptionalHudMotion(variant, motion.c_str());
+    }
+    if (final) {
+        xr_sprintf(variant, "%s_final", motion.c_str());
+        motion = OptionalHudMotion(variant, motion.c_str());
+    }
+    return motion;
 }
 
 void CWeaponAutomaticShotgun::ResetTubeReload() {
@@ -213,36 +394,31 @@ void CWeaponAutomaticShotgun::StartTubeReloadPhase() {
     const bool empty = iAmmoElapsed == 0;
     const auto& section = cNameSect();
     switch (m_sub_state) {
-    case eSubstateReloadBegin:
+    case eSubstateReloadBegin: {
         m_tube_preloaded = empty && m_empty_preload_mode;
-        PlayTubeReloadPhase(empty ? OptionalHudMotion("anm_open_empty", "anm_open") : "anm_open",
+        const shared_str motion = TubeReloadMotion("anm_open");
+        PlayTubeReloadPhase(motion.c_str(),
             empty && pSettings->line_exist(section, "snd_open_weapon_empty") ? "sndOpenEmpty" : "sndOpen",
             m_add_cartridge_in_open);
         break;
+    }
     case eSubstateReloadInProcess: {
-        const LPCSTR preloaded = m_tube_preloaded
-            ? OptionalHudMotion(empty ? "anm_add_cartridge_empty_preloaded" : "anm_add_cartridge_preloaded", nullptr)
-            : nullptr;
-        const LPCSTR motion = preloaded ? preloaded
-            : empty ? OptionalHudMotion("anm_add_cartridge_empty", "anm_add_cartridge") : "anm_add_cartridge";
+        const shared_str motion = TubeReloadMotion("anm_add_cartridge", m_tube_preloaded);
         LPCSTR sound = empty && pSettings->line_exist(section, "snd_add_cartridge_empty")
             ? "sndChamber" : "sndAddCartridge";
-        if (preloaded && pSettings->line_exist(section, "snd_add_cartridge_preloaded"))
+        if (m_tube_preloaded && pSettings->line_exist(section, "snd_add_cartridge_preloaded"))
             sound = "sndAddPreloaded";
-        PlayTubeReloadPhase(motion, sound, true);
+        PlayTubeReloadPhase(motion.c_str(), sound, true);
         break;
     }
     case eSubstateReloadEnd: {
-        const LPCSTR preloaded = m_tube_preloaded
-            ? OptionalHudMotion(empty ? "anm_close_empty_preloaded" : "anm_close_preloaded", nullptr)
-            : nullptr;
-        const LPCSTR motion = preloaded ? preloaded
-            : empty ? OptionalHudMotion("anm_close_empty", "anm_close") : "anm_close";
+        const shared_str motion = TubeReloadMotion("anm_close", m_tube_preloaded,
+            m_need_final_close_anims && iAmmoElapsed == GetAmmoMagSize());
         LPCSTR sound = empty && pSettings->line_exist(section, "snd_close_weapon_empty")
             ? "sndCloseEmpty" : "sndClose";
-        if (preloaded && pSettings->line_exist(section, "snd_close_weapon_preloaded"))
+        if (m_tube_preloaded && pSettings->line_exist(section, "snd_close_weapon_preloaded"))
             sound = "sndClosePreloaded";
-        PlayTubeReloadPhase(motion, sound, false);
+        PlayTubeReloadPhase(motion.c_str(), sound, false);
         break;
     }
     }
@@ -256,8 +432,17 @@ void CWeaponAutomaticShotgun::PlayTubeReloadPhase(LPCSTR motion, LPCSTR sound, b
     const bool has_motion = pSettings->line_exist(hud, motion) &&
         (!GetHUDmode() || g_player_hud->has_hud_motion(hud, motion));
     const u32 duration = has_motion ? PlayHUDMotion(motion, FALSE, this, eReload) : 0;
-    if (m_sounds_enabled)
-        PlaySound(sound, get_LastFP());
+    if (m_sounds_enabled) {
+        string256 sound_key;
+        xr_sprintf(sound_key, "snd_%s", motion);
+        if (pSettings->line_exist(hud, sound_key)) {
+            const LPCSTR value = pSettings->r_string(hud, sound_key);
+            if (value && value[0] && xr_strcmp(value, "$silent") != 0)
+                PlaySound(sound_key, get_LastFP());
+        } else {
+            PlaySound(sound, get_LastFP());
+        }
+    }
 
     if (!duration || !m_current_motion_def) {
         StopCurrentAnimWithoutCallback();
@@ -294,8 +479,16 @@ void CWeaponAutomaticShotgun::CommitTubeReloadShell() {
     }
 
     // FireTrace takes the last cartridge. Keep the chambered shell ahead of the newly filled tube.
-    if (m_keep_chambered_cartridge && m_magazine.size() > 1)
+    const bool keep_chamber = HasChamberRound() && m_keep_chambered_cartridge;
+    if (keep_chamber && m_magazine.size() > 1)
         std::iter_swap(m_magazine.end() - 2, m_magazine.end() - 1);
+
+    // Optional FIFO loading: FireTrace pops the back, so new drum rounds go at the front.
+    if (m_revolver_reload) {
+        auto inserted = m_magazine.end() - (keep_chamber && m_magazine.size() > 1 ? 2 : 1);
+        std::rotate(m_magazine.begin(), inserted, inserted + 1);
+    }
+    m_just_after_reload = true;
 
     m_BriefInfo_CalcFrame = 0;
     if (m_sub_state == eSubstateReloadInProcess)
@@ -308,6 +501,8 @@ void CWeaponAutomaticShotgun::FinishTubeReloadPhase() {
 
     if (IsMisfire()) {
         ResetTubeReload();
+        if (READ_IF_EXISTS(pSettings, r_bool, HudSection(), "first_state_after_jammed", true))
+            m_just_after_reload = true;
         inherited::OnAnimationEnd(eReload);
         return;
     }
@@ -339,6 +534,8 @@ void CWeaponAutomaticShotgun::UpdateCL() {
     }
 
     inherited::UpdateCL();
+    for (const auto& alias : m_tube_sound_aliases)
+        m_sounds.SetPosition(alias.c_str(), get_LastFP());
 }
 
 void CWeaponAutomaticShotgun::switch2_StartReload() {

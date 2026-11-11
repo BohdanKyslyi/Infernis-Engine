@@ -1343,7 +1343,7 @@ shared_str CWeaponMagazined::GunslingerMovementIdle(u32 movement) const {
         // A normal variant may put the slide in the wrong pose.
         return {};
     }
-    return pSettings->line_exist(HudSection(), base) ? shared_str(base) : shared_str();
+    return HudStateVariant(base, pSettings->line_exist(HudSection(), base) ? base : nullptr);
 }
 
 void CWeaponMagazined::UpdateGunslingerMovementIdle() {
