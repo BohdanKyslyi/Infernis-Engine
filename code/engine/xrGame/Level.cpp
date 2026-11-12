@@ -539,6 +539,16 @@ void CLevel::ScopeLensGlass(float* params) const
         weapon->ScopeLensGlass(params);
 }
 
+void CLevel::ScopeLensElectronics(float* params) const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return;
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    if (weapon && weapon->ScopeLensShouldRender())
+        weapon->ScopeLensElectronics(params);
+}
+
 bool CLevel::ScopeLensHasDetector() const
 {
     const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());

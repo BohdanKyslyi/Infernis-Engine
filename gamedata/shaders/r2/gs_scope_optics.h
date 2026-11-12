@@ -1,4 +1,5 @@
 #include "common.h"
+#include "gs_scope_electronics.h"
 
 sampler2D s_vp2;
 uniform float4 gunslinger_scope_state; // blend, mode, height, width
@@ -14,23 +15,22 @@ float4 main(p_scope_lens input) : COLOR0
     float2 uv = (input.tc - 0.5f) * float2(gunslinger_scope_state.z / max(gunslinger_scope_state.w, 1.0f), 1.0f) + 0.5f;
     float3 scene = tex2D(s_vp2, uv).rgb;
 
-#ifdef GS_SCOPE_NIGHT
-    const float mode = 2.0f;
-#else
     float mode = gunslinger_scope_state.y;
+#ifdef GS_SCOPE_NIGHT
+    mode = mode < 0.5f ? 2.0f : mode;
 #endif
-    if (mode > 1.5f) {
-        float light = dot(scene, float3(0.299f, 0.587f, 0.114f));
-        scene = saturate(float3(0.08f, 1.0f, 0.13f) * pow(saturate(light * 2.2f), 0.75f));
-    } else if (mode > 0.5f) {
-        float light = dot(scene, float3(0.299f, 0.587f, 0.114f));
-        scene = saturate(light * 1.55f - 0.12f) * float3(1.0f, 0.96f, 0.20f);
-    }
+    if (mode > 1.5f)
+        scene = scope_night_vision(scene, uv, gunslinger_scope_state.z);
+    else if (mode > 0.5f)
+        scene = scope_contrast(scene);
 
-    float2 reticle_uv = input.tc;
 #ifdef GS_SCOPE_SPLIT_RETICLE
-    reticle_uv.x *= 0.5f;
+    float2 reticle_uv = input.tc * float2(0.5f, 1.0f);
+    float4 unlit = tex2D(s_base, reticle_uv);
+    float4 lit = tex2D(s_base, reticle_uv + float2(0.5f, 0.0f));
+    float4 reticle = lerp(unlit, lit, saturate(scope_lens_electronics.x));
+#else
+    float4 reticle = tex2D(s_base, input.tc);
 #endif
-    float4 reticle = tex2D(s_base, reticle_uv);
     return float4(lerp(scene, reticle.rgb, reticle.a), blend);
 }

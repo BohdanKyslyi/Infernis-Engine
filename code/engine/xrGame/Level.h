@@ -234,6 +234,7 @@ public:
     float ScopeLensBlend() const override;
     u8 ScopeLensMode() const override;
     void ScopeLensGlass(float* params) const override;
+    void ScopeLensElectronics(float* params) const override;
     bool ScopeLensHasDetector() const override;
     u32 ScopeLensTargets(float* targets, u32 capacity) const override;
 

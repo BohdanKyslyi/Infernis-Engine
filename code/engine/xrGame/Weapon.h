@@ -155,6 +155,7 @@ public:
     bool ScopeLensShouldRender() const;
     u8 ScopeLensMode() const;
     void ScopeLensGlass(float* params) const;
+    void ScopeLensElectronics(float* params) const;
     bool HasScopeDetector() const;
     shared_str ScopeSettingSection(LPCSTR key) const;
     shared_str AlternativeAimSettingSection(LPCSTR key) const;
@@ -288,6 +289,7 @@ protected:
     void SetLaserBeamVisible(bool visible);
     void StopLaserDot();
     void StopWeaponLaserEffects();
+    bool AllowsWeaponLaserEffects() const;
 
     shared_str m_bayonet_section;
     bool m_bayonet_has_sound = false;
@@ -354,6 +356,17 @@ protected:
     bool GunslingerScopeLensRange(float& minimum, float& maximum) const;
     shared_str m_gunslinger_lens_scope;
     float m_gunslinger_lens_position = 0.f;
+    struct ScopeBrightness {
+        float minimum = 1.f / 3.f;
+        float maximum = 1.f / 3.f;
+        float noise = 1.f;
+        int steps = 0;
+        int step = 0;
+        bool configured = false;
+    } m_scope_brightness;
+    bool m_scope_brightness_sound[2]{};
+    void LoadScopeBrightness();
+    void ChangeScopeBrightness(bool increase);
 
     float m_fRTZoomFactor; // run-time zoom factor
     CUIWindow* m_UIScope;

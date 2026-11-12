@@ -60,6 +60,8 @@ static bool ItemUseBlocksAction(int cmd) {
     case kWPN_ZOOM_ALTER:
     case kWPN_ZOOM_INC:
     case kWPN_ZOOM_DEC:
+    case kSCOPE_BRIGHTNESS_PLUS:
+    case kSCOPE_BRIGHTNESS_MINUS:
     case kWPN_RELOAD:
     case kWPN_INSPECT:
     case kQUICK_KICK:

@@ -15,6 +15,9 @@
 #include "xrEngine/ssfx_console_vars.h"
 #include "xrEngine/infernis_pbr_console_vars.h"
 #include "xrEngine/shader_bus.h"
+#ifndef _EDITOR
+#include "xrEngine/IGame_Level.h"
+#endif
 
 #include "dxRenderDeviceRender.h"
 
@@ -572,6 +575,17 @@ class ssfx_issvp : public R_constant_setup {
 };
 static ssfx_issvp binder_ssfx_issvp;
 
+#ifndef _EDITOR
+static class cl_scope_lens_electronics : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[] = {0.f, 1.f / 3.f, 1.f}; // reticle blend, NV gain, noise scale
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->ScopeLensElectronics(params);
+        RCache.set_c(C, params[0], params[1], params[2], Device.fTimeGlobal);
+    }
+} binder_scope_lens_electronics;
+#endif
+
 class ssfx_pom : public R_constant_setup {
     virtual void setup(R_constant* C) { RCache.set_c(C, ps_ssfx_pom); }
 };
@@ -752,6 +766,9 @@ void CBlender_Compile::SetMapping() {
     r_Constant("L_ambient", &binder_amb_color);
 #endif
     r_Constant("screen_res", &binder_screen_res);
+#ifndef _EDITOR
+    r_Constant("scope_lens_electronics", &binder_scope_lens_electronics);
+#endif
 
     // Screen Space Shaders
     r_Constant("m_inv_V", &binder_inv_v);

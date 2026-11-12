@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include "Weapon.h"
+#include "ItemUseController.h"
 #include "ssfx_script_bridge.h" // Screen Space Shaders
 #include "ParticlesObject.h"
 #include "entity_alive.h"
@@ -39,6 +40,10 @@
 
 BOOL b_toggle_weapon_aim = FALSE;
 extern CUIXml* pWpnScopeXml;
+
+static constexpr LPCSTR scope_brightness_sounds[] = {
+    "snd_scope_brightness_minus", "snd_scope_brightness_plus"
+};
 
 CWeapon::CWeapon() {
     SetState(eHidden);
@@ -315,6 +320,13 @@ void CWeapon::Load(LPCSTR section) {
     CShootingObject::Load(section);
     LoadHudFeatureFlags();
     m_sounds.LoadSound(section, "snd_boring", "sndInspect", true);
+    for (int i = 0; i < 2; ++i) {
+        const LPCSTR key = scope_brightness_sounds[i];
+        const LPCSTR sound = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
+        m_scope_brightness_sound[i] = sound && sound[0] && xr_strcmp(sound, "none") != 0;
+        if (m_scope_brightness_sound[i])
+            m_sounds.LoadSound(section, key, key, false);
+    }
 
     if (pSettings->line_exist(section, "flame_particles_2"))
         m_sFlameParticles2 = pSettings->r_string(section, "flame_particles_2");
@@ -1157,6 +1169,15 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
         }
         return true;
 
+    case kSCOPE_BRIGHTNESS_PLUS:
+    case kSCOPE_BRIGHTNESS_MINUS:
+        if (!IsZoomed() || !UsesScopeZoom() || UpgradeGrenadeMode() ||
+            !Is3DScopeEnabled() || !m_scope_brightness.steps)
+            return false;
+        if (flags & CMD_START)
+            ChangeScopeBrightness(cmd == kSCOPE_BRIGHTNESS_PLUS);
+        return true;
+
     case kWPN_ZOOM_INC:
     case kWPN_ZOOM_DEC:
         if (IsZoomEnabled() && IsZoomed()) {
@@ -1550,8 +1571,9 @@ u8 CWeapon::ScopeLensMode() const {
     }
 
     const shared_str effect_section = ScopeSettingSection("scope_nightvision");
-    const shared_str effect_name = READ_IF_EXISTS(pSettings, r_string,
-        effect_section, "scope_nightvision", 0);
+    const shared_str effect_name = m_zoom_params.m_sUseZoomPostprocess.size()
+        ? m_zoom_params.m_sUseZoomPostprocess
+        : shared_str(READ_IF_EXISTS(pSettings, r_string, effect_section, "scope_nightvision", nullptr));
     if (!effect_name.size())
         return 0;
 
@@ -1577,6 +1599,50 @@ void CWeapon::ScopeLensGlass(float* params) const {
     clamp(params[2], 0.f, 0.8f);
     params[3] = READ_IF_EXISTS(pSettings, r_bool,
         ScopeSettingSection("scope_lens_white_key"), "scope_lens_white_key", false) ? 1.f : 0.f;
+}
+
+void CWeapon::LoadScopeBrightness() {
+    auto& brightness = m_scope_brightness;
+    brightness = {};
+    if (!m_gunslinger_lens_scope.size())
+        return;
+
+    const auto read_float = [this](LPCSTR key, float fallback) {
+        const float value = READ_IF_EXISTS(pSettings, r_float, ScopeSettingSection(key), key, fallback);
+        return std::isfinite(value) ? std::max(0.f, value) : fallback;
+    };
+    const shared_str minimum = ScopeSettingSection("min_night_brightness");
+    const shared_str maximum = ScopeSettingSection("max_night_brightness");
+    brightness.configured = pSettings->line_exist(minimum, "min_night_brightness") ||
+        pSettings->line_exist(maximum, "max_night_brightness");
+    // GUNSLINGER stores the LTX range in thirds of the shader's gain.
+    brightness.minimum = read_float("min_night_brightness", 1.f) / 3.f;
+    brightness.maximum = std::max(brightness.minimum, read_float("max_night_brightness", 1.f) / 3.f);
+    brightness.noise = read_float("jitter_brightness", 1.f);
+    brightness.steps = std::max(0, READ_IF_EXISTS(pSettings, r_s32,
+        ScopeSettingSection("steps_brightness"), "steps_brightness", 0));
+    brightness.step = clampr(READ_IF_EXISTS(pSettings, r_s32,
+        ScopeSettingSection("default_brightness_step"), "default_brightness_step", brightness.steps),
+        0, brightness.steps);
+}
+
+void CWeapon::ChangeScopeBrightness(bool increase) {
+    auto& brightness = m_scope_brightness;
+    if (increase ? brightness.step >= brightness.steps : brightness.step == 0)
+        return;
+
+    brightness.step += increase ? 1 : -1;
+    if (m_scope_brightness_sound[increase])
+        PlaySound(scope_brightness_sounds[increase], get_LastFP());
+}
+
+void CWeapon::ScopeLensElectronics(float* params) const {
+    const auto& brightness = m_scope_brightness;
+    const float fraction = brightness.steps ? float(brightness.step) / brightness.steps : 0.f;
+    const float gain = brightness.minimum + (brightness.maximum - brightness.minimum) * fraction;
+    params[0] = brightness.configured ? std::min(gain, 1.f) : 0.f;
+    params[1] = gain;
+    params[2] = brightness.noise;
 }
 
 bool CWeapon::HasScopeDetector() const {
@@ -2229,7 +2295,7 @@ bool CWeapon::HasActiveHudLaser() {
 
 bool CWeapon::TraceHudLaserImpact(Fvector& position, bool& green) {
     const auto& laser = m_weapon_laser;
-    if (!laser.draw_hud_impact || !GetHUDmode())
+    if (!laser.draw_hud_impact || !GetHUDmode() || !AllowsWeaponLaserEffects())
         return false;
 
     // Use the crosshair's world ray independently of HUD animation and weapon sway.
@@ -2247,6 +2313,27 @@ bool CWeapon::TraceHudLaserImpact(Fvector& position, bool& green) {
 void CWeapon::StopWeaponLaserEffects() {
     SetLaserBeamVisible(false);
     StopLaserDot();
+}
+
+bool CWeapon::AllowsWeaponLaserEffects() const {
+    const auto ready = [](u32 state) {
+        return state == eIdle || state == eFire || state == eFire2 ||
+               state == eMagEmpty || state == eMisfire;
+    };
+    if (!ready(GetState()) || !ready(GetNextState()))
+        return false;
+
+    if (const auto* actor = smart_cast<const CActor*>(H_Parent())) {
+        const auto* item_use = actor->GetItemUseController();
+        if ((item_use && item_use->IsWeaponLocked()) || (actor->MovingState() & mcClimb))
+            return false;
+        if (!IsZoomed() && (actor->MovingState() & mcSprint))
+            return false;
+    }
+
+    const LPCSTR motion = m_current_motion.c_str();
+    return IsZoomed() || !m_bStopAtEndAnimIsRunning || !motion ||
+        std::strncmp(motion, "anm_idle_sprint_", sizeof("anm_idle_sprint_") - 1) != 0;
 }
 
 void CWeapon::UpdateWeaponLaser() {
@@ -2270,7 +2357,7 @@ void CWeapon::UpdateWeaponLaser() {
     auto* actor = smart_cast<CActor*>(H_Parent());
     if (!laser.enabled || !actor || !actor->g_Alive() ||
         actor->inventory().ActiveItem() != this || IsHidden() ||
-        GetState() == eHiding || GetNextState() == eHiding) {
+        !AllowsWeaponLaserEffects()) {
         StopWeaponLaserEffects();
         return;
     }
@@ -2723,6 +2810,7 @@ void CWeapon::InitAddons() {
     if (lens_scope != m_gunslinger_lens_scope) {
         m_gunslinger_lens_scope = lens_scope;
         m_gunslinger_lens_position = 0.f;
+        LoadScopeBrightness();
     }
 
     for (const shared_str& effect : m_scope_upgrade_sections) {

@@ -86,6 +86,8 @@ enum EGameActions {
     kWIPE_VISOR,
     kWPN_TORCH,
     kWPN_LASER,
+    kSCOPE_BRIGHTNESS_PLUS,
+    kSCOPE_BRIGHTNESS_MINUS,
 
     kLASTACTION,
     kNOTBINDED,

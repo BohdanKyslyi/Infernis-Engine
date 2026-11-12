@@ -1,9 +1,11 @@
 #include "common.h"
+#include "gs_scope_electronics.h"
 
 Texture2D s_vp2;
 uniform float4 scope_lens_state; // capture ready, mode, detector, blend
 uniform float4 scope_lens_glass;
 uniform float4 scope_lens_size;
+uniform float4 scope_lens_targets[8];
 
 struct p_scope_lens {
     float2 tc : TEXCOORD0;
@@ -21,6 +23,24 @@ struct scope_output {
 float3 unit_direction(float3 direction)
 {
     return direction * rsqrt(max(dot(direction, direction), 0.000001f));
+}
+
+float detector_frame_mask(float2 uv, float2 uv_per_pixel)
+{
+    float mask = 0.0f;
+    [unroll] for (int i = 0; i < 8; ++i)
+    {
+        float4 box = scope_lens_targets[i];
+        if (any(box.zw <= box.xy) || any(uv < box.xy) || any(uv > box.zw))
+            continue;
+        float2 distance_to_edge = min(uv - box.xy, box.zw - uv);
+        bool vertical = distance_to_edge.x < 2.0f * uv_per_pixel.x &&
+                        distance_to_edge.y < 11.0f * uv_per_pixel.y;
+        bool horizontal = distance_to_edge.y < 2.0f * uv_per_pixel.y &&
+                          distance_to_edge.x < 11.0f * uv_per_pixel.x;
+        mask = max(mask, (vertical || horizontal) ? 1.0f : 0.0f);
+    }
+    return mask;
 }
 
 scope_output main(p_scope_lens input, float4 screen_pos : SV_Position)
@@ -54,17 +74,14 @@ scope_output main(p_scope_lens input, float4 screen_pos : SV_Position)
     float2 uv = (input.tc - 0.5f) * float2(scope_lens_size.y * pixel.x, 1.0f) + 0.5f;
     float3 scene = s_vp2.Sample(smp_rtlinear, saturate(uv)).rgb;
 
-#ifdef GS_SCOPE_NIGHT
-    const float mode = 2.0f;
-#else
     float mode = scope_lens_state.y;
+#ifdef GS_SCOPE_NIGHT
+    mode = mode < 0.5f ? 2.0f : mode;
 #endif
     if (mode > 1.5f) {
-        float light = dot(scene, float3(0.299f, 0.587f, 0.114f));
-        scene = saturate(float3(0.08f, 1.0f, 0.13f) * pow(saturate(light * 2.2f), 0.75f));
+        scene = scope_night_vision(scene, uv, scope_lens_size.y);
     } else if (mode > 0.5f) {
-        float light = dot(scene, float3(0.299f, 0.587f, 0.114f));
-        scene = saturate(light * 1.55f - 0.12f) * float3(1.0f, 0.96f, 0.20f);
+        scene = scope_contrast(scene);
     } else {
         float2 aberration = radial * (scope_lens_size.z * rim) * pixel;
         scene.r = s_vp2.Sample(smp_rtlinear, saturate(uv + aberration)).r;
@@ -79,12 +96,20 @@ scope_output main(p_scope_lens input, float4 screen_pos : SV_Position)
         scene = saturate(scene + scope_lens_glass.y * exp2(-22.0f * dot(glint_uv, glint_uv)) * (1.0f - rim));
     }
 
-    float2 reticle_uv = input.tc;
 #ifdef GS_SCOPE_SPLIT_RETICLE
-    reticle_uv.x *= 0.5f; // default, unilluminated half of the GUNSLINGER atlas
+    float2 reticle_uv = input.tc * float2(0.5f, 1.0f);
+    float4 unlit = s_base.Sample(smp_base, reticle_uv);
+    float4 lit = s_base.Sample(smp_base, reticle_uv + float2(0.5f, 0.0f));
+    float4 reticle = lerp(unlit, lit, saturate(scope_lens_electronics.x));
+#else
+    float4 reticle = s_base.Sample(smp_base, input.tc);
 #endif
-    float4 reticle = s_base.Sample(smp_base, reticle_uv);
     float3 image = lerp(scene, reticle.rgb, reticle.a);
+    if (scope_lens_state.z > 0.5f) {
+        // Detector boxes are projected into the captured world image's UV space.
+        float2 uv_per_pixel = max(abs(ddx(uv)) + abs(ddy(uv)), 0.000001f);
+        image = lerp(image, float3(0.65f, 0.90f, 0.65f), detector_frame_mask(uv, uv_per_pixel));
+    }
     output.color = float4(lerp(glass, image, blend), lerp(0.94f, 1.0f, blend));
     // Keep the PiP image in front of the geometry behind the aperture.
     output.depth = 0.0f;
