@@ -49,14 +49,15 @@ protected:
     void DestroyIcon(eAddonType);
     void RefreshOffset();
     Fvector2 UpgradeIconCorrection();
-    void CreateUpgradeIcons(CUIWindow* parent, bool rotate, u32 color);
-    xr_vector<CUIStatic*> m_upgrade_icons;
+    void CreateLayeredIcons(CUIStatic* parent, bool rotate, u32 color);
+    xr_vector<CUIStatic*> m_layered_icons;
     const CWeapon* m_icon_weapon = nullptr;
     size_t m_icon_upgrade_count = 0;
     u8 m_icon_addons = 0;
     Fvector2 m_icon_size{};
     CUIStatic* GetIcon(eAddonType);
-    void InitAddon(CUIStatic* s, LPCSTR section, Fvector2 offset, bool use_heading);
+    void InitAddon(CUIStatic* s, LPCSTR section, Fvector2 offset, bool use_heading,
+                   LPCSTR shader_section = nullptr);
     bool is_scope();
     bool is_silencer();
     bool is_launcher();
