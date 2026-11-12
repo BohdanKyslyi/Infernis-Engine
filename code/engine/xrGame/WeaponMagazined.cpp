@@ -1,6 +1,7 @@
 #include "pch_script.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "WeaponMagazined.h"
@@ -99,6 +100,8 @@ void CWeaponMagazined::Load(LPCSTR section) {
     };
     m_has_breechblock_sound = load_action_sound("snd_breechblock", "sndBreechblock");
     m_has_shot_jam_sound = load_action_sound("snd_jam", "sndShotJam");
+    for (LPCSTR sound : {"snd_changefiremode", "snd_changefiremode_empty", "snd_changefiremode_jammed"})
+        load_action_sound(sound, sound);
     m_sounds.LoadSound(section, "snd_empty", "sndEmptyClick", false, m_eSoundEmptyClick);
     if (pSettings->line_exist(section, "snd_light_misfire"))
         m_sounds.LoadSound(section, "snd_light_misfire", "sndLightMisfire", false, m_eSoundEmptyClick);
@@ -215,6 +218,17 @@ bool CWeaponMagazined::TryReload() {
             SetPending(TRUE);
             SwitchState(eReload);
             return true;
+        }
+
+        if (IsReloadAmmoChange()) {
+            m_pCurrentAmmo = smart_cast<CWeaponAmmo*>(
+                m_pInventory->GetAny(m_ammoTypes[m_set_next_ammoType_on_reload].c_str()));
+            if (m_pCurrentAmmo || unlimited_ammo()) {
+                SetPending(TRUE);
+                SwitchState(eReload);
+                return true;
+            }
+            m_set_next_ammoType_on_reload = undefined_ammo_type;
         }
 
         m_pCurrentAmmo =
@@ -411,6 +425,41 @@ void CWeaponMagazined::OnStateSwitch(u32 S) {
     case eFire:
         switch2_Fire();
         break;
+    case eFireModeSwitch: {
+        const shared_str motion = m_fire_mode_motion;
+        m_fire_mode_motion = nullptr;
+        m_fire_mode_duration = 0;
+        if (HasWeaponActionMotion(motion)) {
+            m_fire_mode_duration = PlayHUDMotion(motion, TRUE, this, eFireModeSwitch);
+            string256 key;
+            xr_sprintf(key, "lock_time_%s", motion.c_str());
+            const float seconds = READ_IF_EXISTS(pSettings, r_float, HudSection().c_str(), key, 0.f);
+            if (std::isfinite(seconds))
+                m_fire_mode_duration = (std::max)(m_fire_mode_duration,
+                    u32(clampr(seconds, 0.f, 60.f) * 1000.f + 0.5f));
+
+            const auto play_sound = [&](LPCSTR alias) {
+                LPCSTR value = READ_IF_EXISTS(pSettings, r_string, cNameSect().c_str(), alias, nullptr);
+                string256 path;
+                if (!value || !value[0])
+                    return false;
+                _GetItem(value, 0, path);
+                if (!path[0] || xr_strcmp(path, "$silent") == 0)
+                    return false;
+                PlaySound(alias, get_LastFP());
+                return true;
+            };
+            const LPCSTR variant = IsMisfire() ? "snd_changefiremode_jammed"
+                : (iAmmoElapsed == 0 ? "snd_changefiremode_empty" : nullptr);
+            if (!variant || !play_sound(variant))
+                play_sound("snd_changefiremode");
+        }
+        if (!m_fire_mode_duration) {
+            SetPending(FALSE);
+            SwitchState(eIdle);
+        }
+        break;
+    }
     case eMisfire:
         if (smart_cast<CActor*>(this->H_Parent()) && (Level().CurrentViewEntity() == H_Parent()))
             CurrentGameUI()->AddCustomStatic("gun_jammed", true);
@@ -454,6 +503,12 @@ void CWeaponMagazined::UpdateCL() {
             fShotTimeCounter -= dt;
             clamp(fShotTimeCounter, 0.0f, flt_max);
         } break;
+        case eFireModeSwitch:
+            if (CurrStateTime() >= m_fire_mode_duration && !m_bStopAtEndAnimIsRunning) {
+                SetPending(FALSE);
+                SwitchState(eIdle);
+            }
+            break;
         case eFire: {
             state_Fire(dt);
         } break;
@@ -588,6 +643,7 @@ void CWeaponMagazined::state_Fire(float dt) {
                 SetPending(TRUE);
                 PlaySound(m_has_shot_jam_sound ? "sndShotJam" : "sndEmptyClick", get_LastFP());
                 PlayAnimShoot();
+                UpdateWorldAnimation(eFire, true);
                 fShotTimeCounter = fOneShotTime;
                 if (m_bStopAtEndAnimIsRunning && m_startedMotionState == eFire) {
                     const float duration = float(m_dwMotionEndTm - m_dwMotionStartTm) * 0.001f;
@@ -660,6 +716,8 @@ void CWeaponMagazined::state_MagEmpty(float dt) {}
 void CWeaponMagazined::SetDefaults() { CWeapon::SetDefaults(); }
 
 void CWeaponMagazined::OnShot() {
+    UpdateWorldAnimation(eFire, true);
+
     // Sound
     PlaySound(ShotSound(), get_LastFP());
 
@@ -833,20 +891,42 @@ CCustomDetector* CWeaponMagazined::ReloadDetector() const {
     return smart_cast<CCustomDetector*>(detector_hud->m_parent_hud_item);
 }
 
-LPCSTR CWeaponMagazined::DetectorReloadMotion(CCustomDetector& detector) const {
-    if (IsReloadAmmoChange()) {
-        LPCSTR motion = iAmmoElapsed == 0 ? "anm_reload_empty_ammochange_detector"
-                                         : "anm_reload_ammochange_detector";
-        if (pSettings->line_exist(HudSection(), motion) && detector.CanPlayWeaponReload(motion))
+shared_str CWeaponMagazined::AmmoChangeReloadMotion(LPCSTR suffix, CCustomDetector* detector) const {
+    if (!IsReloadAmmoChange())
+        return {};
+
+    const LPCSTR hud = HudSection().c_str();
+    const int mode = FireModeForHudBones();
+    string32 mask_key;
+    if (mode < 0)
+        xr_strcpy(mask_key, "mask_firemode_a");
+    else
+        xr_sprintf(mask_key, "mask_firemode_%d", mode);
+    const LPCSTR mask = READ_IF_EXISTS(pSettings, r_string, hud, mask_key, nullptr);
+
+    for (LPCSTR variant : {mask, ""}) {
+        if (!variant)
+            continue;
+        string128 motion;
+        xr_sprintf(motion, "anm_reload%s%s_ammochange%s", variant,
+            iAmmoElapsed == 0 ? "_empty" : "", suffix);
+        if (pSettings->line_exist(hud, motion) && (!detector || detector->CanPlayWeaponReload(motion)))
             return motion;
     }
+    return {};
+}
+
+shared_str CWeaponMagazined::DetectorReloadMotion(CCustomDetector& detector) const {
+    const shared_str ammo_change = AmmoChangeReloadMotion("_detector", &detector);
+    if (ammo_change.size())
+        return ammo_change;
 
     LPCSTR motion = IsMisfire() ? (IsLastRoundJam() ? "anm_reload_jammed_last_detector"
                                                  : "anm_reload_jammed_detector")
                                : (iAmmoElapsed == 0 ? "anm_reload_empty_detector"
                                                     : "anm_reload_detector");
     return pSettings->line_exist(HudSection(), motion) && detector.CanPlayWeaponReload(motion)
-               ? motion : nullptr;
+               ? shared_str(motion) : shared_str();
 }
 
 LPCSTR CWeaponMagazined::ReloadSound() const {
@@ -857,7 +937,7 @@ LPCSTR CWeaponMagazined::ReloadSound() const {
         return "snd_changecartridgetype";
 
     if (auto* detector = ReloadDetector()) {
-        if (DetectorReloadMotion(*detector)) {
+        if (DetectorReloadMotion(*detector).size()) {
             LPCSTR sound = IsMisfire()
                                ? (IsLastRoundJam() ? "snd_reload_jammed_last_detector"
                                                    : "snd_reload_jammed_detector")
@@ -1281,13 +1361,15 @@ void CWeaponMagazined::PlayAnimHide() {
 void CWeaponMagazined::PlayAnimReload() {
     VERIFY(GetState() == eReload);
     if (auto* detector = ReloadDetector()) {
-        if (LPCSTR motion = DetectorReloadMotion(*detector)) {
-            detector->PlayWeaponReload(motion);
+        const shared_str motion = DetectorReloadMotion(*detector);
+        if (motion.size()) {
+            detector->PlayWeaponReload(motion.c_str());
             PlayHUDMotion(motion, TRUE, this, GetState());
             return;
         }
     }
-    PlayHUDMotion(ReloadMotion(), TRUE, this, GetState());
+    const shared_str ammo_change = AmmoChangeReloadMotion("");
+    PlayHUDMotion(ammo_change.size() ? ammo_change : shared_str(ReloadMotion()), TRUE, this, GetState());
 }
 
 LPCSTR CWeaponMagazined::StateMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const {
@@ -1552,23 +1634,46 @@ bool CWeaponMagazined::SwitchMode() {
     return true;
 }
 
-void CWeaponMagazined::OnNextFireMode() {
-    if (!m_bHasDifferentFireModes)
-        return;
-    if (GetState() != eIdle)
-        return;
-    m_iCurFireMode = (m_iCurFireMode + 1 + m_aFireModes.size()) % m_aFireModes.size();
-    SetQueueSize(GetCurrentFireMode());
-};
+void CWeaponMagazined::OnNextFireMode() { ChangeFireMode(1); }
 
-void CWeaponMagazined::OnPrevFireMode() {
-    if (!m_bHasDifferentFireModes)
+void CWeaponMagazined::OnPrevFireMode() { ChangeFireMode(-1); }
+
+void CWeaponMagazined::ChangeFireMode(int step) {
+    if (!m_bHasDifferentFireModes || m_aFireModes.empty() || GetState() != eIdle ||
+        GetNextState() != eIdle || IsPending())
         return;
-    if (GetState() != eIdle)
-        return;
-    m_iCurFireMode = (m_iCurFireMode - 1 + m_aFireModes.size()) % m_aFireModes.size();
-    SetQueueSize(GetCurrentFireMode());
-};
+
+    const int count = static_cast<int>(m_aFireModes.size());
+    const int next = (m_iCurFireMode + step + count) % count;
+    const int current_mode = GetQueueSize();
+    const int next_mode = m_aFireModes[next];
+
+    shared_str motion;
+    if (current_mode != next_mode && IsGameTypeSingle() && GetHUDmode() &&
+        READ_IF_EXISTS(pSettings, r_bool, HudSection().c_str(), "use_firemode_change_anim", false)) {
+        string32 from, to;
+        if (current_mode < 0)
+            xr_strcpy(from, "a");
+        else
+            xr_sprintf(from, "%d", current_mode);
+        if (next_mode < 0)
+            xr_strcpy(to, "a");
+        else
+            xr_sprintf(to, "%d", next_mode);
+        string128 base;
+        xr_sprintf(base, "anm_changefiremode_from_%s_to_%s", from, to);
+        motion = WeaponActionMotion(base);
+    }
+
+    m_iCurFireMode = next;
+    SetQueueSize(next_mode);
+    UpdateWorldAnimation(eIdle);
+    if (HasWeaponActionMotion(motion)) {
+        m_fire_mode_motion = motion;
+        SetPending(TRUE);
+        SwitchState(eFireModeSwitch);
+    }
+}
 
 void CWeaponMagazined::OnH_A_Chield() {
     if (m_bHasDifferentFireModes) {

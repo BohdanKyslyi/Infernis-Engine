@@ -71,6 +71,7 @@ public:
     virtual void reinit();
     virtual void reload(LPCSTR section);
     virtual void create_physic_shell();
+    void OnChangeVisual() override;
     virtual void activate_physic_shell();
     virtual void setup_physic_shell();
 
@@ -111,6 +112,7 @@ public:
         eTacticalTorch,
         eBayonetStrike,
         eLaserSwitch,
+        eFireModeSwitch,
     };
     enum EWeaponSubStates {
         eSubstateReloadBegin = 0,
@@ -144,6 +146,9 @@ public:
     bool IsGrenadeLauncherAttached() const;
     bool IsScopeAttached() const;
     bool TraceHudLaserImpact(Fvector& position, bool& green);
+    bool HasActiveHudLaser();
+    shared_str EquipmentToggleMotion(bool night_vision, bool switch_on);
+    void StopEquipmentToggleMotion(const shared_str& motion);
     virtual bool Is3DScopeEnabled() const;
     float ScopeLensFov() const;
     float ScopeLensBlend() const;
@@ -396,6 +401,8 @@ protected:
     bool m_can_be_strapped;
 
     Fmatrix m_Offset;
+    bool m_use_world_anims = false;
+    shared_str m_world_animation;
     // 0-èñïîëüçóåòñÿ áåç ó÷àñòèÿ ðóê, 1-îäíà ðóêà, 2-äâå ðóêè
     EHandDependence eHandDependence;
     bool m_bIsSingleHanded;
@@ -428,6 +435,7 @@ private:
 
 protected:
     void LoadHudFeatureFlags();
+    void UpdateWorldAnimation(u32 state, bool shot = false);
     virtual void OnUpgradeHudChanged() {}
     virtual shared_str WeaponActionMotion(LPCSTR base) const;
     virtual bool UpgradeGrenadeMode() const { return false; }

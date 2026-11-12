@@ -137,7 +137,8 @@ player_hud_motion* player_hud_motion_container::find_motion(const shared_str& na
     return NULL;
 }
 
-void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_str& sect) {
+void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_str& sect,
+                                       bool show_only) {
     // MotionID is local to a concrete hands model. Outfit changes replace that
     // model, so cached IDs must be rebuilt instead of appended to the old set.
     m_anims.clear();
@@ -151,6 +152,8 @@ void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_
     MotionID motion_ID;
 
     for (; _b != _e; ++_b) {
+        if (show_only && xr_strcmp(_b->first.c_str(), "anm_show") != 0)
+            continue;
         if (strstr(_b->first.c_str(), "anm_") == _b->first.c_str()) {
             const shared_str& anm = _b->second;
             m_anims.resize(m_anims.size() + 1);
@@ -206,6 +209,10 @@ void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_
 //pm->m_base_name.c_str(), buff);
 #endif // #ifdef DEBUG
                 }
+            }
+            if (show_only && pm->m_animations.empty()) {
+                m_anims.pop_back();
+                continue;
             }
             R_ASSERT2(pm->m_animations.size(),
                       make_string("motion not found [%s]", pm->m_base_name.c_str()).c_str());
@@ -611,12 +618,13 @@ player_hud::~player_hud() {
 }
 
 attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_section,
-                                                        const shared_str& pose_section) {
+                                                        const shared_str& pose_section,
+                                                        bool show_only) {
     // На всякий случай удаляем предыдущий temporary HUD.
     if (m_controller_item)
         detach_controller_item();
 
-    attachable_hud_item* pi = create_hud_item(hud_section);
+    attachable_hud_item* pi = create_hud_item(hud_section, show_only);
 
     if (!pi)
         return NULL;
@@ -717,7 +725,7 @@ void player_hud::load(const shared_str& player_hud_sect) {
     // Rebind them before an attached weapon or a queued controller animation
     // is restarted on the newly selected outfit hands.
     for (attachable_hud_item* item : m_pool)
-        item->m_hand_motions.load(m_model, item->m_sect_name);
+        item->m_hand_motions.load(m_model, item->m_sect_name, item->m_controller_show_only);
 
     m_ancors.clear();
     CInifile::Sect& _sect = pSettings->r_section(player_hud_sect);
@@ -1065,7 +1073,7 @@ bool player_hud::has_hud_motion(const shared_str& hud_section,
     return false;
 }
 
-bool player_hud::can_attach_controller_item(const shared_str& hud_section) {
+bool player_hud::can_attach_controller_item(const shared_str& hud_section, bool show_only) {
     if (!m_model || !hud_section.size() ||
         !pSettings->section_exist(hud_section.c_str()) ||
         !pSettings->line_exist(hud_section.c_str(), "item_visual") ||
@@ -1094,6 +1102,13 @@ bool player_hud::can_attach_controller_item(const shared_str& hud_section) {
 
     if (!visual_exists)
         return false;
+
+    if (show_only) {
+        // Donor animators play only anm_show; their inherited idles and detector
+        // companion aliases are not needed for a controller one-shot.
+        return pSettings->r_u16(hud_section.c_str(), "attach_place_idx") == 0 &&
+            has_hud_motion(hud_section, "anm_show");
+    }
 
     // create_hud_item() loads every anm_* alias in the section. Verify all of
     // them up front so optional controller HUDs never reach its legacy assert
@@ -1214,17 +1229,18 @@ void player_hud::update_inertion(Fmatrix& trans) {
     }
 }
 
-attachable_hud_item* player_hud::create_hud_item(const shared_str& sect) {
+attachable_hud_item* player_hud::create_hud_item(const shared_str& sect, bool show_only) {
     xr_vector<attachable_hud_item*>::iterator it = m_pool.begin();
     xr_vector<attachable_hud_item*>::iterator it_e = m_pool.end();
     for (; it != it_e; ++it) {
         attachable_hud_item* itm = *it;
-        if (itm->m_sect_name == sect)
+        if (itm->m_sect_name == sect && itm->m_controller_show_only == show_only)
             return itm;
     }
     attachable_hud_item* res = xr_new<attachable_hud_item>(this);
+    res->m_controller_show_only = show_only;
     res->load(sect);
-    res->m_hand_motions.load(m_model, sect);
+    res->m_hand_motions.load(m_model, sect, show_only);
     m_pool.push_back(res);
 
     return res;

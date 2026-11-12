@@ -137,6 +137,9 @@ protected:
     xr_vector<s8> m_aFireModes;
     int m_iCurFireMode;
     int m_iPrefferedFireMode;
+    void ChangeFireMode(int step);
+    shared_str m_fire_mode_motion;
+    u32 m_fire_mode_duration = 0;
 
     //ïåðåìåííàÿ áëîêèðóåò èñïîëüçîâàíèå
     //òîëüêî ðàçíûõ òèïîâ ïàòðîíîâ
@@ -184,7 +187,8 @@ protected:
     bool IsLastRoundJam() const;
     bool IsReloadAmmoChange() const;
     CCustomDetector* ReloadDetector() const;
-    LPCSTR DetectorReloadMotion(CCustomDetector& detector) const;
+    shared_str DetectorReloadMotion(CCustomDetector& detector) const;
+    shared_str AmmoChangeReloadMotion(LPCSTR suffix, CCustomDetector* detector = nullptr) const;
     LPCSTR ShootMotion(LPCSTR fallback) const;
     virtual LPCSTR StateMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const;
     void PlayDryFireMotion(LPCSTR normal, LPCSTR aimed);

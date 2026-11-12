@@ -26,7 +26,7 @@ struct player_hud_motion {
 struct player_hud_motion_container {
     xr_vector<player_hud_motion> m_anims;
     player_hud_motion* find_motion(const shared_str& name);
-    void load(IKinematicsAnimated* model, const shared_str& sect);
+    void load(IKinematicsAnimated* model, const shared_str& sect, bool show_only = false);
 };
 
 struct hud_item_measures {
@@ -58,6 +58,7 @@ struct attachable_hud_item {
     player_hud* m_parent;
     CHudItem* m_parent_hud_item;
     bool m_controller_owned;
+    bool m_controller_show_only = false;
     // Keep the opposite hand on its current motion when a controller-owned
     // HUD item is animated alongside another attached item.
     bool m_preserve_other_hand;
@@ -122,7 +123,7 @@ public:
     ~player_hud();
 
     attachable_hud_item* attach_controller_item(const shared_str& hud_section,
-        const shared_str& pose_section = {});
+        const shared_str& pose_section = {}, bool show_only = false);
     void detach_controller_item();
 
     void load(const shared_str& model_name);
@@ -139,7 +140,7 @@ public:
     bool render_item_ui_query();
     u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed,
                   bool preserve_other_hand = false);
-    bool can_attach_controller_item(const shared_str& hud_section);
+    bool can_attach_controller_item(const shared_str& hud_section, bool show_only = false);
     bool has_hud_motion(const shared_str& hud_section, const shared_str& motion_name);
     bool has_controller_motion(const shared_str& motion_name);
     u32 play_controller_motion(const shared_str& motion_name, BOOL bMixIn = TRUE,
@@ -149,7 +150,7 @@ public:
                                    const Fvector& orientation);
     const shared_str& section_name() const { return m_sect_name; }
 
-    attachable_hud_item* create_hud_item(const shared_str& sect);
+    attachable_hud_item* create_hud_item(const shared_str& sect, bool show_only = false);
 
     void attach_item(CHudItem* item);
     bool allow_activation(CHudItem* item);

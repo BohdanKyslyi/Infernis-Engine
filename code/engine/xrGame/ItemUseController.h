@@ -6,6 +6,7 @@ class CActor;
 class CInventoryItem;
 class CParticlesObject;
 class CCustomMonster;
+class CWeapon;
 class CWeaponKnife;
 class CTorch;
 
@@ -114,6 +115,9 @@ private:
     bool ApplyPickupEffect();
     bool ApplyRainWipeEffect();
     bool ApplyEquipmentToggleEffect();
+    CWeapon* EquipmentToggleWeapon() const;
+    void BeginWeaponEquipmentToggle();
+    void StopWeaponEquipmentToggle();
     bool CanStartLeftHandAnimation();
     void RestoreLeftHandDetector(u16 detector_id, bool restore_detector);
     void PrepareLeftHandDetector();
@@ -130,7 +134,7 @@ private:
     void StopPPEffect();
 
     void LoadAnimSound();
-    void PlayHudAnimationSound(LPCSTR sound_line);
+    void PlayHudAnimationSound(LPCSTR sound_line, LPCSTR section = nullptr);
     void PlayAnimSound();
     void StopAnimSound();
     void DestroyAnimSound();
@@ -174,6 +178,9 @@ private:
     u16 m_quick_knife_id;
     u16 m_pickup_target_id;
     u16 m_equipment_toggle_target_id;
+    u16 m_equipment_toggle_weapon_id = u16(-1);
+    shared_str m_equipment_toggle_weapon_motion;
+    bool m_equipment_toggle_donor_item = false;
     bool m_equipment_toggle_night_vision;
     bool m_equipment_toggle_state;
     u16 m_left_hand_detector_id;

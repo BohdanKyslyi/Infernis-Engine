@@ -119,7 +119,7 @@ void CWeapon::UpdateXForm() {
     }
 
     const CInventoryOwner* parent = smart_cast<const CInventoryOwner*>(E);
-    if (parent && parent->use_simplified_visual())
+    if (!parent || parent->use_simplified_visual())
         return;
 
     if (parent->attached(this))
@@ -134,35 +134,32 @@ void CWeapon::UpdateXForm() {
     // this ugly case is possible in case of a CustomMonster, not a Stalker, nor an Actor
     E->g_WeaponBones(boneL, boneR, boneR2);
 
-    if (boneR == -1)
+    const int bone_count = V->LL_BoneCount();
+    if (boneR < 0 || boneR >= bone_count)
         return;
 
-    if ((HandDependence() == hd1Hand) || (GetState() == eReload) || (!E->g_Alive()))
+    if (HandDependence() == hd1Hand || GetState() == eReload || !E->g_Alive())
         boneL = boneR2;
 
     V->CalculateBones();
-    Fmatrix& mL = V->LL_GetTransform(u16(boneL));
-    Fmatrix& mR = V->LL_GetTransform(u16(boneR));
-    // Calculate
-    Fmatrix mRes;
-    Fvector R, D, N;
-    D.sub(mL.c, mR.c);
-
-    if (fis_zero(D.magnitude())) {
-        mRes.set(E->XFORM());
-        mRes.c.set(mR.c);
-    } else {
-        D.normalize();
-        R.crossproduct(mR.j, D);
-
-        N.crossproduct(D, R);
-        N.normalize();
-
-        mRes.set(R, N, D, mR.c);
-        mRes.mulA_43(E->XFORM());
+    const Fmatrix& right_hand = V->LL_GetTransform(u16(boneR));
+    Fmatrix grip = right_hand;
+    if (boneL >= 0 && boneL < bone_count) {
+        Fvector forward, right, up;
+        forward.sub(V->LL_GetTransform(u16(boneL)).c, right_hand.c);
+        if (forward.square_magnitude() > EPS_S) {
+            forward.normalize();
+            right.crossproduct(right_hand.j, forward);
+            if (right.square_magnitude() > EPS_S) {
+                right.normalize();
+                up.crossproduct(forward, right);
+                grip.set(right, up, forward, right_hand.c);
+            }
+        }
     }
 
-    UpdatePosition(mRes);
+    grip.mulA_43(E->XFORM());
+    UpdatePosition(grip);
 }
 
 void CWeapon::UpdateFireDependencies_internal() {
@@ -288,6 +285,8 @@ void CWeapon::ApplyPendingUpgradeHud() {
 }
 
 void CWeapon::Load(LPCSTR section) {
+    m_use_world_anims = READ_IF_EXISTS(pSettings, r_bool, section, "use_world_anims", false);
+    m_world_animation = nullptr;
     m_bone_upgrade_sections.clear();
     LoadUpgradeBoneDefaults(section);
     m_hud_upgrade_bones = UpgradeBoneMask();
@@ -587,10 +586,18 @@ void CWeapon::LoadFireParams(LPCSTR section) {
 };
 
 LPCSTR CWeapon::visual_name(CSE_Abstract* server_entity) {
-    // Grenade-launcher weapons replay saved upgrades before GameObject spawns
-    // the visual and before PhysicItem builds the shell for a dropped weapon.
-    return m_upgrade_world_visual.size() ? m_upgrade_world_visual.c_str()
-                                         : inherited::visual_name(server_entity);
+    // Resolve the visual before PhysicItem builds the shell for a dropped weapon.
+    if (m_upgrade_world_visual.size())
+        return m_upgrade_world_visual.c_str();
+
+    const LPCSTR section = server_entity->s_name.c_str();
+    if (READ_IF_EXISTS(pSettings, r_bool, section, "force_reset_visual_on_load", false)) {
+        const LPCSTR visual = READ_IF_EXISTS(pSettings, r_string, section, "visual", nullptr);
+        if (visual && visual[0])
+            return visual;
+    }
+
+    return inherited::visual_name(server_entity);
 }
 
 bool CWeapon::SetUpgradeWorldVisual(LPCSTR visual) {
@@ -629,16 +636,18 @@ bool CWeapon::ApplyUpgradeWorldVisual() {
 
 BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
     m_fRTZoomFactor = m_zoom_params.m_fScopeZoomFactor;
-    BOOL bResult = inherited::net_Spawn(DC);
-    CSE_Abstract* e = (CSE_Abstract*)(DC);
-    CSE_ALifeItemWeapon* E = smart_cast<CSE_ALifeItemWeapon*>(e);
-
-    // iAmmoCurrent					= E->a_current;
+    CSE_ALifeItemWeapon* E = smart_cast<CSE_ALifeItemWeapon*>(DC);
+    // Ground objects build their physics shell inside the base spawn.
+    iAmmoElapsed = E->a_elapsed;
+    m_flagsAddOnState = E->m_addon_flags.get();
+    const BOOL bResult = inherited::net_Spawn(DC);
+    if (!bResult)
+        return FALSE;
     iAmmoElapsed = E->a_elapsed;
     m_flagsAddOnState = E->m_addon_flags.get();
     m_ammoType = E->ammo_type < m_ammoTypes.size() ? E->ammo_type : 0;
     const u8 state = (E->wpn_state == eTacticalTorch || E->wpn_state == eBayonetStrike ||
-                      E->wpn_state == eLaserSwitch)
+                      E->wpn_state == eLaserSwitch || E->wpn_state == eFireModeSwitch)
         ? u8(eIdle) : E->wpn_state;
     SetState(state);
     SetNextState(state);
@@ -852,6 +861,7 @@ void CWeapon::OnH_A_Independent() {
 
 void CWeapon::OnH_A_Chield() {
     inherited::OnH_A_Chield();
+    m_world_animation = nullptr;
     UpdateAddonsVisibility();
 };
 
@@ -1161,7 +1171,7 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
 }
 
 bool CWeapon::SwitchAmmoType(u32 flags) {
-    if (IsPending() || OnClient())
+    if (IsPending() || OnClient() || !m_pInventory || m_ammoTypes.empty())
         return false;
 
     if (!(flags & CMD_START))
@@ -1925,14 +1935,17 @@ void CWeapon::CreateTacticalTorchLights() {
 }
 
 shared_str CWeapon::WeaponActionMotion(LPCSTR base) const {
-    const auto& hud = HudSection();
+    const LPCSTR hud = HudSection().c_str();
     const int mode = FireModeForHudBones();
     string64 key;
     if (mode < 0)
         xr_strcpy(key, "mask_firemode_a");
     else
         xr_sprintf(key, "mask_firemode_%d", mode);
-    const LPCSTR mask = READ_IF_EXISTS(pSettings, r_string, hud, key, nullptr);
+    const bool fire_mode_transition = std::strncmp(base, "anm_changefiremode_",
+        sizeof("anm_changefiremode_") - 1) == 0;
+    const LPCSTR mask = fire_mode_transition ? nullptr :
+        READ_IF_EXISTS(pSettings, r_string, hud, key, nullptr);
     const LPCSTR state = IsMisfire() ? "_jammed" : (iAmmoElapsed == 0 ? "_empty" : "");
 
     string256 motion;
@@ -2195,6 +2208,12 @@ void CWeapon::StopLaserDot() {
     m_weapon_laser.draw_hud_impact = false;
 }
 
+bool CWeapon::HasActiveHudLaser() {
+    const auto& laser = m_weapon_laser;
+    return laser.enabled && !laser.damaged && GetHUDmode() && !IsHidden() &&
+        GetState() != eHiding && GetNextState() != eHiding;
+}
+
 bool CWeapon::TraceHudLaserImpact(Fvector& position, bool& green) {
     const auto& laser = m_weapon_laser;
     if (!laser.draw_hud_impact || !GetHUDmode())
@@ -2330,7 +2349,8 @@ void CWeapon::UpdateWeaponLaser() {
 bool CWeapon::IsHudActionLocked() const {
     return GetState() == eTacticalTorch || GetNextState() == eTacticalTorch ||
            GetState() == eBayonetStrike || GetNextState() == eBayonetStrike ||
-           GetState() == eLaserSwitch || GetNextState() == eLaserSwitch;
+           GetState() == eLaserSwitch || GetNextState() == eLaserSwitch ||
+           GetState() == eFireModeSwitch || GetNextState() == eFireModeSwitch;
 }
 
 bool CWeapon::HasWeaponActionMotion(const shared_str& motion) {
@@ -2343,6 +2363,26 @@ bool CWeapon::HasWeaponActionMotion(const shared_str& motion) {
         item->m_attach_place_idx == 1 && ui_core::is_widescreen() ? "_16x9" : "");
     const auto* hud_motion = item->m_hand_motions.find_motion(alias);
     return hud_motion && !hud_motion->m_animations.empty();
+}
+
+shared_str CWeapon::EquipmentToggleMotion(bool night_vision, bool switch_on) {
+    const LPCSTR disabled = night_vision ? "disable_nv_anim" : "disable_headlamp_anim";
+    if (READ_IF_EXISTS(pSettings, r_bool, cNameSect().c_str(), disabled, false) ||
+        READ_IF_EXISTS(pSettings, r_bool, HudSection().c_str(), disabled, false))
+        return {};
+
+    const LPCSTR base = night_vision ? (switch_on ? "anm_nv_on" : "anm_nv_off")
+                                    : (switch_on ? "anm_headlamp_on" : "anm_headlamp_off");
+    const shared_str motion = WeaponActionMotion(base);
+    return HasWeaponActionMotion(motion) ? motion : shared_str();
+}
+
+void CWeapon::StopEquipmentToggleMotion(const shared_str& motion) {
+    if (GetState() == eIdle && GetNextState() == eIdle && m_current_motion == motion) {
+        StopCurrentAnimWithoutCallback();
+        if (GetHUDmode())
+            PlayAnimIdle();
+    }
 }
 
 void CWeapon::LoadBayonet(LPCSTR section) {
@@ -2656,6 +2696,7 @@ void CWeapon::UpdateAddonsVisibility() {
     }
 
     ApplyConfiguredBoneVisibility(pWeaponVisual);
+    UpdateWorldAnimation(H_Parent() ? GetState() : u32(eIdle));
     pWeaponVisual->CalculateBones_Invalidate();
     pWeaponVisual->CalculateBones(TRUE);
 }
@@ -2899,7 +2940,97 @@ void CWeapon::reload(LPCSTR section) {
     m_ef_weapon_type = READ_IF_EXISTS(pSettings, r_u32, section, "ef_weapon_type", u32(-1));
 }
 
-void CWeapon::create_physic_shell() { CPhysicsShellHolder::create_physic_shell(); }
+void CWeapon::OnChangeVisual() {
+    inherited::OnChangeVisual();
+    m_world_animation = nullptr;
+}
+
+void CWeapon::UpdateWorldAnimation(u32 state, bool shot) {
+    if (!m_use_world_anims || PPhysicsShell() || !Visual() || (state == eFire && !shot))
+        return;
+
+    auto* animated = Visual()->dcast_PKinematicsAnimated();
+    if (!animated)
+        return;
+
+    LPCSTR base = "wanm_idle";
+    switch (state) {
+    case eShowing: base = "wanm_draw"; break;
+    case eHiding: base = "wanm_holster"; break;
+    case eFire: base = "wanm_shoot"; break;
+    case eReload: base = "wanm_reload"; break;
+    }
+
+    const shared_str section = cNameSect();
+    const auto read_motion = [&](LPCSTR key) {
+        return READ_IF_EXISTS(pSettings, r_string, section.c_str(), key, nullptr);
+    };
+    LPCSTR name = read_motion(base);
+    if (!name || !name[0]) {
+        base = "wanm_idle";
+        name = read_motion(base);
+    }
+
+    string128 key;
+    xr_strcpy(key, base);
+    const auto suffix = [&](LPCSTR value) {
+        string128 candidate;
+        xr_sprintf(candidate, "%s%s", key, value);
+        const LPCSTR variant = read_motion(candidate);
+        if (variant && variant[0]) {
+            xr_strcpy(key, candidate);
+            name = variant;
+        }
+    };
+
+    if (state == eFire && iAmmoElapsed <= 1)
+        suffix("_last");
+    if (IsMisfire())
+        suffix("_jammed");
+    else if (state != eFire && iAmmoElapsed == 0)
+        suffix("_empty");
+
+    const int mode = FireModeForHudBones();
+    string32 mode_suffix;
+    if (mode < 0)
+        xr_strcpy(mode_suffix, "_a");
+    else
+        xr_sprintf(mode_suffix, "_%d", mode);
+    suffix(mode_suffix);
+    if (UpgradeGrenadeMode())
+        suffix("_g");
+    else if (IsGrenadeLauncherAttached())
+        suffix("_w_gl");
+
+    if (!name || !name[0])
+        return;
+    MotionID motion = animated->ID_Cycle_Safe(name);
+    if (!motion.valid()) {
+        name = read_motion("wanm_idle");
+        if (!name || !name[0])
+            return;
+        motion = animated->ID_Cycle_Safe(name);
+    }
+    if (!motion.valid() || (!shot && m_world_animation == name))
+        return;
+
+    animated->PlayCycle(motion, m_world_animation.size() != 0 && !shot);
+    m_world_animation = name;
+}
+
+void CWeapon::create_physic_shell() {
+    // Build the shell from the assembled pose, before physics takes over the bones.
+    if (m_use_world_anims) {
+        m_world_animation = nullptr;
+        UpdateWorldAnimation(eIdle);
+        if (auto* model = Visual() ? Visual()->dcast_PKinematics() : nullptr) {
+            ApplyConfiguredBoneVisibility(model);
+            model->CalculateBones_Invalidate();
+            model->CalculateBones(TRUE);
+        }
+    }
+    CPhysicsShellHolder::create_physic_shell();
+}
 
 bool CWeapon::ActivationSpeedOverriden(Fvector& dest, bool clear_override) {
     if (m_activation_speed_is_overriden) {
@@ -3447,6 +3578,7 @@ shared_str CWeapon::InspectMotion() const {
 void CWeapon::OnStateSwitch(u32 S) {
     inherited::OnStateSwitch(S);
     m_BriefInfo_CalcFrame = 0;
+    UpdateWorldAnimation(H_Parent() ? S : u32(eIdle));
 
     if (S != eBayonetStrike)
         m_bayonet_hit_pending = false;

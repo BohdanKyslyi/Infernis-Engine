@@ -285,6 +285,12 @@ void CHUDTarget::Render() {
     }
 
     //отрендерить кружочек или крестик
+    if (auto* actor = smart_cast<CActor*>(Level().CurrentViewEntity())) {
+        auto* weapon = smart_cast<CWeapon*>(actor->inventory().ActiveItem());
+        if (weapon && weapon->HasActiveHudLaser())
+            return;
+    }
+
     if (!m_bShowCrosshair) {
 
         UIRender->StartPrimitive(6, IUIRender::ptTriList, UI().m_currentPointType);
