@@ -109,6 +109,7 @@ public:
         eSwitch,
         eInspect,
         eTacticalTorch,
+        eBayonetStrike,
     };
     enum EWeaponSubStates {
         eSubstateReloadBegin = 0,
@@ -246,6 +247,20 @@ protected:
     void StartTacticalTorchAction();
     void UpdateTacticalTorch();
     void SetTacticalTorchEffects(bool active);
+
+    shared_str m_bayonet_section;
+    bool m_bayonet_has_sound = false;
+    bool m_bayonet_hit_pending = false;
+    u32 m_bayonet_start_time = 0;
+    u32 m_bayonet_hit_time = 0;
+    u32 m_bayonet_duration = 0;
+
+    void LoadBayonet(LPCSTR section);
+    LPCSTR BayonetSettingSection(LPCSTR key) const;
+    void StartBayonetStrike();
+    void UpdateBayonetStrike();
+    void PerformBayonetHit();
+    bool HasWeaponActionMotion(const shared_str& motion);
     void RefreshUpgradeHud();
     void ApplyPendingUpgradeHud();
 
@@ -372,8 +387,14 @@ private:
 protected:
     void LoadHudFeatureFlags();
     virtual void OnUpgradeHudChanged() {}
-    virtual shared_str TacticalTorchMotion(LPCSTR base) const;
+    virtual shared_str WeaponActionMotion(LPCSTR base) const;
     virtual bool UpgradeGrenadeMode() const { return false; }
+
+public:
+    bool IsHudActionLocked() const;
+    bool TryBayonetStrike();
+
+protected:
     virtual int FireModeForHudBones() const { return 1; }
     virtual bool UpgradeHudAllowed(const shared_str&) const { return true; }
     virtual void AdjustHudAmmoState(u8&, int&, const shared_str&) const {}

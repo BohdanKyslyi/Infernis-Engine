@@ -90,6 +90,7 @@ void CGrenade::OnH_A_Chield() {
 }
 
 void CGrenade::State(u32 state) {
+    bool destroy_after_state = false;
     switch (state) {
     case eThrowStart: {
         Fvector C;
@@ -102,13 +103,8 @@ void CGrenade::State(u32 state) {
                 m_pPhysicsShell->Deactivate();
             xr_delete(m_pPhysicsShell);
             m_dwDestroyTime = 0xffffffff;
-            PutNextToSlot();
-            if (Local()) {
-#ifndef MASTER_GOLD
-                Msg("Destroying local grenade[%d][%d]", ID(), Device.dwFrame);
-#endif // #ifndef MASTER_GOLD
-                DestroyObject();
-            }
+            PutNextToSlot(!IsQuickThrowActive());
+            destroy_after_state = Local();
         };
     } break;
     case eThrowQuick: {
@@ -122,6 +118,12 @@ void CGrenade::State(u32 state) {
     } break;
     };
     inherited::State(state);
+    if (destroy_after_state) {
+#ifndef MASTER_GOLD
+        Msg("Destroying local grenade[%d][%d]", ID(), Device.dwFrame);
+#endif
+        DestroyObject();
+    }
 }
 
 bool CGrenade::DropGrenade() {
@@ -141,6 +143,9 @@ void CGrenade::DiscardState() {
 }
 
 void CGrenade::SendHiddenItem() {
+    if (IsQuickThrowActive() && GetState() == eThrowEnd)
+        return;
+
     if (GetState() == eThrow || GetState() == eThrowQuick) {
         //		Msg("MotionMarks !!![%d][%d]", ID(), Device.dwFrame);
         Throw();
@@ -200,7 +205,7 @@ void CGrenade::OnEvent(NET_Packet& P, u16 type) {
     CExplosive::OnEvent(P, type);
 }
 
-void CGrenade::PutNextToSlot() {
+void CGrenade::PutNextToSlot(bool activate_replacement) {
     if (OnClient())
         return;
 
@@ -228,8 +233,9 @@ void CGrenade::PutNextToSlot() {
             P.w_u16(pNext->ID());
             P.w_u16(pNext->BaseSlot());
             pNext->u_EventSend(P);
-            m_pInventory->SetActiveSlot(pNext->BaseSlot());
-        } else {
+            if (activate_replacement)
+                m_pInventory->SetActiveSlot(pNext->BaseSlot());
+        } else if (activate_replacement) {
             CActor* pActor = smart_cast<CActor*>(m_pInventory->GetOwner());
 
             if (pActor)

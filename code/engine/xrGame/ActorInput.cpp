@@ -74,6 +74,7 @@ static bool ItemUseBlocksAction(int cmd) {
     case kQUICK_USE_3:
     case kQUICK_USE_4:
     case kUSE:
+    case kDROP:
         return true;
     default:
         return false;
@@ -119,7 +120,8 @@ void CActor::IR_OnKeyboardPress(int cmd) {
         return;
     }
 
-    if (m_item_use && m_item_use->IsWeaponLocked() && ItemUseBlocksAction(cmd))
+    if (m_item_use && (m_item_use->IsWeaponLocked() || m_item_use->HasWeaponHudAction()) &&
+        ItemUseBlocksAction(cmd))
         return;
 
     switch (cmd) {
@@ -220,13 +222,26 @@ void CActor::IR_OnKeyboardPress(int cmd) {
             (detector && !detector->IsHidden()))
             break;
 
+        if (pSettings->section_exist("items_animations") &&
+            !READ_IF_EXISTS(pSettings, r_bool, "items_animations", "enable_quick_kick", true))
+            break;
+        if (active_weapon && active_weapon->TryBayonetStrike())
+            break;
+
         CWeaponKnife* knife = smart_cast<CWeaponKnife*>(inventory().ItemFromSlot(KNIFE_SLOT));
-        if (knife && inventory().ActiveItem() != knife)
+        if (knife && knife == active_weapon) {
+            if (knife->GetState() == CWeapon::eIdle && knife->GetNextState() == CWeapon::eIdle) {
+                knife->Action(kWPN_FIRE, CMD_START);
+                knife->Action(kWPN_FIRE, CMD_STOP);
+            }
+        } else if (knife) {
             m_item_use->StartQuickKnife(knife);
+        }
     } break;
     case kQUICK_GRENADE: {
         if (hud_adj_mode || (m_item_use && m_item_use->IsBusy()) ||
-            inventory().GetActiveSlot() == GRENADE_SLOT)
+            inventory().GetActiveSlot() == GRENADE_SLOT ||
+            inventory().GetActiveSlot() != inventory().GetNextActiveSlot())
             break;
         if (pSettings->section_exist("items_animations") &&
             pSettings->line_exist("items_animations", "enable_quick_throw_grenades") &&
@@ -243,7 +258,7 @@ void CActor::IR_OnKeyboardPress(int cmd) {
         CGrenade* grenade = smart_cast<CGrenade*>(inventory().ItemFromSlot(GRENADE_SLOT));
         if (grenade) {
             const u16 return_slot = inventory().GetActiveSlot();
-            inventory().Activate(GRENADE_SLOT, true);
+            inventory().Activate(GRENADE_SLOT);
             if (inventory().GetNextActiveSlot() == GRENADE_SLOT)
                 grenade->PrepareQuickThrow(return_slot);
         }
@@ -734,6 +749,8 @@ void CActor::set_input_external_handler(CActorInputHandler* handler) {
 }
 
 void CActor::SwitchNightVision() {
+    if (m_item_use && (m_item_use->IsWeaponLocked() || m_item_use->HasWeaponHudAction()))
+        return;
     CWeapon* wpn1 = NULL;
     CWeapon* wpn2 = NULL;
     CWeapon* wpn_extra = NULL;
@@ -771,6 +788,8 @@ void CActor::SwitchNightVision() {
 }
 
 void CActor::SwitchTorch() {
+    if (m_item_use && (m_item_use->IsWeaponLocked() || m_item_use->HasWeaponHudAction()))
+        return;
     xr_vector<CAttachableItem*> const& all = CAttachmentOwner::attached_objects();
     xr_vector<CAttachableItem*>::const_iterator it = all.begin();
     xr_vector<CAttachableItem*>::const_iterator it_e = all.end();

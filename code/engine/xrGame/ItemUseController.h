@@ -53,6 +53,7 @@ public:
     void Finish();
 
     bool IsActive() const { return m_active; }
+    bool HasWeaponHudAction() const;
     bool IsBusy() const { return m_active || m_deferred_hud_animation_section.size(); }
     bool IsWeaponLocked() const { return m_active; }
     bool IsMovementLocked() const { return m_active && m_block_movement; }

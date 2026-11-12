@@ -19,19 +19,25 @@ public:
 
 protected:
     virtual void CreateUI();
-    virtual void UpfateWork();
     virtual void TurnDetectorInternal(bool b);
 
 private:
     bool CanUseDynamicLights();
     bool HudBoneTransform(Fmatrix& result, const shared_str& bone,
                           const Fvector& offset, const Fvector& orientation);
-    void StartEffects();
+    void StartParticles();
+    void UpdateConeBones(bool visible);
     void UpdateEffects();
     void StopEffects();
 
 private:
     ref_light m_light;
+    ref_light m_omni;
+    shared_str m_cone_bones;
+    Fvector m_omni_offset;
+    bool m_legacy_light = false;
+    bool m_has_native_delay = false;
+    u32 m_show_light_delay = 0;
     CParticlesObject* m_particles;
 
     shared_str m_light_bone;

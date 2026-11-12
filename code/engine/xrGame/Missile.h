@@ -83,6 +83,10 @@ protected:
     float m_fThrowForce;
     bool m_bQuickThrowActive;
     u16 m_quick_throw_return_slot;
+    bool m_quick_throw_released = false;
+    bool m_quick_throw_animation_ended = false;
+
+    bool TryReleaseQuickThrow();
 
 protected:
     //относительная точка и направление вылета гранаты
@@ -102,6 +106,7 @@ public:
     }
     virtual void PH_A_CrPr();
     void PrepareQuickThrow(u16 return_slot);
+    bool IsQuickThrowActive() const { return m_bQuickThrowActive; }
 
 protected:
     u32 m_ef_weapon_type;

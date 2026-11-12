@@ -38,6 +38,13 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
             LoadTacticalTorch(section);
     }
 
+    if (pSettings->line_exist(section, "kick_hit_power") &&
+        pSettings->line_exist(section, "kick_distance")) {
+        result = true;
+        if (!test)
+            LoadBayonet(section);
+    }
+
     if (pSettings->line_exist(section, "hud")) {
         result = true;
         if (!test && std::find(m_hud_upgrade_sections.begin(), m_hud_upgrade_sections.end(),

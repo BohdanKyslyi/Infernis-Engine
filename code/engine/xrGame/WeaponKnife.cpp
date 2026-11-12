@@ -46,6 +46,9 @@ void CWeaponKnife::Load(LPCSTR section) {
 
     fWallmarkSize = pSettings->r_float(section, "wm_size");
     m_sounds.LoadSound(section, "snd_shoot", "sndShot", false, SOUND_TYPE_WEAPON_SHOOTING);
+    m_has_quick_strike_sound = pSettings->line_exist(section, "snd_kick_1");
+    if (m_has_quick_strike_sound)
+        m_sounds.LoadSound(section, "snd_kick_1", "sndQuickStrike", false, SOUND_TYPE_WEAPON_SHOOTING);
 
     m_Hit1SpashDir = pSettings->r_fvector3(section, "splash1_direction");
     m_Hit2SpashDir = pSettings->r_fvector3(section, "splash2_direction");
@@ -176,8 +179,15 @@ void CWeaponKnife::FastStrike(u32 state) {
         return;
 
     fireDistance = m_hit_dist + m_splash_radius;
-    if (H_Parent())
-        KnifeStrike(Device.vCameraPosition, Device.vCameraDirection);
+    if (auto* parent = smart_cast<CEntity*>(H_Parent())) {
+        Fvector position = Device.vCameraPosition;
+        Fvector direction = Device.vCameraDirection;
+        parent->g_fireParams(this, position, direction);
+        const auto* actor = smart_cast<const CActor*>(parent);
+        m_sounds.PlaySound(m_has_quick_strike_sound ? "sndQuickStrike" : "sndShot",
+            position, parent, actor && actor->HUDview(), false);
+        KnifeStrike(position, direction);
+    }
 }
 
 void CWeaponKnife::MakeShot(Fvector const& pos, Fvector const& dir, float const k_hit) {
@@ -198,8 +208,6 @@ void CWeaponKnife::MakeShot(Fvector const& pos, Fvector const& dir, float const 
         m_magazine.push_back(cartridge);
     iAmmoElapsed = m_magazine.size();
     bool SendHit = SendHitAllowed(H_Parent());
-
-    PlaySound("sndShot", pos);
 
     Level().BulletManager().AddBullet(pos, dir, m_fStartBulletSpeed, fCurrentHit, fHitImpulse_cur,
                                       H_Parent()->ID(), ID(), m_eHitType, fireDistance, cartridge,
@@ -231,6 +239,7 @@ void CWeaponKnife::OnMotionMark(u32 state, const motion_marks& M) {
 
     if (H_Parent()) {
         smart_cast<CEntity*>(H_Parent())->g_fireParams(this, p1, d);
+        PlaySound("sndShot", p1);
         KnifeStrike(p1, d);
     }
 }

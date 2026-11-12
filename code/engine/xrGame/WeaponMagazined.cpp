@@ -1319,8 +1319,8 @@ shared_str CWeaponMagazined::HudStateVariant(LPCSTR, LPCSTR fallback) const {
     return shared_str(fallback);
 }
 
-shared_str CWeaponMagazined::TacticalTorchMotion(LPCSTR base) const {
-    const shared_str fallback = CWeapon::TacticalTorchMotion(base);
+shared_str CWeaponMagazined::WeaponActionMotion(LPCSTR base) const {
+    const shared_str fallback = CWeapon::WeaponActionMotion(base);
     return HudStateVariant(base, fallback.c_str());
 }
 

@@ -51,7 +51,7 @@ struct hud_item_measures {
 
     Fvector m_hands_attach[2]; // pos,rot
 
-    void load(const shared_str& sect_name, IKinematics* K);
+    void load(const shared_str& sect_name, IKinematics* K, const shared_str& pose_section = {});
 };
 
 struct attachable_hud_item {
@@ -62,6 +62,7 @@ struct attachable_hud_item {
     // HUD item is animated alongside another attached item.
     bool m_preserve_other_hand;
     shared_str m_sect_name;
+    shared_str m_controller_pose_section;
     IKinematics* m_model;
     u16 m_attach_place_idx;
     // Optional per-section override of the global hud_fov from user.ltx.
@@ -120,7 +121,8 @@ public:
     player_hud();
     ~player_hud();
 
-    attachable_hud_item* attach_controller_item(const shared_str& hud_section);
+    attachable_hud_item* attach_controller_item(const shared_str& hud_section,
+        const shared_str& pose_section = {});
     void detach_controller_item();
 
     void load(const shared_str& model_name);

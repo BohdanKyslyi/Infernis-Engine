@@ -1117,6 +1117,8 @@ bool CInventory::Eat(PIItem pIItem) {
 
     if (actor && actor->m_inventory == this && actor->GetItemUseController()) {
         CItemUseController* controller = actor->GetItemUseController();
+        if (controller->HasWeaponHudAction())
+            return false;
 
         if (controller->IsActive()) {
             // An inventory-owned backpack idle allows normal item use. An

@@ -42,6 +42,7 @@ protected:
     float fCurrentHit;
 
     float fHitImpulse_cur;
+    bool m_has_quick_strike_sound = false;
 
 protected:
     virtual void LoadFireParams(LPCSTR section);

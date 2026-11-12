@@ -38,6 +38,7 @@ void create_force_progress() {
 }
 
 CMissile::CMissile(void) {
+    SetNextState(eHidden);
     m_dwStateTime = 0;
     m_bQuickThrowActive = false;
     m_quick_throw_return_slot = NO_ACTIVE_SLOT;
@@ -56,6 +57,7 @@ void CMissile::reinit() {
     SetPending(FALSE);
     m_fake_missile = NULL;
     SetState(eHidden);
+    SetNextState(eHidden);
 }
 
 void CMissile::Load(LPCSTR section) {
@@ -116,10 +118,11 @@ void CMissile::PH_A_CrPr() {
 }
 
 void CMissile::OnActiveItem() {
+    if (IsHidden() && GetNextState() != eHidden)
+        return;
+
     if (m_bQuickThrowActive) {
         inherited::OnActiveItem();
-        SetState(eIdle);
-        SetNextState(eIdle);
         const bool has_quick_motion =
             pSettings->line_exist(HudSection().c_str(), "anm_throw_quick");
         SwitchState(has_quick_motion ? eThrowQuick : eThrowStart);
@@ -127,8 +130,6 @@ void CMissile::OnActiveItem() {
     }
     SwitchState(eShowing);
     inherited::OnActiveItem();
-    SetState(eIdle);
-    SetNextState(eIdle);
 }
 
 void CMissile::OnHiddenItem() {
@@ -199,6 +200,21 @@ void CMissile::UpdateCL() {
     inherited::UpdateCL();
 
     CActor* pActor = smart_cast<CActor*>(H_Parent());
+    if (m_bQuickThrowActive && pActor) {
+        const auto& inventory = pActor->inventory();
+        if (inventory.ActiveItem() != this && inventory.GetNextActiveSlot() != GRENADE_SLOT) {
+            m_bQuickThrowActive = false;
+            m_quick_throw_return_slot = NO_ACTIVE_SLOT;
+        } else if (m_quick_throw_animation_ended && GetState() == GetNextState() &&
+                   (GetState() == eThrow || GetState() == eThrowQuick)) {
+            if (TryReleaseQuickThrow()) {
+                SwitchState(eThrowEnd);
+            } else if (m_dwStateTime >= 2000) {
+                Msg("! Quick grenade [%u]: projectile did not attach", (u32)ID());
+                SwitchState(eThrowEnd);
+            }
+        }
+    }
     if (pActor && !pActor->AnyMove() && this == pActor->inventory().ActiveItem()) {
         if (hud_adj_mode == 0 && GetState() == eIdle &&
             (Device.dwTimeGlobal - m_dw_curr_substate_time > 20000)) {
@@ -264,7 +280,8 @@ void CMissile::State(u32 state) {
         m_fThrowForce = m_fMinForce;
         if (m_bQuickThrowActive)
             m_throw = true;
-        PlayHUDMotion("anm_throw_begin", TRUE, this, GetState());
+        if (!PlayHUDMotion("anm_throw_begin", TRUE, this, GetState()) && m_bQuickThrowActive)
+            OnAnimationEnd(eThrowStart);
     } break;
     case eReady: {
         PlayHUDMotion("anm_throw_idle", TRUE, this, GetState());
@@ -272,20 +289,23 @@ void CMissile::State(u32 state) {
     case eThrow: {
         SetPending(TRUE);
         m_throw = false;
-        PlayHUDMotion("anm_throw", TRUE, this, GetState());
+        if (!PlayHUDMotion("anm_throw", TRUE, this, GetState()) && m_bQuickThrowActive)
+            OnAnimationEnd(eThrow);
     } break;
     case eThrowEnd: {
         if (m_bQuickThrowActive) {
             CActor* actor = smart_cast<CActor*>(H_Parent());
             const u16 return_slot = m_quick_throw_return_slot;
+            if (actor) {
+                auto& inventory = actor->inventory();
+                const u16 slot = return_slot != NO_ACTIVE_SLOT && inventory.ItemFromSlot(return_slot)
+                    ? return_slot : NO_ACTIVE_SLOT;
+                inventory.Activate(slot);
+            }
+            if (GetNextState() != eHidden)
+                SwitchState(eHidden);
             m_bQuickThrowActive = false;
             m_quick_throw_return_slot = NO_ACTIVE_SLOT;
-            if (actor) {
-                const u16 slot = return_slot != NO_ACTIVE_SLOT &&
-                        actor->inventory().ItemFromSlot(return_slot)
-                    ? return_slot : NO_ACTIVE_SLOT;
-                actor->inventory().Activate(slot, true);
-            }
             break;
         }
         SwitchState(eShowing);
@@ -295,7 +315,8 @@ void CMissile::State(u32 state) {
         m_throw = false;
         if (!m_fake_missile && !smart_cast<CMissile*>(H_Parent()))
             spawn_fake_missile();
-        PlayHUDMotion("anm_throw_quick", TRUE, this, GetState());
+        if (!PlayHUDMotion("anm_throw_quick", TRUE, this, GetState()))
+            OnAnimationEnd(eThrowQuick);
     } break;
         /*	case eBore:
                         {
@@ -331,16 +352,17 @@ void CMissile::OnAnimationEnd(u32 state) {
         else
             SwitchState(eReady);
     } break;
-    case eThrow: {
+    case eThrow:
+    case eThrowQuick: {
+        if (m_bQuickThrowActive && !TryReleaseQuickThrow()) {
+            m_quick_throw_animation_ended = true;
+            m_dwStateTime = 0;
+            break;
+        }
         SwitchState(eThrowEnd);
     } break;
     case eThrowEnd: {
         SwitchState(eShowing);
-    } break;
-    case eThrowQuick: {
-        if (H_Parent() && m_fake_missile)
-            Throw();
-        SwitchState(eThrowEnd);
     } break;
     default:
         inherited::OnAnimationEnd(state);
@@ -433,7 +455,9 @@ void CMissile::setup_throw_params() {
 void CMissile::OnMotionMark(u32 state, const motion_marks& M) {
     inherited::OnMotionMark(state, M);
     if ((state == eThrow || state == eThrowQuick) && !m_throw) {
-        if (H_Parent())
+        if (m_bQuickThrowActive)
+            TryReleaseQuickThrow();
+        else if (H_Parent())
             Throw();
     }
 }
@@ -473,6 +497,16 @@ void CMissile::PrepareQuickThrow(u16 return_slot) {
         return;
     m_bQuickThrowActive = true;
     m_quick_throw_return_slot = return_slot;
+    m_quick_throw_released = false;
+    m_quick_throw_animation_ended = false;
+}
+
+bool CMissile::TryReleaseQuickThrow() {
+    if (!m_quick_throw_released && H_Parent() && m_fake_missile) {
+        m_quick_throw_released = true;
+        Throw();
+    }
+    return m_quick_throw_released;
 }
 
 void CMissile::OnEvent(NET_Packet& P, u16 type) {

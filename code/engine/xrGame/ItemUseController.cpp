@@ -13,6 +13,7 @@
 #include "CustomMonster.h"
 #include "Weapon.h"
 #include "WeaponKnife.h"
+#include "Grenade.h"
 #include "Torch.h"
 #include "HudItem.h"
 #include "player_hud.h"
@@ -35,6 +36,7 @@
 #include "ai_space.h"
 #include "script_engine.h"
 #include <luabind/functor.hpp>
+#include <cmath>
 
 static bool ConsumableAnimationsEnabled() {
     static bool initialized = false;
@@ -279,8 +281,24 @@ CItemUseController::~CItemUseController()
     Cancel();
 }
 
+bool CItemUseController::HasWeaponHudAction() const {
+    if (!m_actor)
+        return false;
+
+    const CInventory& inventory = m_actor->inventory();
+    const auto* weapon = smart_cast<const CWeapon*>(inventory.ActiveItem());
+    if (weapon && weapon->IsHudActionLocked())
+        return true;
+
+    if (inventory.GetActiveSlot() != GRENADE_SLOT && inventory.GetNextActiveSlot() != GRENADE_SLOT)
+        return false;
+
+    const auto* grenade = smart_cast<const CGrenade*>(inventory.ItemFromSlot(GRENADE_SLOT));
+    return grenade && grenade->IsQuickThrowActive();
+}
+
 bool CItemUseController::Start(CInventoryItem* item) {
-    if (!item || m_active)
+    if (!item || m_active || HasWeaponHudAction())
         return false;
 
     shared_str item_section;
@@ -367,7 +385,7 @@ bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
 
     // A configured corpse must never fall through into Lua/corpse inventory
     // handling while another controller transition is still settling.
-    if (m_active || m_deferred_hud_animation_section.size())
+    if (IsBusy() || HasWeaponHudAction())
         return true;
 
     shared_str hud_section;
@@ -420,7 +438,11 @@ bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
         m_action_time = pSettings->r_u32(hud_section.c_str(), "action_timing");
     else if (pSettings->line_exist(hud_section.c_str(), "timing"))
         m_action_time = pSettings->r_u32(hud_section.c_str(), "timing");
-    else
+    else if (pSettings->line_exist(hud_section.c_str(), "mark_anm_show")) {
+        const float seconds = pSettings->r_float(hud_section.c_str(), "mark_anm_show");
+        m_action_time = std::isfinite(seconds) ? u32(clampr(seconds, 0.f, 60.f) * 1000.f + 0.5f)
+                                              : u32(-1);
+    } else
         m_action_time = u32(-1);
     m_animation_duration = 0;
 
@@ -450,18 +472,18 @@ bool CItemUseController::StartMutantLoot(CCustomMonster* monster) {
 }
 
 bool CItemUseController::StartQuickKnife(CWeaponKnife* knife) {
-    if (!knife || !m_actor || IsBusy() || !g_player_hud ||
-        !pSettings->section_exist("items_animations"))
-        return false;
-    if (pSettings->line_exist("items_animations", "enable_quick_kick") &&
-        !pSettings->r_bool("items_animations", "enable_quick_kick"))
+    if (!knife || !m_actor || IsBusy() || HasWeaponHudAction() || !g_player_hud)
         return false;
 
-    LPCSTR hud_line = pSettings->line_exist("items_animations", "quick_kick_hud")
-        ? "quick_kick_hud" : "quick_knife_hud";
-    if (!pSettings->line_exist("items_animations", hud_line))
-        return false;
-    LPCSTR configured_hud = pSettings->r_string("items_animations", hud_line);
+    LPCSTR configured_hud = "quick_kick_animator_hud";
+    if (pSettings->section_exist("items_animations")) {
+        if (!READ_IF_EXISTS(pSettings, r_bool, "items_animations", "enable_quick_kick", true))
+            return false;
+        if (pSettings->line_exist("items_animations", "quick_kick_hud"))
+            configured_hud = pSettings->r_string("items_animations", "quick_kick_hud");
+        else if (pSettings->line_exist("items_animations", "quick_knife_hud"))
+            configured_hud = pSettings->r_string("items_animations", "quick_knife_hud");
+    }
     if (!configured_hud || !configured_hud[0] || !xr_strcmp(configured_hud, "none"))
         return false;
 
@@ -504,7 +526,7 @@ bool CItemUseController::StartQuickKnife(CWeaponKnife* knife) {
 }
 
 bool CItemUseController::StartPickup(CInventoryItem* item) {
-    if (!item || !m_actor || IsBusy() || !g_player_hud ||
+    if (!item || !m_actor || IsBusy() || HasWeaponHudAction() || !g_player_hud ||
         !PickupAnimationsEnabled() || !pSettings->section_exist("items_animations")) {
         return false;
     }
@@ -591,7 +613,7 @@ bool CItemUseController::StartPickup(CInventoryItem* item) {
 }
 
 bool CItemUseController::StartRainWipe() {
-    if (!m_actor || IsBusy() || !RainWipingEnabled() || !::Render ||
+    if (!m_actor || IsBusy() || HasWeaponHudAction() || !RainWipingEnabled() || !::Render ||
         ::Render->GetRainDropsFactor() <= EPS_L) {
         return false;
     }
@@ -666,22 +688,24 @@ bool CItemUseController::StartRainWipe() {
 }
 
 bool CItemUseController::StartEquipmentToggle(CTorch* torch, bool night_vision) {
-    if (!torch || !m_actor || IsBusy() || !EquipmentToggleAnimationsEnabled(night_vision))
+    if (!torch || !m_actor || !EquipmentToggleAnimationsEnabled(night_vision))
         return false;
-
-    CInventoryItem* active_item = m_actor->inventory().ActiveItem();
-    CWeapon* active_weapon = smart_cast<CWeapon*>(active_item);
-    CHudItem* active_hud_item = active_item ? active_item->cast_hud_item() : NULL;
-    if ((active_weapon && active_weapon->IsZoomed()) ||
-        (active_hud_item && active_hud_item->IsPending())) {
-        return false;
-    }
 
     const bool switch_on = night_vision ? !torch->GetNightVisionStatus()
                                         : !torch->torch_active();
     shared_str hud_section;
     if (!ResolveEquipmentToggleHud(night_vision, switch_on, hud_section))
         return false;
+
+    CInventoryItem* active_item = m_actor->inventory().ActiveItem();
+    const auto* active_weapon = smart_cast<const CWeapon*>(active_item);
+    const auto* active_hud_item = active_item ? active_item->cast_hud_item() : nullptr;
+    // Consume the press while the hands are busy so the toggle stays synchronized with its HUD.
+    if (IsBusy() || HasWeaponHudAction() || (active_weapon && active_weapon->IsZoomed()) ||
+        (active_hud_item && (active_hud_item->IsPending() ||
+            active_hud_item->GetState() != active_hud_item->GetNextState()))) {
+        return true;
+    }
 
     m_item = NULL;
     m_item_section = torch->cNameSect();
@@ -849,7 +873,7 @@ bool CItemUseController::StartHudAnimationOnce(const shared_str& hud_section) {
 bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section,
                                                    bool allow_inventory,
                                                    bool one_shot) {
-    if (IsBusy() || !m_actor || !g_player_hud || !hud_section.size())
+    if (IsBusy() || HasWeaponHudAction() || !m_actor || !g_player_hud || !hud_section.size())
         return false;
 
     if (!pSettings->section_exist(hud_section.c_str())) {
@@ -1228,7 +1252,19 @@ void CItemUseController::BeginAnimation()
         return;
     }
 
-    if (!g_player_hud->attach_controller_item(m_hud_section)) {
+    shared_str pose_section;
+    if (m_controller_mode == eControllerModeQuickKnife) {
+        const auto* knife = smart_cast<const CWeaponKnife*>(
+            m_actor->inventory().get_object_by_id(m_quick_knife_id));
+        if (!knife || m_actor->inventory().ItemFromSlot(KNIFE_SLOT) != knife) {
+            Cancel();
+            return;
+        }
+        if (READ_IF_EXISTS(pSettings, r_bool, m_hud_section.c_str(), "quick_kick_use_knife_pose", true))
+            pose_section = knife->HudSection();
+    }
+
+    if (!g_player_hud->attach_controller_item(m_hud_section, pose_section)) {
         Msg("! ItemUse: failed to attach HUD [%s]", m_hud_section.c_str());
 
         CCustomMonster* mutant =

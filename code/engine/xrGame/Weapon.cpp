@@ -30,6 +30,9 @@
 #include "ui/UIXmlInit.h"
 #include "ui_base.h"
 #include "Torch.h"
+#include "Entity.h"
+#include "level_bullet_manager.h"
+#include "../xrEngine/gamemtllib.h"
 
 #define WEAPON_REMOVE_TIME 60000
 #define ROTATION_TIME 0.25f
@@ -298,6 +301,10 @@ void CWeapon::Load(LPCSTR section) {
     m_tactical_torch = TacticalTorch();
     if (READ_IF_EXISTS(pSettings, r_bool, section, "torch_installed", false))
         LoadTacticalTorch(section);
+    m_bayonet_section = nullptr;
+    m_bayonet_has_sound = false;
+    m_bayonet_hit_pending = false;
+    LoadBayonet(section);
 
     m_base_upgrade_hud = HudSection();
     CShootingObject::Load(section);
@@ -625,7 +632,8 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
     iAmmoElapsed = E->a_elapsed;
     m_flagsAddOnState = E->m_addon_flags.get();
     m_ammoType = E->ammo_type < m_ammoTypes.size() ? E->ammo_type : 0;
-    const u8 state = E->wpn_state == eTacticalTorch ? u8(eIdle) : E->wpn_state;
+    const u8 state = (E->wpn_state == eTacticalTorch || E->wpn_state == eBayonetStrike)
+        ? u8(eIdle) : E->wpn_state;
     SetState(state);
     SetNextState(state);
 
@@ -901,6 +909,7 @@ void CWeapon::UpdateCL() {
     inherited::UpdateCL();
     ApplyPendingUpgradeHud();
     UpdateTacticalTorch();
+    UpdateBayonetStrike();
     UpdateHUDAddonsVisibility();
     //ïîäñâåòêà îò âûñòðåëà
     UpdateLight();
@@ -1739,7 +1748,7 @@ Fcolor TorchColor(LPCSTR section, LPCSTR prefix, const Fcolor& fallback) {
     return color;
 }
 
-u32 TorchDelay(LPCSTR hud, LPCSTR prefix, LPCSTR motion) {
+u32 WeaponActionDelay(LPCSTR hud, LPCSTR prefix, LPCSTR motion) {
     string256 key;
     xr_sprintf(key, "%s%s", prefix, motion);
     const float seconds = READ_IF_EXISTS(pSettings, r_float, hud, key, 0.f);
@@ -1842,7 +1851,7 @@ void CWeapon::CreateTacticalTorchLights() {
     }
 }
 
-shared_str CWeapon::TacticalTorchMotion(LPCSTR base) const {
+shared_str CWeapon::WeaponActionMotion(LPCSTR base) const {
     const auto& hud = HudSection();
     const int mode = FireModeForHudBones();
     string64 key;
@@ -1878,15 +1887,9 @@ void CWeapon::StartTacticalTorchAction() {
     shared_str motion;
     auto* item = GetHUDmode() ? HudItemData() : nullptr;
     if (item && !g_player_hud->attached_item(1)) {
-        motion = TacticalTorchMotion(turn_on ? "anm_torch_on" : "anm_torch_off");
-        if (motion.size()) {
-            string256 alias;
-            xr_sprintf(alias, "%s%s", motion.c_str(),
-                item->m_attach_place_idx == 1 && ui_core::is_widescreen() ? "_16x9" : "");
-            const auto* hud_motion = item->m_hand_motions.find_motion(alias);
-            if (hud_motion && !hud_motion->m_animations.empty())
-                duration = PlayHUDMotion(motion, TRUE, this, GetState());
-        }
+        motion = WeaponActionMotion(turn_on ? "anm_torch_on" : "anm_torch_off");
+        if (HasWeaponActionMotion(motion))
+            duration = PlayHUDMotion(motion, TRUE, this, GetState());
     }
 
     if (torch.has_switch_sound[turn_on])
@@ -1900,9 +1903,9 @@ void CWeapon::StartTacticalTorchAction() {
 
     const LPCSTR hud = HudSection().c_str();
     torch.action_started = Device.dwTimeGlobal;
-    torch.switch_delay = TorchDelay(hud, "lock_time_start_", motion.c_str());
+    torch.switch_delay = WeaponActionDelay(hud, "lock_time_start_", motion.c_str());
     torch.action_duration = std::max(duration, torch.switch_delay +
-        TorchDelay(hud, "lock_time_end_", motion.c_str()));
+        WeaponActionDelay(hud, "lock_time_end_", motion.c_str()));
     torch.switch_pending = true;
     SetPending(TRUE);
 }
@@ -2011,6 +2014,149 @@ void CWeapon::UpdateTacticalTorch() {
         torch.glow->set_position(position);
 
     SetTacticalTorchEffects(true);
+}
+
+bool CWeapon::IsHudActionLocked() const {
+    return GetState() == eTacticalTorch || GetNextState() == eTacticalTorch ||
+           GetState() == eBayonetStrike || GetNextState() == eBayonetStrike;
+}
+
+bool CWeapon::HasWeaponActionMotion(const shared_str& motion) {
+    auto* item = GetHUDmode() ? HudItemData() : nullptr;
+    if (!item || !motion.size())
+        return false;
+
+    string256 alias;
+    xr_sprintf(alias, "%s%s", motion.c_str(),
+        item->m_attach_place_idx == 1 && ui_core::is_widescreen() ? "_16x9" : "");
+    const auto* hud_motion = item->m_hand_motions.find_motion(alias);
+    return hud_motion && !hud_motion->m_animations.empty();
+}
+
+void CWeapon::LoadBayonet(LPCSTR section) {
+    if (!pSettings->line_exist(section, "kick_hit_power") ||
+        !pSettings->line_exist(section, "kick_distance"))
+        return;
+
+    m_bayonet_section = section;
+    const shared_str weapon = cNameSect();
+    const LPCSTR sound = READ_IF_EXISTS(pSettings, r_string, weapon, "snd_kick", nullptr);
+    if (!m_bayonet_has_sound && sound && sound[0] && xr_strcmp(sound, "$silent") != 0) {
+        m_sounds.LoadSound(weapon.c_str(), "snd_kick", "sndBayonet", false);
+        m_bayonet_has_sound = true;
+    }
+}
+
+LPCSTR CWeapon::BayonetSettingSection(LPCSTR key) const {
+    if (m_bayonet_section.size() && pSettings->line_exist(m_bayonet_section, key))
+        return m_bayonet_section.c_str();
+    return cNameSect_str();
+}
+
+bool CWeapon::TryBayonetStrike() {
+    if (!m_bayonet_section.size() || !IsGameTypeSingle() ||
+        GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
+        m_bStopAtEndAnimIsRunning || IsZoomed() || !GetHUDmode())
+        return false;
+
+    const auto disabled = [this](LPCSTR key) {
+        return READ_IF_EXISTS(pSettings, r_bool, BayonetSettingSection(key), key, false);
+    };
+    if (disabled("disable_kick_anim") ||
+        (IsScopeAttached() && disabled("disable_kick_anim_when_scope_attached")) ||
+        (IsSilencerAttached() && disabled("disable_kick_anim_when_sil_attached")) ||
+        (IsGrenadeLauncherAttached() && disabled("disable_kick_anim_when_gl_attached")) ||
+        (UpgradeGrenadeMode() && disabled("disable_kick_anim_when_gl_enabled")) ||
+        pSettings->r_float(m_bayonet_section, "kick_distance") <= 0.f ||
+        !HasWeaponActionMotion(WeaponActionMotion("anm_kick")))
+        return false;
+
+    SwitchState(eBayonetStrike);
+    return true;
+}
+
+void CWeapon::StartBayonetStrike() {
+    const shared_str motion = WeaponActionMotion("anm_kick");
+    if (!HasWeaponActionMotion(motion)) {
+        SwitchState(eIdle);
+        return;
+    }
+
+    SetPending(TRUE);
+    const u32 duration = PlayHUDMotion(motion, FALSE, this, eBayonetStrike);
+    const LPCSTR hud = HudSection().c_str();
+    const u32 hit_time = WeaponActionDelay(hud, "lock_time_start_", motion.c_str());
+    m_bayonet_start_time = Device.dwTimeGlobal;
+    m_bayonet_hit_time = hit_time ? hit_time : duration / 2;
+    m_bayonet_duration = std::max(duration, m_bayonet_hit_time +
+        WeaponActionDelay(hud, "lock_time_end_", motion.c_str()));
+    m_bayonet_hit_pending = true;
+    if (m_bayonet_has_sound)
+        PlaySound("sndBayonet", get_LastFP());
+}
+
+void CWeapon::UpdateBayonetStrike() {
+    if (GetState() != eBayonetStrike || GetNextState() != eBayonetStrike)
+        return;
+
+    const u32 elapsed = Device.dwTimeGlobal - m_bayonet_start_time;
+    if (m_bayonet_hit_pending && elapsed >= m_bayonet_hit_time) {
+        m_bayonet_hit_pending = false;
+        PerformBayonetHit();
+    }
+    if (elapsed >= m_bayonet_duration && !m_bStopAtEndAnimIsRunning) {
+        SetPending(FALSE);
+        SwitchState(eIdle);
+    }
+}
+
+void CWeapon::PerformBayonetHit() {
+    auto* actor = smart_cast<CActor*>(H_Parent());
+    if (!actor || !actor->g_Alive() || actor->inventory().ActiveItem() != this)
+        return;
+
+    const auto setting = [this](LPCSTR key, float fallback) {
+        return READ_IF_EXISTS(pSettings, r_float, BayonetSettingSection(key), key, fallback);
+    };
+    const float distance = setting("kick_distance", 0.f);
+    const float power = setting("kick_hit_power", 0.f);
+    if (distance <= 0.f || power <= 0.f)
+        return;
+
+    const float impulse = setting("kick_hit_impulse", 0.f);
+    const int type = READ_IF_EXISTS(pSettings, r_s32, BayonetSettingSection("kick_hit_type"),
+        "kick_hit_type", int(ALife::eHitTypeWound));
+    const auto hit_type = type >= 0 && type < ALife::eHitTypeMax
+        ? ALife::EHitType(type) : ALife::eHitTypeWound;
+
+    CCartridge cartridge;
+    cartridge.param_s.kAP = setting("kick_ap", EPS_L);
+    cartridge.param_s.fWallmarkSize = setting("kick_wallmark_size", 0.05f);
+    cartridge.m_flags.set(CCartridge::cfTracer, FALSE);
+    cartridge.m_flags.set(CCartridge::cfRicochet, FALSE);
+    const LPCSTR material = READ_IF_EXISTS(pSettings, r_string, BayonetSettingSection("kick_material"),
+        "kick_material", "objects\\knife");
+    cartridge.bullet_material_idx = GMLib.GetMaterialIdx(material);
+
+    Fvector position = Device.vCameraPosition;
+    Fvector direction = Device.vCameraDirection;
+    actor->g_fireParams(this, position, direction);
+    Fvector up, right;
+    Fvector::generate_orthonormal_basis_normalized(direction, up, right);
+    const float vertical = setting("kick_disp_ver", 0.f);
+    const float horizontal = setting("kick_disp_hor", 0.f);
+    const int count = clampr(READ_IF_EXISTS(pSettings, r_s32, BayonetSettingSection("kick_hit_count"),
+        "kick_hit_count", 1), 1, 32);
+    const bool send_hit = SendHitAllowed(actor);
+    for (int i = 0; i < count; ++i) {
+        const float offset = count > 1 ? 2.f * float(i) / float(count - 1) - 1.f : 0.f;
+        Fvector ray = direction;
+        ray.mad(up, vertical * offset);
+        ray.mad(right, horizontal * offset);
+        ray.normalize_safe();
+        Level().BulletManager().AddBullet(position, ray, 10000.f, power, impulse,
+            actor->ID(), ID(), hit_type, distance, cartridge, 1.f, send_hit);
+    }
 }
 
 void CWeapon::UpdateHudAmmoBones(const CCartridge* fired) {
@@ -2966,8 +3112,13 @@ void CWeapon::OnStateSwitch(u32 S) {
     inherited::OnStateSwitch(S);
     m_BriefInfo_CalcFrame = 0;
 
+    if (S != eBayonetStrike)
+        m_bayonet_hit_pending = false;
+
     if (S == eTacticalTorch) {
         StartTacticalTorchAction();
+    } else if (S == eBayonetStrike) {
+        StartBayonetStrike();
     } else if (S == eInspect) {
         SetPending(TRUE);
         const shared_str motion = InspectMotion();

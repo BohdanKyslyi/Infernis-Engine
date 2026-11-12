@@ -41,7 +41,7 @@ public:
     virtual bool NeedToDestroyObject() const;
     virtual ALife::_TIME_ID TimePassedAfterIndependant() const;
 
-    void PutNextToSlot();
+    void PutNextToSlot(bool activate_replacement = true);
 
     virtual void DeactivateItem();
     virtual bool GetBriefInfo(II_BriefInfo& info);

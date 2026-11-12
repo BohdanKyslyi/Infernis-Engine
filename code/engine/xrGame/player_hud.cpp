@@ -251,7 +251,7 @@ void attachable_hud_item::update(bool bForce) {
     bool is_16x9 = UI().is_widescreen();
 
     if (!!m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now) != is_16x9)
-        m_measures.load(m_sect_name, m_model);
+        m_measures.load(m_sect_name, m_model, m_controller_pose_section);
 
     Fvector ypr = m_measures.m_item_attach[1];
     ypr.mul(PI / 180.f);
@@ -343,19 +343,21 @@ void attachable_hud_item::render_item_ui() {
     m_parent_hud_item->render_item_3d_ui();
 }
 
-void hud_item_measures::load(const shared_str& sect_name, IKinematics* K) {
+void hud_item_measures::load(const shared_str& sect_name, IKinematics* K,
+                             const shared_str& pose_section) {
+    const shared_str& pose = pose_section.size() ? pose_section : sect_name;
     bool is_16x9 = UI().is_widescreen();
     string64 _prefix;
     xr_sprintf(_prefix, "%s", is_16x9 ? "_16x9" : "");
     string128 val_name;
 
     strconcat(sizeof(val_name), val_name, "hands_position", _prefix);
-    m_hands_attach[0] = pSettings->r_fvector3(sect_name, val_name);
+    m_hands_attach[0] = pSettings->r_fvector3(pose, val_name);
     strconcat(sizeof(val_name), val_name, "hands_orientation", _prefix);
-    m_hands_attach[1] = pSettings->r_fvector3(sect_name, val_name);
+    m_hands_attach[1] = pSettings->r_fvector3(pose, val_name);
 
-    m_item_attach[0] = pSettings->r_fvector3(sect_name, "item_position");
-    m_item_attach[1] = pSettings->r_fvector3(sect_name, "item_orientation");
+    m_item_attach[0] = pSettings->r_fvector3(pose, "item_position");
+    m_item_attach[1] = pSettings->r_fvector3(pose, "item_orientation");
 
     shared_str bone_name;
     m_prop_flags.set(e_fire_point, pSettings->line_exist(sect_name, "fire_bone"));
@@ -608,7 +610,8 @@ player_hud::~player_hud() {
     m_pool.clear();
 }
 
-attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_section) {
+attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_section,
+                                                        const shared_str& pose_section) {
     // На всякий случай удаляем предыдущий temporary HUD.
     if (m_controller_item)
         detach_controller_item();
@@ -640,6 +643,9 @@ attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_se
 
     pi->m_parent_hud_item = NULL;
     pi->m_controller_owned = true;
+    pi->m_controller_pose_section = pose_section;
+    if (pose_section.size())
+        pi->m_measures.load(pi->m_sect_name, pi->m_model, pose_section);
 
     m_controller_item = pi;
     m_controller_motion.invalidate();
@@ -663,6 +669,10 @@ void player_hud::detach_controller_item() {
 
     m_controller_item->m_controller_owned = false;
     m_controller_item->m_parent_hud_item = NULL;
+    if (m_controller_item->m_controller_pose_section.size()) {
+        m_controller_item->m_controller_pose_section = nullptr;
+        m_controller_item->m_measures.load(m_controller_item->m_sect_name, m_controller_item->m_model);
+    }
 
     Msg("* ItemUse: detached HUD section [%s]", m_controller_item->m_sect_name.c_str());
 
