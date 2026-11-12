@@ -371,6 +371,7 @@ public:
     float ZoomCameraFov(float base_fov) const;
     //ïîêàçûâàåò, ÷òî îðóæèå íàõîäèòñÿ â ñîîñòîÿíèè ïîâîðîòà äëÿ ïðèáëèæåííîãî ïðèöåëèâàíèÿ
     bool IsRotatingToZoom() const { return (m_zoom_params.m_fZoomRotationFactor < 1.f); }
+    float GetZoomRotationFactor() const { return m_zoom_params.m_fZoomRotationFactor; }
 
     virtual u8 GetCurrentHudOffsetIdx();
 

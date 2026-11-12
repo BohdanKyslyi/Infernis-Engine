@@ -66,7 +66,7 @@ bool CCustomDetector::CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate
         if (W)
             bres = bres && (W->GetState() != CHUDState::eBore) &&
                    (W->GetState() != CWeapon::eReload) && (W->GetState() != CWeapon::eSwitch) &&
-                   !W->IsZoomed();
+                   (AllowsZoomWithDetector() || !W->IsZoomed());
     }
     return bres;
 }
@@ -216,8 +216,10 @@ bool CCustomDetector::IsWorking() {
 }
 
 void CCustomDetector::UpfateWork() {
-    UpdateAf();
-    m_ui->update();
+    if (m_ui) {
+        UpdateAf();
+        m_ui->update();
+    }
 }
 
 bool CCustomDetector::CanPlayWeaponReload(LPCSTR motion) {
@@ -269,7 +271,8 @@ void CCustomDetector::UpdateVisibility() {
             CWeapon* wpn = smart_cast<CWeapon*>(i0->m_parent_hud_item);
             if (wpn) {
                 u32 state = wpn->GetState();
-                if (wpn->IsZoomed() || state == CWeapon::eReload || state == CWeapon::eSwitch) {
+                if ((!AllowsZoomWithDetector() && wpn->IsZoomed()) || state == CWeapon::eReload ||
+                    state == CWeapon::eSwitch) {
                     HideDetector(true);
                     m_bNeedActivation = true;
                 }

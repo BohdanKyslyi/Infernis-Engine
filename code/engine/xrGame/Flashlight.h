@@ -8,58 +8,57 @@ class CFlashlight : public CCustomDetector {
     typedef CCustomDetector inherited;
 
 public:
-    CFlashlight();
-    virtual ~CFlashlight();
+    explicit CFlashlight(bool native_flashlight = true);
+    ~CFlashlight() override;
 
-    virtual void Load(LPCSTR section);
-    virtual void UpdateCL();
-    virtual void OnStateSwitch(u32 S);
-    virtual void OnH_B_Independent(bool just_before_destroy);
-    virtual void OnMoveToRuck(const SInvItemPlace& prev);
+    void Load(LPCSTR section) override;
+    void net_Destroy() override;
+    void UpdateCL() override;
+    void OnStateSwitch(u32 state) override;
+    void OnH_B_Independent(bool just_before_destroy) override;
+    void OnMoveToRuck(const SInvItemPlace& prev) override;
+    void on_b_hud_detach() override;
 
 protected:
-    virtual void CreateUI();
-    virtual void TurnDetectorInternal(bool b);
+    bool HasHandheldLight() const { return !!m_light; }
+    bool AllowsZoomWithDetector() const override { return HasHandheldLight(); }
+    void TurnDetectorInternal(bool working) override;
 
 private:
-    bool CanUseDynamicLights();
-    bool HudBoneTransform(Fmatrix& result, const shared_str& bone,
-                          const Fvector& offset, const Fvector& orientation);
-    void StartParticles();
+    u32 MotionLightDelay(LPCSTR prefix, u32 fallback) const;
     void UpdateConeBones(bool visible);
-    void UpdateEffects();
+    void UpdateEffects(bool lighting_allowed);
+    void UpdateParticles(attachable_hud_item* hud);
     void StopEffects();
+    void StopParticles();
 
-private:
     ref_light m_light;
     ref_light m_omni;
-    shared_str m_cone_bones;
-    Fvector m_omni_offset;
-    bool m_legacy_light = false;
-    bool m_has_native_delay = false;
-    u32 m_show_light_delay = 0;
-    CParticlesObject* m_particles;
+    ref_glow m_glow;
+    CParticlesObject* m_particles = nullptr;
 
     shared_str m_light_bone;
-    shared_str m_light_texture;
+    shared_str m_direction_bone;
+    shared_str m_cone_bones;
     shared_str m_particles_name;
     shared_str m_particles_bone;
-
-    Fcolor m_light_color;
     Fvector m_light_offset;
     Fvector m_light_orientation;
+    Fvector m_omni_offset;
+    Fvector m_aim_offset;
+    Fvector m_world_offset;
+    Fvector m_omni_world_offset;
     Fvector m_particles_offset;
     Fvector m_particles_orientation;
 
-    float m_light_range;
-    float m_light_cone_angle;
-    u32 m_light_start_time;
-    u32 m_light_request_time;
+    u32 m_light_start_time = 0;
+    u32 m_transition_time = 0;
+    u32 m_transition_delay = 0;
 
-    bool m_light_is_spot;
-    bool m_light_shadow;
-    bool m_light_hud_mode;
-    bool m_effects_requested;
-    bool m_effects_active;
-    bool m_transform_error_reported;
+    const bool m_native_flashlight;
+    bool m_legacy_light = false;
+    bool m_legacy_direction = false;
+    bool m_has_native_delay = false;
+    bool m_light_hud_mode = false;
+    bool m_effects_active = false;
 };

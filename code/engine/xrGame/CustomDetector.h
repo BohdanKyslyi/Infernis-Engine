@@ -150,6 +150,7 @@ public:
 
 protected:
     bool CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate);
+    virtual bool AllowsZoomWithDetector() const { return false; }
     virtual void TurnDetectorInternal(bool b);
     void UpdateNightVisionMode(bool b_off);
     void UpdateVisibility();

@@ -126,16 +126,8 @@ void CHUDTarget::RenderLaserImpact() {
         std::abs(projected.x) >= 1.f || std::abs(projected.y) >= 1.f)
         return;
 
-    // The HUD emitter can see around an edge the player camera cannot.
-    Fvector camera_ray;
-    camera_ray.sub(impact, Device.vCameraPosition);
-    const float distance = camera_ray.magnitude();
+    const float distance = impact.distance_to(Device.vCameraPosition);
     if (distance <= 0.025f)
-        return;
-    camera_ray.div(distance);
-    collide::rq_result blocker;
-    if (Level().ObjectSpace.RayPick(Device.vCameraPosition, camera_ray, distance - 0.02f,
-            collide::rqtBoth, blocker, actor))
         return;
 
     if (!m_laser_shader_loaded) {

@@ -39,7 +39,6 @@
 
 BOOL b_toggle_weapon_aim = FALSE;
 extern CUIXml* pWpnScopeXml;
-extern ENGINE_API float psHUD_FOV;
 
 CWeapon::CWeapon() {
     SetState(eHidden);
@@ -2201,50 +2200,14 @@ bool CWeapon::TraceHudLaserImpact(Fvector& position, bool& green) {
     if (!laser.draw_hud_impact || !GetHUDmode())
         return false;
 
-    const auto* hud = HudItemData();
-    if (!hud)
-        return false;
-
-    const LPCSTR hud_section = HudSection().c_str();
-    Fvector origin, direction;
-    Fmatrix emitter = hud->m_item_transform;
-    const u16 bone = laser.bone.size() ? hud->m_model->LL_BoneID(laser.bone.c_str()) : BI_NONE;
-    if (bone != BI_NONE)
-        emitter.mul_43(hud->m_item_transform, hud->m_model->LL_GetTransform(bone));
-    emitter.transform_tiny(origin, laser.hud_offset);
-    // The attachment bone positions the emitter. Forward follows the weapon HUD.
-    direction = hud->m_item_transform.k;
-    direction.normalize_safe();
-
-    const Fvector& camera_dir = Device.vCameraDirection;
-    const float aim = UpgradeGrenadeMode() ? 0.f : m_zoom_params.m_fZoomRotationFactor;
-    const float correction =
-        READ_IF_EXISTS(pSettings, r_float, hud_section, "hud_recalc_koef", 1.f);
-    // Undo the HUD projection for both points of the ray. Keep forward
-    // distance unchanged so the trace starts at the emitter's depth.
-    const float half_fov = deg2rad(Device.fFOV * 0.5f);
-    const float hud_half_fov = half_fov * std::max(psHUD_FOV, 0.1f);
-    const float ratio = std::tan(half_fov) / std::max(std::tan(hud_half_fov), EPS_S);
-    const float scale = std::isfinite(correction) && correction > 0.f ? ratio * correction : ratio;
-    Fvector offset;
-    offset.sub(origin, Device.vCameraPosition);
-    const float forward = offset.dotproduct(camera_dir);
-    offset.mad(camera_dir, -forward).mul(scale).mad(camera_dir, forward);
-    origin.add(Device.vCameraPosition, offset);
-    const float along_camera = direction.dotproduct(camera_dir);
-    direction.mad(camera_dir, -along_camera).mul(scale).mad(camera_dir, along_camera);
-    direction.normalize_safe();
-
-    origin.lerp(origin, Device.vCameraPosition, aim);
-    direction.lerp(direction, camera_dir, aim);
-    direction.normalize_safe();
-
+    // Use the crosshair's world ray independently of HUD animation and weapon sway.
+    const Fvector& origin = Device.vCameraPosition;
+    const Fvector& direction = Device.vCameraDirection;
     collide::rq_result hit;
-    if (direction.square_magnitude() < EPS_S ||
-        !Level().ObjectSpace.RayPick(origin, direction, 300.f, collide::rqtBoth, hit, H_Parent()))
+    if (!Level().ObjectSpace.RayPick(origin, direction, 300.f, collide::rqtBoth, hit, H_Parent()))
         return false;
 
-    position.mad(origin, direction, std::max(0.f, hit.range - 0.01f));
+    position.mad(origin, direction, hit.range);
     green = laser.green;
     return true;
 }
