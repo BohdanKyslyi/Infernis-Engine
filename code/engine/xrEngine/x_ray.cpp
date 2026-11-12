@@ -191,10 +191,14 @@ void execUserScript() {
 }
 
 extern int g_current_renderer; // EngineAPI.cpp
+void cpu_core_mode_apply();     // xr_ioc_cmd.cpp ( item 9 stage A )
 
 void Startup() {
     InitSound1();
     execUserScript();
+    // Item 9 stage A: the CPU core mode of the profile, also for a profile without the line
+    // ( cpu_core_mode, xr_ioc_cmd.cpp ).
+    cpu_core_mode_apply();
     // Infernis PBR: user.ltx is in, no shader is built yet - this is what the session runs with.
     pbr_settings_user_config_loaded();
     // And the SSS switch the session runs with.
@@ -204,6 +208,9 @@ void Startup() {
     // Engine.External.Initialize before Startup ). Nothing has read their files yet: the weathers,
     // their sounds and skies are loaded from here on.
     FS.ssfx_addons(ssfx_session_enable && g_current_renderer == 4);
+    // Weather_ATMOS put in or taken out since the last start: the SSS settings follow, once
+    // ( ssfx_atmos_switch, xr_ioc_cmd.cpp ). The pack is mounted by now, and so is its list.
+    ssfx_atmos_switch();
     InitSound2();
 
     // ...command line for auto start
@@ -555,7 +562,9 @@ int APIENTRY WinMain_impl(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lp
     }
 #endif
 
-    SetThreadAffinityMask(GetCurrentThread(), 1);
+    // Item 9 stage A: no pin to logical CPU 0 any more ( Monolith pins nothing ). The CPUs the game
+    // runs on are set by cpu_core_mode ( CPU::ApplyCoreMode, xrCore\_math.cpp ) from Startup().
+    // SetThreadAffinityMask(GetCurrentThread(), 1);
 
     // Title window
     logoWindow =

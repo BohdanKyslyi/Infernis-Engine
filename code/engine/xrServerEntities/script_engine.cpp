@@ -11,11 +11,7 @@
 #include "ai_space.h"
 #include "object_factory.h"
 #include "script_process.h"
-
-#ifndef XRSE_FACTORY_EXPORTS
-#include "../xrGame/ui/UILuaWorkbench.h"
-#include "../xrGame/ui/LuaWorkbench.h"
-#endif
+#include "script_thread.h" // logging part C: the stack of a running script thread
 
 #ifdef USE_DEBUGGER
 #ifndef USE_LUA_STUDIO
@@ -40,6 +36,12 @@ extern Flags32 psAI_Flags;
 #endif
 
 void jit_command(lua_State*, LPCSTR);
+
+// Logging part C ( 2026-11-10 ): xrCore's record of a C++ exception asks this file for the Lua stack
+// ( cpp_exception_lua_stack, after get_lua_stack ). Set by init(), cleared by the destructor.
+XRCORE_API void SetCppExceptionLuaHook(void (*hook)()); // xrCore\xrDebugNew.cpp
+static CScriptEngine* cpp_exception_engine = nullptr;
+static DWORD cpp_exception_script_thread = 0;
 
 #if defined(USE_DEBUGGER) && defined(USE_LUA_STUDIO)
 static void log_callback(LPCSTR message) {
@@ -137,9 +139,10 @@ CScriptEngine::CScriptEngine() {
 }
 
 CScriptEngine::~CScriptEngine() {
-#ifndef XRSE_FACTORY_EXPORTS
-    ResetLuaWorkbenchRun();
-#endif
+    if (cpp_exception_engine == this) { // logging part C: no Lua stack from a destroyed engine
+        SetCppExceptionLuaHook(nullptr);
+        cpp_exception_engine = nullptr;
+    }
     while (!m_script_processes.empty())
         remove_script_process(m_script_processes.begin()->first);
 
@@ -157,9 +160,6 @@ CScriptEngine::~CScriptEngine() {
 }
 
 void CScriptEngine::unload() {
-#ifndef XRSE_FACTORY_EXPORTS
-    ResetLuaWorkbenchRun();
-#endif
     lua_settop(lua(), m_stack_level);
     m_last_no_file_length = 0;
     *m_last_no_file = 0;
@@ -197,31 +197,25 @@ xr_vector<xr_string> get_lua_stack(lua_State* L) {
     return res;
 }
 
-#ifndef XRSE_FACTORY_EXPORTS
-static void log_live_workbench_error(lua_State* state) {
-    auto& debugger = lua_workbench::Live();
-    if (!debugger.CaptureError(state, 1))
+// Logging part C: the Lua stack for xrCore's record of a C++ exception. Only on the thread the scripts run
+// on ( the one that ran init() ); a script thread ( run_string in a loaded game ) gives that thread's stack.
+static void cpp_exception_lua_stack() {
+    CScriptEngine* const engine = cpp_exception_engine;
+    if (!engine || GetCurrentThreadId() != cpp_exception_script_thread)
         return;
-    Msg("! [Lua Workbench] %s", debugger.Message().c_str());
-    unsigned count = 0;
-    for (const auto& frame : debugger.Frames()) {
-        if (count++ == 6)
-            break;
-        Msg("!   %s:%d (%s)", frame.source.c_str(), frame.line, frame.function.c_str());
-        unsigned variables = 0;
-        for (const auto& value : frame.variables) {
-            if (variables++ == 8)
-                break;
-            Msg("!     %s", value.c_str());
-        }
-    }
+    CScriptThread* const thread = engine->current_thread();
+    lua_State* const L = thread ? thread->lua() : engine->lua();
+    if (!L)
+        return;
+    const auto stack = get_lua_stack(L);
+    if (stack.empty())
+        return;
+    Msg("! Lua stack:");
+    for (auto const& s : stack)
+        Msg("%s", s.c_str());
 }
-#endif
 
 void CScriptEngine::lua_error(lua_State* L) {
-#ifndef XRSE_FACTORY_EXPORTS
-    log_live_workbench_error(L);
-#endif
     // Monolith ( script_engine.cpp:211-235 ): the stack to the log, the first script line ( file,
     // line, function ) into the crash report
     ai().script_engine().print_stack();
@@ -250,9 +244,6 @@ void CScriptEngine::lua_error(lua_State* L) {
 }
 
 int CScriptEngine::lua_pcall_failed(lua_State* L) {
-#ifndef XRSE_FACTORY_EXPORTS
-    log_live_workbench_error(L);
-#endif
     // Monolith ( script_engine.cpp:266-291 ): the stack to the log, the first script line ( file,
     // line, function ) into the crash report
     ai().script_engine().print_stack();
@@ -354,9 +345,6 @@ void CScriptEngine::setup_auto_load() {
 extern void export_classes(lua_State* L);
 
 void CScriptEngine::init() {
-#ifndef XRSE_FACTORY_EXPORTS
-    ResetLuaWorkbenchRun();
-#endif
 #ifdef USE_LUA_STUDIO
     bool lua_studio_connected = !!m_lua_studio_world;
     if (lua_studio_connected)
@@ -379,6 +367,10 @@ void CScriptEngine::init() {
 
     luabind::open(lua());
     setup_callbacks();
+    // logging part C: the record of a C++ exception gets the Lua stack of this engine's scripts
+    cpp_exception_engine = this;
+    cpp_exception_script_thread = GetCurrentThreadId();
+    SetCppExceptionLuaHook(&cpp_exception_lua_stack);
     export_classes(lua());
     setup_auto_load();
 

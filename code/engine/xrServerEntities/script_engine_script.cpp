@@ -49,6 +49,16 @@ void ErrorLog(LPCSTR caMessage) {
 // Monolith ( script_engine_script.cpp:59-63 ): print_stack() for the scripts
 void PrintStack() { ai().script_engine().print_stack(); }
 
+// Logging part C, test only ( addons\Errors\scripts\errors_test.script ): one C++ error on purpose. An empty
+// list read at index 0 - the C++ library throws std::out_of_range, the kind of error a real engine bug gives.
+// The script gets "C++ exception", the log the record of part C.
+__declspec(noinline) void TestCppException() {
+    xr_vector<int> list;
+    volatile size_t index = 0;
+    const int value = list.at(index);
+    (void)value;
+}
+
 void FlushLogs() {
     // Monolith ( script_engine_script.cpp:67-74 ): FlushLog in every build
     FlushLog();
@@ -171,6 +181,7 @@ void CScriptEngine::script_register(lua_State* L) {
 
     function(L, "log", LuaLog);
     function(L, "print_stack", PrintStack); // Monolith ( script_engine_script.cpp:235 )
+    function(L, "test_cpp_exception", TestCppException); // logging part C, test only
     function(L, "error_log", ErrorLog);
     function(L, "flush", FlushLogs);
     function(L, "prefetch", prefetch_module);

@@ -17,6 +17,7 @@
 #include "xrRender/RenderDeviceRender.h"
 
 #include "xr_object.h"
+#include "../xrCore/xrTasks.h" // item 9 stage B ( multithreading ): cpu_tasks, cpu_task_stats
 
 xr_token* vid_quality_token = nullptr;
 
@@ -803,6 +804,10 @@ ENGINE_API int ps_ssfx_menu_configured = 0;
 ENGINE_API int ps_ssfx_enable = 1;
 ENGINE_API int ssfx_session_enable = 1;
 
+// Weather_ATMOS: the pack as the last start found it, -1 until a start has remembered it
+// ( ssfx_console_vars.h ).
+ENGINE_API int ps_ssfx_atmos_state = -1;
+
 // Monolith xrRender_console.cpp:482, off by default. See ssfx_console_vars.h.
 ENGINE_API Flags32 ps_actor_shadow_flags = {0};
 
@@ -912,7 +917,11 @@ static LPCSTR ssfx_profile_shared_cmds[] = {
     "g_important_save", "hud_draw", "r__actor_shadow", "snd_volume_eff", "snd_volume_music",
     "snd_device", "snd_efx", "g_dynamic_music", "snd_hrtf", "snd_output", "snd_acoustics",
     "snd_acoustics_preset", "snd_language", "text_language", "mouse_sens", "mouse_invert",
-    "default_controls", "unbindall", "bind", "bind_sec", "bind_console", nullptr};
+    "default_controls", "unbindall", "bind", "bind_sec", "bind_console",
+    // item 9 stage A: which CPUs the game runs on is the machine's, not the graphics' - one value
+    "cpu_core_mode",
+    // item 9 stage B: whether the task system's workers run the engine's parallel work - one value
+    "cpu_tasks", nullptr};
 
 // The SSS settings that do not start with "ssfx_": the ones SSS added to the engine, set by its
 // settings page ( mm_opt_ssfx ) or by its scripts ( r__fakescope ).
@@ -1153,6 +1162,82 @@ void ssfx_profile_backup() {
         return;
     ssfx_profile_copy(ssfx_profile_plain, "user_backup.ltx");
     ssfx_profile_copy(ssfx_profile_sss, "user_sss_backup.ltx");
+}
+
+// Screen Space Shaders + Weather_ATMOS ( the user, 2026-11-10 ): the settings of the SSS menu follow
+// the addon pack addons\Weather_ATMOS, once each time it is put in or taken out - not at every
+// start, so what the player changes stays until the pack goes or comes ( "reset once, not on every
+// start" ). The pack as a start found it is ssfx_atmos_state in user_sss.ltx: -1 nothing
+// remembered yet, 0 not there, 1 there. Called by Startup right after FS.ssfx_addons, when the pack
+// is mounted, so the list is read from it. Nothing happens unless SSS runs ( switched on, DX11 ):
+// SSS off is the game without SSS. Our own design, the donor has none.
+static LPCSTR ssfx_atmos_pack = "Weather_ATMOS";
+static LPCSTR ssfx_atmos_list = "ssfx_atmos_switch.ltx";
+
+// The pack is on the disk: ssfx_addon_names gives the packs of ssfx_addons that are, folder names
+// as found there, a space between two.
+static bool ssfx_atmos_there() {
+    string_path packs;
+    FS.ssfx_addon_names(packs);
+    const int count = _GetItemCount(packs, ' ');
+    for (int i = 0; i < count; ++i) {
+        string_path name;
+        _GetItem(packs, i, name, ' ');
+        if (0 == _stricmp(name, ssfx_atmos_pack))
+            return true;
+    }
+    return false;
+}
+
+// configs\ssfx_atmos_switch.ltx, one console command a line ( blank lines and lines of ';' are left
+// out ): gamedata's copy holds the settings of SSS alone, the pack's copy those of Weather_ATMOS, and
+// FS gives the pack's while the pack is mounted. false: no such file, or nothing in it.
+static bool ssfx_atmos_run_list(u32& count, string_path& source) {
+    string_path full;
+    FS.update_path(full, "$game_config$", ssfx_atmos_list);
+    xr_vector<xr_string> lines;
+    if (!ssfx_profile_read(full, lines))
+        return false;
+    LPCSTR addon = FS.addon_file(full);
+    xr_strcpy(source, addon ? addon : full);
+    count = 0;
+    for (const xr_string& line : lines) {
+        LPCSTR cmd = line.c_str();
+        while (*cmd == ' ' || *cmd == '\t')
+            ++cmd;
+        if (!*cmd || *cmd == ';')
+            continue;
+        Console->Execute(cmd);
+        ++count;
+    }
+    return count != 0;
+}
+
+void ssfx_atmos_switch() {
+    if (!ssfx_session_enable || g_current_renderer != 4)
+        return;
+
+    const int there = ssfx_atmos_there() ? 1 : 0;
+    if (ps_ssfx_atmos_state == there)
+        return;
+
+    if (ps_ssfx_atmos_state < 0) {
+        // nothing remembered yet: the first start of this build. Remember the pack, change no setting.
+        Msg("* SSS: %s is %s: remembered, the settings stay as they are", ssfx_atmos_pack,
+            there ? "there" : "not there");
+    } else {
+        u32 count = 0;
+        string_path source;
+        if (!ssfx_atmos_run_list(count, source)) {
+            Msg("! SSS: %s is %s now, but the list [%s] is missing or empty: the settings stay as they are",
+                ssfx_atmos_pack, there ? "there" : "not there", ssfx_atmos_list);
+            return;
+        }
+        Msg("* SSS: %s %s: %u settings set from [%s]", ssfx_atmos_pack,
+            there ? "put in" : "taken out", count, source);
+    }
+    ps_ssfx_atmos_state = there;
+    Console->Execute("cfg_save");
 }
 
 // Screen Space Shaders: settings that never reach a shader through a vector the settings page
@@ -1567,6 +1652,68 @@ private:
     }
 };
 
+// Item 9 stage A ( multithreading ): the logical CPUs the game runs on ( CPU::ApplyCoreMode,
+// xrCore\_math.cpp ). "cpu_mode_auto" leaves physical core 0 out from 6 logical CPUs up,
+// "cpu_mode_no_core0" always, "cpu_mode_all" takes every CPU the game started with. A token's name
+// is also the string id the settings page is to show ( stage F ). It takes effect at once, and once
+// more right after the profile is read ( Startup, x_ray.cpp ) for a profile without the line. Both
+// profiles keep one value ( ssfx_profile_shared_cmds ).
+namespace CPU {
+XRCORE_API void ApplyCoreMode(u32 mode);
+}
+
+static u32 ps_cpu_core_mode = 0;
+static xr_token tok_cpu_core_mode[] = {
+    { "cpu_mode_auto", 0 },
+    { "cpu_mode_no_core0", 1 },
+    { "cpu_mode_all", 2 },
+    { 0, 0 },
+};
+
+class CCC_CpuCoreMode : public CCC_Token {
+public:
+    CCC_CpuCoreMode(LPCSTR N, u32* V, xr_token* T) : CCC_Token(N, V, T){};
+    virtual void Execute(LPCSTR args) {
+        CCC_Token::Execute(args);
+        CPU::ApplyCoreMode(*value);
+    }
+};
+
+void cpu_core_mode_apply() { CPU::ApplyCoreMode(ps_cpu_core_mode); }
+
+// Item 9 stage A: the frame measurement ( xrEngine\device.cpp ), one log line every 5 s while it is
+// on. A tool, not a setting: never saved, so every start begins with it off.
+ENGINE_API int ps_cpu_frame_stats = 0;
+
+class CCC_CpuFrameStats : public CCC_Integer {
+public:
+    CCC_CpuFrameStats(LPCSTR N, int* V) : CCC_Integer(N, V, 0, 1){};
+    virtual void Save(IWriter*) {}
+};
+
+// Item 9 stage B ( multithreading ): the X-Ray task system ( xrCore\xrTasks.cpp ). "cpu_tasks 1"
+// ( the default ) runs the engine's parallel work on the worker threads; "cpu_tasks 0" runs every
+// task on the thread that hands it out, as if there were no workers - to compare, and as a way
+// out. It takes effect at once. Both profiles keep one value ( ssfx_profile_shared_cmds ).
+static int ps_cpu_tasks = 1;
+
+class CCC_CpuTasks : public CCC_Integer {
+public:
+    CCC_CpuTasks(LPCSTR N, int* V) : CCC_Integer(N, V, 0, 1){};
+    virtual void Execute(LPCSTR args) {
+        CCC_Integer::Execute(args);
+        xrTasks::SetEnabled(*value != 0);
+    }
+};
+
+// Item 9 stage B: the task system's counters since the last call, one line in the log. A tool:
+// no value, nothing saved.
+class CCC_CpuTaskStats : public IConsole_Command {
+public:
+    CCC_CpuTaskStats(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; };
+    virtual void Execute(LPCSTR) { xrTasks::PrintStats(); }
+};
+
 void CCC_Register() {
     // General
     CMD1(CCC_Help, "help");
@@ -1706,6 +1853,13 @@ void CCC_Register() {
     CMD4(CCC_Integer, "sv_console_update_rate", &g_svTextConsoleUpdateRate, 1, 100);
 
     CMD1(CCC_HideConsole, "hide");
+
+    // Item 9 stage A ( multithreading ): the CPU core mode and the frame measurement
+    CMD3(CCC_CpuCoreMode, "cpu_core_mode", &ps_cpu_core_mode, tok_cpu_core_mode);
+    CMD2(CCC_CpuFrameStats, "cpu_frame_stats", &ps_cpu_frame_stats);
+    // Item 9 stage B ( multithreading ): the task system's switch and its counters
+    CMD2(CCC_CpuTasks, "cpu_tasks", &ps_cpu_tasks);
+    CMD1(CCC_CpuTaskStats, "cpu_task_stats");
 
     // Screen Space Shaders
     {
@@ -1914,6 +2068,9 @@ void CCC_Register() {
         // SSS on or off ( ssfx_console_vars.h ). The renderer and the scripts take it when the game
         // starts, so a change shows after the game is started again.
         CMD4(CCC_Integer, "ssfx_enable", &ps_ssfx_enable, 0, 1);
+        // Weather_ATMOS ( ssfx_console_vars.h ): -1 nothing remembered, 0 the pack was not there at
+        // the last start, 1 it was. Only user_sss.ltx keeps it ( ssfx_profile_keeps ).
+        CMD4(CCC_Integer, "ssfx_atmos_state", &ps_ssfx_atmos_state, -1, 1);
 
         // Monolith xrRender_console.cpp:1339: the actor's own shadow in first person ( DX11 only ).
         CMD3(CCC_Mask, "r__actor_shadow", &ps_actor_shadow_flags, RFLAG_ACTOR_SHADOW);

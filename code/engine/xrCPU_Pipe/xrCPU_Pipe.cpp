@@ -30,7 +30,10 @@ __declspec(dllexport) void __cdecl xrBind_PSGP(xrDispatchTable* T, processor_inf
     ttapi.initialize();
     R_ASSERT(ttapi.threads.size());
 
-    LogMsg("TTAPI number of threads: {}", ttapi.threads.size());
+    // Item 9 stage B ( multithreading ): ttapi has no threads of its own any more, it hands the work
+    // to the X-Ray task system ( thread_pool.h, xrCore\xrTasks.cpp ). The pieces follow the workers
+    // in use; this is their number at start, before the CPU core mode is applied.
+    LogMsg("TTAPI: on the X-Ray task system, {} pieces per job at start", ttapi.threads.size());
 
     // We can use threading
     T->skin4W = xrSkin4W_thread;

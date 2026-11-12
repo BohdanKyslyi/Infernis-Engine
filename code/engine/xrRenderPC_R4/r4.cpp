@@ -18,6 +18,9 @@
 
 #include "D3DX10Core.h"
 
+#include <chrono> // item 9 stage B: the shader build measurement
+#include <mutex>
+
 CRender RImplementation;
 
 //////////////////////////////////////////////////////////////////////////
@@ -654,7 +657,195 @@ void CRender::create() {
     FluidManager.SetScreenSize(Device.dwWidth, Device.dwHeight);
 }
 
+// Item 9 stage B ( multithreading ): how long building the shaders takes, measured before stage E
+// changes anything about it. Every shader the game asks for ( shader_compile below ) is either read
+// from the cache ( userdata\shaders_cache ) or compiled with D3DCompile and written there. Counted:
+// how many of each and the time they take, the time inside D3DCompile alone, the failures, and the
+// ten slowest compiles. Into the log when the renderer goes ( leaving the game ) and by the console
+// command "r__shader_build_stats" ( xrRender_console.cpp ). Our own design, the donor has none.
+namespace {
+using shader_build_clock = std::chrono::steady_clock;
+
+struct shader_build_slow {
+    string128 name; // e.g. deffer_base_bump.ps
+    double ms;      // inside D3DCompile
+};
+
+struct shader_build_data {
+    u32 cached = 0, compiled = 0, failed = 0;
+    double cached_ms = 0, compiled_ms = 0, compile_ms = 0;
+    shader_build_slow slowest[10]; // slowest first
+    u32 slowest_count = 0;
+};
+shader_build_data shader_build;
+std::mutex shader_build_lock; // only the thread that builds shaders writes, but that may change
+
+double shader_build_ms(const shader_build_clock::time_point& from) {
+    return std::chrono::duration<double, std::milli>(shader_build_clock::now() - from).count();
+}
+
+// One shader: from the cache, or compiled ( compile_ms: the time inside D3DCompile ); total_ms is
+// all of shader_compile for it.
+void shader_build_note(LPCSTR name, LPCSTR target, bool cached, bool ok, double compile_ms,
+                       double total_ms) {
+    std::lock_guard<std::mutex> lock(shader_build_lock);
+    shader_build_data& s = shader_build;
+    if (cached) {
+        s.cached++;
+        s.cached_ms += total_ms;
+        return;
+    }
+    if (!ok) {
+        s.failed++;
+        return;
+    }
+    s.compiled++;
+    s.compiled_ms += total_ms;
+    if (compile_ms < 0)
+        return;
+    s.compile_ms += compile_ms;
+    u32 at = s.slowest_count;
+    while (at && s.slowest[at - 1].ms < compile_ms)
+        --at;
+    if (at >= 10)
+        return;
+    for (u32 i = (s.slowest_count < 10 ? s.slowest_count : 9); i > at; --i)
+        s.slowest[i] = s.slowest[i - 1];
+    xr_sprintf(s.slowest[at].name, "%s.%.2s", name, target);
+    s.slowest[at].ms = compile_ms;
+    if (s.slowest_count < 10)
+        s.slowest_count++;
+}
+} // namespace
+
+void shader_build_stats_print() {
+    std::lock_guard<std::mutex> lock(shader_build_lock);
+    const shader_build_data& s = shader_build;
+    Msg("* Shader build: %u compiled in %.2f s ( inside D3DCompile %.2f s ), %u read from the "
+        "cache in %.2f s, %u failed",
+        s.compiled, s.compiled_ms / 1000.0, s.compile_ms / 1000.0, s.cached, s.cached_ms / 1000.0,
+        s.failed);
+    for (u32 i = 0; i < s.slowest_count; ++i)
+        Msg("* Shader build: slowest %u - %s, %.1f ms", i + 1, s.slowest[i].name, s.slowest[i].ms);
+}
+
+// Item 9 stage E ( multithreading plan: the shader build ). Two changes, both as the donor does
+// them ( Monolith MT: r4.cpp shader_compile, xrCore\ShaderSourceCRC.cpp ), our own code:
+//
+// 1. Shaders are compiled by d3dcompiler_47.dll, about three times faster than the
+//    d3dcompiler_43.dll the engine links ( the 273 shaders of a full cache with SSS: 47 s ->
+//    14-15 s ). Only the compile call changes. Reading a compiled shader back stays on _43
+//    ( D3DReflect, D3DGetInputSignatureBlob, D3DDisassemble in create_shader ): _47 refuses the
+//    June 2010 interface id the engine passes to D3DReflect, and _43 reads the code of _47 exactly
+//    as its own ( checked on all 273 ). The donor links _47 outright, which needs the newer SDK
+//    headers; here it is loaded at run time - the game's bin first, then Windows - and when it is
+//    missing ( an old Windows 7 ) the linked _43 compiles, as before.
+//
+// 2. Each file of the generated cache ( userdata\shaders_cache ) starts with a CRC of the shader's
+//    source and of every file it includes, so a changed shader or include is compiled again by
+//    itself. Before, the cache key held only the defines, and a stale file had to be deleted by
+//    hand. Unlike the donor, each include is read and summed once per renderer, not again for
+//    every shader that includes it ( 370 files instead of about 25 000 reads for the 273 ).
+//
+// Both are used by shader_compile only, on the main thread.
+namespace {
+pD3DCompile shader_compile_fn = nullptr;
+
+pD3DCompile shader_compiler() {
+    if (shader_compile_fn)
+        return shader_compile_fn;
+    HMODULE const dll = LoadLibraryA("d3dcompiler_47.dll"); // kept loaded, like a linked one
+    if (dll)
+        shader_compile_fn = (pD3DCompile)GetProcAddress(dll, "D3DCompile");
+    if (shader_compile_fn) {
+        string_path path = "";
+        GetModuleFileNameA(dll, path, sizeof(path));
+        Msg("* Shader compiler: %s", path);
+    } else {
+        shader_compile_fn = &D3DCompile;
+        Msg("* Shader compiler: d3dcompiler_43.dll ( d3dcompiler_47.dll not found )");
+    }
+    return shader_compile_fn;
+}
+
+// Include name ( lower case, as written between the quotes ) -> CRC of the file and its includes.
+xr_map<xr_string, u32> shader_include_crcs;
+
+u32 shader_text_crc(const char* text, u32 size, u32 depth);
+
+u32 shader_include_crc(const xr_string& include_name, u32 depth) {
+    auto const found = shader_include_crcs.find(include_name);
+    if (found != shader_include_crcs.end())
+        return found->second;
+    shader_include_crcs[include_name] = 0; // a file that includes itself back adds nothing
+    // the two places the includer of the compiler looks in, in its order ( class includer below )
+    string_path pname;
+    strconcat(sizeof(pname), pname, ::Render->getShaderPath(), include_name.c_str());
+    IReader* R = FS.r_open("$game_shaders$", pname);
+    if (!R)
+        R = FS.r_open("$game_shaders$", include_name.c_str());
+    u32 crc = 0;
+    if (R) {
+        crc = shader_text_crc((const char*)R->pointer(), (u32)R->length(), depth + 1);
+        FS.r_close(R);
+    } else
+        Msg("~ Shader source CRC: can't find include '%s', skipping it for cache validation",
+            include_name.c_str());
+    shader_include_crcs[include_name] = crc;
+    return crc;
+}
+
+// The text itself, then the CRC of each included file in the order the lines name them. As the
+// donor, every line that starts with '#' and holds "#include" counts, inside an #if or not: a
+// header behind a switched-off #if that changes costs a needless rebuild at worst, never a stale
+// shader.
+u32 shader_text_crc(const char* text, u32 size, u32 depth) {
+    u32 crc = crc32(text, size);
+    if (depth > 32) // deeper than any real chain; only a broken tree gets here
+        return crc;
+    const char* p = text;
+    const char* const end = text + size;
+    while (p < end) {
+        const char* line = p;
+        while (p < end && *p != '\r' && *p != '\n')
+            ++p;
+        const char* const line_end = p;
+        while (p < end && (*p == '\r' || *p == '\n'))
+            ++p;
+        while (line < line_end && (*line == ' ' || *line == '\t'))
+            ++line;
+        if (line == line_end || *line != '#')
+            continue;
+        const xr_string s(line, line_end);
+        if (s.find("#include") == xr_string::npos)
+            continue;
+        size_t const q1 = s.find('"');
+        if (q1 == xr_string::npos)
+            continue;
+        size_t const q2 = s.find('"', q1 + 1);
+        if (q2 == xr_string::npos || q2 == q1 + 1)
+            continue;
+        xr_string include_name = s.substr(q1 + 1, q2 - q1 - 1);
+        for (char& c : include_name)
+            if (c >= 'A' && c <= 'Z')
+                c = char(c - 'A' + 'a');
+        u32 const include_crc = shader_include_crc(include_name, depth);
+        crc = crc32(&include_crc, (u32)sizeof(include_crc), crc);
+    }
+    return crc;
+}
+
+// For a shader source handed to shader_compile.
+u32 shader_source_crc(const void* source, u32 size) {
+    return shader_text_crc((const char*)source, size, 0);
+}
+
+void shader_source_crcs_reset() { shader_include_crcs.clear(); }
+} // namespace
+
 void CRender::destroy() {
+    shader_build_stats_print(); // item 9 stage B: the shader build measurement into the log
+    shader_source_crcs_reset(); // item 9 stage E: a new renderer reads the includes again
     m_bMakeAsyncSS = false;
     FluidManager.Destroy();
     ::PortalTraverser.destroy();
@@ -1203,6 +1394,8 @@ static inline bool match_shader_id(LPCSTR const debug_shader_id, LPCSTR const fu
 
 HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcDataLen,
                                 LPCSTR pFunctionName, LPCSTR pTarget, DWORD Flags, void*& result) {
+    // item 9 stage B: the shader build measurement ( shader_build_note at the end )
+    const shader_build_clock::time_point build_start = shader_build_clock::now();
     D3D_SHADER_MACRO defines[128];
     int def_it = 0;
     char c_smapsize[32];
@@ -1894,6 +2087,7 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
           name[lens_shader_name_len + 1] >= '0' && name[lens_shader_name_len + 1] <= '7' &&
           name[lens_shader_name_len + 2] == 0));
     bool loaded_from_cache = false;
+    double build_compile_ms = -1.0; // item 9 stage B: the time inside D3DCompile
 
     string_path folder_name, folder;
     xr_strcpy(folder, "r3\\objects\\r4\\");
@@ -1911,7 +2105,10 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     FS.file_list(m_file_set, folder_name, FS_ListFiles | FS_RootOnly, "*");
 
     string_path temp_file_name, file_name;
-    if (!match_shader_id(name, sh_name, m_file_set, temp_file_name)) {
+    // item 9 stage E: only the generated cache ( userdata ) keeps the source CRC; match_shader_id
+    // never finds a shipped shader ( its #if 1 ), so this is always the generated cache
+    bool const generated_cache = !match_shader_id(name, sh_name, m_file_set, temp_file_name);
+    if (generated_cache) {
         string_path file;
         xr_strcpy(file, "shaders_cache\\r4\\");
         xr_strcat(file, name);
@@ -1933,9 +2130,29 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         xr_strcat(file_name, temp_file_name);
     }
 
+    // item 9 stage E: a generated cache file is [ source CRC ][ code CRC ][ code ], as the donor's.
+    // A file of the old layout [ code CRC ][ code ] fails the source test and is built once again.
+    u32 const source_crc = generated_cache ? shader_source_crc(pSrcData, SrcDataLen) : 0;
+
     if (FS.exist(file_name)) {
         IReader* file = FS.r_open(file_name);
-        if (file->length() > 4) {
+        if (generated_cache) {
+            if (file->length() > 8) {
+                u32 const saved_source_crc = file->r_u32();
+                if (saved_source_crc == source_crc) {
+                    u32 const crc = file->r_u32();
+                    u32 const real_crc = crc32(file->pointer(), file->elapsed());
+                    if (real_crc == crc) {
+                        _result = create_shader(pTarget, (DWORD*)file->pointer(), file->elapsed(),
+                                                file_name, result, o.disasm);
+                        loaded_from_cache = SUCCEEDED(_result);
+                    }
+                } else
+                    Msg("~ Shader cache source CRC mismatch for '%s.%s': cached=0x%08x "
+                        "current=0x%08x, recompiling",
+                        name, extension, saved_source_crc, source_crc);
+            }
+        } else if (file->length() > 4) {
             u32 crc = 0;
             crc = file->r_u32();
 
@@ -1954,10 +2171,14 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         includer Includer;
         LPD3DBLOB pShaderBuf = NULL;
         LPD3DBLOB pErrorBuf = NULL;
-        _result = D3DCompile(pSrcData, SrcDataLen,
+        // item 9 stage B: the shader build measurement
+        const shader_build_clock::time_point compile_start = shader_build_clock::now();
+        // item 9 stage E: d3dcompiler_47 when it is there ( shader_compiler )
+        _result = shader_compiler()(pSrcData, SrcDataLen,
                              "", // NULL, //LPCSTR pFileName,	//	NVPerfHUD bug workaround.
                              defines, &Includer, pFunctionName, pTarget, Flags, 0, &pShaderBuf,
                              &pErrorBuf);
+        build_compile_ms = shader_build_ms(compile_start); // item 9 stage B
 
         if (SUCCEEDED(_result)) {
             IWriter* file = FS.w_open(file_name);
@@ -1967,6 +2188,8 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
             // ((char*)pShaderBuf->GetBufferPointer()) + pShaderBuf->GetBufferSize() );
             u32 const crc = crc32(pShaderBuf->GetBufferPointer(), pShaderBuf->GetBufferSize());
 
+            if (generated_cache) // item 9 stage E: the source CRC first
+                file->w_u32(source_crc);
             file->w_u32(crc);
             file->w(pShaderBuf->GetBufferPointer(), (u32)pShaderBuf->GetBufferSize());
             FS.w_close(file);
@@ -1982,11 +2205,21 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
             else
                 Msg("Can't compile shader hr=0x%08x", _result);
         }
+        // item 9 stage E: the compiler's buffers go back here; the original engine kept them until
+        // the game closed. Nothing needs them any more: the code is in the cache file and in the
+        // shader ( create_shader copies it, as for the cache path above, whose buffer file->close()
+        // frees right after ), the error text is in the log.
+        _RELEASE(pShaderBuf);
+        _RELEASE(pErrorBuf);
     }
 
     if (scope_lens_shader && SUCCEEDED(_result))
         Msg("* ScopeLens%s: %s source_crc=%08x file=%s", pTarget[0] == 'v' ? "VS" : "PS",
             loaded_from_cache ? "cached" : "compiled", crc32(pSrcData, SrcDataLen), file_name);
+
+    // item 9 stage B: the shader build measurement
+    shader_build_note(name, pTarget, loaded_from_cache, SUCCEEDED(_result), build_compile_ms,
+                      shader_build_ms(build_start));
 
     return _result;
 }

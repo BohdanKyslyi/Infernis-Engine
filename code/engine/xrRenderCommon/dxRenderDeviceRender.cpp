@@ -3,6 +3,104 @@
 
 #include "ResourceManager.h"
 
+#if RENDER == R_R4
+// Item 9 stage A ( multithreading ): the GPU time of a frame for the frame measurement
+// ( "cpu_frame_stats 1", xrEngine\device.cpp ). Two timestamps a frame - right after Begin and
+// right before Present - inside a disjoint query. Six sets in a ring, each read back five frames
+// later without waiting ( D3D11_ASYNC_GETDATA_DONOTFLUSH ), so the measurement never holds a frame
+// up; a set the GPU has not finished by then is dropped. DX11 only: the other renderers keep their
+// code. Our own design, the donor has none.
+extern ENGINE_API int ps_cpu_frame_stats;
+ENGINE_API void frame_stats_add_gpu(float ms);
+
+namespace {
+const u32 gpu_timer_sets = 6;
+
+struct gpu_frame_timer {
+    ID3D11Query* disjoint = nullptr;
+    ID3D11Query* stamp_begin = nullptr;
+    ID3D11Query* stamp_end = nullptr;
+    bool issued = false;
+};
+gpu_frame_timer gpu_timers[gpu_timer_sets];
+u32 gpu_timer_frame = 0;
+bool gpu_timer_open = false; // Begin started the set of this frame
+
+void gpu_timer_release(ID3D11Query*& q) {
+    if (q) {
+        q->Release();
+        q = nullptr;
+    }
+}
+
+void gpu_timers_release() {
+    for (gpu_frame_timer& t : gpu_timers) {
+        gpu_timer_release(t.disjoint);
+        gpu_timer_release(t.stamp_begin);
+        gpu_timer_release(t.stamp_end);
+        t.issued = false;
+    }
+    gpu_timer_open = false;
+}
+
+bool gpu_timers_create() {
+    if (gpu_timers[0].disjoint)
+        return true;
+    D3D11_QUERY_DESC disjoint_desc = { D3D11_QUERY_TIMESTAMP_DISJOINT, 0 };
+    D3D11_QUERY_DESC stamp_desc = { D3D11_QUERY_TIMESTAMP, 0 };
+    for (gpu_frame_timer& t : gpu_timers)
+        if (FAILED(HW.pDevice->CreateQuery(&disjoint_desc, &t.disjoint)) ||
+            FAILED(HW.pDevice->CreateQuery(&stamp_desc, &t.stamp_begin)) ||
+            FAILED(HW.pDevice->CreateQuery(&stamp_desc, &t.stamp_end))) {
+            gpu_timers_release();
+            return false;
+        }
+    return true;
+}
+
+void gpu_timer_begin() {
+    gpu_timer_open = false;
+    if (!ps_cpu_frame_stats) {
+        for (gpu_frame_timer& t : gpu_timers)
+            t.issued = false;
+        return;
+    }
+    if (!gpu_timers_create())
+        return;
+    gpu_frame_timer& t = gpu_timers[gpu_timer_frame % gpu_timer_sets];
+    HW.pContext->Begin(t.disjoint);
+    HW.pContext->End(t.stamp_begin);
+    gpu_timer_open = true;
+}
+
+void gpu_timer_end() {
+    if (!gpu_timer_open)
+        return;
+    gpu_timer_open = false;
+    gpu_frame_timer& t = gpu_timers[gpu_timer_frame % gpu_timer_sets];
+    HW.pContext->End(t.stamp_end);
+    HW.pContext->End(t.disjoint);
+    t.issued = true;
+    ++gpu_timer_frame;
+
+    // the oldest set, the one the next frame starts again
+    gpu_frame_timer& old = gpu_timers[gpu_timer_frame % gpu_timer_sets];
+    if (!old.issued)
+        return;
+    old.issued = false;
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT dj = {};
+    UINT64 t0 = 0, t1 = 0;
+    if (HW.pContext->GetData(old.disjoint, &dj, sizeof(dj), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK ||
+        HW.pContext->GetData(old.stamp_begin, &t0, sizeof(t0), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK ||
+        HW.pContext->GetData(old.stamp_end, &t1, sizeof(t1), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK)
+        return;
+    if (dj.Disjoint || !dj.Frequency || t1 < t0)
+        return;
+    frame_stats_add_gpu(float(double(t1 - t0) * 1000.0 / double(dj.Frequency)));
+}
+} // namespace
+#endif // RENDER == R_R4
+
 dxRenderDeviceRender::dxRenderDeviceRender() : Resources(0) { ; }
 
 void dxRenderDeviceRender::Copy(IRenderDeviceRender& _in) { *this = *(dxRenderDeviceRender*)&_in; }
@@ -26,6 +124,9 @@ void dxRenderDeviceRender::OnDeviceDestroy(BOOL bKeepTextures) {
 void dxRenderDeviceRender::ValidateHW() { HW.Validate(); }
 
 void dxRenderDeviceRender::DestroyHW() {
+#if RENDER == R_R4
+    gpu_timers_release(); // item 9 stage A: the frame measurement's GPU queries
+#endif
     xr_delete(Resources);
     HW.DestroyDevice();
 }
@@ -252,6 +353,9 @@ void dxRenderDeviceRender::Begin() {
 #if !defined(USE_DX10) && !defined(USE_DX11)
     CHK_DX(HW.pDevice->BeginScene());
 #endif //	USE_DX10
+#if RENDER == R_R4
+    gpu_timer_begin(); // item 9 stage A: frame measurement
+#endif
     RCache.OnFrameBegin();
     RCache.set_CullMode(CULL_CW);
     RCache.set_CullMode(CULL_CCW);
@@ -290,6 +394,9 @@ void dxRenderDeviceRender::End() {
     DoAsyncScreenshot();
 
 #if defined(USE_DX10) || defined(USE_DX11)
+#if RENDER == R_R4
+    gpu_timer_end(); // item 9 stage A: frame measurement
+#endif
     HW.m_pSwapChain->Present(0, 0);
 #else //	USE_DX10
     CHK_DX(HW.pDevice->EndScene());

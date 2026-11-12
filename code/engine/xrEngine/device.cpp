@@ -35,6 +35,124 @@ ENGINE_API BOOL g_bRendering = FALSE;
 BOOL g_bLoaded = FALSE;
 ref_light precache_light = 0;
 
+// Item 9 stage A ( multithreading ): the frame measurement, "cpu_frame_stats 1" ( xr_ioc_cmd.cpp ).
+// Once every 5 s one line in the log: frames a second, the frame time ( average and the longest ),
+// the main thread's own work - the game update ( FrameMove ) and the render submission ( Begin ..
+// End, without Present ) - the wait in Present, the wait for the secondary thread, and the GPU
+// time when the renderer measures it ( DX11 only: xrRenderCommon\dxRenderDeviceRender.cpp, through
+// frame_stats_add_gpu ). Nothing is measured while it is off. Our own design, the donor has none.
+extern ENGINE_API int ps_cpu_frame_stats;
+
+namespace {
+using frame_stat_clock = std::chrono::steady_clock;
+
+enum {
+    frame_stat_begin,
+    frame_stat_updated,
+    frame_stat_render,
+    frame_stat_rendered,
+    frame_stat_present,
+    frame_stat_presented,
+    frame_stat_waited,
+    frame_stat_marks
+};
+
+struct frame_stat_data {
+    frame_stat_clock::time_point mark[frame_stat_marks];
+    frame_stat_clock::time_point window_start, last_begin;
+    bool on = false;        // this frame is measured
+    bool have_last = false; // last_begin is the start of the frame before
+    u32 frames = 0, intervals = 0, gpu_frames = 0;
+    double frame_ms = 0, frame_max = 0, update_ms = 0, render_ms = 0, present_ms = 0, wait_ms = 0,
+           gpu_ms = 0;
+};
+frame_stat_data frame_stat;
+
+double frame_stat_ms(const frame_stat_clock::time_point& from,
+                     const frame_stat_clock::time_point& to) {
+    return std::chrono::duration<double, std::milli>(to - from).count();
+}
+
+void frame_stat_mark(int m) {
+    if (frame_stat.on)
+        frame_stat.mark[m] = frame_stat_clock::now();
+}
+
+void frame_stat_window(const frame_stat_clock::time_point& now) {
+    frame_stat.window_start = now;
+    frame_stat.frames = frame_stat.intervals = frame_stat.gpu_frames = 0;
+    frame_stat.frame_ms = frame_stat.frame_max = frame_stat.update_ms = frame_stat.render_ms = 0;
+    frame_stat.present_ms = frame_stat.wait_ms = frame_stat.gpu_ms = 0;
+}
+
+// A frame starts its own work ( on_idle, before FrameMove ).
+void frame_stat_begin_frame() {
+    frame_stat.on = ps_cpu_frame_stats != 0;
+    if (!frame_stat.on) {
+        frame_stat.have_last = false;
+        return;
+    }
+    const frame_stat_clock::time_point now = frame_stat_clock::now();
+    if (!frame_stat.have_last)
+        frame_stat_window(now);
+    // a frame that renders nothing ( the window not active ) keeps its render and Present at zero
+    for (frame_stat_clock::time_point& m : frame_stat.mark)
+        m = now;
+}
+
+// A loading frame ( on_idle, g_loading_events; the load screen still draws through End ): nothing
+// of it is measured, and the next frame starts a new window.
+void frame_stat_skip_frame() {
+    frame_stat.on = false;
+    frame_stat.have_last = false;
+}
+
+// The frame is done ( on_idle, the secondary thread is back ).
+void frame_stat_end_frame() {
+    if (!frame_stat.on)
+        return;
+    frame_stat_data& s = frame_stat;
+    const double present = frame_stat_ms(s.mark[frame_stat_present], s.mark[frame_stat_presented]);
+    s.update_ms += frame_stat_ms(s.mark[frame_stat_begin], s.mark[frame_stat_updated]);
+    s.render_ms += frame_stat_ms(s.mark[frame_stat_render], s.mark[frame_stat_rendered]) - present;
+    s.present_ms += present;
+    s.wait_ms += frame_stat_ms(s.mark[frame_stat_rendered], s.mark[frame_stat_waited]);
+    s.frames++;
+    if (s.have_last) {
+        const double frame = frame_stat_ms(s.last_begin, s.mark[frame_stat_begin]);
+        s.frame_ms += frame;
+        s.intervals++;
+        if (frame > s.frame_max)
+            s.frame_max = frame;
+    }
+    s.last_begin = s.mark[frame_stat_begin];
+    s.have_last = true;
+
+    const frame_stat_clock::time_point now = frame_stat_clock::now();
+    const double window = frame_stat_ms(s.window_start, now);
+    if (window < 5000.0)
+        return;
+    const double n = double(s.frames);
+    string64 gpu = "n/a";
+    if (s.gpu_frames)
+        xr_sprintf(gpu, "%.2f ms", s.gpu_ms / double(s.gpu_frames));
+    Msg("* Frame stats [%.1f s]: FPS %.1f | frame %.2f ms (max %.2f) | main thread %.2f ms "
+        "(update %.2f + render %.2f) | present %.2f | 2nd thread wait %.2f | GPU %s",
+        window / 1000.0, n * 1000.0 / window, s.intervals ? s.frame_ms / s.intervals : 0.0,
+        s.frame_max, (s.update_ms + s.render_ms) / n, s.update_ms / n, s.render_ms / n,
+        s.present_ms / n, s.wait_ms / n, gpu);
+    frame_stat_window(now);
+}
+} // namespace
+
+// The GPU time of one frame, from a renderer that measures it ( on the main thread, in End ).
+ENGINE_API void frame_stats_add_gpu(float ms) {
+    if (!ps_cpu_frame_stats)
+        return;
+    frame_stat.gpu_ms += ms;
+    frame_stat.gpu_frames++;
+}
+
 BOOL CRenderDevice::Begin() {
     /*
     HW.Validate		();
@@ -131,7 +249,9 @@ void CRenderDevice::End(void) {
     g_bRendering = FALSE;
     // end scene
     //	Present goes here
+    frame_stat_mark(frame_stat_present); // item 9 stage A: frame measurement
     m_pRender->End();
+    frame_stat_mark(frame_stat_presented);
 // RCache.OnFrameEnd	();
 // CHK_DX				(HW.pDevice->EndScene());
 
@@ -209,12 +329,15 @@ void CRenderDevice::on_idle() {
     else
         g_bEnableStatGather = FALSE;
     if (g_loading_events.size()) {
+        frame_stat_skip_frame(); // item 9 stage A: frame measurement
         if (g_loading_events.front()())
             g_loading_events.pop_front();
         pApp->LoadDraw();
         return;
     } else {
+        frame_stat_begin_frame(); // item 9 stage A: frame measurement
         FrameMove();
+        frame_stat_mark(frame_stat_updated);
     }
 
     // Precache
@@ -276,6 +399,7 @@ void CRenderDevice::on_idle() {
 
     Statistic->RenderTOTAL_Real.FrameStart();
     Statistic->RenderTOTAL_Real.Begin();
+    frame_stat_mark(frame_stat_render); // item 9 stage A: frame measurement
     if (b_is_Active) {
         if (Begin()) {
 
@@ -289,6 +413,7 @@ void CRenderDevice::on_idle() {
             End();
         }
     }
+    frame_stat_mark(frame_stat_rendered); // item 9 stage A: frame measurement
     Statistic->RenderTOTAL_Real.End();
     Statistic->RenderTOTAL_Real.FrameEnd();
     Statistic->RenderTOTAL.accum = Statistic->RenderTOTAL_Real.accum;
@@ -296,6 +421,7 @@ void CRenderDevice::on_idle() {
     // Capture startup point
     // Release end point - allow thread to wait for startup point
     mt_csEnter.lock();
+    frame_stat_mark(frame_stat_waited); // item 9 stage A: frame measurement
     mt_csLeave.unlock();
 
     // Ensure, that second thread gets chance to execute anyway
@@ -305,6 +431,8 @@ void CRenderDevice::on_idle() {
         Device.seqParallel.clear();
         seqFrameMT.Process(rp_Frame);
     }
+
+    frame_stat_end_frame(); // item 9 stage A: frame measurement
 
     if (!b_is_Active)
         Sleep(1);

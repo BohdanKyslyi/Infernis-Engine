@@ -1,0 +1,64 @@
+; Screen Space Shaders + Weather_ATMOS ( item 7a ). The engine runs this list ONCE each time the
+; addon pack addons\Weather_ATMOS is put in or taken out since the last start
+; ( ssfx_atmos_switch, xrEngine\xr_ioc_cmd.cpp ): one console command a line, the settings of Screen Space Shaders alone ( this copy, in gamedata ).
+; The game reads the copy of the pack instead of the one of gamedata while the pack is there:
+; the pack is put in -> the pack's copy runs, the pack is taken out -> gamedata's copy runs.
+; 57 lines: the rows of ui_sss_menu_data.script ( the 8th field, what "Defaults" writes ) that
+; differ between the two copies. Built by _ssfx_work\atmos_switch_build.py - run it again rather than editing here.
+ssfx_ui_ao_radius 2.5
+ssfx_ui_ao_max_occ 0
+ssfx_ui_ao_flora_int 1
+ssfx_ui_flora_sss_int 2
+ssfx_ui_flora_grass_specular_wet 0.21
+ssfx_ui_flora_trees_specular 0.3
+ssfx_ui_flora_trees_specular_wet 0.21
+ssfx_ui_fog_height 8
+ssfx_ui_fog_density 1.3
+ssfx_ui_fog_suncolor 0.1
+ssfx_ui_fog_scattering 0.7
+ssfx_ui_il_int 1
+ssfx_ui_il_flora_int 0.5
+ssfx_ui_pom_ao 0.4
+ssfx_ui_bloom_use_weather 0
+ssfx_ui_bloom_blur 3
+ssfx_ui_bloom_vibrance 1.5
+ssfx_ui_bloom_lens 1.5
+ssfx_ui_bloom_dirt 1
+ssfx_ui_rain_alpha 0.8
+ssfx_ui_rain_bright 0.3
+ssfx_ui_rain_refraction 1
+ssfx_ui_rain_reflection 1
+ssfx_ui_splash_alpha 0.5
+ssfx_ui_rain_splash_refraction 1.5
+ssfx_ui_cas_grass_shw_quality ui_mcm_lst_shw_cascades_low
+ssfx_ui_volumetric_int 1
+ssfx_ui_es_albedo_boost 0
+ssfx_ui_es_albedo_amount 1
+ssfx_ui_es_rough_low 0.5
+ssfx_ui_es_spec_base 0.01
+ssfx_ui_es_spec_range 1
+ssfx_ui_es_spec_pow 1
+ssfx_ui_ssr_blur 0.2
+ssfx_ui_ssr_int 1
+ssfx_ui_ssr_sky_int 1
+ssfx_ui_ssr_weapon_int 0.5
+ssfx_ui_ssr_weapon_int_max 0.02
+ssfx_ui_terra_grass_align 0
+ssfx_ui_water_ssr_quality ui_mcm_lst_ssfx_quality_low
+ssfx_ui_water_blur 0.8
+ssfx_ui_water_distortion 0.6
+ssfx_ui_water_turbidity 3
+ssfx_ui_water_reflect 0.8
+ssfx_ui_gloss_min 0.6
+ssfx_ui_gloss_max 0.9
+ssfx_ui_spec_int 0.35
+ssfx_ui_spec_color 0.5
+ssfx_ui_wet_buildup 1
+ssfx_ui_wet_dry 0.3
+ssfx_ui_wind_grass_speed 9.5
+ssfx_ui_wind_grass_int 1.4
+ssfx_ui_wind_grass_push 1.5
+ssfx_ui_wind_grass_wave 0.4
+ssfx_ui_wind_tree_branch 11
+ssfx_ui_wind_tree_trunk 0.15
+ssfx_ui_wind_tree_bend 0.5

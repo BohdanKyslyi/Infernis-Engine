@@ -4,6 +4,7 @@
 #include <mmsystem.h>
 #include <objbase.h>
 #include "xrCore.h"
+#include "xrTasks.h" // item 9 stage B ( multithreading )
 
 #ifdef DEBUG
 #include <malloc.h>
@@ -62,8 +63,9 @@ void xrCore::_initialize(const char* _ApplicationName, LogCallback cb, bool init
         InitLog();
         _initialize_cpu();
 		
-        Jobs::Initialize();
-        Msg("* JobSystem initialized: %u worker threads", Jobs::WorkerCount());
+        // Item 9 stage B ( multithreading ): the X-Ray task system ( xrTasks.cpp ), it writes its own
+        // log line. The old job system forwards to it ( JobSystem.cpp ).
+        xrTasks::Initialize();
 
         //		Debug._initialize	();
 
@@ -108,7 +110,7 @@ void xrCore::_destroy() {
 
     --init_counter;
     if (0 == init_counter) {
-        Jobs::Shutdown();
+        xrTasks::Shutdown(); // item 9 stage B: the task system ( xrTasks.cpp )
         FS._destroy();
         xr_delete(xr_FS);
 

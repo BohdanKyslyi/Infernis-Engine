@@ -501,6 +501,53 @@ void CTexture::Load() {
     PostLoad();
 }
 
+#if RENDER == R_R4
+// Item 9 stage D ( multithreading ): textures on all cores ( CResourceManager::DeferredUpload ).
+// LoadPlainBegin = the head of Load() for a plain texture, LoadPlainEnd = its tail; both run on
+// the main thread, the file is read and the texture made by RImplementation.texture_load on a
+// worker in between. The bump name is taken here, not on a worker: copying a shared_str changes its
+// reference count without a lock, and str_container::clean frees strings whose count says nobody
+// holds them. Loaded textures, $null, $user$, video ( .ogm / .avi ) and sequences ( .seq ) get
+// false and take Load() on the main thread, as before.
+bool CTexture::LoadPlainBegin() {
+    if (pSurface)
+        return false;
+    if (0 == stricmp(*cName, "$null") || 0 != strstr(*cName, "$user$"))
+        return false;
+
+    string_path fn;
+    if (FS.exist(fn, "$game_textures$", *cName, ".ogm") ||
+        FS.exist(fn, "$game_textures$", *cName, ".avi") ||
+        FS.exist(fn, "$game_textures$", *cName, ".seq"))
+        return false;
+
+    flags.bLoaded = true;
+    desc_cache = 0;
+    flags.bUser = false;
+    flags.MemoryUsage = 0;
+    Preload();
+    return true;
+}
+
+void CTexture::LoadPlainEnd(ID3DBaseTexture* surface, u32 mem) {
+    pSurface = surface;
+
+    bool bCreateView = true;
+    if (GetUsage() == D3D_USAGE_STAGING) {
+        flags.bLoadedAsStaging = TRUE;
+        bCreateView = false;
+    }
+
+    // Calc memory usage and preload into vid-mem
+    if (pSurface)
+        flags.MemoryUsage = mem;
+
+    if (pSurface && bCreateView)
+        CHK_DX(HW.pDevice->CreateShaderResourceView(pSurface, NULL, &m_pSRView));
+    PostLoad();
+}
+#endif // RENDER == R_R4
+
 void CTexture::Unload() {
 #ifdef DEBUG
     string_path msg_buff;

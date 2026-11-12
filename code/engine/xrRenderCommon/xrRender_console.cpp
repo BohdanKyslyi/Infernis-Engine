@@ -493,6 +493,22 @@ public:
     }
 };
 
+#if RENDER == R_R4
+// Item 9 stage B ( multithreading ): the shader build measurement into the log - how many shaders
+// came from the cache, how many were compiled and how long it took ( xrRenderPC_R4\r4.cpp ).
+void shader_build_stats_print();
+
+class CCC_ShaderBuildStats : public IConsole_Command {
+public:
+    CCC_ShaderBuildStats(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; };
+    virtual void Execute(LPCSTR args) { shader_build_stats_print(); }
+};
+
+// Item 9 stage D ( multithreading ): textures on all cores at level load ( ResourceManager.cpp,
+// CResourceManager::DeferredUpload ); 0 = one by one, as before.
+int ps_r__mt_textures = 1;
+#endif // RENDER == R_R4
+
 #if RENDER != R_R1
 #include "r__pixel_calculator.h"
 class CCC_BuildSSA : public IConsole_Command {
@@ -706,6 +722,12 @@ void xrRender_initconsole() {
 
     // Common
     CMD1(CCC_Screenshot, "screenshot");
+#if RENDER == R_R4
+    // Item 9 stage B ( multithreading ): the shader build measurement
+    CMD1(CCC_ShaderBuildStats, "r__shader_build_stats");
+    // Item 9 stage D ( multithreading ): textures on all cores at level load ( 0 = one by one )
+    CMD4(CCC_Integer, "r__mt_textures", &ps_r__mt_textures, 0, 1);
+#endif
 
     //	Igor: just to test bug with rain/particles corruption
     CMD1(CCC_RestoreQuadIBData, "r_restore_quad_ib_data");

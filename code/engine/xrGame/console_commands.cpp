@@ -48,7 +48,6 @@
 #include "character_hit_animations_params.h"
 #include "inventory_upgrade_manager.h"
 #include "ui/UIWeatherEditor.h"
-#include "ui/UILuaWorkbench.h"
 #include "ui/UIHudEditor.h"
 
 #include "ai_debug_variables.h"
@@ -184,50 +183,6 @@ static bool is_dev_mode() {
     return strstr(Core.Params, "-dev_mode") != nullptr ||
            strstr(Core.Params, "-developer_mode") != nullptr;
 }
-
-class CCC_LuaWorkbench : public IConsole_Command {
-public:
-    CCC_LuaWorkbench(LPCSTR name) : IConsole_Command(name) {
-        bEmptyArgsHandled = true;
-        bLowerCaseArgs = false;
-    }
-
-    void Execute(LPCSTR args) override {
-        if (!is_dev_mode()) {
-            Msg("! Lua workbench requires -dev_mode");
-            return;
-        }
-        if (!g_pGameLevel || !CurrentGameUI() || !IsGameTypeSingle() || MainMenu()->IsActive()) {
-            Msg("! Lua workbench requires an active single-player level");
-            return;
-        }
-
-        if (!args || !*args || !_stricmp(args, "toggle")) {
-            const bool show = !LuaWorkbenchShown();
-            if (show)
-                Console->Hide();
-            ShowLuaWorkbench(show);
-        } else if (!_stricmp(args, "on")) {
-            Console->Hide();
-            ShowLuaWorkbench(true);
-        } else if (!_stricmp(args, "off")) {
-            ShowLuaWorkbench(false);
-        } else if (!_strnicmp(args, "open ", 5) && args[5]) {
-            // Console::Hide may reset the command editor's argument buffer.
-            const std::string file(args + 5);
-            Console->Hide();
-            OpenLuaWorkbenchScript(file.c_str());
-        } else {
-            Msg("! Usage: lua_workbench [on|off|toggle|open <file.script>]");
-        }
-    }
-
-    void Status(TStatus& status) override {
-        xr_strcpy(status, LuaWorkbenchShown() ? "on" : "off");
-    }
-
-    void Info(TInfo& info) override { xr_strcpy(info, "[on|off|toggle|open <file.script>]"); }
-};
 
 class CCC_WeatherEditor : public IConsole_Command {
 public:
@@ -1492,11 +1447,19 @@ public:
     void Save(IWriter*) override {}
 };
 
+#endif // DEBUG_CAPS
+
+// run_script / run_string: in release too, they work only with -dev_mode ( the donor: with -dbg, Monolith
+// console_commands.cpp:2695-2702 ); logging part C tests C++ errors with run_string
 //#ifndef MASTER_GOLD
 class CCC_Script : public IConsole_Command {
 public:
     CCC_Script(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = false; };
     virtual void Execute(LPCSTR args) {
+        if (!is_dev_mode()) {
+            Msg("! Command available only in -dev_mode");
+            return;
+        }
         if (!xr_strlen(args)) {
             Log("* Specify script name!");
         } else {
@@ -1525,6 +1488,10 @@ public:
     CCC_ScriptCommand(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = false; };
 
     virtual void Execute(LPCSTR args) {
+        if (!is_dev_mode()) {
+            Msg("! Command available only in -dev_mode");
+            return;
+        }
         if (!xr_strlen(args))
             Log("* Specify string to run!");
         else {
@@ -1570,6 +1537,7 @@ public:
     }
 };
 
+#ifdef DEBUG_CAPS
 class CCC_TimeFactor : public IConsole_Command {
 public:
     CCC_TimeFactor(LPCSTR N) : IConsole_Command(N) {}
@@ -2143,13 +2111,14 @@ void CCC_RegisterCommands() {
     CMD3(CCC_Mask_Dev, "g_unlimitedammo", &psActorFlags, AF_UNLIMITEDAMMO);
     CMD1(CCC_FovDev, "fov");
     CMD1(CCC_WeatherEditor, "weather_editor");
-    CMD1(CCC_LuaWorkbench, "lua_workbench");
     CMD1(CCC_HudEditor, "hud_editor");
+    // run_script / run_string: in release too, they work only with -dev_mode ( the donor: with -dbg,
+    // Monolith console_commands.cpp:2695-2702 )
+    CMD1(CCC_Script, "run_script");
+    CMD1(CCC_ScriptCommand, "run_string");
 
 #ifdef DEBUG_CAPS
     CMD1(CCC_GreedIsGood, "g_greedisgood");
-    CMD1(CCC_Script, "run_script");
-    CMD1(CCC_ScriptCommand, "run_string");
 #endif
 
     CMD3(CCC_Mask, "g_autopickup", &psActorFlags, AF_AUTOPICKUP);

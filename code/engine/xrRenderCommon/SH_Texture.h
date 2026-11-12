@@ -30,6 +30,14 @@ public:
     void Load();
     void PostLoad();
     void Unload();
+#if RENDER == R_R4
+    // Item 9 stage D ( multithreading ): textures on all cores ( CResourceManager::DeferredUpload ).
+    // Both on the main thread: the head and the tail of Load() for a plain texture; between them a
+    // worker reads the file and makes the texture ( RImplementation.texture_load ). Load() itself
+    // is unchanged.
+    bool LoadPlainBegin();
+    void LoadPlainEnd(ID3DBaseTexture* surface, u32 mem);
+#endif
 
     void surface_set(ID3DBaseTexture* surf);
     ID3DBaseTexture* surface_get();
