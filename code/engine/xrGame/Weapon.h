@@ -108,6 +108,7 @@ public:
         eMagEmpty,
         eSwitch,
         eInspect,
+        eTacticalTorch,
     };
     enum EWeaponSubStates {
         eSubstateReloadBegin = 0,
@@ -217,6 +218,34 @@ protected:
     LPCSTR visual_name(CSE_Abstract* server_entity) override;
     bool SetUpgradeWorldVisual(LPCSTR visual);
     bool ApplyUpgradeWorldVisual();
+
+    struct TacticalTorch {
+        shared_str section;
+        shared_str bone;
+        shared_str direction_bone;
+        Fvector hud_offset{};
+        Fvector world_offset{};
+        Fvector omni_hud_offset{};
+        Fvector omni_world_offset{};
+        Fvector breaking{};
+        ref_light spot;
+        ref_light omni;
+        ref_glow glow;
+        bool enabled = false;
+        bool active = false;
+        bool damaged = false;
+        bool switch_pending = false;
+        bool has_switch_sound[2]{};
+        u32 action_started = 0;
+        u32 switch_delay = 0;
+        u32 action_duration = 0;
+        u32 damage_checked_at = 0;
+    } m_tactical_torch;
+    void LoadTacticalTorch(LPCSTR section);
+    void CreateTacticalTorchLights();
+    void StartTacticalTorchAction();
+    void UpdateTacticalTorch();
+    void SetTacticalTorchEffects(bool active);
     void RefreshUpgradeHud();
     void ApplyPendingUpgradeHud();
 
@@ -343,6 +372,7 @@ private:
 protected:
     void LoadHudFeatureFlags();
     virtual void OnUpgradeHudChanged() {}
+    virtual shared_str TacticalTorchMotion(LPCSTR base) const;
     virtual bool UpgradeGrenadeMode() const { return false; }
     virtual int FireModeForHudBones() const { return 1; }
     virtual bool UpgradeHudAllowed(const shared_str&) const { return true; }

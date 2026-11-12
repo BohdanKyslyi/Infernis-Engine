@@ -1319,6 +1319,11 @@ shared_str CWeaponMagazined::HudStateVariant(LPCSTR, LPCSTR fallback) const {
     return shared_str(fallback);
 }
 
+shared_str CWeaponMagazined::TacticalTorchMotion(LPCSTR base) const {
+    const shared_str fallback = CWeapon::TacticalTorchMotion(base);
+    return HudStateVariant(base, fallback.c_str());
+}
+
 void CWeaponMagazined::PlayAimTransition(bool entering) {
     if (GetState() != eIdle || GetNextState() != eIdle || IsPending() || !GetHUDmode())
         return;

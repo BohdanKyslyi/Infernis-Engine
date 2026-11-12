@@ -24,4 +24,11 @@
 	<string id="inf_mm_wipe_visor">
 		<text>Протерти екран</text>
 	</string>
+	
+	<!-->Перекласти на інші мови - версія 0.2.8<-->
+	
+	<string id="inf_mm_tac_torch">
+		<text>Тактичний ліхтар</text>
+	</string>
+	
 </string_table>

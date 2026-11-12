@@ -161,6 +161,7 @@ public:
 
 protected:
     void OnUpgradeHudChanged() override;
+    shared_str TacticalTorchMotion(LPCSTR base) const override;
     int FireModeForHudBones() const override { return GetQueueSize(); }
     virtual bool install_upgrade_impl(LPCSTR section, bool test);
 

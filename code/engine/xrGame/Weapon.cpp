@@ -28,6 +28,7 @@
 #include "weaponBinocularsVision.h"
 #include "ui/UIWindow.h"
 #include "ui/UIXmlInit.h"
+#include "ui_base.h"
 #include "Torch.h"
 
 #define WEAPON_REMOVE_TIME 60000
@@ -87,6 +88,7 @@ CWeapon::CWeapon() {
 }
 
 CWeapon::~CWeapon() {
+    SetTacticalTorchEffects(false);
     xr_delete(m_UIScope);
     delete_data(m_scopes);
 }
@@ -292,6 +294,11 @@ void CWeapon::Load(LPCSTR section) {
     m_pending_upgrade_hud = shared_str();
     m_upgrade_world_visual = shared_str();
     inherited::Load(section);
+    SetTacticalTorchEffects(false);
+    m_tactical_torch = TacticalTorch();
+    if (READ_IF_EXISTS(pSettings, r_bool, section, "torch_installed", false))
+        LoadTacticalTorch(section);
+
     m_base_upgrade_hud = HudSection();
     CShootingObject::Load(section);
     LoadHudFeatureFlags();
@@ -618,8 +625,9 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
     iAmmoElapsed = E->a_elapsed;
     m_flagsAddOnState = E->m_addon_flags.get();
     m_ammoType = E->ammo_type < m_ammoTypes.size() ? E->ammo_type : 0;
-    SetState(E->wpn_state);
-    SetNextState(E->wpn_state);
+    const u8 state = E->wpn_state == eTacticalTorch ? u8(eIdle) : E->wpn_state;
+    SetState(state);
+    SetNextState(state);
 
     m_DefaultCartridge.Load(m_ammoTypes[m_ammoType].c_str(), m_ammoType);
     if (iAmmoElapsed) {
@@ -640,6 +648,8 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
 }
 
 void CWeapon::net_Destroy() {
+    SetTacticalTorchEffects(false);
+    m_tactical_torch = TacticalTorch();
     m_world_upgrade_bones.Restore(nullptr);
     m_upgrade_world_visual = shared_str();
     inherited::net_Destroy();
@@ -796,6 +806,9 @@ void CWeapon::shedule_Update(u32 dT) {
 
 void CWeapon::OnH_B_Independent(bool just_before_destroy) {
     RemoveShotEffector();
+    m_tactical_torch.enabled = false;
+    m_tactical_torch.switch_pending = false;
+    SetTacticalTorchEffects(false);
 
     if (!just_before_destroy && ApplyUpgradeWorldVisual())
         UpdateAddonsVisibility();
@@ -845,6 +858,7 @@ void CWeapon::OnActiveItem() {
 
 void CWeapon::OnHiddenItem() {
     m_BriefInfo_CalcFrame = 0;
+    SetTacticalTorchEffects(false);
 
     if (IsGameTypeSingle())
         SwitchState(eHiding);
@@ -886,6 +900,7 @@ bool CWeapon::AllowBore() { return true; }
 void CWeapon::UpdateCL() {
     inherited::UpdateCL();
     ApplyPendingUpgradeHud();
+    UpdateTacticalTorch();
     UpdateHUDAddonsVisibility();
     //ïîäñâåòêà îò âûñòðåëà
     UpdateLight();
@@ -995,6 +1010,14 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
         return true;
 
     switch (cmd) {
+    case kWPN_TORCH:
+        if (!m_tactical_torch.section.size())
+            return false;
+        if ((flags & CMD_START) && IsGameTypeSingle() && GetState() == eIdle &&
+            GetNextState() == eIdle && !IsPending() && !m_bStopAtEndAnimIsRunning &&
+            !IsZoomed() && !hud_adj_mode)
+            SwitchState(eTacticalTorch);
+        return true;
     case kWPN_INSPECT: {
         if ((flags & CMD_START) && IsGameTypeSingle() && GetState() == eIdle &&
             GetNextState() == eIdle && !IsPending() && !IsZoomed() && GetHUDmode() &&
@@ -1685,6 +1708,309 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
         if (grenade_pose)
             hidden.Hide(model, effect.c_str(), "hide_bones_override_grenade");
     }
+
+    ApplyBoneList(model, m_tactical_torch.section.c_str(), "torch_cone_bones", m_tactical_torch.active);
+}
+
+namespace {
+Fvector TorchOffset(LPCSTR section, LPCSTR prefix, const Fvector& fallback) {
+    string64 key;
+    Fvector offset;
+    xr_sprintf(key, "%s_x", prefix);
+    offset.x = READ_IF_EXISTS(pSettings, r_float, section, key, fallback.x);
+    xr_sprintf(key, "%s_y", prefix);
+    offset.y = READ_IF_EXISTS(pSettings, r_float, section, key, fallback.y);
+    xr_sprintf(key, "%s_z", prefix);
+    offset.z = READ_IF_EXISTS(pSettings, r_float, section, key, fallback.z);
+    return offset;
+}
+
+Fcolor TorchColor(LPCSTR section, LPCSTR prefix, const Fcolor& fallback) {
+    string64 key;
+    Fcolor color;
+    xr_sprintf(key, "%s_r", prefix);
+    color.r = READ_IF_EXISTS(pSettings, r_float, section, key, fallback.r);
+    xr_sprintf(key, "%s_g", prefix);
+    color.g = READ_IF_EXISTS(pSettings, r_float, section, key, fallback.g);
+    xr_sprintf(key, "%s_b", prefix);
+    color.b = READ_IF_EXISTS(pSettings, r_float, section, key, fallback.b);
+    xr_sprintf(key, "%s_a", prefix);
+    color.a = READ_IF_EXISTS(pSettings, r_float, section, key, fallback.a);
+    return color;
+}
+
+u32 TorchDelay(LPCSTR hud, LPCSTR prefix, LPCSTR motion) {
+    string256 key;
+    xr_sprintf(key, "%s%s", prefix, motion);
+    const float seconds = READ_IF_EXISTS(pSettings, r_float, hud, key, 0.f);
+    return std::isfinite(seconds) ? u32(clampr(seconds, 0.f, 60.f) * 1000.f + 0.5f) : 0;
+}
+} // namespace
+
+void CWeapon::LoadTacticalTorch(LPCSTR section) {
+    auto& torch = m_tactical_torch;
+    if (torch.section.size() && xr_strcmp(torch.section.c_str(), section) == 0)
+        return;
+
+    SetTacticalTorchEffects(false);
+    torch.spot.destroy();
+    torch.omni.destroy();
+    torch.glow.destroy();
+    torch.section = section;
+    torch.bone = READ_IF_EXISTS(pSettings, r_string, section, "torch_light_bone", nullptr);
+    torch.direction_bone = READ_IF_EXISTS(pSettings, r_bool, section, "light_directions_by_bones", false) ?
+        READ_IF_EXISTS(pSettings, r_string, section, "light_dir_bone", nullptr) : nullptr;
+
+    Fvector zero;
+    zero.set(0.f, 0.f, 0.f);
+    torch.hud_offset = TorchOffset(section, "torch_attach_offset", zero);
+    torch.world_offset = TorchOffset(section, "torch_world_attach_offset", zero);
+    torch.omni_hud_offset = TorchOffset(section, "torch_omni_attach_offset", torch.hud_offset);
+    torch.omni_world_offset = TorchOffset(section, "torch_omni_world_attach_offset", torch.world_offset);
+    torch.breaking.set(-1.f, -1.f, 0.f);
+    if (pSettings->line_exist(section, "torch_breaking_params"))
+        torch.breaking = pSettings->r_fvector3(section, "torch_breaking_params");
+    torch.damaged = false;
+    torch.damage_checked_at = Device.dwTimeGlobal - 100;
+
+    const shared_str weapon = cNameSect();
+    const LPCSTR torch_sounds[] = {"snd_torch_off", "snd_torch_on"};
+    for (int i = 0; i < 2; ++i) {
+        if (torch.has_switch_sound[i])
+            continue;
+        const LPCSTR value = READ_IF_EXISTS(pSettings, r_string, weapon, torch_sounds[i], nullptr);
+        if (!value || !value[0])
+            continue;
+        string256 sound_path;
+        _GetItem(value, 0, sound_path);
+        if (!sound_path[0] || xr_strcmp(sound_path, "$silent") == 0)
+            continue;
+        m_sounds.LoadSound(weapon.c_str(), torch_sounds[i], torch_sounds[i], false);
+        torch.has_switch_sound[i] = true;
+    }
+}
+
+void CWeapon::CreateTacticalTorchLights() {
+    auto& torch = m_tactical_torch;
+    const LPCSTR section = torch.section.c_str();
+    const bool deferred = psDeviceFlags.test(rsR2) || psDeviceFlags.test(rsR3) ||
+        psDeviceFlags.test(rsR4);
+    const float cone = deg2rad(clampr(
+        READ_IF_EXISTS(pSettings, r_float, section, "torch_spot_angle", 75.f), 1.f, 120.f));
+
+    Fcolor spot_default, omni_default;
+    if (deferred)
+        spot_default.set(0.6f, 0.55f, 0.55f, 0.8f);
+    else
+        spot_default.set(1.f, 1.f, 1.f, 0.2f);
+    omni_default.set(1.f, 1.f, 1.f, 0.1f);
+    const Fcolor spot_color = TorchColor(section, deferred ? "torch_r2_color" : "torch_color", spot_default);
+    const Fcolor omni_color = TorchColor(section, deferred ? "torch_r2_omni_color" : "torch_omni_color", omni_default);
+
+    const auto create_light = [&](ref_light& light, int type, bool shadow, float range,
+                                  const Fcolor& color) {
+        light = ::Render->light_create();
+        const bool spot = type == IRender_Light::SPOT;
+        light->set_type(spot ? IRender_Light::SPOT : IRender_Light::POINT);
+        light->set_shadow(shadow);
+        light->set_range(std::max(range, 0.01f));
+        light->set_color(color);
+        if (spot)
+            light->set_cone(cone);
+    };
+    create_light(torch.spot,
+        READ_IF_EXISTS(pSettings, r_s32, section, "torch_render_type", int(IRender_Light::SPOT)),
+        READ_IF_EXISTS(pSettings, r_bool, section, "torch_render_shadow", true),
+        READ_IF_EXISTS(pSettings, r_float, section, deferred ? "torch_r2_range" : "torch_range", 15.f),
+        spot_color);
+    create_light(torch.omni,
+        READ_IF_EXISTS(pSettings, r_s32, section, "torch_omni_type", int(IRender_Light::POINT)),
+        READ_IF_EXISTS(pSettings, r_bool, section, "torch_omni_shadow", false),
+        READ_IF_EXISTS(pSettings, r_float, section, deferred ? "torch_r2_omni_range" : "torch_omni_range",
+            deferred ? 0.75f : 1.5f),
+        omni_color);
+    const LPCSTR spot_texture = READ_IF_EXISTS(pSettings, r_string, section, "torch_spot_texture", nullptr);
+    if (spot_texture && spot_texture[0])
+        torch.spot->set_texture(spot_texture);
+
+    const LPCSTR glow_texture = READ_IF_EXISTS(pSettings, r_string, section, "torch_glow_texture", nullptr);
+    if (READ_IF_EXISTS(pSettings, r_bool, section, "create_glow", false) && glow_texture && glow_texture[0]) {
+        torch.glow = ::Render->glow_create();
+        torch.glow->set_color(spot_color);
+        torch.glow->set_texture(glow_texture);
+        torch.glow->set_radius(READ_IF_EXISTS(pSettings, r_float, section, "torch_glow_radius", 0.3f));
+    }
+}
+
+shared_str CWeapon::TacticalTorchMotion(LPCSTR base) const {
+    const auto& hud = HudSection();
+    const int mode = FireModeForHudBones();
+    string64 key;
+    if (mode < 0)
+        xr_strcpy(key, "mask_firemode_a");
+    else
+        xr_sprintf(key, "mask_firemode_%d", mode);
+    const LPCSTR mask = READ_IF_EXISTS(pSettings, r_string, hud, key, nullptr);
+    const LPCSTR state = IsMisfire() ? "_jammed" : (iAmmoElapsed == 0 ? "_empty" : "");
+
+    string256 motion;
+    if (mask && mask[0]) {
+        xr_sprintf(motion, "%s%s%s", base, mask, state);
+        if (pSettings->line_exist(hud, motion))
+            return motion;
+    }
+    xr_sprintf(motion, "%s%s", base, state);
+    if (pSettings->line_exist(hud, motion))
+        return motion;
+    if (mask && mask[0] && state[0]) {
+        xr_sprintf(motion, "%s%s", base, mask);
+        if (pSettings->line_exist(hud, motion))
+            return motion;
+    }
+    return pSettings->line_exist(hud, base) ? shared_str(base) : shared_str();
+}
+
+void CWeapon::StartTacticalTorchAction() {
+    auto& torch = m_tactical_torch;
+    torch.switch_pending = false;
+    const bool turn_on = !torch.enabled;
+    u32 duration = 0;
+    shared_str motion;
+    auto* item = GetHUDmode() ? HudItemData() : nullptr;
+    if (item && !g_player_hud->attached_item(1)) {
+        motion = TacticalTorchMotion(turn_on ? "anm_torch_on" : "anm_torch_off");
+        if (motion.size()) {
+            string256 alias;
+            xr_sprintf(alias, "%s%s", motion.c_str(),
+                item->m_attach_place_idx == 1 && ui_core::is_widescreen() ? "_16x9" : "");
+            const auto* hud_motion = item->m_hand_motions.find_motion(alias);
+            if (hud_motion && !hud_motion->m_animations.empty())
+                duration = PlayHUDMotion(motion, TRUE, this, GetState());
+        }
+    }
+
+    if (torch.has_switch_sound[turn_on])
+        PlaySound(turn_on ? "snd_torch_on" : "snd_torch_off", get_LastFP());
+
+    if (!duration) {
+        torch.enabled = turn_on;
+        SwitchState(eIdle);
+        return;
+    }
+
+    const LPCSTR hud = HudSection().c_str();
+    torch.action_started = Device.dwTimeGlobal;
+    torch.switch_delay = TorchDelay(hud, "lock_time_start_", motion.c_str());
+    torch.action_duration = std::max(duration, torch.switch_delay +
+        TorchDelay(hud, "lock_time_end_", motion.c_str()));
+    torch.switch_pending = true;
+    SetPending(TRUE);
+}
+
+void CWeapon::SetTacticalTorchEffects(bool active) {
+    auto& torch = m_tactical_torch;
+    if (torch.active == active)
+        return;
+
+    torch.active = active;
+    if (torch.spot)
+        torch.spot->set_active(active);
+    if (torch.omni)
+        torch.omni->set_active(active);
+    if (torch.glow)
+        torch.glow->set_active(active);
+
+    if (auto* model = smart_cast<IKinematics*>(Visual()))
+        ApplyBoneList(model, torch.section.c_str(), "torch_cone_bones", active);
+}
+
+void CWeapon::UpdateTacticalTorch() {
+    auto& torch = m_tactical_torch;
+    if (!torch.section.size())
+        return;
+
+    const u32 now = Device.dwTimeGlobal;
+    if (GetState() == eTacticalTorch && GetNextState() == eTacticalTorch) {
+        const u32 elapsed = now - torch.action_started;
+        if (torch.switch_pending && elapsed >= torch.switch_delay) {
+            torch.switch_pending = false;
+            torch.enabled = !torch.enabled;
+        }
+        if (elapsed >= torch.action_duration && !m_bStopAtEndAnimIsRunning) {
+            SetPending(FALSE);
+            SwitchState(eIdle);
+        }
+    }
+
+    auto* actor = smart_cast<CActor*>(H_Parent());
+    if (!torch.enabled || !actor || !actor->g_Alive() || actor->inventory().ActiveItem() != this ||
+        IsHidden() || GetState() == eHiding || GetNextState() == eHiding ||
+        !actor->can_use_dynamic_lights()) {
+        SetTacticalTorchEffects(false);
+        return;
+    }
+
+    const float condition = GetCondition();
+    const auto& breaking = torch.breaking;
+    if (condition <= breaking.y) {
+        torch.damaged = true;
+    } else if (condition >= breaking.x) {
+        torch.damaged = false;
+    } else if (now - torch.damage_checked_at >= 100) {
+        const float progress = (breaking.x - condition) / (breaking.x - breaking.y);
+        const float start_chance = clampr(breaking.z, 0.f, 1.f);
+        torch.damaged = ::Random.randF(0.f, 1.f) < start_chance + progress * (1.f - start_chance);
+        torch.damage_checked_at = now;
+    }
+    if (torch.damaged) {
+        SetTacticalTorchEffects(false);
+        return;
+    }
+
+    if (!torch.spot)
+        CreateTacticalTorchLights();
+
+    auto* hud = GetHUDmode() ? HudItemData() : nullptr;
+    Fvector position, omni_position, direction;
+    if (hud) {
+        hud->update(false);
+        Fmatrix mount = hud->m_item_transform;
+        const u16 bone = torch.bone.size() ? hud->m_model->LL_BoneID(torch.bone.c_str()) : BI_NONE;
+        if (bone != BI_NONE)
+            mount.mul_43(hud->m_item_transform, hud->m_model->LL_GetTransform(bone));
+        mount.transform_tiny(position, torch.hud_offset);
+        mount.transform_tiny(omni_position, torch.omni_hud_offset);
+        direction = hud->m_item_transform.k;
+
+        const u16 target = torch.direction_bone.size() ?
+            hud->m_model->LL_BoneID(torch.direction_bone.c_str()) : BI_NONE;
+        if (target != BI_NONE) {
+            Fvector target_position, target_direction;
+            hud->m_item_transform.transform_tiny(target_position, hud->m_model->LL_GetTransform(target).c);
+            target_direction.sub(target_position, position);
+            if (target_direction.square_magnitude() > EPS_S)
+                direction = target_direction;
+        }
+    } else {
+        UpdateXForm();
+        XFORM().transform_tiny(position, torch.world_offset);
+        XFORM().transform_tiny(omni_position, torch.omni_world_offset);
+        direction = get_LastFD();
+    }
+
+    direction.normalize_safe();
+    Fvector up, right;
+    Fvector::generate_orthonormal_basis_normalized(direction, up, right);
+    torch.spot->set_hud_mode(hud != nullptr);
+    torch.spot->set_position(position);
+    torch.spot->set_rotation(direction, right);
+    torch.omni->set_hud_mode(hud != nullptr);
+    torch.omni->set_position(omni_position);
+    torch.omni->set_rotation(direction, right);
+    if (torch.glow)
+        torch.glow->set_position(position);
+
+    SetTacticalTorchEffects(true);
 }
 
 void CWeapon::UpdateHudAmmoBones(const CCartridge* fired) {
@@ -2318,8 +2644,10 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
 }
 
 void CWeapon::on_b_hud_detach() {
-    if (const auto* data = HudItemData())
+    if (const auto* data = HudItemData()) {
         m_hud_upgrade_bones.Restore(data->m_model);
+        ApplyBoneList(data->m_model, m_tactical_torch.section.c_str(), "torch_cone_bones", FALSE);
+    }
     inherited::on_b_hud_detach();
     m_hud_movement_pos.set(0.f, 0.f, 0.f);
     m_hud_movement_rot.set(0.f, 0.f, 0.f);
@@ -2638,7 +2966,9 @@ void CWeapon::OnStateSwitch(u32 S) {
     inherited::OnStateSwitch(S);
     m_BriefInfo_CalcFrame = 0;
 
-    if (S == eInspect) {
+    if (S == eTacticalTorch) {
+        StartTacticalTorchAction();
+    } else if (S == eInspect) {
         SetPending(TRUE);
         const shared_str motion = InspectMotion();
         if (!motion.c_str() || !PlayHUDMotion(motion, TRUE, this, eInspect)) {

@@ -32,6 +32,12 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
     bool refresh_visuals = has_world_visual && !test && SetUpgradeWorldVisual(visual);
     result |= has_world_visual;
 
+    if (READ_IF_EXISTS(pSettings, r_bool, section, "torch_installed", false)) {
+        result = true;
+        if (!test)
+            LoadTacticalTorch(section);
+    }
+
     if (pSettings->line_exist(section, "hud")) {
         result = true;
         if (!test && std::find(m_hud_upgrade_sections.begin(), m_hud_upgrade_sections.end(),

@@ -34,10 +34,11 @@
 		<command id="kb_firemode_next"					exe="wpn_firemode_next"/>
 		<command id="kb_firemode_prev"					exe="wpn_firemode_prev"/>
 		
-		<command id="inf_mm_quick_kick"					exe="quick_kick"/>		
-		<command id="inf_mm_quick_grenade"				exe="quick_grenade"/>		
-		<command id="inf_mm_wpn_inspect"				exe="wpn_inspect"/>		
-		<command id="inf_mm_wpn_zoom_alter"				exe="wpn_zoom_alter"/>		
+		<command id="inf_mm_quick_kick"					exe="quick_kick"/>
+		<command id="inf_mm_quick_grenade"				exe="quick_grenade"/>
+		<command id="inf_mm_wpn_inspect"				exe="wpn_inspect"/>
+		<command id="inf_mm_wpn_zoom_alter"				exe="wpn_zoom_alter"/>
+		<command id="inf_mm_tac_torch"					exe="wpn_torch"/>
 	</group>
 	<group name="kb_grp_inventory">
 		<command id="kb_inventory"						exe="inventory"/>
