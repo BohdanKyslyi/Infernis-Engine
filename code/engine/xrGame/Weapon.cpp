@@ -276,6 +276,7 @@ void CWeapon::ApplyPendingUpgradeHud() {
     hud_sect = target;
     LoadHudFeatureFlags();
     OnUpgradeHudChanged();
+    UpdateWorldFireModeBones();
 
     if (attached) {
         g_player_hud->attach_item(this);
@@ -1611,7 +1612,7 @@ bool BoneListContains(LPCSTR list, int count, LPCSTR name) {
 }
 
 void ApplyBoneList(IKinematics* model, LPCSTR section, LPCSTR key, BOOL visible,
-                   LPCSTR exclude = nullptr) {
+                   LPCSTR exclude = nullptr, BOOL recursive = TRUE) {
     if (!section || !pSettings->section_exist(section) || !pSettings->line_exist(section, key))
         return;
 
@@ -1625,7 +1626,7 @@ void ApplyBoneList(IKinematics* model, LPCSTR section, LPCSTR key, BOOL visible,
         const u16 bone = model->LL_BoneID(name);
         // World and HUD visuals may use different skeletons.
         if (bone != BI_NONE && model->LL_GetBoneVisible(bone) != visible)
-            model->LL_SetBoneVisible(bone, visible, TRUE);
+            model->LL_SetBoneVisible(bone, visible, recursive);
     }
 }
 void CollectUpgradeBoneDefaults(LPCSTR group, xr_vector<shared_str>& visited,
@@ -1704,6 +1705,17 @@ void CWeapon::UpgradeBoneMask::Hide(IKinematics* current, LPCSTR section, LPCSTR
     }
 }
 
+void CWeapon::UpdateWorldFireModeBones() {
+    const auto& hud_section = HudSection();
+    if (!Visual() || !hud_section.size() || !pSettings->line_exist(hud_section, "firemode_bones_total"))
+        return;
+
+    if (auto* model = Visual()->dcast_PKinematics()) {
+        ApplyConfiguredBoneVisibility(model);
+        model->CalculateBones_Invalidate();
+    }
+}
+
 void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
     if (!model)
         return;
@@ -1769,16 +1781,17 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
         ApplyBoneList(model, m_sGrenadeLauncherName.c_str(), "bones", TRUE);
     }
 
-    if (hud && pSettings->line_exist(HudSection(), "firemode_bones_total")) {
+    const auto& hud_section = HudSection();
+    if (hud_section.size() && pSettings->line_exist(hud_section, "firemode_bones_total")) {
         string64 key;
         const int mode = FireModeForHudBones();
         if (mode < 0)
             xr_strcpy(key, "firemode_bones_a");
         else
             xr_sprintf(key, "firemode_bones_%d", mode);
-        const LPCSTR visible = READ_IF_EXISTS(pSettings, r_string, HudSection(), key, nullptr);
-        ApplyBoneList(model, HudSection().c_str(), "firemode_bones_total", FALSE, visible);
-        ApplyBoneList(model, HudSection().c_str(), key, TRUE);
+        const LPCSTR visible = READ_IF_EXISTS(pSettings, r_string, hud_section, key, nullptr);
+        ApplyBoneList(model, hud_section.c_str(), "firemode_bones_total", FALSE, visible, hud);
+        ApplyBoneList(model, hud_section.c_str(), key, TRUE, nullptr, hud);
     }
 
     const bool launcher = IsGrenadeLauncherAttached();

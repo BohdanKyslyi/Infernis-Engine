@@ -436,6 +436,7 @@ private:
 protected:
     void LoadHudFeatureFlags();
     void UpdateWorldAnimation(u32 state, bool shot = false);
+    void UpdateWorldFireModeBones();
     virtual void OnUpgradeHudChanged() {}
     virtual shared_str WeaponActionMotion(LPCSTR base) const;
     virtual bool UpgradeGrenadeMode() const { return false; }

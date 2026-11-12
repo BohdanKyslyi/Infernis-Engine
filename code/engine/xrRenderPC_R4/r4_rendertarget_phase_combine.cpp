@@ -481,7 +481,8 @@ void CRenderTarget::phase_combine() {
         if (RImplementation.o.ssfx_fog && ps_ssfx_fog_scattering > 0)
             phase_ssfx_fog_scattering();
 
-        if (RImplementation.o.ssfx_motionblur && ps_ssfx_motionblur.y > 0)
+        // The lens projection differs from the main view used to build motion vectors.
+        if (!Device.scopeLensPass && RImplementation.o.ssfx_motionblur && ps_ssfx_motionblur.y > 0)
             phase_ssfx_motion_blur();
 
         // Compute blur textures. Monolith r4_rendertarget_phase_combine.cpp:524-526 runs this on
@@ -508,7 +509,8 @@ void CRenderTarget::phase_combine() {
         if (ps_r2_ls_flags.test(R2FLAG_DOF) && !Device.scopeLensPass)
             phase_dof();
 
-        if (RImplementation.o.ssfx_taa && ps_ssfx_taa.x > 0)
+        // Keep the TAA history in main-view coordinates across both passes.
+        if (!Device.scopeLensPass && RImplementation.o.ssfx_taa && ps_ssfx_taa.x > 0)
             phase_ssfx_taa();
 
         if (ssfx_PrevPos_Requiered)

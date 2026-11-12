@@ -1624,10 +1624,7 @@ bool CWeaponMagazined::SwitchMode() {
     if (eIdle != GetState() || IsPending())
         return false;
 
-    if (SingleShotMode())
-        m_iQueueSize = WEAPON_ININITE_QUEUE;
-    else
-        m_iQueueSize = 1;
+    SetQueueSize(SingleShotMode() ? WEAPON_ININITE_QUEUE : 1);
 
     PlaySound("sndEmptyClick", get_LastFP());
 
@@ -1686,7 +1683,13 @@ void CWeaponMagazined::OnH_A_Chield() {
     inherited::OnH_A_Chield();
 };
 
-void CWeaponMagazined::SetQueueSize(int size) { m_iQueueSize = size; };
+void CWeaponMagazined::SetQueueSize(int size) {
+    if (m_iQueueSize == size)
+        return;
+
+    m_iQueueSize = size;
+    UpdateWorldFireModeBones();
+}
 
 float CWeaponMagazined::GetWeaponDeterioration() {
     // modified by Peacemaker [17.10.08]
@@ -1705,15 +1708,16 @@ void CWeaponMagazined::save(NET_Packet& output_packet) {
 
 void CWeaponMagazined::load(IReader& input_packet) {
     inherited::load(input_packet);
-    load_data(m_iQueueSize, input_packet);
-    SetQueueSize(m_iQueueSize);
+    int queue_size;
+    load_data(queue_size, input_packet);
     load_data(m_iShotNum, input_packet);
     load_data(m_iCurFireMode, input_packet);
     if (!m_aFireModes.empty() &&
         (m_iCurFireMode < 0 || static_cast<size_t>(m_iCurFireMode) >= m_aFireModes.size())) {
         m_iCurFireMode = static_cast<int>(m_aFireModes.size()) - 1;
-        SetQueueSize(GetCurrentFireMode());
+        queue_size = GetCurrentFireMode();
     }
+    SetQueueSize(queue_size);
 }
 
 void CWeaponMagazined::net_Export(NET_Packet& P) {
