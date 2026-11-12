@@ -1,5 +1,5 @@
 function normal(shader, t_base, t_second, t_detail)
-    shader:begin("model_scope_lense", "model_scope_lense_gs_night")
+    shader:begin("model_scope_lense", "model_scope_lense_gs_night_coated")
         :fog(false)
         :zb(true, false)
         :blend(true, blend.srcalpha, blend.invsrcalpha)

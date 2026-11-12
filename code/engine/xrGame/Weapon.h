@@ -166,7 +166,7 @@ public:
     ALife::EWeaponAddonStatus get_ScopeStatus() const { return m_eScopeStatus; }
     ALife::EWeaponAddonStatus get_SilencerStatus() const { return m_eSilencerStatus; }
 
-    virtual bool UseScopeTexture() { return !Is3DScopeEnabled(); };
+    virtual bool UseScopeTexture();
 
     //îáíîâëåíèå âèäèìîñòè äëÿ êîñòî÷åê àääîíîâ
     void UpdateAddonsVisibility();
@@ -344,6 +344,7 @@ protected:
     bool UsesGunslingerZoom() const;
     virtual bool UsesScopeZoom() const;
     void ChangeZoomStep(bool increase);
+    bool IsScopeCollimator() const;
     bool UsesGunslingerScopeLens() const;
     bool GunslingerScopeLensRange(float& minimum, float& maximum) const;
     shared_str m_gunslinger_lens_scope;

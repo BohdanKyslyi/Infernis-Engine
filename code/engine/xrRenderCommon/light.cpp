@@ -270,6 +270,14 @@ void light::set_volumetric_distance(float fValue) {
 static const Fvector cmNorm[6] = { {0.f, 1.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, -1.f}, {0.f, 0.f, 1.f}, {0.f, 1.f, 0.f}, {0.f, 1.f, 0.f} };
 static const Fvector cmDir[6]  = { {1.f, 0.f, 0.f}, {-1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, -1.f, 0.f}, {0.f, 0.f, 1.f}, {0.f, 0.f, -1.f} };
 
+bool light::visible_in_current_view() {
+    // Occlusion results from the lens projection must not cull the main view.
+    if (Device.scopeLensPass)
+        return true;
+    vis_update();
+    return vis.visible;
+}
+
 void light::export_(light_Package& package) {
     if (flags.bShadow) {
         switch (flags.type) {

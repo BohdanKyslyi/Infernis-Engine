@@ -393,24 +393,27 @@ void CRender::Render() {
         for (u32 it = 0; it < count; it++) {
             if (it < LP.v_point.size()) {
                 light* L = LP.v_point[it];
-                L->vis_prepare();
-                if (L->vis.pending)
+                if (!Device.scopeLensPass)
+                    L->vis_prepare();
+                if (!Device.scopeLensPass && L->vis.pending)
                     LP_pending.v_point.push_back(L);
                 else
                     LP_normal.v_point.push_back(L);
             }
             if (it < LP.v_spot.size()) {
                 light* L = LP.v_spot[it];
-                L->vis_prepare();
-                if (L->vis.pending)
+                if (!Device.scopeLensPass)
+                    L->vis_prepare();
+                if (!Device.scopeLensPass && L->vis.pending)
                     LP_pending.v_spot.push_back(L);
                 else
                     LP_normal.v_spot.push_back(L);
             }
             if (it < LP.v_shadowed.size()) {
                 light* L = LP.v_shadowed[it];
-                L->vis_prepare();
-                if (L->vis.pending)
+                if (!Device.scopeLensPass)
+                    L->vis_prepare();
+                if (!Device.scopeLensPass && L->vis.pending)
                     LP_pending.v_shadowed.push_back(L);
                 else
                     LP_normal.v_shadowed.push_back(L);
@@ -627,15 +630,6 @@ void CRender::Render() {
 bool CRender::CaptureScopeLens() {
     if (!Device.scopeLensPass || !Target)
         return false;
-
-    // A second Calculate() in the same frame must be able to discover these lights again.
-    // Render marks each light with Device.dwFrame to avoid duplicates within one view.
-    for (light* L : Lights.package.v_point)
-        L->frame_render = 0;
-    for (light* L : Lights.package.v_spot)
-        L->frame_render = 0;
-    for (light* L : Lights.package.v_shadowed)
-        L->frame_render = 0;
 
     if (!m_bScopeLensRendered)
         return false;

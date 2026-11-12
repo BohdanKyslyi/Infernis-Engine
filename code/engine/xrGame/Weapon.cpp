@@ -1413,8 +1413,17 @@ float CWeapon::AlternativeHudFovFactor() const {
     return 1.f + (factor - 1.f) * blend;
 }
 
+bool CWeapon::IsScopeCollimator() const {
+    return IsScopeAttached() &&
+        READ_IF_EXISTS(pSettings, r_bool, ScopeSettingSection("collimator"), "collimator", false);
+}
+
+bool CWeapon::UseScopeTexture() {
+    return !IsScopeCollimator() && !Is3DScopeEnabled();
+}
+
 bool CWeapon::UsesGunslingerScopeLens() const {
-    if (!IsScopeAttached())
+    if (!IsScopeAttached() || IsScopeCollimator())
         return false;
 
     const shared_str section = ScopeSettingSection("need_lens_frame");
@@ -1428,8 +1437,7 @@ bool CWeapon::Is3DScopeEnabled() const {
     if (!IsScopeAttached() || !(psDeviceFlags.test(rsR4) || psDeviceFlags.test(rsR3) || psDeviceFlags.test(rsR2)) ||
         !pSettings->section_exist("shader_extensions") ||
         !pSettings->line_exist("shader_extensions", "enable_3d_scopes") ||
-        !pSettings->r_bool("shader_extensions", "enable_3d_scopes") ||
-        READ_IF_EXISTS(pSettings, r_bool, ScopeSettingSection("collimator"), "collimator", false))
+        !pSettings->r_bool("shader_extensions", "enable_3d_scopes"))
         return false;
 
     const shared_str section = ScopeSettingSection("scope_3d");
