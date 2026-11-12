@@ -2504,8 +2504,20 @@ void CItemUseController::StartCameraEffector(const shared_str& played_motion_nam
     string_path full_path;
     bool effector_exists = !!FS.exist(full_path, "$game_anims$", effector_name);
 
-    // A randomized HUD motion can be named motion1..motion8. If there is no
-    // matching camera file, also try the base motion from the anm_show alias.
+    const bool quick_knife = m_controller_mode == eControllerModeQuickKnife;
+    const auto try_motion_effector = [&](LPCSTR directory, LPCSTR motion) {
+        if (!motion || !motion[0])
+            return false;
+        strconcat(sizeof(effector_name), effector_name, directory, motion, ".anm");
+        return !!FS.exist(full_path, "$game_anims$", effector_name);
+    };
+    const LPCSTR weapon_effects = "camera_effects\\weapon\\";
+    const LPCSTR item_effects = "camera_effects\\";
+
+    if (!effector_exists && !explicitly_configured && quick_knife)
+        effector_exists = try_motion_effector(weapon_effects, played_motion_name.c_str());
+
+    // A randomized HUD motion can be named motion1..motion8. Try its base alias too.
     if (!effector_exists && !explicitly_configured && m_hud_section.size() &&
         (pSettings->line_exist(m_hud_section.c_str(), "anm_show") ||
          pSettings->line_exist(m_hud_section.c_str(), "anm_use"))) {
@@ -2516,10 +2528,21 @@ void CItemUseController::StartCameraEffector(const shared_str& played_motion_nam
         _GetItem(pSettings->r_string(m_hud_section.c_str(), motion_line), 0,
                  base_motion_name);
 
-        if (base_motion_name[0]) {
-            strconcat(sizeof(effector_name), effector_name, "camera_effects\\",
-                      base_motion_name, ".anm");
-            effector_exists = !!FS.exist(full_path, "$game_anims$", effector_name);
+        effector_exists = (quick_knife && try_motion_effector(weapon_effects, base_motion_name)) ||
+            try_motion_effector(item_effects, base_motion_name);
+    }
+
+    if (!effector_exists && !explicitly_configured && quick_knife) {
+        const auto* knife = smart_cast<const CWeaponKnife*>(
+            m_actor->inventory().get_object_by_id(m_quick_knife_id));
+        if (knife && m_actor->inventory().ItemFromSlot(KNIFE_SLOT) == knife) {
+            const LPCSTR attack = READ_IF_EXISTS(pSettings, r_string, knife->HudSection().c_str(),
+                "anm_attack", nullptr);
+            if (attack && attack[0]) {
+                string256 base_motion_name;
+                _GetItem(attack, 0, base_motion_name);
+                effector_exists = try_motion_effector(weapon_effects, base_motion_name);
+            }
         }
     }
 

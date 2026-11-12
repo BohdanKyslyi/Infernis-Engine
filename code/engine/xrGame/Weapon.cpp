@@ -2054,9 +2054,7 @@ LPCSTR CWeapon::BayonetSettingSection(LPCSTR key) const {
 }
 
 bool CWeapon::TryBayonetStrike() {
-    if (!m_bayonet_section.size() || !IsGameTypeSingle() ||
-        GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
-        m_bStopAtEndAnimIsRunning || IsZoomed() || !GetHUDmode())
+    if (!m_bayonet_section.size() || !IsGameTypeSingle() || !GetHUDmode())
         return false;
 
     const auto disabled = [this](LPCSTR key) {
@@ -2070,6 +2068,19 @@ bool CWeapon::TryBayonetStrike() {
         pSettings->r_float(m_bayonet_section, "kick_distance") <= 0.f ||
         !HasWeaponActionMotion(WeaponActionMotion("anm_kick")))
         return false;
+
+    // An eligible bayonet owns this input even when the weapon is briefly busy.
+    if (GetState() != eIdle || GetNextState() != eIdle || IsPending() || IsZoomed())
+        return true;
+
+    if (m_bStopAtEndAnimIsRunning) {
+        const LPCSTR motion = m_current_motion.c_str();
+        const bool movement_idle = m_startedMotionState == eIdle && motion &&
+            (std::strcmp(motion, "anm_idle") == 0 ||
+             std::strncmp(motion, "anm_idle_", sizeof("anm_idle_") - 1) == 0);
+        if (!movement_idle)
+            return true;
+    }
 
     SwitchState(eBayonetStrike);
     return true;
