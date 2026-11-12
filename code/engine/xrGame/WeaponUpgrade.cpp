@@ -38,6 +38,14 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
             LoadTacticalTorch(section);
     }
 
+    if (READ_IF_EXISTS(pSettings, r_bool, section, "laser_installed", false)) {
+        result = true;
+        if (!test) {
+            LoadWeaponLaser(section);
+            refresh_visuals = true;
+        }
+    }
+
     if (pSettings->line_exist(section, "kick_hit_power") &&
         pSettings->line_exist(section, "kick_distance")) {
         result = true;

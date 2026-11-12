@@ -30,5 +30,8 @@
 	<string id="inf_mm_tac_torch">
 		<text>Тактичний ліхтар</text>
 	</string>
+	<string id="inf_mm_laser">
+		<text>Лазерний цілевказівник</text>
+	</string>
 	
 </string_table>

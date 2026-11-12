@@ -45,6 +45,7 @@ static bool ItemUseBlocksAction(int cmd) {
     case kDETECTOR:
     case kTORCH:
     case kWPN_TORCH:
+    case kWPN_LASER:
     case kNIGHT_VISION:
     case kWPN_1:
     case kWPN_2:

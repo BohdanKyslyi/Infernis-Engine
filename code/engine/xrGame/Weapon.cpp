@@ -39,6 +39,7 @@
 
 BOOL b_toggle_weapon_aim = FALSE;
 extern CUIXml* pWpnScopeXml;
+extern ENGINE_API float psHUD_FOV;
 
 CWeapon::CWeapon() {
     SetState(eHidden);
@@ -92,6 +93,7 @@ CWeapon::CWeapon() {
 
 CWeapon::~CWeapon() {
     SetTacticalTorchEffects(false);
+    StopLaserDot();
     xr_delete(m_UIScope);
     delete_data(m_scopes);
 }
@@ -301,6 +303,10 @@ void CWeapon::Load(LPCSTR section) {
     m_tactical_torch = TacticalTorch();
     if (READ_IF_EXISTS(pSettings, r_bool, section, "torch_installed", false))
         LoadTacticalTorch(section);
+    StopWeaponLaserEffects();
+    m_weapon_laser = WeaponLaser();
+    if (READ_IF_EXISTS(pSettings, r_bool, section, "laser_installed", false))
+        LoadWeaponLaser(section);
     m_bayonet_section = nullptr;
     m_bayonet_has_sound = false;
     m_bayonet_hit_pending = false;
@@ -632,7 +638,8 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
     iAmmoElapsed = E->a_elapsed;
     m_flagsAddOnState = E->m_addon_flags.get();
     m_ammoType = E->ammo_type < m_ammoTypes.size() ? E->ammo_type : 0;
-    const u8 state = (E->wpn_state == eTacticalTorch || E->wpn_state == eBayonetStrike)
+    const u8 state = (E->wpn_state == eTacticalTorch || E->wpn_state == eBayonetStrike ||
+                      E->wpn_state == eLaserSwitch)
         ? u8(eIdle) : E->wpn_state;
     SetState(state);
     SetNextState(state);
@@ -656,6 +663,8 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
 }
 
 void CWeapon::net_Destroy() {
+    StopWeaponLaserEffects();
+    m_weapon_laser = WeaponLaser();
     SetTacticalTorchEffects(false);
     m_tactical_torch = TacticalTorch();
     m_world_upgrade_bones.Restore(nullptr);
@@ -817,6 +826,9 @@ void CWeapon::OnH_B_Independent(bool just_before_destroy) {
     m_tactical_torch.enabled = false;
     m_tactical_torch.switch_pending = false;
     SetTacticalTorchEffects(false);
+    m_weapon_laser.enabled = false;
+    m_weapon_laser.switch_pending = false;
+    StopWeaponLaserEffects();
 
     if (!just_before_destroy && ApplyUpgradeWorldVisual())
         UpdateAddonsVisibility();
@@ -867,6 +879,7 @@ void CWeapon::OnActiveItem() {
 void CWeapon::OnHiddenItem() {
     m_BriefInfo_CalcFrame = 0;
     SetTacticalTorchEffects(false);
+    StopWeaponLaserEffects();
 
     if (IsGameTypeSingle())
         SwitchState(eHiding);
@@ -909,6 +922,7 @@ void CWeapon::UpdateCL() {
     inherited::UpdateCL();
     ApplyPendingUpgradeHud();
     UpdateTacticalTorch();
+    UpdateWeaponLaser();
     UpdateBayonetStrike();
     UpdateHUDAddonsVisibility();
     //ïîäñâåòêà îò âûñòðåëà
@@ -1020,13 +1034,16 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
 
     switch (cmd) {
     case kWPN_TORCH:
-        if (!m_tactical_torch.section.size())
+    case kWPN_LASER: {
+        const bool laser = cmd == kWPN_LASER;
+        if (!(laser ? m_weapon_laser.section.size() : m_tactical_torch.section.size()))
             return false;
         if ((flags & CMD_START) && IsGameTypeSingle() && GetState() == eIdle &&
             GetNextState() == eIdle && !IsPending() && !m_bStopAtEndAnimIsRunning &&
             !IsZoomed() && !hud_adj_mode)
-            SwitchState(eTacticalTorch);
+            SwitchState(laser ? eLaserSwitch : eTacticalTorch);
         return true;
+    }
     case kWPN_INSPECT: {
         if ((flags & CMD_START) && IsGameTypeSingle() && GetState() == eIdle &&
             GetNextState() == eIdle && !IsPending() && !IsZoomed() && GetHUDmode() &&
@@ -1719,10 +1736,11 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
     }
 
     ApplyBoneList(model, m_tactical_torch.section.c_str(), "torch_cone_bones", m_tactical_torch.active);
+    ApplyBoneList(model, m_weapon_laser.section.c_str(), "laser_ray_bones", m_weapon_laser.beam_visible);
 }
 
 namespace {
-Fvector TorchOffset(LPCSTR section, LPCSTR prefix, const Fvector& fallback) {
+Fvector WeaponAccessoryOffset(LPCSTR section, LPCSTR prefix, const Fvector& fallback) {
     string64 key;
     Fvector offset;
     xr_sprintf(key, "%s_x", prefix);
@@ -1772,10 +1790,10 @@ void CWeapon::LoadTacticalTorch(LPCSTR section) {
 
     Fvector zero;
     zero.set(0.f, 0.f, 0.f);
-    torch.hud_offset = TorchOffset(section, "torch_attach_offset", zero);
-    torch.world_offset = TorchOffset(section, "torch_world_attach_offset", zero);
-    torch.omni_hud_offset = TorchOffset(section, "torch_omni_attach_offset", torch.hud_offset);
-    torch.omni_world_offset = TorchOffset(section, "torch_omni_world_attach_offset", torch.world_offset);
+    torch.hud_offset = WeaponAccessoryOffset(section, "torch_attach_offset", zero);
+    torch.world_offset = WeaponAccessoryOffset(section, "torch_world_attach_offset", zero);
+    torch.omni_hud_offset = WeaponAccessoryOffset(section, "torch_omni_attach_offset", torch.hud_offset);
+    torch.omni_world_offset = WeaponAccessoryOffset(section, "torch_omni_world_attach_offset", torch.world_offset);
     torch.breaking.set(-1.f, -1.f, 0.f);
     if (pSettings->line_exist(section, "torch_breaking_params"))
         torch.breaking = pSettings->r_fvector3(section, "torch_breaking_params");
@@ -2016,9 +2034,249 @@ void CWeapon::UpdateTacticalTorch() {
     SetTacticalTorchEffects(true);
 }
 
+void CWeapon::LoadWeaponLaser(LPCSTR section) {
+    auto& laser = m_weapon_laser;
+    if (laser.section.size() && xr_strcmp(laser.section.c_str(), section) == 0)
+        return;
+
+    StopWeaponLaserEffects();
+    laser.section = section;
+    laser.bone = READ_IF_EXISTS(pSettings, r_string, section, "laserdot_attach_bone", nullptr);
+    laser.dots.clear();
+    laser.checked_effects = false;
+    laser.damaged = false;
+    laser.damage_checked_at = Device.dwTimeGlobal - 100;
+    Fvector zero;
+    zero.set(0.f, 0.f, 0.f);
+    laser.hud_offset = WeaponAccessoryOffset(section, "laserdot_attach_offset", zero);
+    laser.world_offset = WeaponAccessoryOffset(section, "laserdot_world_attach_offset", zero);
+    laser.breaking.set(-1.f, -1.f, 0.f);
+    if (pSettings->line_exist(section, "laser_breaking_params"))
+        laser.breaking = pSettings->r_fvector3(section, "laser_breaking_params");
+
+    const int count = clampr(READ_IF_EXISTS(pSettings, r_s32, section, "particles_count", 1), 1, 64);
+    float previous_distance = 0.f;
+    for (int i = 0; i < count; ++i) {
+        string64 key;
+        xr_sprintf(key, "laserdot_particle_%d", i);
+        const LPCSTR effect = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
+        xr_sprintf(key, "laserdot_dist_%d", i);
+        const float distance = READ_IF_EXISTS(pSettings, r_float, section, key, previous_distance);
+        if (i != 0 && std::isfinite(distance))
+            previous_distance = std::max(previous_distance, distance);
+        if (effect && effect[0] && xr_strcmp(effect, "none") != 0)
+            laser.dots.push_back({effect, previous_distance});
+    }
+
+    const shared_str weapon = cNameSect();
+    const LPCSTR sounds[] = {"snd_laser_off", "snd_laser_on"};
+    for (int i = 0; i < 2; ++i) {
+        const LPCSTR sound_section = pSettings->line_exist(section, sounds[i]) ?
+            section : weapon.c_str();
+        if (laser.has_switch_sound[i])
+            continue;
+        const LPCSTR value = READ_IF_EXISTS(pSettings, r_string, sound_section, sounds[i], nullptr);
+        if (!value || !value[0])
+            continue;
+        string256 path;
+        _GetItem(value, 0, path);
+        if (!path[0] || xr_strcmp(path, "$silent") == 0)
+            continue;
+        m_sounds.LoadSound(sound_section, sounds[i], sounds[i], false);
+        laser.has_switch_sound[i] = true;
+    }
+}
+
+void CWeapon::StartWeaponLaserAction() {
+    auto& laser = m_weapon_laser;
+    const bool turn_on = !laser.enabled;
+    u32 duration = 0;
+    shared_str motion;
+    if (GetHUDmode() && !g_player_hud->attached_item(1)) {
+        motion = WeaponActionMotion(turn_on ? "anm_laser_on" : "anm_laser_off");
+        if (HasWeaponActionMotion(motion))
+            duration = PlayHUDMotion(motion, TRUE, this, eLaserSwitch);
+    }
+
+    if (laser.has_switch_sound[turn_on])
+        PlaySound(turn_on ? "snd_laser_on" : "snd_laser_off", get_LastFP());
+
+    if (!duration) {
+        laser.enabled = turn_on;
+        SwitchState(eIdle);
+        return;
+    }
+
+    const LPCSTR hud = HudSection().c_str();
+    laser.action_started = Device.dwTimeGlobal;
+    laser.switch_delay = WeaponActionDelay(hud, "lock_time_start_", motion.c_str());
+    laser.action_duration = std::max(duration, laser.switch_delay +
+        WeaponActionDelay(hud, "lock_time_end_", motion.c_str()));
+    laser.switch_pending = true;
+    SetPending(TRUE);
+}
+
+void CWeapon::SetLaserBeamVisible(bool visible) {
+    auto& laser = m_weapon_laser;
+    if (laser.beam_visible == visible)
+        return;
+
+    laser.beam_visible = visible;
+    if (auto* model = smart_cast<IKinematics*>(Visual()))
+        ApplyBoneList(model, laser.section.c_str(), "laser_ray_bones", visible);
+    if (auto* hud = HudItemData())
+        ApplyBoneList(hud->m_model, laser.section.c_str(), "laser_ray_bones", visible);
+}
+
+void CWeapon::StopLaserDot() {
+    if (auto* dot = m_weapon_laser.dot)
+        dot->Stop(FALSE);
+    CParticlesObject::Destroy(m_weapon_laser.dot);
+    m_weapon_laser.current_effect = nullptr;
+}
+
+void CWeapon::StopWeaponLaserEffects() {
+    SetLaserBeamVisible(false);
+    StopLaserDot();
+}
+
+void CWeapon::UpdateWeaponLaser() {
+    auto& laser = m_weapon_laser;
+    if (!laser.section.size())
+        return;
+
+    const u32 now = Device.dwTimeGlobal;
+    if (GetState() == eLaserSwitch && GetNextState() == eLaserSwitch) {
+        const u32 elapsed = now - laser.action_started;
+        if (laser.switch_pending && elapsed >= laser.switch_delay) {
+            laser.enabled = !laser.enabled;
+            laser.switch_pending = false;
+        }
+        if (elapsed >= laser.action_duration && !m_bStopAtEndAnimIsRunning) {
+            SetPending(FALSE);
+            SwitchState(eIdle);
+        }
+    }
+
+    auto* actor = smart_cast<CActor*>(H_Parent());
+    if (!laser.enabled || !actor || !actor->g_Alive() ||
+        actor->inventory().ActiveItem() != this || IsHidden() ||
+        GetState() == eHiding || GetNextState() == eHiding) {
+        StopWeaponLaserEffects();
+        return;
+    }
+
+    const float condition = GetCondition();
+    const auto& breaking = laser.breaking;
+    if (condition <= breaking.y) {
+        laser.damaged = true;
+    } else if (condition >= breaking.x) {
+        laser.damaged = false;
+    } else if (now - laser.damage_checked_at >= 100) {
+        const float progress = (breaking.x - condition) / (breaking.x - breaking.y);
+        const float chance = clampr(breaking.z, 0.f, 1.f);
+        laser.damaged = ::Random.randF(0.f, 1.f) < chance + progress * (1.f - chance);
+        laser.damage_checked_at = now;
+    }
+    if (laser.damaged) {
+        StopWeaponLaserEffects();
+        return;
+    }
+
+    const LPCSTR hud_section = HudSection().c_str();
+    const bool hide_gl_dot = UpgradeGrenadeMode() &&
+        READ_IF_EXISTS(pSettings, r_bool, hud_section, "disable_laserdot_when_gl_enabled", false);
+    SetLaserBeamVisible(!hide_gl_dot ||
+        !READ_IF_EXISTS(pSettings, r_bool, hud_section, "disable_laserray_when_gl_enabled", false));
+    if (hide_gl_dot) {
+        StopLaserDot();
+        return;
+    }
+
+    if (!laser.checked_effects) {
+        laser.dots.erase(std::remove_if(laser.dots.begin(), laser.dots.end(),
+            [&laser](const LaserDot& dot) {
+                if (::Render->model_HasParticles(dot.effect.c_str()))
+                    return false;
+                Msg("! [%s] Laser dot particle not found: %s", laser.section.c_str(), dot.effect.c_str());
+                return true;
+            }), laser.dots.end());
+        laser.checked_effects = true;
+    }
+    if (laser.dots.empty())
+        return;
+
+    Fvector origin, direction;
+    if (auto* hud = GetHUDmode() ? HudItemData() : nullptr) {
+        hud->update(false);
+        Fmatrix emitter = hud->m_item_transform;
+        const u16 bone = laser.bone.size() ? hud->m_model->LL_BoneID(laser.bone.c_str()) : BI_NONE;
+        if (bone != BI_NONE)
+            emitter.mul_43(hud->m_item_transform, hud->m_model->LL_GetTransform(bone));
+        emitter.transform_tiny(origin, laser.hud_offset);
+        // The attachment bone positions the emitter. Forward follows the weapon HUD.
+        direction = hud->m_item_transform.k;
+        direction.normalize_safe();
+
+        const Fvector& camera_dir = Device.vCameraDirection;
+        const float aim = UpgradeGrenadeMode() ? 0.f : m_zoom_params.m_fZoomRotationFactor;
+        const float correction =
+            READ_IF_EXISTS(pSettings, r_float, hud_section, "hud_recalc_koef", 1.f);
+        direction.sub(camera_dir).mul(correction / std::max(psHUD_FOV, 0.1f)).add(camera_dir);
+        origin.lerp(origin, Device.vCameraPosition, aim);
+        direction.lerp(direction, camera_dir, aim);
+        direction.normalize_safe();
+
+        const bool force_world =
+            READ_IF_EXISTS(pSettings, r_bool, hud_section, "laserdot_always_world", false);
+        const bool hide_dot =
+            READ_IF_EXISTS(pSettings, r_bool, hud_section, "laserdot_always_hud", false);
+        const float angle = READ_IF_EXISTS(pSettings, r_float, hud_section, "laserdot_hud_treshold", 10.f);
+        if (!force_world && (hide_dot || camera_dir.dotproduct(direction) < std::cos(deg2rad(angle)))) {
+            StopLaserDot();
+            return;
+        }
+    } else {
+        UpdateXForm();
+        XFORM().transform_tiny(origin, laser.world_offset);
+        direction = get_LastFD();
+        direction.normalize_safe();
+    }
+
+    constexpr float laser_range = 300.f;
+    collide::rq_result hit;
+    if (direction.square_magnitude() < EPS_S ||
+        !Level().ObjectSpace.RayPick(origin, direction, laser_range, collide::rqtBoth, hit, actor)) {
+        StopLaserDot();
+        return;
+    }
+
+    const LaserDot* selected = &laser.dots.front();
+    for (const auto& dot : laser.dots) {
+        if (dot.distance > hit.range)
+            break;
+        selected = &dot;
+    }
+    if (laser.current_effect != selected->effect) {
+        StopLaserDot();
+        laser.current_effect = selected->effect;
+        laser.dot = CParticlesObject::Create(laser.current_effect.c_str(), FALSE);
+    }
+
+    // Keep the sprite slightly in front of the collision plane to avoid z-fighting.
+    Fvector position;
+    position.mad(origin, direction, std::max(0.f, hit.range - 0.005f));
+    Fmatrix transform;
+    transform.translate(position);
+    laser.dot->SetXFORM(transform);
+    if (!laser.dot->IsPlaying())
+        laser.dot->Play(false);
+}
+
 bool CWeapon::IsHudActionLocked() const {
     return GetState() == eTacticalTorch || GetNextState() == eTacticalTorch ||
-           GetState() == eBayonetStrike || GetNextState() == eBayonetStrike;
+           GetState() == eBayonetStrike || GetNextState() == eBayonetStrike ||
+           GetState() == eLaserSwitch || GetNextState() == eLaserSwitch;
 }
 
 bool CWeapon::HasWeaponActionMotion(const shared_str& motion) {
@@ -2801,9 +3059,11 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
 }
 
 void CWeapon::on_b_hud_detach() {
+    StopWeaponLaserEffects();
     if (const auto* data = HudItemData()) {
         m_hud_upgrade_bones.Restore(data->m_model);
         ApplyBoneList(data->m_model, m_tactical_torch.section.c_str(), "torch_cone_bones", FALSE);
+        ApplyBoneList(data->m_model, m_weapon_laser.section.c_str(), "laser_ray_bones", FALSE);
     }
     inherited::on_b_hud_detach();
     m_hud_movement_pos.set(0.f, 0.f, 0.f);
@@ -3125,9 +3385,13 @@ void CWeapon::OnStateSwitch(u32 S) {
 
     if (S != eBayonetStrike)
         m_bayonet_hit_pending = false;
+    if (S != eLaserSwitch)
+        m_weapon_laser.switch_pending = false;
 
     if (S == eTacticalTorch) {
         StartTacticalTorchAction();
+    } else if (S == eLaserSwitch) {
+        StartWeaponLaserAction();
     } else if (S == eBayonetStrike) {
         StartBayonetStrike();
     } else if (S == eInspect) {

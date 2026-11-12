@@ -110,6 +110,7 @@ public:
         eInspect,
         eTacticalTorch,
         eBayonetStrike,
+        eLaserSwitch,
     };
     enum EWeaponSubStates {
         eSubstateReloadBegin = 0,
@@ -247,6 +248,37 @@ protected:
     void StartTacticalTorchAction();
     void UpdateTacticalTorch();
     void SetTacticalTorchEffects(bool active);
+
+    struct LaserDot {
+        shared_str effect;
+        float distance;
+    };
+    struct WeaponLaser {
+        shared_str section;
+        shared_str bone;
+        xr_vector<LaserDot> dots;
+        Fvector hud_offset{};
+        Fvector world_offset{};
+        Fvector breaking{};
+        CParticlesObject* dot = nullptr;
+        shared_str current_effect;
+        bool checked_effects = false;
+        bool enabled = false;
+        bool beam_visible = false;
+        bool damaged = false;
+        bool switch_pending = false;
+        bool has_switch_sound[2]{};
+        u32 action_started = 0;
+        u32 switch_delay = 0;
+        u32 action_duration = 0;
+        u32 damage_checked_at = 0;
+    } m_weapon_laser;
+    void LoadWeaponLaser(LPCSTR section);
+    void StartWeaponLaserAction();
+    void UpdateWeaponLaser();
+    void SetLaserBeamVisible(bool visible);
+    void StopLaserDot();
+    void StopWeaponLaserEffects();
 
     shared_str m_bayonet_section;
     bool m_bayonet_has_sound = false;

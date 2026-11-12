@@ -39,6 +39,7 @@
 		<command id="inf_mm_wpn_inspect"				exe="wpn_inspect"/>
 		<command id="inf_mm_wpn_zoom_alter"				exe="wpn_zoom_alter"/>
 		<command id="inf_mm_tac_torch"					exe="wpn_torch"/>
+		<command id="inf_mm_laser"						exe="wpn_laser"/>
 	</group>
 	<group name="kb_grp_inventory">
 		<command id="kb_inventory"						exe="inventory"/>

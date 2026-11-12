@@ -85,6 +85,7 @@ enum EGameActions {
     kWPN_ZOOM_ALTER,
     kWIPE_VISOR,
     kWPN_TORCH,
+    kWPN_LASER,
 
     kLASTACTION,
     kNOTBINDED,
