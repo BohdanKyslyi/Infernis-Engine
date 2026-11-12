@@ -1413,17 +1413,29 @@ float CWeapon::AlternativeHudFovFactor() const {
     return 1.f + (factor - 1.f) * blend;
 }
 
+bool CWeapon::UsesGunslingerScopeLens() const {
+    if (!IsScopeAttached())
+        return false;
+
+    const shared_str section = ScopeSettingSection("need_lens_frame");
+    if (pSettings->line_exist(section, "need_lens_frame"))
+        return pSettings->r_bool(section, "need_lens_frame");
+
+    return READ_IF_EXISTS(pSettings, r_bool, HudSection(), "need_lens_frame", false);
+}
+
 bool CWeapon::Is3DScopeEnabled() const {
     if (!IsScopeAttached() || !(psDeviceFlags.test(rsR4) || psDeviceFlags.test(rsR3) || psDeviceFlags.test(rsR2)) ||
         !pSettings->section_exist("shader_extensions") ||
         !pSettings->line_exist("shader_extensions", "enable_3d_scopes") ||
-        !pSettings->r_bool("shader_extensions", "enable_3d_scopes"))
+        !pSettings->r_bool("shader_extensions", "enable_3d_scopes") ||
+        READ_IF_EXISTS(pSettings, r_bool, ScopeSettingSection("collimator"), "collimator", false))
         return false;
 
-    const bool enabled = READ_IF_EXISTS(pSettings, r_bool,
-        ScopeSettingSection("scope_3d"), "scope_3d", false);
-    const float fov = ScopeLensFov();
-    return enabled && fov >= 5.f && fov <= 90.f;
+    const shared_str section = ScopeSettingSection("scope_3d");
+    const bool enabled = pSettings->line_exist(section, "scope_3d")
+        ? pSettings->r_bool(section, "scope_3d") : UsesGunslingerScopeLens();
+    return enabled && ScopeLensFov() > 0.f;
 }
 
 namespace {
@@ -1439,13 +1451,37 @@ float MinScopeMagnification(float maximum) {
 }
 } // namespace
 
+bool CWeapon::GunslingerScopeLensRange(float& minimum, float& maximum) const {
+    if (!UsesGunslingerScopeLens() ||
+        pSettings->line_exist(ScopeSettingSection("scope_lens_fov"), "scope_lens_fov"))
+        return false;
+
+    minimum = READ_IF_EXISTS(pSettings, r_float,
+        ScopeSettingSection("min_lens_factor"), "min_lens_factor", 1.f);
+    maximum = READ_IF_EXISTS(pSettings, r_float,
+        ScopeSettingSection("max_lens_factor"), "max_lens_factor", minimum);
+    return std::isfinite(minimum) && std::isfinite(maximum) && minimum > 0.f && maximum >= minimum;
+}
+
 float CWeapon::ScopeLensFov() const {
     if (!IsScopeAttached())
         return 0.f;
 
-    float fov = READ_IF_EXISTS(pSettings, r_float,
-        ScopeSettingSection("scope_lens_fov"), "scope_lens_fov", 0.f);
-    if (fov >= 5.f && fov <= 90.f && IsZoomed() && UsesScopeZoom() &&
+    const shared_str fov_section = ScopeSettingSection("scope_lens_fov");
+    if (!pSettings->line_exist(fov_section, "scope_lens_fov")) {
+        float minimum, maximum;
+        if (!GunslingerScopeLensRange(minimum, maximum))
+            return 0.f;
+
+        const float factor = minimum + (maximum - minimum) * m_gunslinger_lens_position;
+        return clampr(FovWithMagnification(g_fov, factor), 2.f, 90.f);
+    }
+
+    float fov = pSettings->r_float(fov_section, "scope_lens_fov");
+    if (!(fov >= 5.f && fov <= 90.f))
+        return 0.f;
+
+    if (IsZoomed() && UsesScopeZoom() &&
         m_zoom_params.m_bUseDynamicZoom && m_zoom_params.m_fScopeZoomFactor > 0.f) {
         const float ratio = GetZoomFactor() / m_zoom_params.m_fScopeZoomFactor;
         fov = UsesGunslingerZoom() ? FovWithMagnification(fov, ratio) : fov * ratio;
@@ -1454,8 +1490,18 @@ float CWeapon::ScopeLensFov() const {
     return fov;
 }
 
+float CWeapon::ScopeLensBlend() const {
+    if (UpgradeGrenadeMode())
+        return 0.f;
+    return m_zoom_params.m_fZoomRotationFactor * (1.f - m_fAlternativeAimFactor);
+}
+
 bool CWeapon::ScopeLensShouldRender() const {
-    if (!Is3DScopeEnabled() || m_bAlternativeAimActive)
+    if (!Is3DScopeEnabled() || UpgradeGrenadeMode())
+        return false;
+
+    const bool gunslinger = UsesGunslingerScopeLens();
+    if (m_bAlternativeAimActive && (!gunslinger || ScopeLensBlend() <= EPS_S))
         return false;
 
     const LPCSTR setting = READ_IF_EXISTS(pSettings, r_string,
@@ -1464,6 +1510,8 @@ bool CWeapon::ScopeLensShouldRender() const {
         return true;
     if (!strcmp(setting, "performance") || !strcmp(setting, "perfomance"))
         return IsZoomed() && !IsRotatingToZoom();
+    if (gunslinger)
+        return ScopeLensBlend() > EPS_S || (IsZoomed() && !m_bAlternativeAimActive);
     return IsZoomed(); // balanced: from the start of the aim transition
 }
 
@@ -2043,6 +2091,7 @@ void CWeapon::LoadWeaponLaser(LPCSTR section) {
     laser.section = section;
     laser.bone = READ_IF_EXISTS(pSettings, r_string, section, "laserdot_attach_bone", nullptr);
     laser.dots.clear();
+    laser.green = false;
     laser.checked_effects = false;
     laser.damaged = false;
     laser.damage_checked_at = Device.dwTimeGlobal - 100;
@@ -2064,8 +2113,11 @@ void CWeapon::LoadWeaponLaser(LPCSTR section) {
         const float distance = READ_IF_EXISTS(pSettings, r_float, section, key, previous_distance);
         if (i != 0 && std::isfinite(distance))
             previous_distance = std::max(previous_distance, distance);
-        if (effect && effect[0] && xr_strcmp(effect, "none") != 0)
+        if (effect && effect[0] && xr_strcmp(effect, "none") != 0) {
+            if (laser.dots.empty())
+                laser.green = std::strstr(effect, "green") != nullptr;
             laser.dots.push_back({effect, previous_distance});
+        }
     }
 
     const shared_str weapon = cNameSect();
@@ -2133,6 +2185,60 @@ void CWeapon::StopLaserDot() {
         dot->Stop(FALSE);
     CParticlesObject::Destroy(m_weapon_laser.dot);
     m_weapon_laser.current_effect = nullptr;
+    m_weapon_laser.draw_hud_impact = false;
+}
+
+bool CWeapon::TraceHudLaserImpact(Fvector& position, bool& green) {
+    const auto& laser = m_weapon_laser;
+    if (!laser.draw_hud_impact || !GetHUDmode())
+        return false;
+
+    const auto* hud = HudItemData();
+    if (!hud)
+        return false;
+
+    const LPCSTR hud_section = HudSection().c_str();
+    Fvector origin, direction;
+    Fmatrix emitter = hud->m_item_transform;
+    const u16 bone = laser.bone.size() ? hud->m_model->LL_BoneID(laser.bone.c_str()) : BI_NONE;
+    if (bone != BI_NONE)
+        emitter.mul_43(hud->m_item_transform, hud->m_model->LL_GetTransform(bone));
+    emitter.transform_tiny(origin, laser.hud_offset);
+    // The attachment bone positions the emitter. Forward follows the weapon HUD.
+    direction = hud->m_item_transform.k;
+    direction.normalize_safe();
+
+    const Fvector& camera_dir = Device.vCameraDirection;
+    const float aim = UpgradeGrenadeMode() ? 0.f : m_zoom_params.m_fZoomRotationFactor;
+    const float correction =
+        READ_IF_EXISTS(pSettings, r_float, hud_section, "hud_recalc_koef", 1.f);
+    // Undo the HUD projection for both points of the ray. Keep forward
+    // distance unchanged so the trace starts at the emitter's depth.
+    const float half_fov = deg2rad(Device.fFOV * 0.5f);
+    const float hud_half_fov = half_fov * std::max(psHUD_FOV, 0.1f);
+    const float ratio = std::tan(half_fov) / std::max(std::tan(hud_half_fov), EPS_S);
+    const float scale = std::isfinite(correction) && correction > 0.f ? ratio * correction : ratio;
+    Fvector offset;
+    offset.sub(origin, Device.vCameraPosition);
+    const float forward = offset.dotproduct(camera_dir);
+    offset.mad(camera_dir, -forward).mul(scale).mad(camera_dir, forward);
+    origin.add(Device.vCameraPosition, offset);
+    const float along_camera = direction.dotproduct(camera_dir);
+    direction.mad(camera_dir, -along_camera).mul(scale).mad(camera_dir, along_camera);
+    direction.normalize_safe();
+
+    origin.lerp(origin, Device.vCameraPosition, aim);
+    direction.lerp(direction, camera_dir, aim);
+    direction.normalize_safe();
+
+    collide::rq_result hit;
+    if (direction.square_magnitude() < EPS_S ||
+        !Level().ObjectSpace.RayPick(origin, direction, 300.f, collide::rqtBoth, hit, H_Parent()))
+        return false;
+
+    position.mad(origin, direction, std::max(0.f, hit.range - 0.01f));
+    green = laser.green;
+    return true;
 }
 
 void CWeapon::StopWeaponLaserEffects() {
@@ -2193,6 +2299,31 @@ void CWeapon::UpdateWeaponLaser() {
         return;
     }
 
+    laser.draw_hud_impact = false;
+    if (GetHUDmode() && HudItemData()) {
+        if (laser.dot)
+            StopLaserDot();
+        laser.draw_hud_impact = true;
+        return;
+    }
+
+    if (laser.dots.empty())
+        return;
+
+    UpdateXForm();
+    Fvector origin;
+    XFORM().transform_tiny(origin, laser.world_offset);
+    Fvector direction = get_LastFD();
+    direction.normalize_safe();
+    collide::rq_result hit;
+    if (direction.square_magnitude() < EPS_S ||
+        !Level().ObjectSpace.RayPick(origin, direction, 300.f, collide::rqtBoth, hit, actor)) {
+        StopLaserDot();
+        return;
+    }
+    Fvector position;
+    position.mad(origin, direction, std::max(0.f, hit.range - 0.01f));
+
     if (!laser.checked_effects) {
         laser.dots.erase(std::remove_if(laser.dots.begin(), laser.dots.end(),
             [&laser](const LaserDot& dot) {
@@ -2206,51 +2337,6 @@ void CWeapon::UpdateWeaponLaser() {
     if (laser.dots.empty())
         return;
 
-    Fvector origin, direction;
-    if (auto* hud = GetHUDmode() ? HudItemData() : nullptr) {
-        hud->update(false);
-        Fmatrix emitter = hud->m_item_transform;
-        const u16 bone = laser.bone.size() ? hud->m_model->LL_BoneID(laser.bone.c_str()) : BI_NONE;
-        if (bone != BI_NONE)
-            emitter.mul_43(hud->m_item_transform, hud->m_model->LL_GetTransform(bone));
-        emitter.transform_tiny(origin, laser.hud_offset);
-        // The attachment bone positions the emitter. Forward follows the weapon HUD.
-        direction = hud->m_item_transform.k;
-        direction.normalize_safe();
-
-        const Fvector& camera_dir = Device.vCameraDirection;
-        const float aim = UpgradeGrenadeMode() ? 0.f : m_zoom_params.m_fZoomRotationFactor;
-        const float correction =
-            READ_IF_EXISTS(pSettings, r_float, hud_section, "hud_recalc_koef", 1.f);
-        direction.sub(camera_dir).mul(correction / std::max(psHUD_FOV, 0.1f)).add(camera_dir);
-        origin.lerp(origin, Device.vCameraPosition, aim);
-        direction.lerp(direction, camera_dir, aim);
-        direction.normalize_safe();
-
-        const bool force_world =
-            READ_IF_EXISTS(pSettings, r_bool, hud_section, "laserdot_always_world", false);
-        const bool hide_dot =
-            READ_IF_EXISTS(pSettings, r_bool, hud_section, "laserdot_always_hud", false);
-        const float angle = READ_IF_EXISTS(pSettings, r_float, hud_section, "laserdot_hud_treshold", 10.f);
-        if (!force_world && (hide_dot || camera_dir.dotproduct(direction) < std::cos(deg2rad(angle)))) {
-            StopLaserDot();
-            return;
-        }
-    } else {
-        UpdateXForm();
-        XFORM().transform_tiny(origin, laser.world_offset);
-        direction = get_LastFD();
-        direction.normalize_safe();
-    }
-
-    constexpr float laser_range = 300.f;
-    collide::rq_result hit;
-    if (direction.square_magnitude() < EPS_S ||
-        !Level().ObjectSpace.RayPick(origin, direction, laser_range, collide::rqtBoth, hit, actor)) {
-        StopLaserDot();
-        return;
-    }
-
     const LaserDot* selected = &laser.dots.front();
     for (const auto& dot : laser.dots) {
         if (dot.distance > hit.range)
@@ -2263,9 +2349,6 @@ void CWeapon::UpdateWeaponLaser() {
         laser.dot = CParticlesObject::Create(laser.current_effect.c_str(), FALSE);
     }
 
-    // Keep the sprite slightly in front of the collision plane to avoid z-fighting.
-    Fvector position;
-    position.mad(origin, direction, std::max(0.f, hit.range - 0.005f));
     Fmatrix transform;
     transform.translate(position);
     laser.dot->SetXFORM(transform);
@@ -2607,6 +2690,16 @@ void CWeapon::UpdateAddonsVisibility() {
 }
 
 void CWeapon::InitAddons() {
+    shared_str lens_scope;
+    if (UsesGunslingerScopeLens()) {
+        lens_scope = m_eScopeStatus == ALife::eAddonAttachable && m_cur_scope < m_scopes.size()
+            ? m_scopes[m_cur_scope] : cNameSect();
+    }
+    if (lens_scope != m_gunslinger_lens_scope) {
+        m_gunslinger_lens_scope = lens_scope;
+        m_gunslinger_lens_position = 0.f;
+    }
+
     for (const shared_str& effect : m_scope_upgrade_sections) {
         process_if_exists_set(effect.c_str(), "scope_dynamic_zoom", &CInifile::r_bool,
                               m_zoom_params.m_bUseDynamicZoom, false);
@@ -2658,7 +2751,8 @@ void CWeapon::OnZoomIn() {
         const bool global = pSettings->section_exist("shader_extensions") &&
             pSettings->line_exist("shader_extensions", "enable_3d_scopes") &&
             pSettings->r_bool("shader_extensions", "enable_3d_scopes");
-        const bool configured = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d", false);
+        const bool configured = READ_IF_EXISTS(pSettings, r_bool, scope_section, "scope_3d",
+            UsesGunslingerScopeLens());
         Msg("* ScopeLens: weapon=%s optic=%s R4=%d global=%d scope_3d=%d lens_fov=%.1f active=%d",
             cNameSect().c_str(), scope_section.c_str(), !!psDeviceFlags.test(rsR4),
             !!global, !!configured, ScopeLensFov(), !!Is3DScopeEnabled());
@@ -3449,7 +3543,23 @@ bool CWeapon::MovingAnimAllowedNow() { return !IsZoomed(); }
 bool CWeapon::IsHudModeNow() { return (HudItemData() != NULL); }
 
 void CWeapon::ChangeZoomStep(bool increase) {
-    if (!UsesScopeZoom() || !m_zoom_params.m_bUseDynamicZoom)
+    if (!UsesScopeZoom())
+        return;
+
+    float lens_minimum, lens_maximum;
+    if (!UpgradeGrenadeMode() && GunslingerScopeLensRange(lens_minimum, lens_maximum) &&
+        Is3DScopeEnabled()) {
+        const int steps = READ_IF_EXISTS(pSettings, r_s32,
+            ScopeSettingSection("lens_factor_levels_count"), "lens_factor_levels_count", 1);
+        if (steps > 0 && lens_maximum > lens_minimum) {
+            const float step = 1.f / steps;
+            m_gunslinger_lens_position = clampr(
+                m_gunslinger_lens_position + (increase ? step : -step), 0.f, 1.f);
+        }
+        return;
+    }
+
+    if (!m_zoom_params.m_bUseDynamicZoom)
         return;
 
     const float scope = m_zoom_params.m_fScopeZoomFactor;

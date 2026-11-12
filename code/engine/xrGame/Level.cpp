@@ -509,6 +509,16 @@ float CLevel::ScopeLensFov() const
     return weapon->ScopeLensFov();
 }
 
+float CLevel::ScopeLensBlend() const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return 0.f;
+
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    return weapon && weapon->ScopeLensShouldRender() ? weapon->ScopeLensBlend() : 0.f;
+}
+
 u8 CLevel::ScopeLensMode() const
 {
     const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());

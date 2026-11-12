@@ -231,6 +231,7 @@ public:
     virtual void OnFrame() override;
     virtual void OnRender() override;
     float ScopeLensFov() const override;
+    float ScopeLensBlend() const override;
     u8 ScopeLensMode() const override;
     void ScopeLensGlass(float* params) const override;
     bool ScopeLensHasDetector() const override;

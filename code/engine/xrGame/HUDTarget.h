@@ -15,6 +15,9 @@ struct SPickParam {
 class CHUDTarget {
 private:
     ui_shader hShader;
+    ui_shader m_laser_shader;
+    bool m_laser_shader_loaded = false;
+    void RenderLaserImpact();
     float fuzzyShowInfo;
     SPickParam PP;
 

@@ -19,6 +19,10 @@
 
 #include "inventory_item.h"
 #include "inventory.h"
+#include "Actor.h"
+#include "Weapon.h"
+
+#include <cmath>
 
 #include <ai/monsters/poltergeist/poltergeist.h>
 
@@ -106,14 +110,61 @@ void CHUDTarget::CursorOnFrame() {
 }
 
 extern ENGINE_API BOOL g_bRendering;
+void CHUDTarget::RenderLaserImpact() {
+    auto* actor = smart_cast<CActor*>(Level().CurrentViewEntity());
+    if (!actor || !actor->HUDview() || Device.scopeLensPass)
+        return;
+    auto* weapon = smart_cast<CWeapon*>(actor->inventory().ActiveItem());
+    Fvector impact;
+    bool green;
+    if (!weapon || !weapon->TraceHudLaserImpact(impact, green))
+        return;
+
+    Fvector4 projected;
+    Device.mFullTransform.transform(projected, impact);
+    if (projected.w <= EPS_S || projected.z < 0.f || projected.z > 1.f ||
+        std::abs(projected.x) >= 1.f || std::abs(projected.y) >= 1.f)
+        return;
+
+    // The HUD emitter can see around an edge the player camera cannot.
+    Fvector camera_ray;
+    camera_ray.sub(impact, Device.vCameraPosition);
+    const float distance = camera_ray.magnitude();
+    if (distance <= 0.025f)
+        return;
+    camera_ray.div(distance);
+    collide::rq_result blocker;
+    if (Level().ObjectSpace.RayPick(Device.vCameraPosition, camera_ray, distance - 0.02f,
+            collide::rqtBoth, blocker, actor))
+        return;
+
+    if (!m_laser_shader_loaded) {
+        m_laser_shader->create("hud\\default", "ui\\ie_gunslinger_laser_dot");
+        m_laser_shader_loaded = true;
+    }
+    const float x = (projected.x * 0.5f + 0.5f) * Device.dwWidth;
+    const float y = (0.5f - projected.y * 0.5f) * Device.dwHeight;
+    const float radius = clampr(4.f + 4.f / distance, 4.f, 8.f) * Device.dwHeight / 1080.f;
+    const u32 color = green ? color_rgba(75, 255, 65, 255) : color_rgba(255, 40, 24, 255);
+    UIRender->SetShader(*m_laser_shader);
+    UIRender->StartPrimitive(6, IUIRender::ptTriList, IUIRender::pttTL);
+    UIRender->PushPoint(x - radius, y + radius, 0, color, 0, 1);
+    UIRender->PushPoint(x - radius, y - radius, 0, color, 0, 0);
+    UIRender->PushPoint(x + radius, y + radius, 0, color, 1, 1);
+    UIRender->PushPoint(x + radius, y + radius, 0, color, 1, 1);
+    UIRender->PushPoint(x - radius, y - radius, 0, color, 0, 0);
+    UIRender->PushPoint(x + radius, y - radius, 0, color, 1, 0);
+    UIRender->FlushPrimitive();
+}
+
 void CHUDTarget::Render() {
+    VERIFY(g_bRendering);
+    RenderLaserImpact();
 
     BOOL b_do_rendering = (psHUD_Flags.is(HUD_CROSSHAIR | HUD_CROSSHAIR_RT | HUD_CROSSHAIR_RT2));
 
     if (!b_do_rendering)
         return;
-
-    VERIFY(g_bRendering);
 
     CObject* O = Level().CurrentEntity();
     if (0 == O)

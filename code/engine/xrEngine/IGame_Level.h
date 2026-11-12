@@ -100,6 +100,7 @@ public:
     virtual void OnFrame(void);
     virtual void OnRender(void);
     virtual float ScopeLensFov() const { return 0.f; }
+    virtual float ScopeLensBlend() const { return 0.f; }
     virtual u8 ScopeLensMode() const { return 0; }
     virtual void ScopeLensGlass(float* params) const {
         params[0] = 0.12f; // pupil shift

@@ -143,8 +143,10 @@ protected:
 public:
     bool IsGrenadeLauncherAttached() const;
     bool IsScopeAttached() const;
+    bool TraceHudLaserImpact(Fvector& position, bool& green);
     virtual bool Is3DScopeEnabled() const;
     float ScopeLensFov() const;
+    float ScopeLensBlend() const;
     bool ScopeLensShouldRender() const;
     u8 ScopeLensMode() const;
     void ScopeLensGlass(float* params) const;
@@ -260,6 +262,8 @@ protected:
         Fvector hud_offset{};
         Fvector world_offset{};
         Fvector breaking{};
+        bool draw_hud_impact = false;
+        bool green = false;
         CParticlesObject* dot = nullptr;
         shared_str current_effect;
         bool checked_effects = false;
@@ -340,6 +344,10 @@ protected:
     bool UsesGunslingerZoom() const;
     virtual bool UsesScopeZoom() const;
     void ChangeZoomStep(bool increase);
+    bool UsesGunslingerScopeLens() const;
+    bool GunslingerScopeLensRange(float& minimum, float& maximum) const;
+    shared_str m_gunslinger_lens_scope;
+    float m_gunslinger_lens_position = 0.f;
 
     float m_fRTZoomFactor; // run-time zoom factor
     CUIWindow* m_UIScope;
