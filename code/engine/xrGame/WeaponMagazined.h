@@ -228,6 +228,7 @@ protected:
     void PlayLightMisfire();
     virtual void PlayAnimAim();
     void PlayAimTransition(bool entering);
+    bool CanPlayHipIdleDuringRecharge();
     void UpdateGunslingerMovementIdle();
     shared_str GunslingerMovementIdle(u32 movement) const;
     BOOL MixShootAfterIdle() const;

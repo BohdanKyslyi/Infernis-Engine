@@ -702,12 +702,13 @@ void CWeaponMagazined::UpdateCL() {
     if (m_gunslinger_movement_idles)
         UpdateGunslingerMovementIdle();
     if (auto* hud = GetHUDmode() ? HudItemData() : nullptr) {
-        const u16 loading = hud->m_model->LL_BoneID("mui_loading");
-        if (loading != BI_NONE) {
-            const BOOL charging = GetAmmoElapsed() > 0 && !IsMisfire() && RechargeProgress() < 1.f;
-            if (hud->m_model->LL_GetBoneVisible(loading) != charging)
-                hud->m_model->LL_SetBoneVisible(loading, charging, FALSE);
-        }
+        const auto set_visible = [&](LPCSTR name, BOOL visible) {
+            const u16 bone = hud->m_model->LL_BoneID(name);
+            if (bone != BI_NONE && hud->m_model->LL_GetBoneVisible(bone) != visible)
+                hud->m_model->LL_SetBoneVisible(bone, visible, FALSE);
+        };
+        set_visible("mui_broken", !!IsMisfire());
+        set_visible("mui_loading", GetAmmoElapsed() > 0 && !IsMisfire() && RechargeProgress() < 1.f);
     }
     UpdateSounds();
 }
@@ -1037,6 +1038,8 @@ void CWeaponMagazined::OnAnimationEnd(u32 state) {
     case eIdle:
         if (GetState() == eIdle && GetNextState() == eIdle)
             switch2_Idle();
+        else if (CanPlayHipIdleDuringRecharge())
+            PlayAnimIdle();
         break; // Keep showing idle
     }
     inherited::OnAnimationEnd(state);
@@ -1683,8 +1686,15 @@ shared_str CWeaponMagazined::WeaponActionMotion(LPCSTR base) const {
     return IsGrenadeLauncherAttached() ? HudStateVariant(base, fallback.c_str()) : fallback;
 }
 
+bool CWeaponMagazined::CanPlayHipIdleDuringRecharge() {
+    return GetState() == eFire && GetNextState() == eFire && !IsPending() &&
+           !IsZoomed() && m_iShotNum > 0 && RechargeProgress() < 1.f && GetHUDmode();
+}
+
 void CWeaponMagazined::PlayAimTransition(bool entering) {
-    if (GetState() != eIdle || GetNextState() != eIdle || IsPending() || !GetHUDmode())
+    const bool during_recharge = !entering && CanPlayHipIdleDuringRecharge();
+    if (!during_recharge &&
+        (GetState() != eIdle || GetNextState() != eIdle || IsPending() || !GetHUDmode()))
         return;
 
     const LPCSTR base = entering ? "anm_idle_aim_start" : "anm_idle_aim_end";
@@ -1692,8 +1702,11 @@ void CWeaponMagazined::PlayAimTransition(bool entering) {
         ? StateMotion(base, "anm_idle_aim_start_empty", "anm_idle_aim_start_jammed")
         : StateMotion(base, "anm_idle_aim_end_empty", "anm_idle_aim_end_jammed");
     const shared_str motion = HudStateVariant(base, IsGrenadeLauncherAttached() ? nullptr : fallback);
-    if (!motion.c_str() || !pSettings->line_exist(HudSection(), motion.c_str()))
+    if (!motion.c_str() || !pSettings->line_exist(HudSection(), motion.c_str())) {
+        if (during_recharge)
+            PlayAnimIdle();
         return;
+    }
 
     if (!PlayHUDMotion(motion, TRUE, this, eIdle)) {
         PlayAnimIdle();
@@ -1796,7 +1809,7 @@ bool CWeaponMagazined::IsAimTransitionPlaying() const {
 }
 
 void CWeaponMagazined::PlayAnimIdle() {
-    if (GetState() != eIdle || IsAimTransitionPlaying())
+    if ((GetState() != eIdle && !CanPlayHipIdleDuringRecharge()) || IsAimTransitionPlaying())
         return;
 
     if (m_gunslinger_movement_idles && GetHUDmode() && !IsGrenadeLauncherAttached() &&

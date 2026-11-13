@@ -78,6 +78,9 @@ void dxRender_Visual::Load(const char* N, IReader* data, u32) {
             xr_strcpy(fnS, "models\\energy_gauss");
         } else if (std::strstr(N, "wpn_gauss") && _stricmp(fnS, "models\\compscreen") == 0) {
             hudDisplayLayer = HudDisplayLayer::Background;
+#if RENDER != R_R1
+            xr_strcpy(fnS, "models\\gauss_display_background");
+#endif
         }
 #endif
         shader.create(fnS, fnT);
