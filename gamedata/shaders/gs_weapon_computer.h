@@ -1,4 +1,4 @@
-uniform float4 weapon_computer_display; // recharge progress, electronics interference
+uniform float4 weapon_computer_display; // charge, interference, condition, ammo
 
 float weapon_computer_noise(float2 uv)
 {

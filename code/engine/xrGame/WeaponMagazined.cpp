@@ -69,6 +69,7 @@ void CWeaponMagazined::net_Destroy() { inherited::net_Destroy(); }
 
 void CWeaponMagazined::Load(LPCSTR section) {
     inherited::Load(section);
+    m_ammo_capacity_upgrades.clear();
     m_upgrade_scope_zoom = 0.f;
     m_recharge_time = READ_IF_EXISTS(pSettings, r_float, section, "recharge_time", 0.f);
     m_has_recharge_shot = false;
@@ -471,6 +472,21 @@ void CWeaponMagazined::UnloadMagazine(bool spawn_ammo) {
     }
 }
 
+int CWeaponMagazined::AmmoCapacity(u8 ammo_type) const {
+    string64 key;
+    xr_sprintf(key, "ammo_mag_size_for_type_%u", static_cast<unsigned>(ammo_type));
+    int capacity = READ_IF_EXISTS(pSettings, r_s32, cNameSect(), key, 0);
+    for (const auto& section : m_ammo_capacity_upgrades)
+        capacity = READ_IF_EXISTS(pSettings, r_s32, section, key, capacity);
+    return capacity > 0 ? capacity : iMagazineSize + (HasChamberRound() ? 1 : 0);
+}
+
+int CWeaponMagazined::GetAmmoMagSize() const {
+    const u8 type = m_set_next_ammoType_on_reload < m_ammoTypes.size()
+        ? m_set_next_ammoType_on_reload : m_ammoType;
+    return AmmoCapacity(type);
+}
+
 void CWeaponMagazined::ReloadMagazine() {
     m_BriefInfo_CalcFrame = 0;
 
@@ -488,7 +504,7 @@ void CWeaponMagazined::ReloadMagazine() {
     // A full magazine with a chambered round needs only one more cartridge.
     // Keep the existing rounds even when the available ammo box has another type.
     const bool chamber_top_off = !m_bLockType && HasChamberRound() &&
-        iAmmoElapsed == iMagazineSize &&
+        iAmmoElapsed == GetAmmoMagSize() - 1 &&
         m_set_next_ammoType_on_reload == undefined_ammo_type;
 
     if (m_set_next_ammoType_on_reload != undefined_ammo_type) {
@@ -529,7 +545,7 @@ void CWeaponMagazined::ReloadMagazine() {
     // Capture whether a round was chambered before an ammo-type change unloads
     // the old magazine. Recursive refills keep the same target capacity.
     if (!m_bLockType)
-        m_reload_target_capacity = iMagazineSize + (HasChamberRound() && iAmmoElapsed > 0 ? 1 : 0);
+        m_reload_target_capacity = GetAmmoMagSize() - (HasChamberRound() && iAmmoElapsed == 0 ? 1 : 0);
 
     if (!m_bLockType && !chamber_top_off && !m_magazine.empty() &&
         (!m_pCurrentAmmo || xr_strcmp(m_pCurrentAmmo->cNameSect(), *m_magazine.back().m_ammoSect)))
@@ -685,6 +701,14 @@ void CWeaponMagazined::UpdateCL() {
 
     if (m_gunslinger_movement_idles)
         UpdateGunslingerMovementIdle();
+    if (auto* hud = GetHUDmode() ? HudItemData() : nullptr) {
+        const u16 loading = hud->m_model->LL_BoneID("mui_loading");
+        if (loading != BI_NONE) {
+            const BOOL charging = GetAmmoElapsed() > 0 && !IsMisfire() && RechargeProgress() < 1.f;
+            if (hud->m_model->LL_GetBoneVisible(loading) != charging)
+                hud->m_model->LL_SetBoneVisible(loading, charging, FALSE);
+        }
+    }
     UpdateSounds();
 }
 
@@ -2062,6 +2086,18 @@ bool CWeaponMagazined::GetBriefInfo(II_BriefInfo& info) {
 
 bool CWeaponMagazined::install_upgrade_impl(LPCSTR section, bool test) {
     bool result = inherited::install_upgrade_impl(section, test);
+
+    const auto& upgrade = pSettings->r_section(section);
+    for (const auto& line : upgrade.Data) {
+        const LPCSTR key = line.first.c_str();
+        constexpr char prefix[] = "ammo_mag_size_for_type_";
+        if (std::strncmp(key, prefix, sizeof(prefix) - 1) != 0)
+            continue;
+        result = true;
+        if (!test)
+            m_ammo_capacity_upgrades.emplace_back(section);
+        break;
+    }
 
     LPCSTR str;
     result |= process_if_exists(section, "recharge_time", &CInifile::r_float, m_recharge_time, test);

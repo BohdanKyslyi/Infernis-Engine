@@ -563,6 +563,7 @@ void CLevel::WeaponComputerDisplay(float* params) const
     if (weapon && !weapon->IsHidden()) {
         params[0] = weapon->RechargeProgress();
         params[1] = clampr(m_electronics_problems * 0.1f, 0.f, 1.f);
+        params[2] = clampr(weapon->GetCondition(), 0.f, 1.f);
     }
 }
 

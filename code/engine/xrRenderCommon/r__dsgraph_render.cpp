@@ -729,6 +729,44 @@ void R_dsgraph_structure::r_dsgraph_render_sorted(bool renderHUD) {
 }
 
 //////////////////////////////////////////////////////////////////////////
+namespace {
+void __fastcall render_display_background(mapSorted_Node* node) {
+    if (node->val.pVisual->hudDisplayLayer == dxRender_Visual::HudDisplayLayer::Background)
+        sorted_L1(node);
+}
+
+void __fastcall render_display_indicators(mapSorted_Node* node) {
+    if (node->val.pVisual->hudDisplayLayer == dxRender_Visual::HudDisplayLayer::Indicators)
+        sorted_L1(node);
+}
+}
+
+// HUD displays need their weapon projection after the fullscreen postprocess.
+void R_dsgraph_structure::r_dsgraph_render_hud_display() {
+    if (!mapHUDDisplay.size())
+        return;
+
+    extern ENGINE_API float psHUD_FOV;
+    const Fmatrix oldProject = Device.mProject;
+    const Fmatrix oldTransform = Device.mFullTransform;
+    Device.mProject.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT,
+                                     IE_VIEWPORT_NEAR,
+                                     g_pGamePersistent->Environment().CurrentEnv->far_plane);
+    Device.mFullTransform.mul(Device.mProject, Device.mView);
+    RCache.set_xform_project(Device.mProject);
+
+    rmNear();
+    mapHUDDisplay.traverseRL(render_display_background);
+    mapHUDDisplay.traverseRL(render_display_indicators);
+    mapHUDDisplay.clear();
+    rmNormal();
+
+    Device.mProject = oldProject;
+    Device.mFullTransform = oldTransform;
+    RCache.set_xform_project(Device.mProject);
+}
+
+//////////////////////////////////////////////////////////////////////////
 // strict-sorted render
 // Screen Space Shaders render the emissive geometry twice: once into the accumulator as before,
 // and once into the bloom emissive buffer. `clear` lets the first call keep the lists for the

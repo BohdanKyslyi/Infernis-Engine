@@ -1,0 +1,9 @@
+#include "common.h"
+#include "gs_weapon_computer.h"
+
+float4 main(float2 uv : TEXCOORD0) : COLOR
+{
+    float4 texel = tex2D(s_base, uv);
+    texel.rgb = saturate(texel.rgb + weapon_computer_noise(uv));
+    return texel;
+}

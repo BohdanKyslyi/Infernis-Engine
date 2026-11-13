@@ -2742,6 +2742,10 @@ void CWeapon::UpdateHudAmmoBones(const CCartridge* fired) {
 
     xr_sprintf(key, "configuration_%d", count);
     auto* model = HudItemData()->m_model;
+    if (count > 12 && !pSettings->line_exist(section, key) &&
+        pSettings->line_exist(section, "configuration_12") &&
+        model->LL_BoneID("mui_amount_12") != BI_NONE)
+        xr_strcpy(key, "configuration_12");
     const LPCSTR visible = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
     ApplyBoneList(model, section, "all_bones", FALSE, visible);
     ApplyBoneList(model, section, key, TRUE);

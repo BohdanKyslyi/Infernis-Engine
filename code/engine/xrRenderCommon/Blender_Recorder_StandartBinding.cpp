@@ -596,10 +596,10 @@ static class cl_scope_lens_gauss : public R_constant_setup {
 
 static class cl_weapon_computer_display : public R_constant_setup {
     virtual void setup(R_constant* C) {
-        float params[] = {1.f, 0.f}; // charge, interference
+        float params[] = {1.f, 0.f, 1.f}; // charge, interference, condition
         if (!Device.scopeLensPass && g_pGameLevel)
             g_pGameLevel->WeaponComputerDisplay(params);
-        RCache.set_c(C, params[0], params[1], 0.f, 0.f);
+        RCache.set_c(C, params[0], params[1], params[2], 0.f);
     }
 } binder_weapon_computer_display;
 #endif

@@ -5,6 +5,8 @@
 #include "stdafx.h"
 #pragma hdrstop
 
+#include <cstring>
+
 #ifndef _EDITOR
 #include "xrEngine/render.h"
 #endif // #ifndef _EDITOR
@@ -58,6 +60,26 @@ void dxRender_Visual::Load(const char* N, IReader* data, u32) {
         string256 fnT, fnS;
         data->r_stringZ(fnT, sizeof(fnT));
         data->r_stringZ(fnS, sizeof(fnS));
+#ifndef _EDITOR
+        const auto texture_is = [&](LPCSTR name) { return _stricmp(fnT, name) == 0; };
+        if (texture_is("wpn\\wpn_gauss_condition")) {
+            hudDisplayLayer = HudDisplayLayer::Indicators;
+            xr_strcpy(fnS, "models\\gauss_display_condition");
+        } else if (texture_is("wpn\\wpn_gauss_mui")) {
+            hudDisplayLayer = HudDisplayLayer::Indicators;
+            xr_strcpy(fnS, "models\\gauss_display_atlas");
+        } else if (texture_is("wpn\\wpn_gauss_digits") ||
+                   texture_is("wpn\\wpn_gauss_digits_points")) {
+            hudDisplayLayer = HudDisplayLayer::Indicators;
+            xr_strcpy(fnS, "models\\gauss_display_detail");
+        } else if (_stricmp(fnS, "models\\energy_gauss") == 0 ||
+                   texture_is("wpn\\wpn_gauss_energy")) {
+            hudDisplayLayer = HudDisplayLayer::Indicators;
+            xr_strcpy(fnS, "models\\energy_gauss");
+        } else if (std::strstr(N, "wpn_gauss") && _stricmp(fnS, "models\\compscreen") == 0) {
+            hudDisplayLayer = HudDisplayLayer::Background;
+        }
+#endif
         shader.create(fnS, fnT);
     }
 
@@ -72,6 +94,7 @@ void dxRender_Visual::Load(const char* N, IReader* data, u32) {
 void dxRender_Visual::Copy(dxRender_Visual* pFrom) {
     PCOPY(Type);
     PCOPY(shader);
+    PCOPY(hudDisplayLayer);
     PCOPY(vis);
 #ifdef _EDITOR
     PCOPY(desc);

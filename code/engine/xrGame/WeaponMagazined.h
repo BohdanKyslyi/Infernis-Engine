@@ -62,7 +62,7 @@ protected:
 
 protected:
     virtual void ReloadMagazine();
-    int GetAmmoMagSize() const override { return iMagazineSize + (HasChamberRound() ? 1 : 0); }
+    int GetAmmoMagSize() const override;
     virtual bool HasChamberRound() const { return m_chamber_round; }
     void ApplySilencerKoeffs();
     void ResetSilencerKoeffs();
@@ -177,6 +177,8 @@ protected:
     float m_upgrade_ironsight_zoom = 0.f;
     u32 m_previous_hud_movement = 0;
     int m_reload_target_capacity;
+    xr_vector<shared_str> m_ammo_capacity_upgrades;
+    int AmmoCapacity(u8 ammo_type) const;
 
 public:
     virtual void OnZoomIn();
