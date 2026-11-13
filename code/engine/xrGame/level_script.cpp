@@ -190,6 +190,11 @@ void set_time_factor(float time_factor) {
 
 float get_time_factor() { return (Level().GetGameTimeFactor()); }
 
+static bool electronics_break() { return g_pGameLevel && Level().ChangeElectronicsProblems(1); }
+static bool electronics_restore() { return g_pGameLevel && Level().ChangeElectronicsProblems(-1); }
+static bool electronics_reset() { return g_pGameLevel && Level().ResetElectronicsProblems(); }
+static bool electronics_apply() { return g_pGameLevel && Level().ApplyElectronicsProblems(); }
+
 void set_game_difficulty(ESingleGameDifficulty dif) {
     g_SingleGameDifficulty = dif;
     game_cl_Single* game = smart_cast<game_cl_Single*>(Level().game);
@@ -1237,6 +1242,10 @@ void CLevel::script_register(lua_State* L) {
         class_<CEnvironment>("CEnvironment").def("current", current_environment);
 
     module(L, "level")[
+        def("electronics_break", electronics_break),
+        def("electronics_restore", electronics_restore),
+        def("electronics_reset", electronics_reset),
+        def("electronics_apply", electronics_apply),
         // obsolete\deprecated
         def("object_by_id", get_object_by_id),
 #ifdef DEBUG

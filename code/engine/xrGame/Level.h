@@ -235,8 +235,18 @@ public:
     u8 ScopeLensMode() const override;
     void ScopeLensGlass(float* params) const override;
     void ScopeLensElectronics(float* params) const override;
+    void ScopeLensGauss(float* params) const override;
+    bool ChangeElectronicsProblems(int delta);
+    bool ResetElectronicsProblems();
+    bool ApplyElectronicsProblems();
     bool ScopeLensHasDetector() const override;
     u32 ScopeLensTargets(float* targets, u32 capacity) const override;
+
+private:
+    float m_electronics_problems = 0.f;
+    float m_electronics_target = 0.f;
+
+public:
 
     virtual shared_str OpenDemoFile(LPCSTR demo_file_name) override;
     virtual void net_StartPlayDemo() override;

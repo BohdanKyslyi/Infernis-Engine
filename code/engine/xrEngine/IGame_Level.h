@@ -133,6 +133,7 @@ public:
     void LL_CheckTextures();
     virtual void SetEnvironmentGameTimeFactor(u64 const& GameTime, float const& fTimeFactor) = 0;
     virtual void ScopeLensElectronics(float*) const {}
+    virtual void ScopeLensGauss(float*) const {}
 };
 
 //-----------------------------------------------------------------------------------------------------------

@@ -1,5 +1,8 @@
 #include "common.h"
 #include "gs_scope_electronics.h"
+#ifdef GS_SCOPE_GAUSS
+#include "gs_scope_gauss.h"
+#endif
 
 Texture2D s_vp2;
 uniform float4 scope_lens_state; // capture ready, mode, detector, blend
@@ -55,7 +58,7 @@ scope_output main(p_scope_lens input, float4 screen_pos : SV_Position)
     float2 highlight = (input.tc - float2(0.31f, 0.24f)) * float2(1.0f, 1.6f);
     float glint = exp2(-17.0f * dot(highlight, highlight));
     float rim = smoothstep(0.25f, 0.90f, dot(radial, radial));
-#ifdef GS_SCOPE_NIGHT
+#if defined(GS_SCOPE_NIGHT) || defined(GS_SCOPE_GAUSS)
     const float3 coating = float3(0.028f, 0.055f, 0.047f);
 #else
     const float3 coating = float3(0.032f, 0.044f, 0.055f);
@@ -74,6 +77,12 @@ scope_output main(p_scope_lens input, float4 screen_pos : SV_Position)
     float2 uv = (input.tc - 0.5f) * float2(scope_lens_size.y * pixel.x, 1.0f) + 0.5f;
     float3 scene = s_vp2.Sample(smp_rtlinear, saturate(uv)).rgb;
 
+#ifdef GS_SCOPE_GAUSS
+    float2 offset = length(uv - 0.5f) * scope_lens_gauss.x;
+    scene.r = s_vp2.Sample(smp_rtlinear, saturate(uv + offset)).r;
+    scene.b = s_vp2.Sample(smp_rtlinear, saturate(uv - offset)).b;
+    scene = scope_gauss_image(scene, uv);
+#else
     float mode = scope_lens_state.y;
 #ifdef GS_SCOPE_NIGHT
     mode = mode < 0.5f ? 2.0f : mode;
@@ -95,6 +104,7 @@ scope_output main(p_scope_lens input, float4 screen_pos : SV_Position)
         float2 glint_uv = (input.tc - float2(0.29f, 0.23f) - eye_offset * 0.04f) * float2(1.0f, 1.4f);
         scene = saturate(scene + scope_lens_glass.y * exp2(-22.0f * dot(glint_uv, glint_uv)) * (1.0f - rim));
     }
+#endif
 
 #ifdef GS_SCOPE_SPLIT_RETICLE
     float2 reticle_uv = input.tc * float2(0.5f, 1.0f);

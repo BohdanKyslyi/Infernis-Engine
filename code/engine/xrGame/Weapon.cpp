@@ -942,6 +942,7 @@ bool CWeapon::AllowBore() { return true; }
 
 void CWeapon::UpdateCL() {
     inherited::UpdateCL();
+    UpdateScopeLensZoom();
     ApplyPendingUpgradeHud();
     UpdateTacticalTorch();
     UpdateWeaponLaser();
@@ -1394,6 +1395,16 @@ shared_str CWeapon::ScopeSettingSection(LPCSTR key) const {
     return cNameSect();
 }
 
+shared_str CWeapon::ScopeLensUpgradeSection(LPCSTR key) const {
+    if (m_eScopeStatus == ALife::eAddonPermanent) {
+        for (auto it = m_scope_upgrade_sections.rbegin(); it != m_scope_upgrade_sections.rend(); ++it) {
+            if (pSettings->line_exist(*it, key))
+                return *it;
+        }
+    }
+    return ScopeSettingSection(key);
+}
+
 shared_str CWeapon::AlternativeAimSettingSection(LPCSTR key) const {
     if (IsScopeAttached() && m_eScopeStatus == ALife::eAddonAttachable &&
         m_cur_scope < m_scopes.size()) {
@@ -1496,9 +1507,9 @@ bool CWeapon::GunslingerScopeLensRange(float& minimum, float& maximum) const {
         return false;
 
     minimum = READ_IF_EXISTS(pSettings, r_float,
-        ScopeSettingSection("min_lens_factor"), "min_lens_factor", 1.f);
+        ScopeLensUpgradeSection("min_lens_factor"), "min_lens_factor", 1.f);
     maximum = READ_IF_EXISTS(pSettings, r_float,
-        ScopeSettingSection("max_lens_factor"), "max_lens_factor", minimum);
+        ScopeLensUpgradeSection("max_lens_factor"), "max_lens_factor", minimum);
     return std::isfinite(minimum) && std::isfinite(maximum) && minimum > 0.f && maximum >= minimum;
 }
 
@@ -1601,29 +1612,39 @@ void CWeapon::ScopeLensGlass(float* params) const {
         ScopeSettingSection("scope_lens_white_key"), "scope_lens_white_key", false) ? 1.f : 0.f;
 }
 
-void CWeapon::LoadScopeBrightness() {
+void CWeapon::LoadScopeBrightness(bool new_scope) {
     auto& brightness = m_scope_brightness;
+    const ScopeBrightness previous = brightness;
     brightness = {};
     if (!m_gunslinger_lens_scope.size())
         return;
 
-    const auto read_float = [this](LPCSTR key, float fallback) {
-        const float value = READ_IF_EXISTS(pSettings, r_float, ScopeSettingSection(key), key, fallback);
-        return std::isfinite(value) ? std::max(0.f, value) : fallback;
+    const auto read_float = [this](LPCSTR key, float fallback, float scale) {
+        float value = READ_IF_EXISTS(pSettings, r_float, ScopeSettingSection(key), key, fallback) * scale;
+        if (m_eScopeStatus == ALife::eAddonPermanent) {
+            for (const auto& effect : m_scope_upgrade_sections)
+                value += READ_IF_EXISTS(pSettings, r_float, effect, key, 0.f);
+        }
+        return std::isfinite(value) ? std::max(0.f, value) : fallback * scale;
     };
-    const shared_str minimum = ScopeSettingSection("min_night_brightness");
-    const shared_str maximum = ScopeSettingSection("max_night_brightness");
+    const shared_str minimum = ScopeLensUpgradeSection("min_night_brightness");
+    const shared_str maximum = ScopeLensUpgradeSection("max_night_brightness");
     brightness.configured = pSettings->line_exist(minimum, "min_night_brightness") ||
         pSettings->line_exist(maximum, "max_night_brightness");
     // GUNSLINGER stores the LTX range in thirds of the shader's gain.
-    brightness.minimum = read_float("min_night_brightness", 1.f) / 3.f;
-    brightness.maximum = std::max(brightness.minimum, read_float("max_night_brightness", 1.f) / 3.f);
-    brightness.noise = read_float("jitter_brightness", 1.f);
+    brightness.minimum = read_float("min_night_brightness", 1.f, 1.f / 3.f);
+    brightness.maximum = std::max(brightness.minimum, read_float("max_night_brightness", 1.f, 1.f / 3.f));
+    brightness.noise = read_float("jitter_brightness", 1.f, 1.f);
     brightness.steps = std::max(0, READ_IF_EXISTS(pSettings, r_s32,
-        ScopeSettingSection("steps_brightness"), "steps_brightness", 0));
-    brightness.step = clampr(READ_IF_EXISTS(pSettings, r_s32,
-        ScopeSettingSection("default_brightness_step"), "default_brightness_step", brightness.steps),
-        0, brightness.steps);
+        ScopeLensUpgradeSection("steps_brightness"), "steps_brightness", 0));
+    if (new_scope || previous.steps != brightness.steps || previous.minimum != brightness.minimum ||
+        previous.maximum != brightness.maximum) {
+        brightness.step = clampr(READ_IF_EXISTS(pSettings, r_s32,
+            ScopeLensUpgradeSection("default_brightness_step"), "default_brightness_step", brightness.steps),
+            0, brightness.steps);
+    } else {
+        brightness.step = previous.step;
+    }
 }
 
 void CWeapon::ChangeScopeBrightness(bool increase) {
@@ -1643,6 +1664,16 @@ void CWeapon::ScopeLensElectronics(float* params) const {
     params[0] = brightness.configured ? std::min(gain, 1.f) : 0.f;
     params[1] = gain;
     params[2] = brightness.noise;
+}
+
+float CWeapon::ScopeLensAberration() const {
+    const LPCSTR key = "scope_abberation"; // Original GUNSLINGER LTX spelling.
+    float amount = READ_IF_EXISTS(pSettings, r_float, ScopeSettingSection(key), key, 0.f);
+    if (m_eScopeStatus == ALife::eAddonPermanent) {
+        for (const auto& effect : m_scope_upgrade_sections)
+            amount += READ_IF_EXISTS(pSettings, r_float, effect, key, 0.f);
+    }
+    return std::isfinite(amount) ? clampr(amount, 0.f, 0.05f) : 0.f;
 }
 
 bool CWeapon::HasScopeDetector() const {
@@ -2807,11 +2838,16 @@ void CWeapon::InitAddons() {
         lens_scope = m_eScopeStatus == ALife::eAddonAttachable && m_cur_scope < m_scopes.size()
             ? m_scopes[m_cur_scope] : cNameSect();
     }
-    if (lens_scope != m_gunslinger_lens_scope) {
+    const bool new_scope = lens_scope != m_gunslinger_lens_scope;
+    if (new_scope) {
         m_gunslinger_lens_scope = lens_scope;
         m_gunslinger_lens_position = 0.f;
-        LoadScopeBrightness();
+        m_gunslinger_lens_target = 0.f;
     }
+    LoadScopeBrightness(new_scope);
+    const float speed = m_gunslinger_lens_scope.size() ? READ_IF_EXISTS(pSettings, r_float,
+        ScopeLensUpgradeSection("lens_speed"), "lens_speed", 0.f) : 0.f;
+    m_gunslinger_lens_speed = std::isfinite(speed) ? std::max(0.f, speed) : 0.f;
 
     for (const shared_str& effect : m_scope_upgrade_sections) {
         process_if_exists_set(effect.c_str(), "scope_dynamic_zoom", &CInifile::r_bool,
@@ -3615,7 +3651,14 @@ float CWeapon::Weight() const {
 
 bool CWeapon::show_crosshair() { return !IsPending() && (!IsZoomed() || !ZoomHideCrosshair()); }
 
-bool CWeapon::show_indicators() { return !(IsZoomed() && ZoomTexture()); }
+bool CWeapon::show_indicators() {
+    if (IsZoomed() && UsesScopeZoom() && !UpgradeGrenadeMode() && UsesGunslingerScopeLens() &&
+        Is3DScopeEnabled() && m_eScopeStatus == ALife::eAddonPermanent &&
+        READ_IF_EXISTS(pSettings, r_bool, cNameSect(), "zoom_hide_ui", false))
+        return false;
+
+    return !(IsZoomed() && ZoomTexture());
+}
 
 float CWeapon::GetConditionToShow() const {
     return (GetCondition()); // powf(GetCondition(),4.0f));
@@ -3746,6 +3789,20 @@ bool CWeapon::MovingAnimAllowedNow() { return !IsZoomed(); }
 
 bool CWeapon::IsHudModeNow() { return (HudItemData() != NULL); }
 
+void CWeapon::UpdateScopeLensZoom() {
+    if (m_gunslinger_lens_position == m_gunslinger_lens_target)
+        return;
+
+    if (m_gunslinger_lens_speed <= EPS_S) {
+        m_gunslinger_lens_position = m_gunslinger_lens_target;
+        return;
+    }
+
+    const float movement = m_gunslinger_lens_speed * std::max(0.f, Device.fTimeDelta);
+    m_gunslinger_lens_position += clampr(m_gunslinger_lens_target - m_gunslinger_lens_position,
+                                        -movement, movement);
+}
+
 void CWeapon::ChangeZoomStep(bool increase) {
     if (!UsesScopeZoom())
         return;
@@ -3754,11 +3811,13 @@ void CWeapon::ChangeZoomStep(bool increase) {
     if (!UpgradeGrenadeMode() && GunslingerScopeLensRange(lens_minimum, lens_maximum) &&
         Is3DScopeEnabled()) {
         const int steps = READ_IF_EXISTS(pSettings, r_s32,
-            ScopeSettingSection("lens_factor_levels_count"), "lens_factor_levels_count", 1);
+            ScopeLensUpgradeSection("lens_factor_levels_count"), "lens_factor_levels_count", 1);
         if (steps > 0 && lens_maximum > lens_minimum) {
             const float step = 1.f / steps;
-            m_gunslinger_lens_position = clampr(
-                m_gunslinger_lens_position + (increase ? step : -step), 0.f, 1.f);
+            m_gunslinger_lens_target = clampr(
+                m_gunslinger_lens_target + (increase ? step : -step), 0.f, 1.f);
+            if (m_gunslinger_lens_speed <= EPS_S)
+                m_gunslinger_lens_position = m_gunslinger_lens_target;
         }
         return;
     }

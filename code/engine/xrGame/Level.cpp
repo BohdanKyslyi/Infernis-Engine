@@ -409,6 +409,9 @@ void CLevel::MakeReconnect()
 
 void CLevel::OnFrame() 
 {
+    const float electronics_step = std::max(0.f, Device.fTimeDelta) * 0.5f;
+    m_electronics_problems += clampr(m_electronics_target - m_electronics_problems,
+                                    -electronics_step, electronics_step);
 #ifdef DEBUG
     DBG_RenderUpdate();
 #endif 
@@ -547,6 +550,38 @@ void CLevel::ScopeLensElectronics(float* params) const
     const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
     if (weapon && weapon->ScopeLensShouldRender())
         weapon->ScopeLensElectronics(params);
+}
+
+void CLevel::ScopeLensGauss(float* params) const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return;
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    if (weapon && weapon->ScopeLensShouldRender()) {
+        params[0] = weapon->ScopeLensAberration();
+        params[1] = m_electronics_problems * 0.1f;
+    }
+}
+
+bool CLevel::ChangeElectronicsProblems(int delta)
+{
+    if (delta < 0 && m_electronics_target <= 0.f)
+        return false;
+    m_electronics_target = std::max(0.f, m_electronics_target + float(delta));
+    return true;
+}
+
+bool CLevel::ResetElectronicsProblems()
+{
+    m_electronics_target = 0.f;
+    return true;
+}
+
+bool CLevel::ApplyElectronicsProblems()
+{
+    m_electronics_problems = m_electronics_target;
+    return true;
 }
 
 bool CLevel::ScopeLensHasDetector() const

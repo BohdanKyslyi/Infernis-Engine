@@ -40,6 +40,8 @@
 		<command id="inf_mm_wpn_zoom_alter"				exe="wpn_zoom_alter"/>
 		<command id="inf_mm_tac_torch"					exe="wpn_torch"/>
 		<command id="inf_mm_laser"						exe="wpn_laser"/>
+		<command id="inf_mm_scope_brightness_plus"		exe="scope_brightness_plus"/>
+		<command id="inf_mm_scope_brightness_minus"		exe="scope_brightness_minus"/>
 	</group>
 	<group name="kb_grp_inventory">
 		<command id="kb_inventory"						exe="inventory"/>

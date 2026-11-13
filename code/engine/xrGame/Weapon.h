@@ -156,6 +156,7 @@ public:
     u8 ScopeLensMode() const;
     void ScopeLensGlass(float* params) const;
     void ScopeLensElectronics(float* params) const;
+    float ScopeLensAberration() const;
     bool HasScopeDetector() const;
     shared_str ScopeSettingSection(LPCSTR key) const;
     shared_str AlternativeAimSettingSection(LPCSTR key) const;
@@ -354,8 +355,12 @@ protected:
     bool IsScopeCollimator() const;
     bool UsesGunslingerScopeLens() const;
     bool GunslingerScopeLensRange(float& minimum, float& maximum) const;
+    shared_str ScopeLensUpgradeSection(LPCSTR key) const;
     shared_str m_gunslinger_lens_scope;
     float m_gunslinger_lens_position = 0.f;
+    float m_gunslinger_lens_target = 0.f;
+    float m_gunslinger_lens_speed = 0.f;
+    void UpdateScopeLensZoom();
     struct ScopeBrightness {
         float minimum = 1.f / 3.f;
         float maximum = 1.f / 3.f;
@@ -365,7 +370,7 @@ protected:
         bool configured = false;
     } m_scope_brightness;
     bool m_scope_brightness_sound[2]{};
-    void LoadScopeBrightness();
+    void LoadScopeBrightness(bool new_scope);
     void ChangeScopeBrightness(bool increase);
 
     float m_fRTZoomFactor; // run-time zoom factor

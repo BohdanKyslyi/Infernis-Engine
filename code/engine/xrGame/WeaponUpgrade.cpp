@@ -375,7 +375,17 @@ bool CWeapon::install_upgrade_addon(LPCSTR section, bool test) {
     }
     const bool scope_effect = pSettings->line_exist(section, "scope_dynamic_zoom") ||
         pSettings->line_exist(section, "scope_nightvision") ||
-        pSettings->line_exist(section, "scope_alive_detector");
+        pSettings->line_exist(section, "scope_alive_detector") ||
+        pSettings->line_exist(section, "min_lens_factor") ||
+        pSettings->line_exist(section, "max_lens_factor") ||
+        pSettings->line_exist(section, "lens_factor_levels_count") ||
+        pSettings->line_exist(section, "lens_speed") ||
+        pSettings->line_exist(section, "min_night_brightness") ||
+        pSettings->line_exist(section, "max_night_brightness") ||
+        pSettings->line_exist(section, "steps_brightness") ||
+        pSettings->line_exist(section, "default_brightness_step") ||
+        pSettings->line_exist(section, "jitter_brightness") ||
+        pSettings->line_exist(section, "scope_abberation");
     if (!test && scope_effect &&
         std::find(m_scope_upgrade_sections.begin(), m_scope_upgrade_sections.end(),
                   shared_str(section)) == m_scope_upgrade_sections.end()) {

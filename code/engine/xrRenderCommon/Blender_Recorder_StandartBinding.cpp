@@ -584,6 +584,15 @@ static class cl_scope_lens_electronics : public R_constant_setup {
         RCache.set_c(C, params[0], params[1], params[2], Device.fTimeGlobal);
     }
 } binder_scope_lens_electronics;
+
+static class cl_scope_lens_gauss : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[] = {0.f, 0.f}; // aberration, electronic interference
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->ScopeLensGauss(params);
+        RCache.set_c(C, params[0], params[1], 0.f, 0.f);
+    }
+} binder_scope_lens_gauss;
 #endif
 
 class ssfx_pom : public R_constant_setup {
@@ -768,6 +777,7 @@ void CBlender_Compile::SetMapping() {
     r_Constant("screen_res", &binder_screen_res);
 #ifndef _EDITOR
     r_Constant("scope_lens_electronics", &binder_scope_lens_electronics);
+    r_Constant("scope_lens_gauss", &binder_scope_lens_gauss);
 #endif
 
     // Screen Space Shaders
