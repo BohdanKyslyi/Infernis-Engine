@@ -41,6 +41,10 @@
 BOOL b_toggle_weapon_aim = FALSE;
 extern CUIXml* pWpnScopeXml;
 
+static constexpr LPCSTR scope_zoom_sounds[] = {
+    "snd_scope_zoom_minus", "snd_scope_zoom_plus", "snd_scope_zoom_gyro"
+};
+
 static constexpr LPCSTR scope_brightness_sounds[] = {
     "snd_scope_brightness_minus", "snd_scope_brightness_plus"
 };
@@ -320,6 +324,16 @@ void CWeapon::Load(LPCSTR section) {
     CShootingObject::Load(section);
     LoadHudFeatureFlags();
     m_sounds.LoadSound(section, "snd_boring", "sndInspect", true);
+    for (u32 i = 0; i < 3; ++i) {
+        const LPCSTR key = scope_zoom_sounds[i];
+        const LPCSTR sound = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
+        string256 path;
+        if (sound && sound[0])
+            _GetItem(sound, 0, path);
+        m_scope_zoom_sound[i] = sound && sound[0] && path[0] && xr_strcmp(path, "$silent") != 0;
+        if (m_scope_zoom_sound[i])
+            m_sounds.LoadSound(section, key, key, false);
+    }
     for (int i = 0; i < 2; ++i) {
         const LPCSTR key = scope_brightness_sounds[i];
         const LPCSTR sound = READ_IF_EXISTS(pSettings, r_string, section, key, nullptr);
@@ -660,7 +674,8 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
     m_flagsAddOnState = E->m_addon_flags.get();
     m_ammoType = E->ammo_type < m_ammoTypes.size() ? E->ammo_type : 0;
     const u8 state = (E->wpn_state == eTacticalTorch || E->wpn_state == eBayonetStrike ||
-                      E->wpn_state == eLaserSwitch || E->wpn_state == eFireModeSwitch)
+                      E->wpn_state == eLaserSwitch || E->wpn_state == eFireModeSwitch ||
+                      E->wpn_state == eUnloadMagazine)
         ? u8(eIdle) : E->wpn_state;
     SetState(state);
     SetNextState(state);
@@ -2481,7 +2496,8 @@ bool CWeapon::IsHudActionLocked() const {
     return GetState() == eTacticalTorch || GetNextState() == eTacticalTorch ||
            GetState() == eBayonetStrike || GetNextState() == eBayonetStrike ||
            GetState() == eLaserSwitch || GetNextState() == eLaserSwitch ||
-           GetState() == eFireModeSwitch || GetNextState() == eFireModeSwitch;
+           GetState() == eFireModeSwitch || GetNextState() == eFireModeSwitch ||
+           GetState() == eUnloadMagazine || GetNextState() == eUnloadMagazine;
 }
 
 bool CWeapon::HasWeaponActionMotion(const shared_str& motion) {
@@ -3789,15 +3805,33 @@ bool CWeapon::MovingAnimAllowedNow() { return !IsZoomed(); }
 
 bool CWeapon::IsHudModeNow() { return (HudItemData() != NULL); }
 
+void CWeapon::PlayScopeZoomSound(u32 sound) {
+    if (m_scope_zoom_sound[sound] && GetHUDmode())
+        PlaySound(scope_zoom_sounds[sound], get_LastFP());
+}
+
 void CWeapon::UpdateScopeLensZoom() {
-    if (m_gunslinger_lens_position == m_gunslinger_lens_target)
+    if (m_gunslinger_lens_position == m_gunslinger_lens_target) {
+        m_scope_gyro_started = false;
         return;
+    }
 
     if (m_gunslinger_lens_speed <= EPS_S) {
         m_gunslinger_lens_position = m_gunslinger_lens_target;
         return;
     }
 
+    if (IsZoomed() && UsesScopeZoom() && m_scope_zoom_sound[2]) {
+        const LPCSTR key = "lens_gyro_sound_period";
+        const float period = READ_IF_EXISTS(pSettings, r_float, ScopeLensUpgradeSection(key), key, 0.f);
+        const u32 now = Device.dwTimeGlobal;
+        if (std::isfinite(period) && period > 0.f &&
+            (!m_scope_gyro_started || now - m_scope_gyro_time >= u32(std::min(period, 60.f) * 1000.f))) {
+            PlayScopeZoomSound(2);
+            m_scope_gyro_time = now;
+            m_scope_gyro_started = true;
+        }
+    }
     const float movement = m_gunslinger_lens_speed * std::max(0.f, Device.fTimeDelta);
     m_gunslinger_lens_position += clampr(m_gunslinger_lens_target - m_gunslinger_lens_position,
                                         -movement, movement);
@@ -3812,12 +3846,17 @@ void CWeapon::ChangeZoomStep(bool increase) {
         Is3DScopeEnabled()) {
         const int steps = READ_IF_EXISTS(pSettings, r_s32,
             ScopeLensUpgradeSection("lens_factor_levels_count"), "lens_factor_levels_count", 1);
-        if (steps > 0 && lens_maximum > lens_minimum) {
+        const bool force_sound = READ_IF_EXISTS(pSettings, r_bool,
+            ScopeSettingSection("force_zoom_sound"), "force_zoom_sound", false);
+        if (steps > 0 && (lens_maximum > lens_minimum || force_sound)) {
             const float step = 1.f / steps;
-            m_gunslinger_lens_target = clampr(
-                m_gunslinger_lens_target + (increase ? step : -step), 0.f, 1.f);
-            if (m_gunslinger_lens_speed <= EPS_S)
-                m_gunslinger_lens_position = m_gunslinger_lens_target;
+            const float target = clampr(m_gunslinger_lens_target + (increase ? step : -step), 0.f, 1.f);
+            if (target != m_gunslinger_lens_target) {
+                m_gunslinger_lens_target = target;
+                PlayScopeZoomSound(increase ? 1 : 0);
+                if (m_gunslinger_lens_speed <= EPS_S)
+                    m_gunslinger_lens_position = target;
+            }
         }
         return;
     }

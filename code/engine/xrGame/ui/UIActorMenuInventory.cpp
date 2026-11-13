@@ -1135,14 +1135,19 @@ void CUIActorMenu::ProcessPropertiesBoxClicked(CUIWindow* w, void* d) {
         if (!weap_mag) {
             break;
         }
-        weap_mag->UnloadMagazine();
+        bool animated = weap_mag->RequestMagazineUnload(m_currMenuMode == mmInventory);
         for (u32 i = 0; i < cell_item->ChildsCount(); ++i) {
             CUICellItem* child_itm = cell_item->Child(i);
             CWeaponMagazined* child_weap_mag =
                 smart_cast<CWeaponMagazined*>((CWeapon*)child_itm->m_pData);
             if (child_weap_mag) {
-                child_weap_mag->UnloadMagazine();
+                animated |= child_weap_mag->RequestMagazineUnload(m_currMenuMode == mmInventory);
             }
+        }
+        if (animated) {
+            SetCurrentItem(NULL);
+            HideDialog();
+            return;
         }
         break;
     }

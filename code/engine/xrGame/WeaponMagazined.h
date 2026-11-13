@@ -102,6 +102,7 @@ public:
     virtual bool Action(u16 cmd, u32 flags);
     bool IsAmmoAvailable();
     virtual void UnloadMagazine(bool spawn_ammo = true);
+    bool RequestMagazineUnload(bool animate);
 
     virtual bool GetBriefInfo(II_BriefInfo& info);
 
@@ -140,6 +141,31 @@ protected:
     void ChangeFireMode(int step);
     shared_str m_fire_mode_motion;
     u32 m_fire_mode_duration = 0;
+    float m_recharge_time = 0.f;
+    u32 m_last_recharge_shot = 0;
+    bool m_has_recharge_shot = false;
+
+    float m_autoaim_time = 0.f;
+    shared_str m_autoaim_modes;
+    BOOL m_autoaim_only_alive = FALSE;
+    BOOL m_autoaim_ignore_dead = FALSE;
+    BOOL m_autoaim_cancel = FALSE;
+    BOOL m_autoaim_after_release = FALSE;
+    bool m_autoaim_waiting = false;
+    bool m_autoaim_trigger_held = false;
+    u32 m_autoaim_start_time = 0;
+
+    float ActiveAutoAimTime();
+    bool AutoAimAllowsShot(const Fvector& origin, const Fvector& direction, float wait);
+    bool PlayHudActionSound(const shared_str& motion);
+    shared_str MaskedHudMotion(LPCSTR motion, LPCSTR prefix) const;
+    shared_str m_unload_motion;
+    u32 m_unload_commit_time = 0;
+    u32 m_unload_duration = 0;
+    bool m_unload_committed = false;
+    bool m_has_unload_sound = false;
+    void StartMagazineUnload();
+    void UpdateMagazineUnload();
 
     //ïåðåìåííàÿ áëîêèðóåò èñïîëüçîâàíèå
     //òîëüêî ðàçíûõ òèïîâ ïàòðîíîâ

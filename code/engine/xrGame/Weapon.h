@@ -113,6 +113,7 @@ public:
         eBayonetStrike,
         eLaserSwitch,
         eFireModeSwitch,
+        eUnloadMagazine,
     };
     enum EWeaponSubStates {
         eSubstateReloadBegin = 0,
@@ -361,6 +362,10 @@ protected:
     float m_gunslinger_lens_target = 0.f;
     float m_gunslinger_lens_speed = 0.f;
     void UpdateScopeLensZoom();
+    void PlayScopeZoomSound(u32 sound);
+    bool m_scope_zoom_sound[3]{};
+    u32 m_scope_gyro_time = 0;
+    bool m_scope_gyro_started = false;
     struct ScopeBrightness {
         float minimum = 1.f / 3.f;
         float maximum = 1.f / 3.f;
@@ -449,9 +454,9 @@ private:
 
     bool m_advanced_ammo_bones = false;
     shared_str m_last_shot_ammo_section;
-    void UpdateHudAmmoBones(const CCartridge* fired = nullptr);
 
 protected:
+    void UpdateHudAmmoBones(const CCartridge* fired = nullptr);
     void LoadHudFeatureFlags();
     void UpdateWorldAnimation(u32 state, bool shot = false);
     void UpdateWorldFireModeBones();

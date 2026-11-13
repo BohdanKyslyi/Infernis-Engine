@@ -253,8 +253,8 @@ void CCustomDetector::UpdateVisibility() {
     attachable_hud_item* i0 = g_player_hud->attached_item(0);
     if (m_weapon_reload_motion) {
         const auto* weapon = i0 ? smart_cast<CWeapon*>(i0->m_parent_hud_item) : nullptr;
-        if (weapon && weapon->GetState() == CWeapon::eReload &&
-            weapon->GetNextState() == CWeapon::eReload &&
+        if (weapon && weapon->GetState() == weapon->GetNextState() &&
+            (weapon->GetState() == CWeapon::eReload || weapon->GetState() == CWeapon::eUnloadMagazine) &&
             !(Actor()->MovingState() & mcClimb))
             return;
 
