@@ -236,6 +236,7 @@ public:
     void ScopeLensGlass(float* params) const override;
     void ScopeLensElectronics(float* params) const override;
     void ScopeLensGauss(float* params) const override;
+    void WeaponComputerDisplay(float* params) const override;
     bool ChangeElectronicsProblems(int delta);
     bool ResetElectronicsProblems();
     bool ApplyElectronicsProblems();

@@ -103,6 +103,7 @@ public:
     bool IsAmmoAvailable();
     virtual void UnloadMagazine(bool spawn_ammo = true);
     bool RequestMagazineUnload(bool animate);
+    float RechargeProgress() const;
 
     virtual bool GetBriefInfo(II_BriefInfo& info);
 

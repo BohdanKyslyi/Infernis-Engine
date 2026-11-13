@@ -44,6 +44,7 @@
 #include "actor_memory.h"
 #include "Inventory.h"
 #include "Weapon.h"
+#include "WeaponMagazined.h"
 #include "player_hud.h"
 #include "UI/UIGameTutorial.h"
 #include "message_filter.h"
@@ -550,6 +551,19 @@ void CLevel::ScopeLensElectronics(float* params) const
     const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
     if (weapon && weapon->ScopeLensShouldRender())
         weapon->ScopeLensElectronics(params);
+}
+
+void CLevel::WeaponComputerDisplay(float* params) const
+{
+    const auto* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return;
+
+    const auto* weapon = smart_cast<const CWeaponMagazined*>(actor->inventory().ActiveItem());
+    if (weapon && !weapon->IsHidden()) {
+        params[0] = weapon->RechargeProgress();
+        params[1] = clampr(m_electronics_problems * 0.1f, 0.f, 1.f);
+    }
 }
 
 void CLevel::ScopeLensGauss(float* params) const

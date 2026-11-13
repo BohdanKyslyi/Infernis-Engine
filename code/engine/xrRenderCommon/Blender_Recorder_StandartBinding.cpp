@@ -593,6 +593,15 @@ static class cl_scope_lens_gauss : public R_constant_setup {
         RCache.set_c(C, params[0], params[1], 0.f, 0.f);
     }
 } binder_scope_lens_gauss;
+
+static class cl_weapon_computer_display : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[] = {1.f, 0.f}; // charge, interference
+        if (!Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->WeaponComputerDisplay(params);
+        RCache.set_c(C, params[0], params[1], 0.f, 0.f);
+    }
+} binder_weapon_computer_display;
 #endif
 
 class ssfx_pom : public R_constant_setup {
@@ -778,6 +787,7 @@ void CBlender_Compile::SetMapping() {
 #ifndef _EDITOR
     r_Constant("scope_lens_electronics", &binder_scope_lens_electronics);
     r_Constant("scope_lens_gauss", &binder_scope_lens_gauss);
+    r_Constant("weapon_computer_display", &binder_weapon_computer_display);
 #endif
 
     // Screen Space Shaders

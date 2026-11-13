@@ -214,9 +214,16 @@ bool CWeaponMagazined::PlayHudActionSound(const shared_str& motion) {
     return true;
 }
 
+float CWeaponMagazined::RechargeProgress() const {
+    if (!m_has_recharge_shot || !std::isfinite(m_recharge_time) || m_recharge_time <= 0.f)
+        return 1.f;
+
+    const float elapsed = float(Device.dwTimeGlobal - m_last_recharge_shot) * 0.001f;
+    return clampr(elapsed / m_recharge_time, 0.f, 1.f);
+}
+
 void CWeaponMagazined::FireStart() {
-    if (!IsMisfire() && std::isfinite(m_recharge_time) && m_recharge_time > 0.f && m_has_recharge_shot &&
-        float(Device.dwTimeGlobal - m_last_recharge_shot) * 0.001f < m_recharge_time)
+    if (!IsMisfire() && RechargeProgress() < 1.f)
         return;
 
     if (!IsMisfire()) {
@@ -1707,6 +1714,14 @@ shared_str CWeaponMagazined::GunslingerMovementIdle(u32 movement) const {
     return HudStateVariant(base, pSettings->line_exist(HudSection(), base) ? base : nullptr);
 }
 
+namespace {
+bool IsSprintTransitionMotion(LPCSTR motion) {
+    return motion &&
+        (std::strncmp(motion, "anm_idle_sprint_start", sizeof("anm_idle_sprint_start") - 1) == 0 ||
+         std::strncmp(motion, "anm_idle_sprint_end", sizeof("anm_idle_sprint_end") - 1) == 0);
+}
+}
+
 void CWeaponMagazined::UpdateGunslingerMovementIdle() {
     const auto* actor = smart_cast<CActor*>(H_Parent());
     if (!actor || !GetHUDmode()) {
@@ -1722,9 +1737,7 @@ void CWeaponMagazined::UpdateGunslingerMovementIdle() {
         return;
 
     const bool sprint_changed = (changed & mcSprint) && !IsZoomed() && MovingAnimAllowedNow();
-    LPCSTR current = m_current_motion.c_str();
-    const bool sprint_transition = current &&
-        std::strncmp(current, "anm_idle_sprint_", sizeof("anm_idle_sprint_") - 1) == 0;
+    const bool sprint_transition = IsSprintTransitionMotion(m_current_motion.c_str());
     if (m_bStopAtEndAnimIsRunning && !(sprint_changed && sprint_transition))
         return;
 
@@ -1737,7 +1750,10 @@ void CWeaponMagazined::UpdateGunslingerMovementIdle() {
         const shared_str motion = HudStateVariant(base, IsGrenadeLauncherAttached() ? nullptr : fallback);
         if (motion.c_str() && pSettings->line_exist(HudSection(), motion.c_str()) &&
             PlayHUDMotion(motion, TRUE, this, eIdle)) {
-            if (pSettings->line_exist(cNameSect(), entering ? "snd_sprint_start" : "snd_sprint_end"))
+            const auto section = cNameSect();
+            const LPCSTR disable_sound = entering ? "disable_sprint_start_snd" : "disable_sprint_end_snd";
+            if (!READ_IF_EXISTS(pSettings, r_bool, section, disable_sound, false) &&
+                pSettings->line_exist(section, entering ? "snd_sprint_start" : "snd_sprint_end"))
                 PlaySound(entering ? "sndSprintStart" : "sndSprintEnd", get_LastFP());
             return;
         }
@@ -1759,11 +1775,9 @@ void CWeaponMagazined::PlayAnimIdle() {
     if (GetState() != eIdle || IsAimTransitionPlaying())
         return;
 
-    LPCSTR motion = m_current_motion.c_str();
     if (m_gunslinger_movement_idles && GetHUDmode() && !IsGrenadeLauncherAttached() &&
         MovingAnimAllowedNow()) {
-        if (m_bStopAtEndAnimIsRunning && motion &&
-            std::strncmp(motion, "anm_idle_sprint_", sizeof("anm_idle_sprint_") - 1) == 0)
+        if (m_bStopAtEndAnimIsRunning && IsSprintTransitionMotion(m_current_motion.c_str()))
             return;
         if (const auto* actor = smart_cast<CActor*>(H_Parent())) {
             const shared_str movement_motion = GunslingerMovementIdle(actor->MovingState());
@@ -1780,7 +1794,7 @@ void CWeaponMagazined::PlayAnimIdle() {
     } else {
         const LPCSTR normal = StateMotion("anm_idle", "anm_idle_empty", "anm_idle_jammed");
         const shared_str motion = MaskedHudMotion(normal, "anm_idle");
-        if (motion != shared_str(normal) || !TryPlayAnimIdle())
+        if (!TryPlayAnimIdle())
             PlayHUDMotion(motion, TRUE, NULL, GetState());
     }
 }
@@ -1919,6 +1933,8 @@ void CWeaponMagazined::ChangeFireMode(int step) {
         m_fire_mode_motion = motion;
         SetPending(TRUE);
         SwitchState(eFireModeSwitch);
+    } else if (GetHUDmode()) {
+        PlayAnimIdle();
     }
 }
 
