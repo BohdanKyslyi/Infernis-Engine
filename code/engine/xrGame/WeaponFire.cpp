@@ -97,10 +97,11 @@ void CWeapon::FireTrace(const Fvector& P, const Fvector& D) {
         FireBullet(P, D, fire_disp, l_cartridge, H_Parent()->ID(), ID(), SendHit);
     }
 
-    StartShotParticles();
-
-    if (m_bLightShotEnabled)
-        Light_Start();
+    if (!IsSilencerAttached()) {
+        StartShotParticles();
+        if (m_bLightShotEnabled)
+            Light_Start();
+    }
 
     // Interactive Grass FX
     Fvector ShotPos = Fvector().mad(P, D, 1.5f);

@@ -112,6 +112,8 @@ protected:
     bool m_bFastAnimMode;
     bool m_bNeedActivation;
     bool m_weapon_reload_motion = false;
+    u16 m_preparing_weapon_id = u16(-1);
+    u16 m_draw_weapon_id = u16(-1);
 
 public:
     CCustomDetector();
@@ -150,6 +152,8 @@ public:
 
 protected:
     bool CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate);
+    bool CanResumeShowing();
+    void StartShowing(u16 prepared_weapon_id = u16(-1));
     virtual bool AllowsZoomWithDetector() const { return false; }
     virtual void TurnDetectorInternal(bool b);
     void UpdateNightVisionMode(bool b_off);

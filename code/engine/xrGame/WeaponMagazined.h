@@ -23,7 +23,6 @@ protected:
     bool m_has_shot_jam_sound = false;
 
     //äîïîëíèòåëüíàÿ èíôîðìàöèÿ î ãëóøèòåëå
-    LPCSTR m_sSilencerFlameParticles;
     LPCSTR m_sSilencerSmokeParticles;
 
     ESoundTypes m_eSoundShow;
@@ -105,6 +104,8 @@ public:
     bool RequestMagazineUnload(bool animate);
     enum class SilencerActionResult { UseDefault, Busy, Started };
     SilencerActionResult RequestSilencerAction(PIItem silencer, LPCSTR detach_section = nullptr);
+    enum class DetectorTransition { Prepare, Draw, Finish };
+    bool RequestDetectorTransition(DetectorTransition phase);
     float RechargeProgress() const;
 
     virtual bool GetBriefInfo(II_BriefInfo& info);
@@ -178,6 +179,15 @@ protected:
     bool m_has_silencer_detach_sound = false;
     void StartSilencerAction();
     void UpdateSilencerAction();
+    void UpdateMuzzleParticles();
+
+    shared_str m_detector_transition_motion;
+    DetectorTransition m_detector_transition_phase = DetectorTransition::Prepare;
+    u32 m_detector_transition_duration = 0;
+    bool m_has_detector_prepare_sound = false;
+    bool m_has_detector_finish_sound = false;
+    void StartDetectorTransition();
+    void UpdateDetectorTransition();
 
     //ïåðåìåííàÿ áëîêèðóåò èñïîëüçîâàíèå
     //òîëüêî ðàçíûõ òèïîâ ïàòðîíîâ
