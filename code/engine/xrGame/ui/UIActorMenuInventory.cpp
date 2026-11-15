@@ -325,8 +325,22 @@ void CUIActorMenu::OnInventoryAction(PIItem pItem, u16 action_type) {
     UpdateConditionProgressBars();
 }
 void CUIActorMenu::AttachAddon(PIItem item_to_upgrade) {
-    PlaySnd(eAttachAddon);
     R_ASSERT(item_to_upgrade);
+    if (GetMenuMode() == mmInventory) {
+        if (auto* weapon = smart_cast<CWeaponMagazined*>(item_to_upgrade)) {
+            using Result = CWeaponMagazined::SilencerActionResult;
+            const auto result = weapon->RequestSilencerAction(CurrentIItem());
+            if (result == Result::Started) {
+                PlaySnd(eAttachAddon);
+                m_close_for_silencer_action = true;
+                SetCurrentItem(nullptr);
+            }
+            if (result != Result::UseDefault)
+                return;
+        }
+    }
+
+    PlaySnd(eAttachAddon);
     if (OnClient()) {
         NET_Packet P;
         CGameObject::u_EventGen(P, GE_ADDON_ATTACH, item_to_upgrade->object().ID());
@@ -340,6 +354,20 @@ void CUIActorMenu::AttachAddon(PIItem item_to_upgrade) {
 }
 
 void CUIActorMenu::DetachAddon(LPCSTR addon_name, PIItem itm) {
+    PIItem item = itm ? itm : CurrentIItem();
+    if (GetMenuMode() == mmInventory) {
+        if (auto* weapon = smart_cast<CWeaponMagazined*>(item)) {
+            using Result = CWeaponMagazined::SilencerActionResult;
+            const auto result = weapon->RequestSilencerAction(nullptr, addon_name);
+            if (result == Result::Started) {
+                PlaySnd(eDetachAddon);
+                m_close_for_silencer_action = true;
+            }
+            if (result != Result::UseDefault)
+                return;
+        }
+    }
+
     PlaySnd(eDetachAddon);
     if (OnClient()) {
         NET_Packet P;
@@ -352,10 +380,7 @@ void CUIActorMenu::DetachAddon(LPCSTR addon_name, PIItem itm) {
         CGameObject::u_EventSend(P);
         return;
     }
-    if (itm == NULL)
-        CurrentIItem()->Detach(addon_name, true);
-    else
-        itm->Detach(addon_name, true);
+    item->Detach(addon_name, true);
 }
 
 void CUIActorMenu::InitCellForSlot(u16 slot_idx) {

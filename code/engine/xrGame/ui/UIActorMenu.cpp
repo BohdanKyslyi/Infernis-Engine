@@ -171,6 +171,7 @@ void CUIActorMenu::Show(bool status) {
         PlaySnd(eSndOpen);
         m_ActorStateInfo->UpdateActorInfo(m_pActorInvOwner);
     } else {
+        m_close_for_silencer_action = false;
         PlaySnd(eSndClose);
         SetMenuMode(mmUndefined);
     }
@@ -187,6 +188,12 @@ void CUIActorMenu::Draw() {
 }
 
 void CUIActorMenu::Update() {
+    if (m_close_for_silencer_action && IsShown() && !CUIDragDropListEx::m_drag_item) {
+        SetCurrentItem(nullptr);
+        HideDialog();
+        return;
+    }
+
     { // all mode
         m_last_time = Device.dwTimeGlobal;
         m_ActorStateInfo->UpdateActorInfo(m_pActorInvOwner);

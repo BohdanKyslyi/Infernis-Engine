@@ -103,6 +103,8 @@ public:
     bool IsAmmoAvailable();
     virtual void UnloadMagazine(bool spawn_ammo = true);
     bool RequestMagazineUnload(bool animate);
+    enum class SilencerActionResult { UseDefault, Busy, Started };
+    SilencerActionResult RequestSilencerAction(PIItem silencer, LPCSTR detach_section = nullptr);
     float RechargeProgress() const;
 
     virtual bool GetBriefInfo(II_BriefInfo& info);
@@ -167,6 +169,15 @@ protected:
     bool m_has_unload_sound = false;
     void StartMagazineUnload();
     void UpdateMagazineUnload();
+
+    shared_str m_silencer_action_motion;
+    shared_str m_silencer_to_detach;
+    u32 m_silencer_detach_time = 0;
+    u32 m_silencer_action_duration = 0;
+    bool m_has_silencer_attach_sound = false;
+    bool m_has_silencer_detach_sound = false;
+    void StartSilencerAction();
+    void UpdateSilencerAction();
 
     //ïåðåìåííàÿ áëîêèðóåò èñïîëüçîâàíèå
     //òîëüêî ðàçíûõ òèïîâ ïàòðîíîâ

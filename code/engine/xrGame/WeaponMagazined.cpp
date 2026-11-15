@@ -116,6 +116,8 @@ void CWeaponMagazined::Load(LPCSTR section) {
     m_has_breechblock_sound = load_action_sound("snd_breechblock", "sndBreechblock");
     m_has_shot_jam_sound = load_action_sound("snd_jam", "sndShotJam");
     m_has_unload_sound = load_action_sound("snd_unload_mag", "sndUnloadMagazine");
+    m_has_silencer_attach_sound = load_action_sound("snd_attach_sil", "sndSilencerAttach");
+    m_has_silencer_detach_sound = load_action_sound("snd_detach_sil", "sndSilencerDetach");
     for (LPCSTR sound : {"snd_changefiremode", "snd_changefiremode_empty", "snd_changefiremode_jammed"})
         load_action_sound(sound, sound);
     m_sounds.LoadSound(section, "snd_empty", "sndEmptyClick", false, m_eSoundEmptyClick);
@@ -182,7 +184,9 @@ void CWeaponMagazined::OnUpgradeHudChanged() {
         const LPCSTR motion = line.first.c_str();
         const bool shot = std::strncmp(motion, "anm_shoot", sizeof("anm_shoot") - 1) == 0;
         const bool selector = std::strncmp(motion, "anm_changefiremode_", sizeof("anm_changefiremode_") - 1) == 0;
-        if (!shot && !selector)
+        const bool silencer = std::strncmp(motion, "anm_attach_sil", sizeof("anm_attach_sil") - 1) == 0 ||
+            std::strncmp(motion, "anm_detach_sil", sizeof("anm_detach_sil") - 1) == 0;
+        if (!shot && !selector && !silencer)
             continue;
         string256 key, exclusive, alias, path;
         xr_sprintf(key, "snd_%s", motion);
@@ -350,7 +354,8 @@ void CWeaponMagazined::OnMagazineEmpty() {
 }
 
 bool CWeaponMagazined::RequestMagazineUnload(bool animate) {
-    if (GetState() == eUnloadMagazine || GetNextState() == eUnloadMagazine || m_magazine.empty())
+    if (GetState() == eUnloadMagazine || GetNextState() == eUnloadMagazine ||
+        GetState() == eSilencerAction || GetNextState() == eSilencerAction || m_magazine.empty())
         return false;
 
     const auto* actor = smart_cast<const CActor*>(H_Parent());
@@ -375,6 +380,104 @@ bool CWeaponMagazined::RequestMagazineUnload(bool animate) {
     UnloadMagazine();
     ForceUpdateAmmo();
     return false;
+}
+
+CWeaponMagazined::SilencerActionResult CWeaponMagazined::RequestSilencerAction(
+    PIItem silencer, LPCSTR detach_section) {
+    const auto* actor = smart_cast<const CActor*>(H_Parent());
+    if (!IsGameTypeSingle() || !OnServer() || !actor ||
+        actor != Level().CurrentControlEntity() || actor->inventory().ActiveItem() != this ||
+        m_eSilencerStatus != ALife::eAddonAttachable)
+        return SilencerActionResult::UseDefault;
+
+    const bool attaching = silencer != nullptr;
+    if (attaching ? !smart_cast<CSilencer*>(silencer)
+                  : (!detach_section || !(m_sSilencerName == detach_section)))
+        return SilencerActionResult::UseDefault;
+
+    if (GetState() == eSilencerAction || GetNextState() == eSilencerAction)
+        return SilencerActionResult::Busy;
+
+    const LPCSTR flag = attaching ? "use_silattach_anim" : "use_sildetach_anim";
+    if (!READ_IF_EXISTS(pSettings, r_bool, HudSection(), flag, false))
+        return SilencerActionResult::UseDefault;
+
+    const shared_str motion = WeaponActionMotion(attaching ? "anm_attach_sil" : "anm_detach_sil");
+    if (!HasWeaponActionMotion(motion))
+        return SilencerActionResult::UseDefault;
+
+    const auto* item_use = actor->GetItemUseController();
+    if (!actor->g_Alive() || GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
+        IsZoomed() || m_bStopAtEndAnimIsRunning || g_player_hud->attached_item(1) ||
+        (item_use && item_use->IsWeaponLocked()))
+        return SilencerActionResult::Busy;
+
+    if (attaching && (silencer->m_pInventory != m_pInventory ||
+        silencer->object().getDestroy() || !CanAttach(silencer)))
+        return SilencerActionResult::Busy;
+    if (!attaching && !IsSilencerAttached())
+        return SilencerActionResult::Busy;
+
+    SetPending(TRUE);
+    // The donor installs the silencer when the action starts.
+    if (attaching && !Attach(silencer, true)) {
+        SetPending(FALSE);
+        return SilencerActionResult::Busy;
+    }
+
+    m_silencer_action_motion = motion;
+    m_silencer_to_detach = detach_section;
+    SwitchState(eSilencerAction);
+    return SilencerActionResult::Started;
+}
+
+void CWeaponMagazined::StartSilencerAction() {
+    const shared_str motion = m_silencer_action_motion;
+    m_silencer_action_motion = nullptr;
+    if (!HasWeaponActionMotion(motion)) {
+        SetPending(FALSE);
+        SwitchState(eIdle);
+        return;
+    }
+
+    const u32 duration = PlayHUDMotion(motion, TRUE, this, eSilencerAction);
+    string256 key;
+    xr_sprintf(key, "lock_time_%s", motion.c_str());
+    const float seconds = READ_IF_EXISTS(pSettings, r_float, HudSection(), key, -1.f);
+    m_silencer_detach_time = std::isfinite(seconds) && seconds >= 0.f
+        ? u32(clampr(seconds, 0.f, 60.f) * 1000.f + 0.5f) : duration;
+    m_silencer_action_duration = (std::max)(duration, m_silencer_detach_time);
+
+    const bool attaching = !m_silencer_to_detach.size();
+    if (!PlayHudActionSound(motion) &&
+        (attaching ? m_has_silencer_attach_sound : m_has_silencer_detach_sound))
+        PlaySound(attaching ? "sndSilencerAttach" : "sndSilencerDetach", get_LastFP());
+
+    UpdateSilencerAction();
+}
+
+void CWeaponMagazined::UpdateSilencerAction() {
+    const auto* actor = smart_cast<const CActor*>(H_Parent());
+    const bool active = actor && actor->g_Alive() && actor->inventory().ActiveItem() == this;
+    if (!active || !GetHUDmode()) {
+        StopCurrentAnimWithoutCallback();
+        SetPending(FALSE);
+        SwitchState(active ? eIdle : eHidden);
+        return;
+    }
+
+    const u32 elapsed = CurrStateTime();
+    if (m_silencer_to_detach.size() && elapsed >= m_silencer_detach_time) {
+        const shared_str section = m_silencer_to_detach;
+        m_silencer_to_detach = nullptr;
+        if (m_eSilencerStatus == ALife::eAddonAttachable &&
+            IsSilencerAttached() && m_sSilencerName == section)
+            Detach(section.c_str(), true);
+    }
+    if (elapsed >= m_silencer_action_duration && !m_bStopAtEndAnimIsRunning) {
+        SetPending(FALSE);
+        SwitchState(eIdle);
+    }
 }
 
 void CWeaponMagazined::StartMagazineUnload() {
@@ -584,6 +687,10 @@ void CWeaponMagazined::ReloadMagazine() {
 void CWeaponMagazined::OnStateSwitch(u32 S) {
     if (S != eUnloadMagazine)
         m_unload_motion = nullptr;
+    if (S != eSilencerAction) {
+        m_silencer_action_motion = nullptr;
+        m_silencer_to_detach = nullptr;
+    }
     if (S == eHiding || S == eHidden)
         m_autoaim_trigger_held = false;
     inherited::OnStateSwitch(S);
@@ -597,6 +704,9 @@ void CWeaponMagazined::OnStateSwitch(u32 S) {
         break;
     case eUnloadMagazine:
         StartMagazineUnload();
+        break;
+    case eSilencerAction:
+        StartSilencerAction();
         break;
     case eFireModeSwitch: {
         const shared_str motion = m_fire_mode_motion;
@@ -678,6 +788,9 @@ void CWeaponMagazined::UpdateCL() {
         } break;
         case eUnloadMagazine:
             UpdateMagazineUnload();
+            break;
+        case eSilencerAction:
+            UpdateSilencerAction();
             break;
         case eFireModeSwitch:
             if (CurrStateTime() >= m_fire_mode_duration && !m_bStopAtEndAnimIsRunning) {

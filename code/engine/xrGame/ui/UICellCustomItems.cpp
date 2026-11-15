@@ -387,10 +387,8 @@ void CUIWeaponCellItem::CreateLayeredIcons(CUIStatic* parent, bool rotate, u32 c
             READ_IF_EXISTS(pSettings, r_u32, effect, "upgrade_addon_icon_banned_addons_mask", 0)});
     }
 
-    if (elements.empty())
-        parent->TextureOn();
-    else
-        parent->TextureOff();
+    // Element icons can cover only part of the weapon, such as the magazine.
+    parent->TextureOn();
 
     const u8 addons = object()->GetAddonsState();
     const auto draw_layers = [&](const xr_vector<WeaponIconLayer>& layers, bool front, bool base) {
@@ -424,7 +422,7 @@ void CUIWeaponCellItem::CreateLayeredIcons(CUIStatic* parent, bool rotate, u32 c
     draw_layers(elements, true, true);
     draw_layers(upgrades, true, false);
 
-    if (parent == this && !elements.empty()) {
+    if (parent == this && (!elements.empty() || !upgrades.empty())) {
         // Keep cell text, condition and upgrade markers above the assembled icon.
         for (CUIWindow* overlay : {static_cast<CUIWindow*>(m_text),
                                   static_cast<CUIWindow*>(m_pConditionState),

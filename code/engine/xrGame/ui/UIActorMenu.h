@@ -74,6 +74,7 @@ protected:
     };
 
     EMenuMode m_currMenuMode;
+    bool m_close_for_silencer_action = false;
     ref_sound sounds[eSndMax];
     void PlaySnd(eActorMenuSndAction a);
 

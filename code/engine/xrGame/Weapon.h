@@ -114,6 +114,7 @@ public:
         eLaserSwitch,
         eFireModeSwitch,
         eUnloadMagazine,
+        eSilencerAction,
     };
     enum EWeaponSubStates {
         eSubstateReloadBegin = 0,
