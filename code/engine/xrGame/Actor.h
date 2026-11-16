@@ -185,6 +185,7 @@ public:
     [[nodiscard]] virtual float GetMass() override;
     [[nodiscard]] virtual float Radius() const override;
     virtual void g_PerformDrop();
+    bool RequestMonsterDisarm(LPCSTR animation_group);
 
     [[nodiscard]] virtual bool use_default_throw_force() override;
     [[nodiscard]] virtual float missile_throw_force() override;
@@ -272,6 +273,9 @@ public:
 
 protected:
     CItemUseController* m_item_use = nullptr;
+    shared_str m_monster_disarm_animation;
+    u16 m_monster_disarm_item = u16(-1);
+    u32 m_monster_disarm_started = 0;
     CHolderCustom* m_holder = nullptr;
     u16 m_holderID = u16(-1);
     bool use_Holder(CHolderCustom* holder);

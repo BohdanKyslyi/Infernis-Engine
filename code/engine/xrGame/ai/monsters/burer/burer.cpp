@@ -21,7 +21,6 @@
 #include "../../../ActorCondition.h"
 #include "../../../xr_level_controller.h"
 #include "../../../WeaponMagazined.h"
-#include "../../../ItemUseController.h"
 #include <cmath>
 
 #include "../../../../xrCore/_vector3d_ext.h"
@@ -122,6 +121,8 @@ void CBurer::Load(LPCSTR section) {
     m_shield_keep_particle_period =
         READ_IF_EXISTS(pSettings, r_u32, section, "shield_keep_particle_period", 1000);
 
+    m_tele_weapon_shooting = READ_IF_EXISTS(pSettings, r_bool, section, "Tele_Shooting_From_Weapon_Enable", true);
+    m_tele_max_weapons = READ_IF_EXISTS(pSettings, r_u32, section, "Tele_Max_Pickuped_Weapons", 1);
     m_tele_max_handled_objects = pSettings->r_u32(section, "Tele_Max_Handled_Objects");
     m_tele_max_time = READ_IF_EXISTS(pSettings, r_u32, section, "Tele_Max_Time", 10000);
     m_tele_time_to_hold = pSettings->r_u32(section, "Tele_Time_To_Hold");
@@ -291,12 +292,79 @@ void xr_stdcall CBurer::StaminaHit() {
         dir.y = -dir.y;
     weapon->SetActivationSpeedOverride(normalize(dir) * m_weapon_drop_velocity);
 
-    if (!actor->inventory().Action((u16)kDROP, CMD_STOP))
+    if (IsGameTypeSingle() && OnServer() && actor == Level().CurrentControlEntity()) {
+        actor->RequestMonsterDisarm("burer_kicks");
+    } else if (!actor->inventory().Action((u16)kDROP, CMD_STOP)) {
         actor->g_PerformDrop();
+    }
+}
 
-    if (IsGameTypeSingle() && weapon->GetDropManual()) {
-        if (auto* controller = actor->GetItemUseController())
-            controller->StartMonsterHitReaction("burer_kicks");
+bool CBurer::CanUseTelekineticWeapon(CPhysicsShellHolder* object) const {
+    if (!m_tele_weapon_shooting || !m_tele_max_weapons || !IsGameTypeSingle() || !OnServer())
+        return false;
+
+    const auto* weapon = smart_cast<CWeaponMagazined*>(object);
+    return weapon && weapon->CanFireTelekinetically();
+}
+
+void CBurer::UpdateTelekineticWeapons() {
+    if (!m_tele_weapon_shooting || !m_tele_max_weapons || !g_Alive() ||
+        !IsGameTypeSingle() || !OnServer())
+        return;
+
+    const auto* enemy = EnemyMan.get_enemy();
+    if (!enemy || enemy->getDestroy() || !enemy->g_Alive() || !EnemyMan.see_enemy_now())
+        return;
+
+    Fvector target;
+    enemy->Center(target);
+    u32 aimed_weapons = 0;
+    for (auto* held : CTelekinesis::objects) {
+        if (held->get_state() != TS_Keep)
+            continue;
+
+        auto* weapon = smart_cast<CWeaponMagazined*>(held->get_object());
+        if (!weapon || !weapon->CanFireTelekinetically())
+            continue;
+        auto* shell = weapon->PPhysicsShell();
+        if (!shell || !shell->isActive() || shell->get_ApplyByGravity())
+            continue;
+        if (aimed_weapons++ >= m_tele_max_weapons)
+            break;
+
+        const Fvector muzzle = weapon->TelekineticMuzzle();
+        Fvector to_enemy = Fvector().sub(target, muzzle);
+        const float range = to_enemy.magnitude();
+        if (range < EPS_L || range > m_tele_max_distance)
+            continue;
+        to_enemy.mul(1.f / range);
+
+        Fvector forward = weapon->get_LastFD();
+        forward.normalize_safe();
+        Fvector rotation = Fvector().crossproduct(forward, to_enemy);
+        const float sine = rotation.magnitude();
+        const float cosine = forward.dotproduct(to_enemy);
+        if (sine > EPS_L) {
+            rotation.mul(5.f * atan2f(sine, cosine) / sine);
+        } else if (cosine < 0.f) {
+            const Fvector axis = fabsf(forward.y) < 0.9f
+                ? Fvector().set(0.f, 1.f, 0.f) : Fvector().set(1.f, 0.f, 0.f);
+            rotation.crossproduct(forward, axis).normalize_safe();
+            rotation.mul(5.f * PI);
+        }
+        shell->set_AngularVel(rotation);
+
+        if (cosine < 0.99f || Device.dwTimeGlobal - held->time_keep_started < 200)
+            continue;
+
+        Fvector to_burer = Fvector().sub(Position(), muzzle);
+        to_burer.normalize_safe();
+        if (forward.dotproduct(to_burer) > 0.26f)
+            continue;
+
+        collide::rq_result hit;
+        if (!Level().ObjectSpace.RayPick(muzzle, forward, range, collide::rqtStatic, hit, weapon))
+            weapon->FireTelekineticShot(*this, muzzle, forward);
     }
 }
 

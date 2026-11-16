@@ -85,7 +85,12 @@ public:
 
     } m_gravi;
 
+    bool CanUseTelekineticWeapon(CPhysicsShellHolder* object) const;
+    void UpdateTelekineticWeapons();
+
     u32 m_tele_max_handled_objects;
+    u32 m_tele_max_weapons = 1;
+    bool m_tele_weapon_shooting = true;
     u32 m_tele_time_to_hold;
     u32 m_tele_max_time;
     float m_tele_object_min_mass;

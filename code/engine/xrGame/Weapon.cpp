@@ -3690,9 +3690,8 @@ float CWeapon::GetConditionToShow() const {
 }
 
 BOOL CWeapon::ParentMayHaveAimBullet() {
-    CObject* O = H_Parent();
-    CEntityAlive* EA = smart_cast<CEntityAlive*>(O);
-    return EA->cast_actor() != 0;
+    auto* entity = smart_cast<CEntityAlive*>(H_Parent());
+    return entity && entity->cast_actor() != nullptr;
 }
 
 BOOL CWeapon::ParentIsActor() {

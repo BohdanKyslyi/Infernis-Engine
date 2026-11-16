@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "WeaponMagazined.h"
+#include "WeaponRPG7.h"
 #include "actor.h"
 #include "ActorCondition.h"
 #include "ai/monsters/controller/controller.h"
@@ -1100,6 +1101,13 @@ void CWeaponMagazined::UpdateMagazineReloadTiming() {
 }
 
 void CWeaponMagazined::UpdateCL() {
+    if (m_telekinetic_flame_active &&
+        (H_Parent() || Device.dwTimeGlobal - m_last_recharge_shot >= 120)) {
+        StopFlameParticles();
+        StopFlameParticles2();
+        m_telekinetic_flame_active = false;
+    }
+
     inherited::UpdateCL();
     float dt = Device.fTimeDelta;
 
@@ -1453,6 +1461,88 @@ void CWeaponMagazined::PlayMagazineShotEffects() {
     //äûì èç ñòâîëà
     ForceUpdateFireParticles();
     StartSmokeParticles(get_LastFP(), vel);
+}
+
+LPCSTR CWeaponMagazined::TelekineticRocketSection() const {
+    const LPCSTR rocket = READ_IF_EXISTS(pSettings, r_string, cNameSect(), "rocket_class", nullptr);
+    if (rocket && rocket[0])
+        return rocket;
+
+    const LPCSTR grenade =
+        READ_IF_EXISTS(pSettings, r_string, m_magazine.back().m_ammoSect, "fake_grenade_name", nullptr);
+    return grenade && grenade[0] ? grenade : nullptr;
+}
+
+bool CWeaponMagazined::CanFireTelekinetically() const {
+    if (H_Parent() || getDestroy() || IsQuestItem() || IsMisfire() ||
+        GetCondition() <= 0.f || m_magazine.empty())
+        return false;
+
+    const LPCSTR rocket_section = TelekineticRocketSection();
+    if (!rocket_section)
+        return !UpgradeGrenadeMode();
+
+    const auto* launcher = smart_cast<const CRocketLauncher*>(this);
+    return launcher && launcher->CanLaunchTelekineticRocket(rocket_section);
+}
+
+const Fvector& CWeaponMagazined::TelekineticMuzzle() {
+    return UpgradeGrenadeMode() ? get_LastFP2() : get_LastFP();
+}
+
+void CWeaponMagazined::FireTelekineticShot(CObject& shooter, const Fvector& pos, const Fvector& dir) {
+    if (!OnServer() || !IsGameTypeSingle() || !CanFireTelekinetically())
+        return;
+
+    const u32 now = Device.dwTimeGlobal;
+    const float shot_interval = (std::max)(fOneShotTime, m_recharge_time);
+    if (m_has_recharge_shot && float(now - m_last_recharge_shot) * 0.001f < shot_interval)
+        return;
+
+    m_last_recharge_shot = now;
+    m_has_recharge_shot = true;
+    if (RollForMisfire()) {
+        bMisfire = true;
+        return;
+    }
+
+    if (const LPCSTR rocket_section = TelekineticRocketSection()) {
+        auto* launcher = smart_cast<CRocketLauncher*>(this);
+        if (!launcher)
+            return;
+        const u16 rocket_id = launcher->LaunchTelekineticRocket(*this, shooter.ID(), rocket_section, pos, dir);
+        if (rocket_id == u16(-1))
+            return;
+
+        const auto& cartridge = m_magazine.back();
+        ChangeCondition(-GetWeaponDeterioration() * cartridge.param_s.impair);
+        UpdateHudAmmoBones(&cartridge);
+        m_magazine.pop_back();
+        --iAmmoElapsed;
+        if (auto* rpg = smart_cast<CWeaponRPG7*>(this))
+            rpg->UpdateMissileVisibility();
+
+        NET_Packet packet;
+        u_EventGen(packet, GE_LAUNCH_ROCKET, ID());
+        packet.w_u16(rocket_id);
+        u_EventSend(packet);
+    } else {
+        FireTraceFrom(shooter, pos, dir);
+    }
+
+    Fvector velocity;
+    PHGetLinearVell(velocity);
+    if (UpgradeGrenadeMode()) {
+        PlaySound("sndShotG", pos);
+        StartFlameParticles2();
+    } else {
+        PlaySound(ShotSound(), pos);
+        OnShellDrop(get_LastSP(), velocity);
+        StartFlameParticles();
+        StartSmokeParticles(pos, velocity);
+    }
+    m_telekinetic_flame_active = true;
+    ForceUpdateAmmo();
 }
 
 void CWeaponMagazined::OnEmptyClick() { PlaySound("sndEmptyClick", get_LastFP()); }
@@ -2843,7 +2933,7 @@ float CWeaponMagazined::GetFireDispersion(float cartridge_k, bool for_crosshair)
 void CWeaponMagazined::FireBullet(const Fvector& pos, const Fvector& shot_dir, float fire_disp,
                                   const CCartridge& cartridge, u16 parent_id, u16 weapon_id,
                                   bool send_hit) {
-    if (m_iBaseDispersionedBulletsCount) {
+    if (H_Parent() && m_iBaseDispersionedBulletsCount) {
         if (m_iShotNum <= 1) {
             m_fOldBulletSpeed = GetBulletSpeed();
             SetBulletSpeed(m_fBaseDispersionedBulletsSpeed);

@@ -242,6 +242,9 @@ void CActor::reinit() {
 
     set_input_external_handler(nullptr);
     m_time_lock_accel = 0;
+    m_monster_disarm_animation = nullptr;
+    m_monster_disarm_item = u16(-1);
+    m_monster_disarm_started = 0;
 }
 
 void CActor::reload(LPCSTR section) {
@@ -402,29 +405,26 @@ void ApplyBoarImpact(CActor& actor, const SHit& hit, float power) {
         return;
 
     constexpr LPCSTR section = "gunslinger_base";
-    const float factor = READ_IF_EXISTS(pSettings, r_float, section, "boar_stamina_hit_k", 0.f);
+    const float factor = READ_IF_EXISTS(pSettings, r_float, section, "boar_stamina_hit_k", 1.f);
     const float drain = power * factor;
-    if (!std::isfinite(drain) || drain <= 0.f)
+    if (!std::isfinite(drain) || drain < 0.f)
         return;
 
     const float stamina = actor.conditions().GetPower();
-    actor.conditions().PowerHit(drain, false);
+    if (drain > 0.f)
+        actor.conditions().PowerHit(drain, false);
     const Fvector to_boar = Fvector().sub(hit.who->Position(), actor.Position());
     const float forced_distance = READ_IF_EXISTS(pSettings, r_float, section,
-        "boar_hit_unconditional_weapon_drop_dist", -1.f);
+        "boar_hit_unconditional_weapon_drop_dist", 0.f);
     const bool force_drop = forced_distance > 0.f && to_boar.square_magnitude() < forced_distance * forced_distance;
     if (!force_drop && drain <= stamina)
         return;
 
-    PIItem item = actor.inventory().ActiveItem();
-    if (item) {
-        if (item->IsQuestItem() || item->GetDropManual() ||
-            actor.inventory().SlotIsPersistent(actor.inventory().GetActiveSlot()) ||
-            (!force_drop && Random.randF() >= drain - stamina))
-            return;
-
-        actor.g_PerformDrop();
-        if (!item->GetDropManual())
+    const bool front = Device.vCameraDirection.dotproduct(to_boar) >= 0.f;
+    const LPCSTR animation_group = front ? "boar_front_kicks" : "boar_back_kicks";
+    if (PIItem item = actor.inventory().ActiveItem()) {
+        if ((!force_drop && Random.randF() >= drain - stamina) ||
+            !actor.RequestMonsterDisarm(animation_group))
             return;
 
         if (auto* weapon = smart_cast<CWeaponMagazined*>(item)) {
@@ -433,11 +433,8 @@ void ApplyBoarImpact(CActor& actor, const SHit& hit, float power) {
             if (std::isfinite(minimum) && std::isfinite(maximum) && minimum >= 0.f && maximum >= minimum)
                 weapon->ChangeCondition(-Random.randF(minimum, maximum));
         }
-    }
-
-    if (auto* controller = actor.GetItemUseController()) {
-        const bool front = Device.vCameraDirection.dotproduct(to_boar) >= 0.f;
-        controller->StartMonsterHitReaction(front ? "boar_front_kicks" : "boar_back_kicks");
+    } else if (auto* controller = actor.GetItemUseController()) {
+        controller->StartMonsterHitReaction(animation_group);
     }
 }
 }
@@ -819,6 +816,21 @@ float CActor::currentFOV() {
 }
 
 void CActor::UpdateCL() {
+    // Wait for the ownership change and for the active HUD action to finish.
+    if (m_monster_disarm_animation.size()) {
+        if (!g_Alive() || Level().CurrentControlEntity() != this ||
+            Device.dwTimeGlobal - m_monster_disarm_started > 2000) {
+            m_monster_disarm_animation = nullptr;
+            m_monster_disarm_item = u16(-1);
+        } else if (m_monster_disarm_item == u16(-1) && m_item_use &&
+            !m_item_use->IsBusy() && !m_item_use->HasWeaponHudAction()) {
+            const shared_str group = m_monster_disarm_animation;
+            m_monster_disarm_animation = nullptr;
+            if (HUDview())
+                m_item_use->StartMonsterHitReaction(group.c_str());
+        }
+    }
+
     if (m_item_use)
         m_item_use->Update(Device.fTimeDelta);
 
@@ -1242,6 +1254,23 @@ void CActor::g_PerformDrop() {
     }
 }
 
+bool CActor::RequestMonsterDisarm(LPCSTR animation_group) {
+    PIItem item = inventory().ActiveItem();
+    if (!item || item->GetDropManual())
+        return false;
+
+    g_PerformDrop();
+    if (!item->GetDropManual())
+        return false;
+
+    if (HUDview() && m_item_use) {
+        m_monster_disarm_animation = animation_group;
+        m_monster_disarm_item = item->object().ID();
+        m_monster_disarm_started = Device.dwTimeGlobal;
+    }
+    return true;
+}
+
 bool CActor::use_default_throw_force() {
     return g_Alive();
 }
@@ -1437,6 +1466,12 @@ void CActor::OnItemTake(CInventoryItem* inventory_item) {
 
 void CActor::OnItemDrop(CInventoryItem* inventory_item, bool just_before_destroy) {
     CInventoryOwner::OnItemDrop(inventory_item, just_before_destroy);
+
+    if (m_monster_disarm_animation.size() && inventory_item->object().ID() == m_monster_disarm_item) {
+        m_monster_disarm_item = u16(-1);
+        if (just_before_destroy)
+            m_monster_disarm_animation = nullptr;
+    }
 
     if (CCustomOutfit* outfit = smart_cast<CCustomOutfit*>(inventory_item)) {
         if (inventory_item->m_ItemCurrPlace.type == eItemPlaceSlot) {

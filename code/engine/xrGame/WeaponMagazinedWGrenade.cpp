@@ -263,7 +263,7 @@ void CWeaponMagazinedWGrenade::OnEvent(NET_Packet& P, u16 type) {
         bool bLaunch = (type == GE_LAUNCH_ROCKET);
         P.r_u16(id);
         CRocketLauncher::DetachRocket(id, bLaunch);
-        if (bLaunch && m_bGrenadeMode)
+        if (bLaunch && m_bGrenadeMode && H_Parent())
             OnShot();
         UpdateGrenadeVisibility(false);
         break;

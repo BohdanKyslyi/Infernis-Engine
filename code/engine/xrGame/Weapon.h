@@ -531,6 +531,7 @@ protected:
 
     //òðàññèðîâàíèå ïîëåòà ïóëè
     virtual void FireTrace(const Fvector& P, const Fvector& D);
+    void FireTraceFrom(CObject& shooter, const Fvector& P, const Fvector& D);
     virtual float GetWeaponDeterioration();
 
     virtual void FireStart() { CShootingObject::FireStart(); }

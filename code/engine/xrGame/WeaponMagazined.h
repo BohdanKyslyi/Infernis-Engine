@@ -81,6 +81,10 @@ public:
     virtual CWeaponMagazined* cast_weapon_magazined() { return this; }
 
     virtual void SetDefaults();
+    bool CanFireTelekinetically() const;
+    const Fvector& TelekineticMuzzle();
+    void FireTelekineticShot(CObject& shooter, const Fvector& pos, const Fvector& dir);
+
     virtual void FireStart();
     virtual void FireEnd();
     virtual void Reload();
@@ -155,6 +159,8 @@ protected:
     float m_recharge_time = 0.f;
     u32 m_last_recharge_shot = 0;
     bool m_has_recharge_shot = false;
+    bool m_telekinetic_flame_active = false;
+    LPCSTR TelekineticRocketSection() const;
 
     float m_autoaim_time = 0.f;
     shared_str m_autoaim_modes;

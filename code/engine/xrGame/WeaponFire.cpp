@@ -49,6 +49,10 @@ void random_dir(Fvector& tgt_dir, const Fvector& src_dir, float dispersion) {
 float CWeapon::GetWeaponDeterioration() { return conditionDecreasePerShot; };
 
 void CWeapon::FireTrace(const Fvector& P, const Fvector& D) {
+    FireTraceFrom(*H_Parent(), P, D);
+}
+
+void CWeapon::FireTraceFrom(CObject& shooter, const Fvector& P, const Fvector& D) {
     VERIFY(m_magazine.size());
 
     CCartridge& l_cartridge = m_magazine.back();
@@ -91,10 +95,10 @@ void CWeapon::FireTrace(const Fvector& P, const Fvector& D) {
         }
     }
 
-    bool SendHit = SendHitAllowed(H_Parent());
+    bool SendHit = SendHitAllowed(&shooter);
     //выстерлить пулю (с учетом возможной стрельбы дробью)
     for (int i = 0; i < l_cartridge.param_s.buckShot; ++i) {
-        FireBullet(P, D, fire_disp, l_cartridge, H_Parent()->ID(), ID(), SendHit);
+        FireBullet(P, D, fire_disp, l_cartridge, shooter.ID(), ID(), SendHit);
     }
 
     if (!IsSilencerAttached()) {

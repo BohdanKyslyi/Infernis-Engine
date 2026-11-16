@@ -15,6 +15,9 @@ public:
 
     void SpawnRocket(const shared_str& rocket_section, CGameObject* parent_rocket_launcher);
     void LaunchRocket(const Fmatrix& xform, const Fvector& vel, const Fvector& angular_vel);
+    bool CanLaunchTelekineticRocket(LPCSTR rocket_section) const;
+    u16 LaunchTelekineticRocket(CGameObject& weapon, u16 initiator, LPCSTR rocket_section,
+                                 const Fvector& pos, const Fvector& dir);
 
 protected:
     using ROCKET_VECTOR = xr_vector<CCustomRocket*>;

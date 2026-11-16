@@ -911,18 +911,30 @@ bool CItemUseController::StartHudAnimationOnce(const shared_str& hud_section) {
 }
 
 bool CItemUseController::StartMonsterHitReaction(LPCSTR animation_group) {
+    if (READ_IF_EXISTS(pSettings, r_bool, "gunslinger_base", "disable_planned_kicks", false))
+        return false;
+
     const u32 count = READ_IF_EXISTS(pSettings, r_u32, animation_group, "count", 0);
-    if (!count)
+    if (!count) {
+        Msg("! ItemUse: missing monster reaction animators for [%s]", animation_group);
         return false;
+    }
 
-    string32 key;
-    xr_sprintf(key, "animator_%u", Random.randI(count));
-    LPCSTR section = READ_IF_EXISTS(pSettings, r_string, animation_group, key, nullptr);
-    if (!section || !section[0])
-        return false;
+    const u32 first = Random.randI(count);
+    for (u32 offset = 0; offset < count; ++offset) {
+        string32 key;
+        xr_sprintf(key, "animator_%u", (first + offset) % count);
+        const LPCSTR section = READ_IF_EXISTS(pSettings, r_string, animation_group, key, nullptr);
+        if (!section || !section[0])
+            continue;
 
-    const shared_str hud = READ_IF_EXISTS(pSettings, r_string, section, "hud", nullptr);
-    return hud.size() && StartHudAnimationInternal(hud, false, true, true);
+        const shared_str hud = READ_IF_EXISTS(pSettings, r_string, section, "hud", nullptr);
+        if (hud.size() && StartHudAnimationInternal(hud, false, true, true))
+            return true;
+    }
+
+    Msg("! ItemUse: no playable monster reaction HUD for [%s]", animation_group);
+    return false;
 }
 
 bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section,
