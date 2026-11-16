@@ -773,8 +773,16 @@ void CWeaponMagazined::OnStateSwitch(u32 S) {
     }
     if (S != eDetectorTransition)
         m_detector_transition_motion = nullptr;
-    if (S == eHiding || S == eHidden)
+    m_timed_magazine_reload = false;
+    m_magazine_reload_committed = false;
+    m_restore_detector_after_reload = false;
+    if (S != eIdle && S != eFire)
+        m_deferred_hud_shot = false;
+    if (S == eHiding || S == eHidden) {
+        m_timed_hud_motion = nullptr;
+        m_deferred_aim_exit = false;
         m_autoaim_trigger_held = false;
+    }
     inherited::OnStateSwitch(S);
     CInventoryOwner* owner = smart_cast<CInventoryOwner*>(this->H_Parent());
     switch (S) {
@@ -856,6 +864,59 @@ void CWeaponMagazined::OnStateSwitch(u32 S) {
     }
 }
 
+s32 CWeaponMagazined::HudLockTime(LPCSTR prefix, LPCSTR motion) const {
+    string256 key;
+    xr_sprintf(key, "%s%s", prefix, motion);
+    const float seconds = READ_IF_EXISTS(pSettings, r_float, HudSection(), key, -1.f);
+    return std::isfinite(seconds) && seconds >= 0.f
+        ? s32(clampr(seconds, 0.f, 60.f) * 1000.f + 0.5f) : -1;
+}
+
+bool CWeaponMagazined::PlayMagazineReloadMotion(const shared_str& motion, BOOL mix) {
+    const u32 duration = PlayHUDMotion(motion, mix, this, eReload);
+    if (!IsGameTypeSingle() || !OnServer() || H_Parent() != Level().CurrentControlEntity() ||
+        !GetHUDmode())
+        return duration != 0;
+
+    string256 key;
+    xr_sprintf(key, "immediate_unhide_%s", motion.c_str());
+    m_restore_detector_after_reload |= READ_IF_EXISTS(pSettings, r_bool, HudSection(), key, false);
+
+    const s32 start = HudLockTime("lock_time_start_", motion.c_str());
+    const s32 tail = HudLockTime("lock_time_end_", motion.c_str());
+    const s32 total = HudLockTime("lock_time_", motion.c_str());
+    if (start < 0 && tail < 0 && total < 0)
+        return duration != 0;
+
+    m_timed_magazine_reload = true;
+    m_magazine_reload_commit_time = start >= 0 ? u32(start) : duration;
+    m_magazine_reload_end_time = (std::max)(duration,
+        (std::max)(m_magazine_reload_commit_time + u32((std::max)(tail, 0)),
+                   u32((std::max)(total, 0))));
+    return true;
+}
+
+void CWeaponMagazined::CommitMagazineReload() {
+    if (IsMisfire()) {
+        // Clearing a jam does not touch the magazine or reserve ammo.
+        bMisfire = false;
+        m_set_next_ammoType_on_reload = undefined_ammo_type;
+    } else {
+        ReloadMagazine();
+    }
+}
+
+void CWeaponMagazined::UpdateMagazineReloadTiming() {
+    const u32 elapsed = CurrStateTime();
+    if (!m_magazine_reload_committed && elapsed >= m_magazine_reload_commit_time) {
+        m_magazine_reload_committed = true;
+        CommitMagazineReload();
+        UpdateHudAmmoBones();
+    }
+    if (elapsed >= m_magazine_reload_end_time && !m_bStopAtEndAnimIsRunning)
+        SwitchState(eIdle);
+}
+
 void CWeaponMagazined::UpdateCL() {
     inherited::UpdateCL();
     float dt = Device.fTimeDelta;
@@ -868,6 +929,8 @@ void CWeaponMagazined::UpdateCL() {
         case eHiding:
         case eReload:
         case eIdle: {
+            if (GetState() == eReload && m_timed_magazine_reload)
+                UpdateMagazineReloadTiming();
             fShotTimeCounter -= dt;
             clamp(fShotTimeCounter, 0.0f, flt_max);
         } break;
@@ -902,6 +965,7 @@ void CWeaponMagazined::UpdateCL() {
 
     if (m_gunslinger_movement_idles)
         UpdateGunslingerMovementIdle();
+    UpdateTimedHudInput();
     if (auto* hud = GetHUDmode() ? HudItemData() : nullptr) {
         const auto set_visible = [&](LPCSTR name, BOOL visible) {
             const u16 bone = hud->m_model->LL_BoneID(name);
@@ -1029,6 +1093,11 @@ bool CWeaponMagazined::AutoAimAllowsShot(const Fvector& origin, const Fvector& d
 }
 
 void CWeaponMagazined::state_Fire(float dt) {
+    if (IsHudTransitionLocked()) {
+        fShotTimeCounter = (std::max)(fShotTimeCounter - dt, -dt);
+        return;
+    }
+
     if (iAmmoElapsed > 0 && !IsMisfire() && !IsPending()) {
         VERIFY(fOneShotTime > 0.f);
 
@@ -1116,6 +1185,7 @@ void CWeaponMagazined::state_Fire(float dt) {
             // The jammed shot clip needs the jam flag before FireTrace consumes the round.
             if (jam_this_shot)
                 bMisfire = true;
+            m_deferred_hud_shot = false;
             OnShot();
 
             if (m_iShotNum > m_iBaseDispersionedBulletsCount)
@@ -1221,15 +1291,11 @@ shared_str CWeaponMagazined::SelectDryFireMotion(LPCSTR normal, LPCSTR aimed) co
 void CWeaponMagazined::OnAnimationEnd(u32 state) {
     switch (state) {
     case eReload:
-        if (IsMisfire()) {
-            // Clearing a jam does not touch the magazine or reserve ammo.
-            bMisfire = false;
-            m_set_next_ammoType_on_reload = undefined_ammo_type;
-        } else {
-            ReloadMagazine();
+        if (GetState() == eReload && GetNextState() == eReload && !m_timed_magazine_reload) {
+            CommitMagazineReload();
+            SwitchState(eIdle);
         }
-        SwitchState(eIdle);
-        break; // End of reload animation
+        break;
     case eHiding:
         SwitchState(eHidden);
         break; // End of Hide
@@ -1237,6 +1303,8 @@ void CWeaponMagazined::OnAnimationEnd(u32 state) {
         SwitchState(eIdle);
         break; // End of Show
     case eIdle:
+        if (IsHudTransitionLocked())
+            break;
         if (GetState() == eIdle && GetNextState() == eIdle)
             switch2_Idle();
         else if (CanPlayHipIdleDuringRecharge())
@@ -1373,8 +1441,8 @@ shared_str CWeaponMagazined::AmmoChangeReloadMotion(LPCSTR suffix, CCustomDetect
     return {};
 }
 
-shared_str CWeaponMagazined::DetectorReloadMotion(CCustomDetector& detector) const {
-    const shared_str ammo_change = AmmoChangeReloadMotion("_detector", &detector);
+shared_str CWeaponMagazined::DetectorReloadMotion(CCustomDetector* detector) const {
+    const shared_str ammo_change = AmmoChangeReloadMotion("_detector", detector);
     if (ammo_change.size())
         return ammo_change;
 
@@ -1382,8 +1450,12 @@ shared_str CWeaponMagazined::DetectorReloadMotion(CCustomDetector& detector) con
                                                  : "anm_reload_jammed_detector")
                                : (iAmmoElapsed == 0 ? "anm_reload_empty_detector"
                                                     : "anm_reload_detector");
-    return pSettings->line_exist(HudSection(), motion) && detector.CanPlayWeaponReload(motion)
-               ? shared_str(motion) : shared_str();
+    const shared_str masked = MaskedHudMotion(motion, "anm_reload");
+    if (pSettings->line_exist(HudSection(), masked.c_str()) &&
+        (!detector || detector->CanPlayWeaponReload(masked.c_str())))
+        return masked;
+    return pSettings->line_exist(HudSection(), motion) && (!detector || detector->CanPlayWeaponReload(motion))
+        ? shared_str(motion) : shared_str();
 }
 
 LPCSTR CWeaponMagazined::ReloadSound() const {
@@ -1394,7 +1466,7 @@ LPCSTR CWeaponMagazined::ReloadSound() const {
         return "snd_changecartridgetype";
 
     if (auto* detector = ReloadDetector()) {
-        if (DetectorReloadMotion(*detector).size()) {
+        if (DetectorReloadMotion(detector).size()) {
             LPCSTR sound = IsMisfire()
                                ? (IsLastRoundJam() ? "snd_reload_jammed_last_detector"
                                                    : "snd_reload_jammed_detector")
@@ -1503,13 +1575,136 @@ void CWeaponMagazined::switch2_Showing() {
     PlayAnimShow();
 }
 
-bool CWeaponMagazined::Action(u16 cmd, u32 flags) {
-    if (cmd == kWPN_FIRE && (flags & CMD_STOP))
+bool CWeaponMagazined::PlayTimedHudTransition(const shared_str& motion) {
+    const u32 clip_time = PlayHUDMotion(motion, TRUE, this, eIdle);
+    const s32 lock = IsGameTypeSingle() ? HudLockTime("lock_time_", motion.c_str()) : -1;
+    m_timed_hud_motion = lock > 0 ? motion : shared_str();
+    m_hud_transition_start = Device.dwTimeGlobal;
+    m_hud_transition_lock = lock > 0 ? u32(lock) : 0;
+    return clip_time != 0 || m_hud_transition_lock != 0;
+}
+
+bool CWeaponMagazined::IsHudTransitionLocked() const {
+    return m_timed_hud_motion.size() && m_current_motion == m_timed_hud_motion &&
+        Device.dwTimeGlobal - m_hud_transition_start < m_hud_transition_lock;
+}
+
+bool CWeaponMagazined::HandleTimedFireInput(u32 flags) {
+    if (flags & CMD_STOP) {
         m_autoaim_trigger_held = false;
-    else if (cmd == kWPN_FIRE && (flags & CMD_START) && !IsPending())
+        // The preceding press only queued a shot. It did not start firing or empty-mag reload.
+        return GetState() == eIdle && GetNextState() == eIdle &&
+            (m_deferred_hud_shot || IsHudTransitionLocked());
+    }
+    if (!(flags & CMD_START))
+        return false;
+
+    if (!IsPending())
         m_autoaim_trigger_held = true;
 
-    if (cmd == kWPN_ZOOM) {
+    const auto* actor = smart_cast<const CActor*>(H_Parent());
+    if (!IsGameTypeSingle() || !OnServer() || !actor || !actor->g_Alive() ||
+        actor != Level().CurrentControlEntity() || !GetHUDmode())
+        return false;
+
+    if (m_gunslinger_movement_idles && (actor->MovingState() & mcSprint) && !IsPending() &&
+        GetState() == eIdle && GetNextState() == eIdle) {
+        const shared_str motion = SprintTransitionMotion(false);
+        if (HasWeaponActionMotion(motion) && HudLockTime("lock_time_", motion.c_str()) > 0) {
+            m_previous_hud_movement |= mcSprint;
+            m_deferred_hud_shot = true;
+            return true;
+        }
+    }
+    if (IsHudTransitionLocked()) {
+        string256 key;
+        xr_sprintf(key, "autoshoot_%s", m_current_motion.c_str());
+        m_deferred_hud_shot |= READ_IF_EXISTS(pSettings, r_bool, HudSection(), key, false);
+        return true;
+    }
+
+    m_deferred_hud_shot = false;
+    return false;
+}
+
+bool CWeaponMagazined::ShouldDelayAimExit() {
+    if (!IsGameTypeSingle() || !OnServer() || H_Parent() != Level().CurrentControlEntity() ||
+        !GetHUDmode() || !IsZoomed() ||
+        (!IsPending() && GetState() == eIdle && GetNextState() == eIdle))
+        return false;
+
+    constexpr LPCSTR key = "allow_halfaimstate";
+    const shared_str optic = ScopeLensUpgradeSection(key);
+    if (!pSettings->line_exist(HudSection(), key) &&
+        (!IsScopeAttached() || !pSettings->line_exist(optic, key)))
+        return false;
+
+    const bool weapon_allows = READ_IF_EXISTS(pSettings, r_bool, HudSection(), key, false);
+    const bool optic_allows = !IsScopeAttached() || READ_IF_EXISTS(pSettings, r_bool, optic, key, false);
+    return !weapon_allows || !optic_allows;
+}
+
+bool CWeaponMagazined::DeferAimExit() {
+    m_deferred_aim_exit = ShouldDelayAimExit();
+    return m_deferred_aim_exit;
+}
+
+void CWeaponMagazined::UpdateTimedHudInput() {
+    if (!m_timed_hud_motion.size() && !m_deferred_hud_shot && !m_deferred_aim_exit)
+        return;
+
+    const auto* actor = smart_cast<const CActor*>(H_Parent());
+    if (!actor || !actor->g_Alive() || actor != Level().CurrentControlEntity() ||
+        actor->inventory().ActiveItem() != this || !GetHUDmode()) {
+        m_timed_hud_motion = nullptr;
+        m_deferred_aim_exit = false;
+        m_deferred_hud_shot = false;
+        return;
+    }
+
+    if (m_timed_hud_motion.size() && !IsHudTransitionLocked()) {
+        const bool play_idle = m_current_motion == m_timed_hud_motion &&
+            !m_bStopAtEndAnimIsRunning && !IsPending();
+        m_timed_hud_motion = nullptr;
+        if (play_idle)
+            PlayAnimIdle();
+    }
+
+    if (m_deferred_aim_exit && !ShouldDelayAimExit()) {
+        OnZoomOut();
+        PlayAimTransition(false);
+    }
+
+    if (!m_deferred_hud_shot)
+        return;
+
+    if ((CurrentGameUI() && CurrentGameUI()->TopInputReceiver()) ||
+        (actor->GetItemUseController() && actor->GetItemUseController()->IsWeaponLocked())) {
+        m_deferred_hud_shot = false;
+        return;
+    }
+    if (IsHudTransitionLocked() || IsPending() || (actor->MovingState() & mcSprint) ||
+        GetState() != eIdle || GetNextState() != eIdle || (!IsMisfire() && RechargeProgress() < 1.f))
+        return;
+
+    m_deferred_hud_shot = false;
+    const bool trigger_held = m_autoaim_trigger_held;
+    Action(kWPN_FIRE, CMD_START);
+    if (!trigger_held) {
+        m_autoaim_trigger_held = false;
+        CWeapon::FireEnd();
+    }
+}
+
+bool CWeaponMagazined::Action(u16 cmd, u32 flags) {
+    if (cmd == kWPN_FIRE && HandleTimedFireInput(flags))
+        return true;
+
+    if (cmd == kWPN_ZOOM || cmd == kWPN_ZOOM_ALTER) {
+        if ((flags & CMD_START) && m_deferred_aim_exit) {
+            m_deferred_aim_exit = false;
+            return true;
+        }
         const bool was_zoomed = IsZoomed();
         const bool handled = inherited::Action(cmd, flags);
         if (handled && was_zoomed != IsZoomed())
@@ -1517,6 +1712,9 @@ bool CWeaponMagazined::Action(u16 cmd, u32 flags) {
         return handled;
     }
 
+    if (IsHudTransitionLocked() && (cmd == kWPN_RELOAD || cmd == kWPN_NEXT ||
+        cmd == kWPN_FIREMODE_PREV || cmd == kWPN_FIREMODE_NEXT))
+        return true;
     if (inherited::Action(cmd, flags))
         return true;
 
@@ -1829,16 +2027,23 @@ void CWeaponMagazined::PlayAnimHide() {
 void CWeaponMagazined::PlayAnimReload() {
     VERIFY(GetState() == eReload);
     if (auto* detector = ReloadDetector()) {
-        const shared_str motion = DetectorReloadMotion(*detector);
+        const shared_str motion = DetectorReloadMotion(detector);
         if (motion.size()) {
             detector->PlayWeaponReload(motion.c_str());
-            PlayHUDMotion(motion, TRUE, this, GetState());
+            PlayMagazineReloadMotion(motion, TRUE);
             return;
+        }
+
+        // The weapon may have a paired alias while this detector lacks its companion clip.
+        const shared_str paired = DetectorReloadMotion(nullptr);
+        if (paired.size()) {
+            string256 key;
+            xr_sprintf(key, "immediate_unhide_%s", paired.c_str());
+            m_restore_detector_after_reload = READ_IF_EXISTS(pSettings, r_bool, HudSection(), key, false);
         }
     }
     const shared_str ammo_change = AmmoChangeReloadMotion("");
-    PlayHUDMotion(ammo_change.size() ? ammo_change : MaskedHudMotion(ReloadMotion(), "anm_reload"),
-                  TRUE, this, GetState());
+    PlayMagazineReloadMotion(ammo_change.size() ? ammo_change : MaskedHudMotion(ReloadMotion(), "anm_reload"), TRUE);
 }
 
 LPCSTR CWeaponMagazined::StateMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const {
@@ -1909,13 +2114,13 @@ void CWeaponMagazined::PlayAimTransition(bool entering) {
         ? StateMotion(base, "anm_idle_aim_start_empty", "anm_idle_aim_start_jammed")
         : StateMotion(base, "anm_idle_aim_end_empty", "anm_idle_aim_end_jammed");
     const shared_str motion = HudStateVariant(base, IsGrenadeLauncherAttached() ? nullptr : fallback);
-    if (!motion.c_str() || !pSettings->line_exist(HudSection(), motion.c_str())) {
+    if (!HasWeaponActionMotion(motion)) {
         if (during_recharge)
             PlayAnimIdle();
         return;
     }
 
-    if (!PlayHUDMotion(motion, TRUE, this, eIdle)) {
+    if (!PlayTimedHudTransition(motion)) {
         PlayAnimIdle();
         return;
     }
@@ -1966,6 +2171,14 @@ bool IsSprintTransitionMotion(LPCSTR motion) {
 }
 }
 
+shared_str CWeaponMagazined::SprintTransitionMotion(bool entering) const {
+    const LPCSTR base = entering ? "anm_idle_sprint_start" : "anm_idle_sprint_end";
+    const LPCSTR fallback = entering
+        ? StateMotion(base, "anm_idle_sprint_start_empty", "anm_idle_sprint_start_jammed")
+        : StateMotion(base, "anm_idle_sprint_end_empty", "anm_idle_sprint_end_jammed");
+    return HudStateVariant(base, IsGrenadeLauncherAttached() ? nullptr : fallback);
+}
+
 void CWeaponMagazined::UpdateGunslingerMovementIdle() {
     const auto* actor = smart_cast<CActor*>(H_Parent());
     if (!actor || !GetHUDmode()) {
@@ -1982,18 +2195,14 @@ void CWeaponMagazined::UpdateGunslingerMovementIdle() {
 
     const bool sprint_changed = (changed & mcSprint) && !IsZoomed() && MovingAnimAllowedNow();
     const bool sprint_transition = IsSprintTransitionMotion(m_current_motion.c_str());
-    if (m_bStopAtEndAnimIsRunning && !(sprint_changed && sprint_transition))
+    if ((m_bStopAtEndAnimIsRunning || IsHudTransitionLocked()) &&
+        !(sprint_changed && sprint_transition))
         return;
 
     if (sprint_changed) {
         const bool entering = (movement & mcSprint) != 0;
-        const LPCSTR base = entering ? "anm_idle_sprint_start" : "anm_idle_sprint_end";
-        const LPCSTR fallback = entering
-            ? StateMotion(base, "anm_idle_sprint_start_empty", "anm_idle_sprint_start_jammed")
-            : StateMotion(base, "anm_idle_sprint_end_empty", "anm_idle_sprint_end_jammed");
-        const shared_str motion = HudStateVariant(base, IsGrenadeLauncherAttached() ? nullptr : fallback);
-        if (motion.c_str() && pSettings->line_exist(HudSection(), motion.c_str()) &&
-            PlayHUDMotion(motion, TRUE, this, eIdle)) {
+        const shared_str motion = SprintTransitionMotion(entering);
+        if (HasWeaponActionMotion(motion) && PlayTimedHudTransition(motion)) {
             const auto section = cNameSect();
             const LPCSTR disable_sound = entering ? "disable_sprint_start_snd" : "disable_sprint_end_snd";
             if (!READ_IF_EXISTS(pSettings, r_bool, section, disable_sound, false) &&
@@ -2001,8 +2210,10 @@ void CWeaponMagazined::UpdateGunslingerMovementIdle() {
                 PlaySound(entering ? "sndSprintStart" : "sndSprintEnd", get_LastFP());
             return;
         }
-        if (sprint_transition)
+        if (sprint_transition) {
+            m_timed_hud_motion = nullptr;
             StopCurrentAnimWithoutCallback();
+        }
     }
 
     PlayAnimIdle();
@@ -2016,7 +2227,8 @@ bool CWeaponMagazined::IsAimTransitionPlaying() const {
 }
 
 void CWeaponMagazined::PlayAnimIdle() {
-    if ((GetState() != eIdle && !CanPlayHipIdleDuringRecharge()) || IsAimTransitionPlaying())
+    if ((GetState() != eIdle && !CanPlayHipIdleDuringRecharge()) ||
+        IsAimTransitionPlaying() || IsHudTransitionLocked())
         return;
 
     if (m_gunslinger_movement_idles && GetHUDmode() && !IsGrenadeLauncherAttached() &&
@@ -2113,6 +2325,7 @@ void CWeaponMagazined::OnZoomIn() {
     }
 }
 void CWeaponMagazined::OnZoomOut() {
+    m_deferred_aim_exit = false;
     if (!IsZoomed())
         return;
 

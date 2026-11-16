@@ -114,6 +114,7 @@ protected:
     bool m_weapon_reload_motion = false;
     u16 m_preparing_weapon_id = u16(-1);
     u16 m_draw_weapon_id = u16(-1);
+    u16 m_reload_restore_weapon_id = u16(-1);
 
 public:
     CCustomDetector();

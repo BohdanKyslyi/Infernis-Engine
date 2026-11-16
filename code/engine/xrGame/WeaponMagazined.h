@@ -107,6 +107,7 @@ public:
     enum class DetectorTransition { Prepare, Draw, Finish };
     bool RequestDetectorTransition(DetectorTransition phase);
     float RechargeProgress() const;
+    bool ImmediatelyRestoreDetector() const { return m_restore_detector_after_reload; }
 
     virtual bool GetBriefInfo(II_BriefInfo& info);
 
@@ -189,6 +190,29 @@ protected:
     void StartDetectorTransition();
     void UpdateDetectorTransition();
 
+    s32 HudLockTime(LPCSTR prefix, LPCSTR motion) const;
+    bool PlayMagazineReloadMotion(const shared_str& motion, BOOL mix);
+    void CommitMagazineReload();
+    void UpdateMagazineReloadTiming();
+    bool m_timed_magazine_reload = false;
+    bool m_magazine_reload_committed = false;
+    bool m_restore_detector_after_reload = false;
+    u32 m_magazine_reload_commit_time = 0;
+    u32 m_magazine_reload_end_time = 0;
+
+    bool PlayTimedHudTransition(const shared_str& motion);
+    bool IsHudTransitionLocked() const;
+    bool HandleTimedFireInput(u32 flags);
+    bool ShouldDelayAimExit();
+    bool DeferAimExit() override;
+    void UpdateTimedHudInput();
+    shared_str SprintTransitionMotion(bool entering) const;
+    shared_str m_timed_hud_motion;
+    u32 m_hud_transition_start = 0;
+    u32 m_hud_transition_lock = 0;
+    bool m_deferred_hud_shot = false;
+    bool m_deferred_aim_exit = false;
+
     //ïåðåìåííàÿ áëîêèðóåò èñïîëüçîâàíèå
     //òîëüêî ðàçíûõ òèïîâ ïàòðîíîâ
     bool m_bLockType;
@@ -237,7 +261,7 @@ protected:
     bool IsLastRoundJam() const;
     bool IsReloadAmmoChange() const;
     CCustomDetector* ReloadDetector() const;
-    shared_str DetectorReloadMotion(CCustomDetector& detector) const;
+    shared_str DetectorReloadMotion(CCustomDetector* detector) const;
     shared_str AmmoChangeReloadMotion(LPCSTR suffix, CCustomDetector* detector = nullptr) const;
     LPCSTR ShootMotion(LPCSTR fallback) const;
     virtual LPCSTR StateMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const;

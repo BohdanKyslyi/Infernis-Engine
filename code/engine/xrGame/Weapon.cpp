@@ -1121,7 +1121,7 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
                                 SwitchState(eIdle);
                             OnZoomIn();
                         }
-                    } else
+                    } else if (!DeferAimExit())
                         OnZoomOut();
                 }
             } else {
@@ -1131,7 +1131,7 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
                             SwitchState(eIdle);
                         OnZoomIn();
                     }
-                } else if (IsZoomed())
+                } else if (IsZoomed() && !DeferAimExit())
                     OnZoomOut();
             }
             return true;
@@ -1173,7 +1173,8 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
             const bool owns_zoom = m_bAlternativeAimOwnsZoom;
 
             if (owns_zoom && IsZoomed()) {
-                OnZoomOut();
+                if (!DeferAimExit())
+                    OnZoomOut();
             } else {
                 m_bAlternativeAimActive = false;
                 m_bAlternativeAimOwnsZoom = false;

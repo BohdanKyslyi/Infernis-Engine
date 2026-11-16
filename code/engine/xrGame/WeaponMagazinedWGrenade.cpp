@@ -123,7 +123,7 @@ void CWeaponMagazinedWGrenade::switch2_Reload() {
         ? "sndChangeGrenade" : "sndReloadG", get_LastFP2());
     SetPending(TRUE);
     const shared_str motion = LauncherReloadMotion();
-    if (!motion.c_str() || !PlayHUDMotion(motion, FALSE, this, eReload))
+    if (!motion.c_str() || !PlayMagazineReloadMotion(motion, FALSE))
         OnAnimationEnd(eReload);
 }
 
@@ -183,6 +183,8 @@ void CWeaponMagazinedWGrenade::PerformSwitchGL() {
 
 bool CWeaponMagazinedWGrenade::Action(u16 cmd, u32 flags) {
     if (m_bGrenadeMode && cmd == kWPN_FIRE) {
+        if (HandleTimedFireInput(flags))
+            return true;
         if (IsPending() || GetNextState() != GetState())
             return false;
 
@@ -654,7 +656,7 @@ void CWeaponMagazinedWGrenade::PlayAnimHide() {
 void CWeaponMagazinedWGrenade::PlayAnimReload() {
     VERIFY(GetState() == eReload);
     if (IsGrenadeLauncherAttached())
-        PlayHUDMotion(LauncherReloadMotion(), TRUE, this, GetState());
+        PlayMagazineReloadMotion(LauncherReloadMotion(), TRUE);
     else
         inherited::PlayAnimReload();
 }
@@ -664,7 +666,7 @@ void CWeaponMagazinedWGrenade::PlayAnimIdle() {
         inherited::PlayAnimIdle();
         return;
     }
-    if (GetState() != eIdle || IsAimTransitionPlaying())
+    if (GetState() != eIdle || IsAimTransitionPlaying() || IsHudTransitionLocked())
         return;
     if (m_bStopAtEndAnimIsRunning && ((m_bGrenadeMode && m_startedMotionState == eFire) ||
         (m_current_motion.c_str() &&

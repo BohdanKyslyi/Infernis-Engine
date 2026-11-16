@@ -389,6 +389,11 @@ public:
     virtual void ZoomDec();
     virtual void OnZoomIn();
     virtual void OnZoomOut();
+
+protected:
+    virtual bool DeferAimExit() { return false; }
+
+public:
     IC bool IsZoomed() const { return m_zoom_params.m_bIsZoomModeNow; };
     CUIWindow* ZoomTexture();
 
