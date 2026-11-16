@@ -12,6 +12,8 @@ class ENGINE_API CMotionDef;
 //çàêàí÷èâàåì ñòðåëüáó, òîëüêî, åñëè êîí÷èëèñü ïàòðîíû
 #define WEAPON_ININITE_QUEUE -1
 
+class CController;
+
 class CWeaponMagazined : public CWeapon {
 private:
     typedef CWeapon inherited;
@@ -106,6 +108,10 @@ public:
     SilencerActionResult RequestSilencerAction(PIItem silencer, LPCSTR detach_section = nullptr);
     enum class DetectorTransition { Prepare, Draw, Finish };
     bool RequestDetectorTransition(DetectorTransition phase);
+    bool RequestControllerAttack(CController& attacker);
+    bool IsControllerAttackActive() const {
+        return GetState() == eControllerAttack || GetNextState() == eControllerAttack;
+    }
     float RechargeProgress() const;
     bool ImmediatelyRestoreDetector() const { return m_restore_detector_after_reload; }
 
@@ -189,6 +195,21 @@ protected:
     bool m_has_detector_finish_sound = false;
     void StartDetectorTransition();
     void UpdateDetectorTransition();
+
+    enum class ControllerPhase { Prepare, Recover, Shot };
+    ControllerPhase m_controller_phase = ControllerPhase::Prepare;
+    u16 m_controller_attacker = u16(-1);
+    u32 m_controller_phase_start = 0;
+    u32 m_controller_phase_duration = 0;
+    shared_str m_controller_prepare_motion;
+    bool m_has_controller_prepare_sound = false;
+    bool m_has_controller_recovery_sound = false;
+    shared_str ControllerMotion(LPCSTR base);
+    u32 PlayControllerMotion(const shared_str& motion, LPCSTR fallback_sound);
+    void StartControllerAttack();
+    void UpdateControllerAttack();
+    void FireControllerShot();
+    void PlayMagazineShotEffects();
 
     s32 HudLockTime(LPCSTR prefix, LPCSTR motion) const;
     bool PlayMagazineReloadMotion(const shared_str& motion, BOOL mix);

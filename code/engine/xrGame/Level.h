@@ -240,6 +240,7 @@ public:
     bool ChangeElectronicsProblems(int delta);
     bool ResetElectronicsProblems();
     bool ApplyElectronicsProblems();
+    float ElectronicsProblems() const { return m_electronics_problems; }
     bool ScopeLensHasDetector() const override;
     u32 ScopeLensTargets(float* targets, u32 capacity) const override;
 

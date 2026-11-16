@@ -76,6 +76,7 @@ private:
         eHudAnimationNone,
         eHudAnimationShow,
         eHudAnimationIdle,
+        eHudAnimationBlowout,
         eHudAnimationHide,
     };
 
@@ -100,6 +101,9 @@ private:
     void BeginHudAnimationIdle();
     void BeginHudAnimationHide();
     void UpdateHudAnimation();
+    bool IsHudBlowoutActive() const;
+    void BeginHudBlowout();
+    bool m_hud_blowout_played = false;
     void UpdateMutantLootAnimation();
     void UpdateQuickKnifeAnimation();
     void UpdatePickupAnimation();

@@ -676,7 +676,7 @@ BOOL CWeapon::net_Spawn(CSE_Abstract* DC) {
     const u8 state = (E->wpn_state == eTacticalTorch || E->wpn_state == eBayonetStrike ||
                       E->wpn_state == eLaserSwitch || E->wpn_state == eFireModeSwitch ||
                       E->wpn_state == eUnloadMagazine || E->wpn_state == eSilencerAction ||
-                      E->wpn_state == eDetectorTransition)
+                      E->wpn_state == eDetectorTransition || E->wpn_state == eControllerAttack)
         ? u8(eIdle) : E->wpn_state;
     SetState(state);
     SetNextState(state);
@@ -2501,7 +2501,8 @@ bool CWeapon::IsHudActionLocked() const {
            GetState() == eFireModeSwitch || GetNextState() == eFireModeSwitch ||
            GetState() == eUnloadMagazine || GetNextState() == eUnloadMagazine ||
            GetState() == eSilencerAction || GetNextState() == eSilencerAction ||
-           GetState() == eDetectorTransition || GetNextState() == eDetectorTransition;
+           GetState() == eDetectorTransition || GetNextState() == eDetectorTransition ||
+           GetState() == eControllerAttack || GetNextState() == eControllerAttack;
 }
 
 bool CWeapon::HasWeaponActionMotion(const shared_str& motion) {

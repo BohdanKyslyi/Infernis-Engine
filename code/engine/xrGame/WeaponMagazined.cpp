@@ -6,6 +6,8 @@
 
 #include "WeaponMagazined.h"
 #include "actor.h"
+#include "ActorCondition.h"
+#include "ai/monsters/controller/controller.h"
 #include "entity_alive.h"
 #include "ai/crow/ai_crow.h"
 #include "ai/monsters/bloodsucker/bloodsucker.h"
@@ -120,6 +122,8 @@ void CWeaponMagazined::Load(LPCSTR section) {
     m_has_silencer_detach_sound = load_action_sound("snd_detach_sil", "sndSilencerDetach");
     m_has_detector_prepare_sound = load_action_sound("snd_prepare_detector", "sndPrepareDet");
     m_has_detector_finish_sound = load_action_sound("snd_finish_detector", "sndFinishDet");
+    m_has_controller_prepare_sound = load_action_sound("snd_suicide", "sndSuicide");
+    m_has_controller_recovery_sound = load_action_sound("snd_stop_suicide", "sndStopSuicide");
     for (LPCSTR sound : {"snd_changefiremode", "snd_changefiremode_empty", "snd_changefiremode_jammed"})
         load_action_sound(sound, sound);
     m_sounds.LoadSound(section, "snd_empty", "sndEmptyClick", false, m_eSoundEmptyClick);
@@ -190,7 +194,10 @@ void CWeaponMagazined::OnUpgradeHudChanged() {
             std::strncmp(motion, "anm_prepare_detector", sizeof("anm_prepare_detector") - 1) == 0 ||
             std::strncmp(motion, "anm_draw_detector", sizeof("anm_draw_detector") - 1) == 0 ||
             std::strncmp(motion, "anm_finish_detector", sizeof("anm_finish_detector") - 1) == 0;
-        if (!shot && !selector && !silencer && !detector)
+        const bool controller =
+            std::strncmp(motion, "anm_suicide", sizeof("anm_suicide") - 1) == 0 ||
+            std::strncmp(motion, "anm_stop_suicide", sizeof("anm_stop_suicide") - 1) == 0;
+        if (!shot && !selector && !silencer && !detector && !controller)
             continue;
         string256 key, exclusive, alias, path;
         xr_sprintf(key, "snd_%s", motion);
@@ -204,7 +211,7 @@ void CWeaponMagazined::OnUpgradeHudChanged() {
         xr_sprintf(alias, "%s:%s", HudSection().c_str(), key);
         m_sounds.ReloadSound(HudSection().c_str(), key, alias,
             READ_IF_EXISTS(pSettings, r_bool, HudSection(), exclusive, false),
-            detector ? m_eSoundReload : m_eSoundShot);
+            (detector || controller) ? m_eSoundReload : m_eSoundShot);
     }
 }
 
@@ -361,7 +368,8 @@ void CWeaponMagazined::OnMagazineEmpty() {
 bool CWeaponMagazined::RequestMagazineUnload(bool animate) {
     if (GetState() == eUnloadMagazine || GetNextState() == eUnloadMagazine ||
         GetState() == eSilencerAction || GetNextState() == eSilencerAction ||
-        GetState() == eDetectorTransition || GetNextState() == eDetectorTransition || m_magazine.empty())
+        GetState() == eDetectorTransition || GetNextState() == eDetectorTransition ||
+        IsControllerAttackActive() || m_magazine.empty())
         return false;
 
     const auto* actor = smart_cast<const CActor*>(H_Parent());
@@ -558,6 +566,173 @@ void CWeaponMagazined::UpdateDetectorTransition() {
         SetPending(FALSE);
         SwitchState(eIdle);
     }
+}
+
+namespace {
+bool HasControllerPsyBlockade(CActor& actor) {
+    const auto boosters = actor.conditions().GetCurBoosterInfluences();
+    for (const auto type : {eBoostTelepaticImmunity, eBoostTelepaticProtection}) {
+        const auto it = boosters.find(type);
+        if (it != boosters.end() && it->second.fBoostTime > 0.f && it->second.fBoostValue > 0.f)
+            return true;
+    }
+    return false;
+}
+}
+
+shared_str CWeaponMagazined::ControllerMotion(LPCSTR base) {
+    if (iAmmoElapsed == 1 || iAmmoElapsed == 2) {
+        string128 counted;
+        xr_sprintf(counted, "%s_%d", base, iAmmoElapsed);
+        if (HasWeaponActionMotion(counted))
+            return counted;
+    }
+
+    const auto motion = WeaponActionMotion(base);
+    return HasWeaponActionMotion(motion) ? motion : shared_str();
+}
+
+bool CWeaponMagazined::RequestControllerAttack(CController& attacker) {
+    auto* actor = smart_cast<CActor*>(H_Parent());
+    if (!IsGameTypeSingle() || !OnServer() || !actor || !actor->g_Alive() ||
+        actor != Level().CurrentControlEntity() || actor->inventory().ActiveItem() != this ||
+        GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
+        IsHudTransitionLocked() || m_bStopAtEndAnimIsRunning || m_magazine.empty() || IsMisfire() ||
+        UpgradeGrenadeMode() || RechargeProgress() < 1.f || !GetHUDmode() ||
+        g_player_hud->attached_item(1) || HasControllerPsyBlockade(*actor) ||
+        (actor->GetItemUseController() && actor->GetItemUseController()->IsBusy()) ||
+        (CurrentGameUI() && CurrentGameUI()->TopInputReceiver()))
+        return false;
+
+    if (READ_IF_EXISTS(pSettings, r_bool, HudSection(), "prohibit_suicide", false) ||
+        !READ_IF_EXISTS(pSettings, r_bool, HudSection(), "suicide_by_animation", false))
+        return false;
+
+    const auto motion = ControllerMotion("anm_suicide");
+    if (!motion.size())
+        return false;
+
+    OnZoomOut();
+    CWeapon::FireEnd();
+    m_controller_attacker = attacker.ID();
+    m_controller_prepare_motion = motion;
+    SetPending(TRUE);
+    SwitchState(eControllerAttack);
+    return true;
+}
+
+u32 CWeaponMagazined::PlayControllerMotion(const shared_str& motion, LPCSTR fallback_sound) {
+    if (!HasWeaponActionMotion(motion))
+        return 0;
+
+    const u32 duration = PlayHUDMotion(motion, TRUE, this, eControllerAttack);
+    if (!PlayHudActionSound(motion) && fallback_sound)
+        PlaySound(fallback_sound, get_LastFP());
+    const s32 lock = HudLockTime("lock_time_", motion.c_str());
+    return lock > 0 ? u32(lock) : duration;
+}
+
+void CWeaponMagazined::StartControllerAttack() {
+    const auto motion = m_controller_prepare_motion;
+    m_controller_prepare_motion = nullptr;
+    if (!HasWeaponActionMotion(motion)) {
+        SetPending(FALSE);
+        SwitchState(eIdle);
+        return;
+    }
+
+    m_controller_phase = ControllerPhase::Prepare;
+    m_controller_phase_start = Device.dwTimeGlobal;
+    m_controller_phase_duration = PlayControllerMotion(motion,
+        m_has_controller_prepare_sound ? "sndSuicide" : nullptr);
+    if (!m_controller_phase_duration) {
+        StopCurrentAnimWithoutCallback();
+        SetPending(FALSE);
+        SwitchState(eIdle);
+    }
+}
+
+void CWeaponMagazined::UpdateControllerAttack() {
+    auto* actor = smart_cast<CActor*>(H_Parent());
+    const bool active = actor && actor->g_Alive() && actor->inventory().ActiveItem() == this;
+    if (!active || (!GetHUDmode() && m_controller_phase != ControllerPhase::Shot)) {
+        SetPending(FALSE);
+        StopCurrentAnimWithoutCallback();
+        SwitchState(active ? eIdle : eHidden);
+        return;
+    }
+
+    const u32 elapsed = Device.dwTimeGlobal - m_controller_phase_start;
+    if (m_controller_phase == ControllerPhase::Shot) {
+        if (elapsed >= m_controller_phase_duration) {
+            StopFlameParticles();
+            SetPending(FALSE);
+            SwitchState(eIdle);
+            if (!actor->AlreadyDie())
+                actor->KillEntity(actor->ID());
+        }
+        return;
+    }
+
+    if (m_controller_phase == ControllerPhase::Recover) {
+        if (elapsed >= m_controller_phase_duration) {
+            SetPending(FALSE);
+            StopCurrentAnimWithoutCallback();
+            SwitchState(eIdle);
+        }
+        return;
+    }
+
+    auto* attacker = m_controller_attacker != u16(-1)
+        ? smart_cast<CController*>(Level().Objects.net_Find(m_controller_attacker)) : nullptr;
+    const bool controlled = attacker && !attacker->getDestroy() && attacker->g_Alive() &&
+        attacker->EnemyMan.see_enemy_now(actor) && !HasControllerPsyBlockade(*actor);
+    if (!controlled || IsMisfire() || m_magazine.empty()) {
+        m_controller_phase = ControllerPhase::Recover;
+        m_controller_attacker = u16(-1);
+        m_controller_phase_start = Device.dwTimeGlobal;
+        StopCurrentAnimWithoutCallback();
+        m_controller_phase_duration = PlayControllerMotion(ControllerMotion("anm_stop_suicide"),
+            m_has_controller_recovery_sound ? "sndStopSuicide" : nullptr);
+    } else if (elapsed >= m_controller_phase_duration) {
+        FireControllerShot();
+    }
+}
+
+void CWeaponMagazined::FireControllerShot() {
+    shared_str motion;
+    if (READ_IF_EXISTS(pSettings, r_bool, HudSection(), "custom_suicide_shot", false)) {
+        if (iAmmoElapsed == 1 && IsSilencerAttached())
+            motion = ControllerMotion("anm_shoot_last_suicide_sil");
+        if (!motion.size() && iAmmoElapsed == 1)
+            motion = ControllerMotion("anm_shoot_last_suicide");
+        if (!motion.size() && IsSilencerAttached())
+            motion = ControllerMotion("anm_shoot_suicide_sil");
+        if (!motion.size())
+            motion = ControllerMotion("anm_shoot_suicide");
+    }
+    if (!motion.size())
+        motion = ShootMotion(OptionalHudMotion("anm_shots", "anm_shoot"));
+
+    m_controller_phase = ControllerPhase::Shot;
+    m_controller_phase_start = Device.dwTimeGlobal;
+    const float delay = READ_IF_EXISTS(pSettings, r_float, HudSection(), "suicide_delay", 0.1f);
+    m_controller_phase_duration = std::isfinite(delay)
+        ? u32(clampr(delay, 0.f, 10.f) * 1000.f + 0.5f) : 100;
+    StopCurrentAnimWithoutCallback();
+    UpdateWorldAnimation(eFire, true);
+    AddShotEffector();
+    if (HasWeaponActionMotion(motion))
+        PlayHUDMotion(motion, TRUE, this, eControllerAttack);
+    PlayMagazineShotEffects();
+
+    // Commit one round. The actor death event represents this scripted hit;
+    // spawning a regular world projectile could also injure a bystander.
+    ChangeCondition(-GetWeaponDeterioration() * m_magazine.back().param_s.impair);
+    UpdateHudAmmoBones(&m_magazine.back());
+    m_magazine.pop_back();
+    --iAmmoElapsed;
+    ForceUpdateAmmo();
 }
 
 void CWeaponMagazined::StartMagazineUnload() {
@@ -773,6 +948,10 @@ void CWeaponMagazined::OnStateSwitch(u32 S) {
     }
     if (S != eDetectorTransition)
         m_detector_transition_motion = nullptr;
+    if (S != eControllerAttack) {
+        m_controller_attacker = u16(-1);
+        m_controller_prepare_motion = nullptr;
+    }
     m_timed_magazine_reload = false;
     m_magazine_reload_committed = false;
     m_restore_detector_after_reload = false;
@@ -800,6 +979,9 @@ void CWeaponMagazined::OnStateSwitch(u32 S) {
         break;
     case eDetectorTransition:
         StartDetectorTransition();
+        break;
+    case eControllerAttack:
+        StartControllerAttack();
         break;
     case eFireModeSwitch: {
         const shared_str motion = m_fire_mode_motion;
@@ -942,6 +1124,9 @@ void CWeaponMagazined::UpdateCL() {
             break;
         case eDetectorTransition:
             UpdateDetectorTransition();
+            break;
+        case eControllerAttack:
+            UpdateControllerAttack();
             break;
         case eFireModeSwitch:
             if (CurrStateTime() >= m_fire_mode_duration && !m_bStopAtEndAnimIsRunning) {
@@ -1244,6 +1429,10 @@ void CWeaponMagazined::OnShot() {
 
     // Animation
     PlayAnimShoot();
+    PlayMagazineShotEffects();
+}
+
+void CWeaponMagazined::PlayMagazineShotEffects() {
     if (m_motion_play_frame != Device.dwFrame || !PlayHudActionSound(m_current_motion))
         PlaySound(ShotSound(), get_LastFP());
     if (IsMisfire()) {

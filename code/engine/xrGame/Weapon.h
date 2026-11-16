@@ -116,6 +116,7 @@ public:
         eUnloadMagazine,
         eSilencerAction,
         eDetectorTransition,
+        eControllerAttack,
     };
     enum EWeaponSubStates {
         eSubstateReloadBegin = 0,

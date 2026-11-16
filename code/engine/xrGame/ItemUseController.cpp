@@ -957,6 +957,7 @@ bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section
                                  : eControllerModeHudAnimation;
     m_hud_animation_phase = eHudAnimationNone;
     m_hud_animation_hide_requested = false;
+    m_hud_blowout_played = false;
     m_hud_animation_allow_inventory = allow_inventory;
     m_queued_consumable_id = u16(-1);
     m_queued_hud_animation_section = NULL;
@@ -989,7 +990,7 @@ void CItemUseController::RequestHudAnimationHide() {
     }
 
     // A close request during show is queued, so show is never cut in half.
-    if (m_hud_animation_phase == eHudAnimationIdle)
+    if (m_hud_animation_phase == eHudAnimationIdle || m_hud_animation_phase == eHudAnimationBlowout)
         BeginHudAnimationHide();
 }
 
@@ -998,7 +999,8 @@ bool CItemUseController::IsHudAnimationActive() const {
 }
 
 bool CItemUseController::IsHudAnimationIdle() const {
-    return IsHudAnimationActive() && m_hud_animation_phase == eHudAnimationIdle;
+    return IsHudAnimationActive() &&
+        (m_hud_animation_phase == eHudAnimationIdle || m_hud_animation_phase == eHudAnimationBlowout);
 }
 
 bool CItemUseController::CanUseConsumables() const {
@@ -1565,18 +1567,41 @@ void CItemUseController::BeginHudAnimationHide() {
     if (m_hud_animation_allow_inventory && m_actor && m_actor_locked)
         m_actor->set_inventory_disabled(true);
 
-    // anm_hide is optional. If it is absent, closing remains instant and the
-    // caller does not need a special fallback path.
-    if (!PlayHudAnimationMotion("anm_hide", eHudAnimationHide, TRUE)) {
+    const bool emergency = IsHudBlowoutActive() &&
+        PlayHudAnimationMotion("anm_hide_emerg", eHudAnimationHide, TRUE);
+    if (!emergency && !PlayHudAnimationMotion("anm_hide", eHudAnimationHide, TRUE)) {
         Finish();
         return;
     }
 
-    PlayHudAnimationSound("snd_hide");
+    LPCSTR sound = emergency && pSettings->line_exist(m_hud_section, "snd_hide_emerg")
+        ? "snd_hide_emerg" : "snd_hide";
+    PlayHudAnimationSound(sound);
 
     Msg("* ItemUse HUD animation hide: [%s], duration [%u], sound [%s]",
         m_hud_section.c_str(), m_animation_duration,
         m_anim_sound_loaded ? "yes" : "no");
+}
+
+bool CItemUseController::IsHudBlowoutActive() const {
+    if (!g_pGameLevel || !m_hud_section.size() ||
+        !READ_IF_EXISTS(pSettings, r_bool, m_hud_section, "play_blowout_anim", true) ||
+        !pSettings->line_exist(m_hud_section, "anm_blowout"))
+        return false;
+
+    const float threshold = READ_IF_EXISTS(pSettings, r_float, m_hud_section, "blowout_anim_level", 4.5f);
+    return std::isfinite(threshold) && threshold > 0.f && Level().ElectronicsProblems() >= threshold;
+}
+
+void CItemUseController::BeginHudBlowout() {
+    m_hud_blowout_played = true;
+    if (!g_player_hud->has_controller_motion("anm_blowout"))
+        return;
+
+    m_animation_duration = g_player_hud->play_controller_motion("anm_blowout", TRUE);
+    m_start_time = Device.dwTimeGlobal;
+    m_hud_animation_phase = eHudAnimationBlowout;
+    PlayHudAnimationSound("snd_blowout");
 }
 
 void CItemUseController::UpdateHudAnimation() {
@@ -1593,9 +1618,22 @@ void CItemUseController::UpdateHudAnimation() {
         return;
     }
 
-    if (m_hud_animation_phase == eHudAnimationIdle) {
-        if (m_hud_animation_hide_requested)
+    if (m_hud_animation_phase == eHudAnimationIdle || m_hud_animation_phase == eHudAnimationBlowout) {
+        const bool active = IsHudBlowoutActive();
+        if (!active)
+            m_hud_blowout_played = false;
+
+        if (m_hud_animation_hide_requested) {
             BeginHudAnimationHide();
+        } else if (m_hud_animation_phase == eHudAnimationBlowout) {
+            const bool finished = m_animation_duration && Device.dwTimeGlobal - m_start_time >= m_animation_duration;
+            if (!active || finished) {
+                DestroyAnimSound();
+                BeginHudAnimationIdle();
+            }
+        } else if (active && !m_hud_blowout_played) {
+            BeginHudBlowout();
+        }
 
         return;
     }
