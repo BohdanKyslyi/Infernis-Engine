@@ -1818,8 +1818,15 @@ bool CWeaponMagazined::HandleTimedFireInput(u32 flags) {
 
 bool CWeaponMagazined::ShouldDelayAimExit() {
     if (!IsGameTypeSingle() || !OnServer() || H_Parent() != Level().CurrentControlEntity() ||
-        !GetHUDmode() || !IsZoomed() ||
-        (!IsPending() && GetState() == eIdle && GetNextState() == eIdle))
+        !GetHUDmode() || !IsZoomed())
+        return false;
+
+    const bool firing = GetState() == eFire || GetNextState() == eFire;
+    if (GetQueueSize() != 1 &&
+        (m_autoaim_trigger_held || (firing && !IsRecoveringFromShot())))
+        return true;
+
+    if (!IsPending() && GetState() == eIdle && GetNextState() == eIdle)
         return false;
 
     constexpr LPCSTR key = "allow_halfaimstate";
@@ -2287,9 +2294,13 @@ shared_str CWeaponMagazined::WeaponActionMotion(LPCSTR base) const {
     return IsGrenadeLauncherAttached() ? HudStateVariant(base, fallback.c_str()) : fallback;
 }
 
-bool CWeaponMagazined::CanPlayHipIdleDuringRecharge() {
+bool CWeaponMagazined::IsRecoveringFromShot() const {
     return GetState() == eFire && GetNextState() == eFire && !IsPending() &&
-           !IsZoomed() && m_iShotNum > 0 && RechargeProgress() < 1.f && GetHUDmode();
+           m_iShotNum > 0 && RechargeProgress() < 1.f;
+}
+
+bool CWeaponMagazined::CanPlayHipIdleDuringRecharge() {
+    return !IsZoomed() && GetHUDmode() && IsRecoveringFromShot();
 }
 
 void CWeaponMagazined::PlayAimTransition(bool entering) {

@@ -910,9 +910,24 @@ bool CItemUseController::StartHudAnimationOnce(const shared_str& hud_section) {
     return StartHudAnimationInternal(hud_section, false, true);
 }
 
+bool CItemUseController::StartMonsterHitReaction(LPCSTR animation_group) {
+    const u32 count = READ_IF_EXISTS(pSettings, r_u32, animation_group, "count", 0);
+    if (!count)
+        return false;
+
+    string32 key;
+    xr_sprintf(key, "animator_%u", Random.randI(count));
+    LPCSTR section = READ_IF_EXISTS(pSettings, r_string, animation_group, key, nullptr);
+    if (!section || !section[0])
+        return false;
+
+    const shared_str hud = READ_IF_EXISTS(pSettings, r_string, section, "hud", nullptr);
+    return hud.size() && StartHudAnimationInternal(hud, false, true, true);
+}
+
 bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section,
                                                    bool allow_inventory,
-                                                   bool one_shot) {
+                                                   bool one_shot, bool show_only) {
     if (IsBusy() || HasWeaponHudAction() || !m_actor || !g_player_hud || !hud_section.size())
         return false;
 
@@ -932,7 +947,7 @@ bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section
     // Validate the resolved hand motion before hiding the inventory or weapon.
     // player_hud's regular HUD loader asserts on a missing motion, while an
     // optional controller animation must safely fall back to normal gameplay.
-    if (!g_player_hud->can_attach_controller_item(hud_section)) {
+    if (!g_player_hud->can_attach_controller_item(hud_section, show_only)) {
         Msg("! ItemUse: HUD animation section [%s] has an invalid item visual or unavailable "
             "motion; check HUD fields, [hands_animations_path] and OMF files",
             hud_section.c_str());
@@ -958,6 +973,7 @@ bool CItemUseController::StartHudAnimationInternal(const shared_str& hud_section
     m_hud_animation_phase = eHudAnimationNone;
     m_hud_animation_hide_requested = false;
     m_hud_blowout_played = false;
+    m_hud_show_only = show_only;
     m_hud_animation_allow_inventory = allow_inventory;
     m_queued_consumable_id = u16(-1);
     m_queued_hud_animation_section = NULL;
@@ -1319,7 +1335,7 @@ void CItemUseController::BeginAnimation()
     }
 
     if (!g_player_hud->attach_controller_item(m_hud_section, pose_section,
-                                              m_equipment_toggle_donor_item)) {
+                                              m_hud_show_only || m_equipment_toggle_donor_item)) {
         Msg("! ItemUse: failed to attach HUD [%s]", m_hud_section.c_str());
 
         CCustomMonster* mutant =
@@ -2278,6 +2294,7 @@ void CItemUseController::Reset()
     m_effect_applied = false;
 
     m_controller_mode = eControllerModeNone;
+    m_hud_show_only = false;
     m_hud_animation_phase = eHudAnimationNone;
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;

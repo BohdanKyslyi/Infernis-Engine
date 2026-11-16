@@ -152,10 +152,11 @@ public:
     virtual u32 ef_detector_type() const { return 1; };
 
 protected:
-    bool CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate);
+    bool CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate, bool check_state = true);
     bool CanResumeShowing();
     void StartShowing(u16 prepared_weapon_id = u16(-1));
     virtual bool AllowsZoomWithDetector() const { return false; }
+    virtual bool AllowsImmediateReloadRestore() const { return true; }
     virtual void TurnDetectorInternal(bool b);
     void UpdateNightVisionMode(bool b_off);
     void UpdateVisibility();

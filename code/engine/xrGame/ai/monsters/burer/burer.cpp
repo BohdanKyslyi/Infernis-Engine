@@ -20,7 +20,9 @@
 #include "../../../Inventory.h"
 #include "../../../ActorCondition.h"
 #include "../../../xr_level_controller.h"
-#include "../../../weapon.h"
+#include "../../../WeaponMagazined.h"
+#include "../../../ItemUseController.h"
+#include <cmath>
 
 #include "../../../../xrCore/_vector3d_ext.h"
 #include "../control_direction_base.h"
@@ -244,33 +246,57 @@ void CBurer::shedule_Update(u32 dt) {
 void CBurer::CheckSpecParams(u32 spec_params) {}
 
 void xr_stdcall CBurer::StaminaHit() {
-    if (GodMode()) {
+    auto* actor = Actor();
+    if (!actor || !actor->g_Alive() || GodMode())
         return;
+
+    auto* weapon = smart_cast<CWeapon*>(actor->inventory().ActiveItem());
+    if (!weapon)
+        return;
+
+    float stamina_hit = weapon->Weight() * m_weight_to_stamina_hit;
+    bool strong_hit = false;
+    constexpr LPCSTR section = "gunslinger_base";
+    if (IsGameTypeSingle() && OnServer() && actor == Level().CurrentControlEntity()) {
+        const float value = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_value", 0.f);
+        if (std::isfinite(value) && value > 0.f && EnemyMan.see_enemy_now(actor)) {
+            const Fvector to_burer = Fvector().sub(Position(), actor->Position());
+            const float distance = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_dist", 10.f);
+            const bool in_range = distance > 0.f && to_burer.square_magnitude() < distance * distance;
+            const bool aimed = weapon->IsZoomed() && Device.vCameraDirection.dotproduct(to_burer) > 0.f;
+            const bool sniper = READ_IF_EXISTS(pSettings, r_bool, weapon->cNameSect(),
+                "is_burer_see_sniper_weapon", false);
+            strong_hit = in_range || aimed || sniper;
+            if (strong_hit)
+                stamina_hit = (std::max)(stamina_hit, value);
+        }
     }
 
-    CWeapon* const active_weapon = smart_cast<CWeapon*>(Actor()->inventory().ActiveItem());
-    if (!active_weapon) {
-        return;
+    const bool drop = actor->conditions().GetPower() < stamina_hit * m_weapon_drop_stamina_k;
+    actor->conditions().PowerHit(stamina_hit, false);
+
+    if (strong_hit && smart_cast<CWeaponMagazined*>(weapon)) {
+        const float minimum = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_conditiondecmin", 0.f);
+        const float maximum = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_conditiondecmax", minimum);
+        if (std::isfinite(minimum) && std::isfinite(maximum) && minimum >= 0.f && maximum >= minimum)
+            weapon->ChangeCondition(-Random.randF(minimum, maximum));
     }
 
-    float const weight = active_weapon->Weight();
-    float const stamina_hit = weight * m_weight_to_stamina_hit;
+    if (!drop || weapon->IsQuestItem() || weapon->GetDropManual() ||
+        actor->inventory().SlotIsPersistent(actor->inventory().GetActiveSlot()))
+        return;
 
-    bool const do_weapon_drop =
-        Actor()->conditions().GetPower() < stamina_hit * m_weapon_drop_stamina_k;
+    Fvector dir = actor->Direction();
+    if (dir.y < 0.f)
+        dir.y = -dir.y;
+    weapon->SetActivationSpeedOverride(normalize(dir) * m_weapon_drop_velocity);
 
-    Actor()->conditions().PowerHit(stamina_hit, false);
+    if (!actor->inventory().Action((u16)kDROP, CMD_STOP))
+        actor->g_PerformDrop();
 
-    if (do_weapon_drop) {
-        Fvector dir = Actor()->Direction();
-        if (dir.y < 0.f) {
-            dir.y = -dir.y;
-        }
-        active_weapon->SetActivationSpeedOverride(normalize(dir) * m_weapon_drop_velocity);
-
-        if (!Actor()->inventory().Action((u16)kDROP, CMD_STOP)) {
-            Actor()->g_PerformDrop();
-        }
+    if (IsGameTypeSingle() && weapon->GetDropManual()) {
+        if (auto* controller = actor->GetItemUseController())
+            controller->StartMonsterHitReaction("burer_kicks");
     }
 }
 

@@ -69,6 +69,9 @@
 #include "ui/UIHudEditor.h"
 #include "ItemUseController.h"
 #include "ai/monsters/basemonster/base_monster.h"
+#include "ai/monsters/boar/boar.h"
+#include "WeaponMagazined.h"
+#include <cmath>
 #include "ssfx_script_bridge.h"
 
 #include "xrRender/UIRender.h"
@@ -392,6 +395,53 @@ void CActor::Load(LPCSTR section) {
 
 void CActor::PHHit(SHit& H) { m_pPhysics_support->in_Hit(H, false); }
 
+namespace {
+void ApplyBoarImpact(CActor& actor, const SHit& hit, float power) {
+    if (!actor.g_Alive() || !OnServer() || Level().CurrentControlEntity() != &actor ||
+        !smart_cast<CAI_Boar*>(hit.who) || !std::isfinite(power) || power <= 0.f)
+        return;
+
+    constexpr LPCSTR section = "gunslinger_base";
+    const float factor = READ_IF_EXISTS(pSettings, r_float, section, "boar_stamina_hit_k", 0.f);
+    const float drain = power * factor;
+    if (!std::isfinite(drain) || drain <= 0.f)
+        return;
+
+    const float stamina = actor.conditions().GetPower();
+    actor.conditions().PowerHit(drain, false);
+    const Fvector to_boar = Fvector().sub(hit.who->Position(), actor.Position());
+    const float forced_distance = READ_IF_EXISTS(pSettings, r_float, section,
+        "boar_hit_unconditional_weapon_drop_dist", -1.f);
+    const bool force_drop = forced_distance > 0.f && to_boar.square_magnitude() < forced_distance * forced_distance;
+    if (!force_drop && drain <= stamina)
+        return;
+
+    PIItem item = actor.inventory().ActiveItem();
+    if (item) {
+        if (item->IsQuestItem() || item->GetDropManual() ||
+            actor.inventory().SlotIsPersistent(actor.inventory().GetActiveSlot()) ||
+            (!force_drop && Random.randF() >= drain - stamina))
+            return;
+
+        actor.g_PerformDrop();
+        if (!item->GetDropManual())
+            return;
+
+        if (auto* weapon = smart_cast<CWeaponMagazined*>(item)) {
+            const float minimum = READ_IF_EXISTS(pSettings, r_float, section, "boar_hit_conditiondecmin", 0.f);
+            const float maximum = READ_IF_EXISTS(pSettings, r_float, section, "boar_hit_conditiondecmax", minimum);
+            if (std::isfinite(minimum) && std::isfinite(maximum) && minimum >= 0.f && maximum >= minimum)
+                weapon->ChangeCondition(-Random.randF(minimum, maximum));
+        }
+    }
+
+    if (auto* controller = actor.GetItemUseController()) {
+        const bool front = Device.vCameraDirection.dotproduct(to_boar) >= 0.f;
+        controller->StartMonsterHitReaction(front ? "boar_front_kicks" : "boar_back_kicks");
+    }
+}
+}
+
 void CActor::Hit(SHit* pHDS) {
     bool b_initiated = pHDS->aim_bullet; 
 
@@ -490,7 +540,8 @@ void CActor::Hit(SHit* pHDS) {
     }
 
     if (IsGameTypeSingle()) {
-        float hit_power = HitArtefactsOnBelt(HDS.damage(), HDS.hit_type);
+        const float original_power = HDS.damage();
+        float hit_power = HitArtefactsOnBelt(original_power, HDS.hit_type);
 
         if (GodMode()) {
             HDS.power = 0.0f;
@@ -500,6 +551,7 @@ void CActor::Hit(SHit* pHDS) {
             HDS.power = hit_power;
             HDS.add_wound = true;
             inherited::Hit(&HDS);
+            ApplyBoarImpact(*this, HDS, original_power);
         }
     } else {
         m_bWasBackStabbed = false;

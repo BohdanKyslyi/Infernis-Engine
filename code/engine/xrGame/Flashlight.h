@@ -22,6 +22,7 @@ public:
 protected:
     bool HasHandheldLight() const { return !!m_light; }
     bool AllowsZoomWithDetector() const override { return HasHandheldLight(); }
+    bool AllowsImmediateReloadRestore() const override { return !HasHandheldLight(); }
     void TurnDetectorInternal(bool working) override;
 
 private:

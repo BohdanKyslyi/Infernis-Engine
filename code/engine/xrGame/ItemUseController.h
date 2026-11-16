@@ -38,6 +38,7 @@ public:
     // One-shot controller-owned HUD animation used by equipment dressing.
     // Only anm_show/snd_show are played; anm_idle and anm_hide are ignored.
     bool StartHudAnimationOnce(const shared_str& hud_section);
+    bool StartMonsterHitReaction(LPCSTR animation_group);
     void RequestHudAnimationHide();
     bool IsHudAnimationActive() const;
     bool IsHudAnimationIdle() const;
@@ -84,7 +85,7 @@ private:
     void ApplyPendingOutfitHudRefresh();
 
     bool StartHudAnimationInternal(const shared_str& hud_section,
-                                   bool allow_inventory, bool one_shot);
+                                   bool allow_inventory, bool one_shot, bool show_only = false);
     bool CanQueueAfterHudHide() const;
 
     bool ResolveConsumableAnimation(CInventoryItem* item, shared_str& item_section,
@@ -104,6 +105,7 @@ private:
     bool IsHudBlowoutActive() const;
     void BeginHudBlowout();
     bool m_hud_blowout_played = false;
+    bool m_hud_show_only = false;
     void UpdateMutantLootAnimation();
     void UpdateQuickKnifeAnimation();
     void UpdatePickupAnimation();
