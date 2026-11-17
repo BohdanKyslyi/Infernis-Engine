@@ -331,6 +331,18 @@ void CWeapon::Load(LPCSTR section) {
     m_weapon_laser = WeaponLaser();
     if (READ_IF_EXISTS(pSettings, r_bool, section, "laser_installed", false))
         LoadWeaponLaser(section);
+
+    auto& sight = m_collimator_sight;
+    sight.configured = pSettings->line_exist(section, "collimator_sights_bones");
+    sight.breaking.set(-1.f, -1.f, 0.f);
+    if (pSettings->line_exist(section, "collimator_breaking_params"))
+        sight.breaking = pSettings->r_fvector3(section, "collimator_breaking_params");
+    sight.problems_level = READ_IF_EXISTS(pSettings, r_float, section, "collimator_problems_level", 0.f);
+    sight.hide_in_alternate_aim =
+        READ_IF_EXISTS(pSettings, r_bool, section, "hide_collimator_sights_in_alter_zoom", true);
+    sight.damage_checked_at = Device.dwTimeGlobal - 100;
+    sight.flickers_off = false;
+    sight.visible = true;
     m_bayonet_section = nullptr;
     m_bayonet_has_sound = false;
     m_bayonet_hit_pending = false;
@@ -986,6 +998,9 @@ void CWeapon::UpdateCL() {
     ApplyPendingUpgradeHud();
     UpdateTacticalTorch();
     UpdateWeaponLaser();
+    UpdateCollimatorSight();
+    if (IsZoomed() && !CanAimInGrenadeMode())
+        OnZoomOut();
     UpdateBayonetStrike();
     UpdateHUDAddonsVisibility();
     UpdateLegacyAmmoBones();
@@ -1134,6 +1149,9 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
     }
 
     case kWPN_ZOOM:
+        if ((flags & CMD_START) && !CanAimInGrenadeMode())
+            return true;
+
         if (IsZoomEnabled()) {
             if (m_bAlternativeAimActive)
                 return true;
@@ -1164,6 +1182,9 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
             return false;
 
     case kWPN_ZOOM_ALTER:
+        if ((flags & CMD_START) && !CanAimInGrenadeMode())
+            return true;
+
         if (!IsZoomEnabled() || !IsAlternativeAimAllowed())
             return false;
 
@@ -1479,6 +1500,15 @@ shared_str CWeapon::AlternativeAimSettingSection(LPCSTR key) const {
         return cNameSect();
 
     return shared_str();
+}
+
+bool CWeapon::CanAimInGrenadeMode() const {
+    if (!UpgradeGrenadeMode() || !IsGameTypeSingle() || !smart_cast<const CActor*>(H_Parent()))
+        return true;
+
+    const LPCSTR key = "prohibit_aim_for_grenade_mode";
+    const shared_str section = IsScopeAttached() ? ScopeSettingSection(key) : HudSection();
+    return !READ_IF_EXISTS(pSettings, r_bool, section, key, false);
 }
 
 bool CWeapon::IsAlternativeAimAllowed() const {
@@ -2011,6 +2041,49 @@ void CWeapon::ApplyConfiguredBoneVisibility(IKinematics* model) {
 
     ApplyBoneList(model, m_tactical_torch.section.c_str(), "torch_cone_bones", m_tactical_torch.active);
     ApplyBoneList(model, m_weapon_laser.section.c_str(), "laser_ray_bones", m_weapon_laser.beam_visible);
+    if (m_collimator_sight.configured)
+        ApplyBoneList(model, weapon_section.c_str(), "collimator_sights_bones", m_collimator_sight.visible);
+}
+
+void CWeapon::UpdateCollimatorSight() {
+    auto& sight = m_collimator_sight;
+    if (!sight.configured)
+        return;
+
+    const auto& breaking = sight.breaking;
+    const float condition = GetCondition();
+    const float problems = IsGameTypeSingle() ? Level().ElectronicsProblems() : 0.f;
+    const bool hidden_by_aim = sight.hide_in_alternate_aim && GetZoomRotationFactor() > EPS_S &&
+        (m_bAlternativeAimActive || m_fAlternativeAimFactor > EPS_S);
+    const bool failed = condition < breaking.y ||
+        (sight.problems_level > 0.f && problems >= sight.problems_level);
+    const u32 now = Device.dwTimeGlobal;
+    if (!hidden_by_aim && !failed) {
+        float probability = 0.f;
+        if (condition < breaking.x && breaking.x > breaking.y) {
+            const float wear = (breaking.x - condition) / (breaking.x - breaking.y);
+            const float start = clampr(breaking.z, 0.f, 1.f);
+            probability = start + wear * (1.f - start);
+        }
+        if (sight.problems_level > 0.f)
+            probability = std::max(probability, problems / sight.problems_level);
+
+        if (probability <= 0.f) {
+            sight.flickers_off = false;
+            sight.damage_checked_at = now - 100;
+        } else if (now - sight.damage_checked_at >= 100) {
+            sight.flickers_off = ::Random.randF(0.f, 1.f) < probability;
+            sight.damage_checked_at = now;
+        }
+    }
+
+    const bool visible = !hidden_by_aim && !failed && !sight.flickers_off;
+    if (sight.visible == visible)
+        return;
+
+    sight.visible = visible;
+    if (auto* model = Visual() ? Visual()->dcast_PKinematics() : nullptr)
+        ApplyBoneList(model, cNameSect().c_str(), "collimator_sights_bones", visible);
 }
 
 namespace {
@@ -2331,6 +2404,7 @@ void CWeapon::LoadWeaponLaser(LPCSTR section) {
     laser.breaking.set(-1.f, -1.f, 0.f);
     if (pSettings->line_exist(section, "laser_breaking_params"))
         laser.breaking = pSettings->r_fvector3(section, "laser_breaking_params");
+    laser.problems_level = READ_IF_EXISTS(pSettings, r_float, section, "laser_problems_level", 0.f);
 
     const int count = clampr(READ_IF_EXISTS(pSettings, r_s32, section, "particles_count", 1), 1, 64);
     float previous_distance = 0.f;
@@ -2507,7 +2581,9 @@ void CWeapon::UpdateWeaponLaser() {
         laser.damaged = ::Random.randF(0.f, 1.f) < chance + progress * (1.f - chance);
         laser.damage_checked_at = now;
     }
-    if (laser.damaged) {
+    const bool jammed = IsGameTypeSingle() && laser.problems_level > 0.f &&
+        Level().ElectronicsProblems() >= laser.problems_level;
+    if (laser.damaged || jammed) {
         StopWeaponLaserEffects();
         return;
     }
@@ -3042,6 +3118,9 @@ float CWeapon::CurrentZoomFactor() {
 }
 void GetZoomData(const float scope_factor, float& delta, float& min_zoom_factor);
 void CWeapon::OnZoomIn() {
+    if (!CanAimInGrenadeMode())
+        return;
+
     m_zoom_params.m_bIsZoomModeNow = true;
     // Screen Space Shaders - aim depth of field. Only the player's own weapon: an NPC aiming must
     // not move the player's focus.

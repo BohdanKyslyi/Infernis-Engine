@@ -25,6 +25,8 @@ bool CWeapon::install_upgrade_impl(LPCSTR section, bool test) {
     result |= install_upgrade_disp(section, test);
     result |= install_upgrade_hit(section, test);
     result |= install_upgrade_addon(section, test);
+    result |= process_if_exists(section, "collimator_problems_level", &CInifile::r_float,
+                                m_collimator_sight.problems_level, test);
 
     LPCSTR visual = nullptr;
     const bool has_world_visual =

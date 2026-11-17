@@ -302,6 +302,9 @@ bool Manager::is_disabled_upgrade( CInventoryItem& item, shared_str const& upgra
 */
 
 bool Manager::upgrade_install(CInventoryItem& item, shared_str const& upgrade_id, bool loading) {
+    if (item.IsUpgradeBanned(upgrade_id))
+        return false;
+
     Upgrade* upgrade = upgrade_verify(item.m_section_id, upgrade_id);
     UpgradeStateResult res = upgrade->can_install(item, loading);
 

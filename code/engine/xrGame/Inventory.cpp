@@ -854,6 +854,15 @@ void CInventory::ActiveWeapon(u16 slot) {
 
 void CInventory::Update() {
     if (OnServer()) {
+        // Defer validation of saved slots until the outfit and its upgrades are loaded.
+        if (PIItem weapon = ItemFromSlot(INV_SLOT_2);
+            weapon && !CanUsePistolSlot(weapon) && Ruck(weapon)) {
+            if (auto* ui = CurrentGameUI(); ui &&
+                Level().CurrentViewEntity() == smart_cast<CObject*>(m_pOwner)) {
+                ui->OnInventoryAction(weapon, GE_OWNERSHIP_TAKE);
+            }
+        }
+
         if (m_iActiveSlot != m_iNextActiveSlot) {
             CObject* pActor_owner = smart_cast<CObject*>(m_pOwner);
             if (Level().CurrentViewEntity() == pActor_owner) {
@@ -1248,6 +1257,15 @@ bool CInventory::InRuck(const CInventoryItem* pIItem) const {
     return false;
 }
 
+bool CInventory::CanUsePistolSlot(PIItem item) const {
+    if (!item->HasPistolSlotRule() || item->BaseSlot() == INV_SLOT_2 || !IsGameTypeSingle() ||
+        !item->cast_weapon() || !smart_cast<CActor*>(m_pOwner))
+        return true;
+
+    const auto* outfit = m_pOwner->GetOutfit();
+    return item->PistolSlotAllowance() >= 1.f || (outfit && outfit->PistolSlotAllowance() >= 1.f);
+}
+
 bool CInventory::CanPutInSlot(PIItem pIItem, u16 slot_id) const {
     if (!pIItem || slot_id < FirstSlot() || slot_id > LastSlot())
         return false;
@@ -1258,6 +1276,9 @@ bool CInventory::CanPutInSlot(PIItem pIItem, u16 slot_id) const {
     if (slot_id == EXTRA_PISTOL_SLOT &&
         (!smart_cast<CActor*>(m_pOwner) || !NoirInventorySlots::ExtraPistolEnabled() ||
          pIItem->BaseSlot() != INV_SLOT_2))
+        return false;
+
+    if (slot_id == INV_SLOT_2 && !CanUsePistolSlot(pIItem))
         return false;
 
     if (!GetOwner()->CanPutInSlot(pIItem, slot_id))

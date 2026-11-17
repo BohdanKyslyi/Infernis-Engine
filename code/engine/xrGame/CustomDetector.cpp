@@ -35,27 +35,18 @@ bool CCustomDetector::CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate
     if (itm == NULL)
         return true;
 
-    CInventoryItem& iitm = itm->item();
-    u32 slot = iitm.BaseSlot();
-    bool bres = (slot == INV_SLOT_2 || slot == KNIFE_SLOT || slot == BOLT_SLOT);
-    if (!bres && slot_to_activate) {
+    bool bres = itm->item().SupportsDetector();
+    if (!bres && slot_to_activate && m_pInventory) {
         *slot_to_activate = NO_ACTIVE_SLOT;
-        if (m_pInventory->ItemFromSlot(BOLT_SLOT))
-            *slot_to_activate = BOLT_SLOT;
-
-        if (m_pInventory->ItemFromSlot(KNIFE_SLOT))
-            *slot_to_activate = KNIFE_SLOT;
-
-        if (m_pInventory->ItemFromSlot(INV_SLOT_3) &&
-            m_pInventory->ItemFromSlot(INV_SLOT_3)->BaseSlot() != INV_SLOT_3)
-            *slot_to_activate = INV_SLOT_3;
-
-        if (m_pInventory->ItemFromSlot(INV_SLOT_2) &&
-            m_pInventory->ItemFromSlot(INV_SLOT_2)->BaseSlot() != INV_SLOT_3)
-            *slot_to_activate = INV_SLOT_2;
-
-        if (*slot_to_activate != NO_ACTIVE_SLOT)
-            bres = true;
+        const u16 slots[] = {INV_SLOT_2, INV_SLOT_3, EXTRA_PISTOL_SLOT, KNIFE_SLOT, BOLT_SLOT};
+        for (const u16 slot : slots) {
+            const auto* candidate = m_pInventory->ItemFromSlot(slot);
+            if (candidate && candidate->SupportsDetector()) {
+                *slot_to_activate = slot;
+                bres = true;
+                break;
+            }
+        }
     }
 
     if (!check_state)
@@ -335,7 +326,8 @@ void CCustomDetector::UpdateVisibility() {
         auto* weapon = smart_cast<CWeapon*>(i0->m_parent_hud_item);
         const bool climbing = (Actor()->MovingState() & mcClimb) != 0;
         const bool reloading = weapon && weapon->GetState() == CWeapon::eReload;
-        if (climbing || reloading || (weapon && (weapon->GetState() == CWeapon::eSwitch ||
+        if (!i0->m_parent_hud_item->item().SupportsDetector() || climbing || reloading ||
+            (weapon && (weapon->GetState() == CWeapon::eSwitch ||
             (!AllowsZoomWithDetector() && weapon->IsZoomed())))) {
             if (GetState() == eIdle && GetNextState() == eIdle) {
                 const auto* magazined = smart_cast<const CWeaponMagazined*>(weapon);

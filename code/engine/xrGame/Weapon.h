@@ -167,6 +167,7 @@ public:
     shared_str ScopeSettingSection(LPCSTR key) const;
     shared_str AlternativeAimSettingSection(LPCSTR key) const;
     bool IsAlternativeAimAllowed() const;
+    bool CanAimInGrenadeMode() const;
     bool IsAlternativeAimActive() const { return m_bAlternativeAimActive; }
     float HudFovFactor(float hip_factor) const;
     HudInertionParams GetHudInertionParams(const attachable_hud_item& hud) const;
@@ -290,8 +291,19 @@ protected:
         u32 switch_delay = 0;
         u32 action_duration = 0;
         u32 damage_checked_at = 0;
+        float problems_level = 0.f;
     } m_weapon_laser;
     void LoadWeaponLaser(LPCSTR section);
+    struct CollimatorSight {
+        Fvector breaking;
+        float problems_level = 0.f;
+        u32 damage_checked_at = 0;
+        bool configured = false;
+        bool hide_in_alternate_aim = true;
+        bool flickers_off = false;
+        bool visible = true;
+    } m_collimator_sight;
+    void UpdateCollimatorSight();
     void StartWeaponLaserAction();
     void UpdateWeaponLaser();
     void SetLaserBeamVisible(bool visible);

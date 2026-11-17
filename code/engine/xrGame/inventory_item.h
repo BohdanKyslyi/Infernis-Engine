@@ -297,10 +297,17 @@ public:
 
 protected:
     Upgrades_type m_upgrades;
+    int m_supports_detector = -1; // Unspecified: use the legacy slot rule.
+    bool m_has_pistol_slot_rule = false;
+    float m_pistol_slot_allowance = 0.f;
 
 public:
     IC bool has_any_upgrades() { return (m_upgrades.size() != 0); }
     bool has_upgrade(const shared_str& upgrade_id);
+    bool IsUpgradeBanned(const shared_str& upgrade_id) const;
+    bool SupportsDetector() const;
+    bool HasPistolSlotRule() const { return m_has_pistol_slot_rule; }
+    float PistolSlotAllowance() const { return m_pistol_slot_allowance; }
     bool has_upgrade_group(const shared_str& upgrade_group_id);
     void add_upgrade(const shared_str& upgrade_id, bool loading);
     bool get_upgrades_str(string2048& res) const;

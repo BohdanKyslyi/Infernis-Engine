@@ -2052,7 +2052,28 @@ bool CWeaponMagazined::Action(u16 cmd, u32 flags) {
     return false;
 }
 
+bool CWeaponMagazined::IsAddonCompatible(PIItem addon) const {
+    const auto section = cNameSect();
+    const bool scope = smart_cast<CScope*>(addon) != nullptr;
+    const bool silencer = smart_cast<CSilencer*>(addon) != nullptr;
+    const bool launcher = smart_cast<CGrenadeLauncher*>(addon) != nullptr;
+
+    if (((scope && IsSilencerAttached()) || (silencer && IsScopeAttached())) &&
+        READ_IF_EXISTS(pSettings, r_bool, section, "restricted_scope_and_sil", false))
+        return false;
+
+    if (((scope && IsGrenadeLauncherAttached()) || (launcher && IsScopeAttached())) &&
+        READ_IF_EXISTS(pSettings, r_bool, section, "restricted_scope_and_gl", false))
+        return false;
+
+    return !((silencer && IsGrenadeLauncherAttached()) || (launcher && IsSilencerAttached())) ||
+        !READ_IF_EXISTS(pSettings, r_bool, section, "restricted_gl_and_sil", false);
+}
+
 bool CWeaponMagazined::CanAttach(PIItem pIItem) {
+    if (!IsAddonCompatible(pIItem))
+        return false;
+
     CScope* pScope = smart_cast<CScope*>(pIItem);
     CSilencer* pSilencer = smart_cast<CSilencer*>(pIItem);
     CGrenadeLauncher* pGrenadeLauncher = smart_cast<CGrenadeLauncher*>(pIItem);
@@ -2104,6 +2125,9 @@ bool CWeaponMagazined::CanDetach(const char* item_section_name) {
 }
 
 bool CWeaponMagazined::Attach(PIItem pIItem, bool b_send_event) {
+    if (!IsAddonCompatible(pIItem))
+        return false;
+
     bool result = false;
 
     CScope* pScope = smart_cast<CScope*>(pIItem);
@@ -2617,6 +2641,9 @@ void CWeaponMagazined::PlayAnimShoot() {
 }
 
 void CWeaponMagazined::OnZoomIn() {
+    if (!CanAimInGrenadeMode())
+        return;
+
     inherited::OnZoomIn();
 
     if (GetState() == eIdle)

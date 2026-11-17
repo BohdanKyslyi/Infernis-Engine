@@ -88,6 +88,14 @@ CInventoryItem::~CInventoryItem() {
 #endif // #ifndef MASTER_GOLD
 }
 
+bool CInventoryItem::SupportsDetector() const {
+    if (m_supports_detector >= 0)
+        return m_supports_detector != 0;
+
+    const u16 slot = BaseSlot();
+    return slot == INV_SLOT_2 || slot == KNIFE_SLOT || slot == BOLT_SLOT;
+}
+
 void CInventoryItem::Load(LPCSTR section) {
     CHitImmunity::LoadImmunities(pSettings->r_string(section, "immunities_sect"), pSettings);
 
@@ -107,6 +115,12 @@ void CInventoryItem::Load(LPCSTR section) {
     m_cost = pSettings->r_u32(section, "cost");
     u32 sl = pSettings->r_u32(section, "slot");
     m_ItemCurrPlace.base_slot_id = (sl == -1) ? 0 : (sl + 1);
+
+    m_supports_detector = pSettings->line_exist(section, "supports_detector")
+        ? pSettings->r_bool(section, "supports_detector") : -1;
+    m_has_pistol_slot_rule = pSettings->line_exist(section, "pistol_slot_allowed");
+    m_pistol_slot_allowance = m_has_pistol_slot_rule
+        ? pSettings->r_float(section, "pistol_slot_allowed") : 0.f;
 
     m_Description = CStringTable().translate(pSettings->r_string(section, "description"));
     m_localized_description = m_Description;

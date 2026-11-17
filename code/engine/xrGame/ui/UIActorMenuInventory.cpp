@@ -558,6 +558,9 @@ bool CUIActorMenu::ToSlot(CUICellItem* itm, bool force_place, u16 slot_id) {
             m_pActorInvOwner->inventory().CanPutInSlot(iitem, EXTRA_PISTOL_SLOT))
             return ToSlot(itm, force_place, EXTRA_PISTOL_SLOT);
 
+        if (slot_id == INV_SLOT_2 && !m_pActorInvOwner->inventory().CanUsePistolSlot(iitem))
+            return false;
+
         PIItem _iitem = m_pActorInvOwner->inventory().ItemFromSlot(slot_id);
         CUIDragDropListEx* slot_list = GetSlotList(slot_id);
         if (!_iitem || !slot_list || slot_list->ItemsCount() != 1)
