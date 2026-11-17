@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "missile.h"
+#include "grenade.h"
 //.#include "WeaponHUD.h"
 #include "../xrphysics/PhysicsShell.h"
 #include "actor.h"
@@ -669,7 +670,8 @@ void CMissile::net_Relcase(CObject* O) {
     inherited::net_Relcase(O);
     if (PPhysicsShell() && PPhysicsShell()->isActive()) {
         if (O == smart_cast<CObject*>((CPhysicsShellHolder*)PPhysicsShell()->get_CallbackData())) {
-            PPhysicsShell()->remove_ObjectContactCallback(ExitContactCallback);
+            if (!smart_cast<CGrenade*>(this))
+                PPhysicsShell()->remove_ObjectContactCallback(ExitContactCallback);
             PPhysicsShell()->set_CallbackData(NULL);
         }
     }
@@ -721,8 +723,21 @@ void CMissile::ExitContactCallback(bool& do_colide, bool bo1, dContact& c, SGame
         gd2 = PHRetrieveGeomUserData(c.geom.g1);
         gd1 = PHRetrieveGeomUserData(c.geom.g2);
     }
-    if (gd1 && gd2 && (CPhysicsShellHolder*)gd1->callback_data == gd2->ph_ref_object)
+    if (gd1 && gd1->callback_data && gd2 &&
+        (CPhysicsShellHolder*)gd1->callback_data == gd2->ph_ref_object)
         do_colide = false;
+
+    if (!do_colide)
+        return;
+
+    if (gd1) {
+        if (auto* grenade = smart_cast<CGrenade*>(gd1->ph_ref_object))
+            grenade->OnPhysicsContact();
+    }
+    if (gd2) {
+        if (auto* grenade = smart_cast<CGrenade*>(gd2->ph_ref_object))
+            grenade->OnPhysicsContact();
+    }
 }
 
 bool CMissile::GetBriefInfo(II_BriefInfo& info) {

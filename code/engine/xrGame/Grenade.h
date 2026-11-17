@@ -37,6 +37,7 @@ public:
     virtual void OnH_B_Chield() { inherited::OnH_B_Chield(); }
 
     virtual void Hit(SHit* pHDS);
+    void OnPhysicsContact();
 
     virtual bool NeedToDestroyObject() const;
     virtual ALife::_TIME_ID TimePassedAfterIndependant() const;
@@ -58,6 +59,15 @@ protected:
 private:
     float m_grenade_detonation_threshold_hit;
     bool m_thrown;
+    bool m_configured_hit_detonation = false;
+    bool m_detonate_on_hit = false;
+    bool m_detonate_before_activation = true;
+    xr_vector<ALife::EHitType> m_detonation_hit_types;
+    bool m_detonate_on_impact = false;
+    bool m_disarm_on_slow_impact = false;
+    u32 m_impact_safe_time = 0;
+    u32 m_impact_arm_delay = 0;
+    float m_min_impact_speed = 0.f;
 
 protected:
     virtual void UpdateXForm() { CMissile::UpdateXForm(); };

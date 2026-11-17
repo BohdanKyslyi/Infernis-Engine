@@ -7,6 +7,30 @@
 class CWeaponRPG7 : public CWeaponCustomPistol, public CRocketLauncher {
 private:
     typedef CWeaponCustomPistol inherited;
+    bool ShouldExplodeOnLaunch() const;
+    void ApplyBackblast(const Fvector& position, const Fvector& muzzle_direction);
+
+    float m_malfunction_start_condition = 0.f;
+    float m_malfunction_end_condition = 0.f;
+    float m_malfunction_start_probability = 0.f;
+    float m_malfunction_end_probability = 0.f;
+    u16 m_malfunction_rocket = u16(-1);
+    Fvector m_malfunction_position;
+
+    struct {
+        float distance;
+        float power;
+        float impulse;
+        int rays;
+        float dispersion;
+        ALife::EHitType hit_type;
+        shared_str material;
+        int reflected_rays;
+        float reflection_dispersion;
+        float reflected_dispersion;
+        float reflected_power;
+        float reflected_range_factor;
+    } m_backblast{};
 
 public:
     CWeaponRPG7();

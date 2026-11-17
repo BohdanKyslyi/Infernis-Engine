@@ -11,6 +11,8 @@
 #include "xr_level_controller.h"
 #include "game_cl_base.h"
 #include "xrserver_objects_alife.h"
+#include <algorithm>
+#include <cstdlib>
 
 #define GRENADE_REMOVE_TIME 30000
 const float default_grenade_detonation_threshold_hit = 100;
@@ -40,15 +42,84 @@ void CGrenade::Load(LPCSTR section) {
     m_grenade_detonation_threshold_hit =
         READ_IF_EXISTS(pSettings, r_float, section, "detonation_threshold_hit",
                        default_grenade_detonation_threshold_hit);
+
+    m_configured_hit_detonation = pSettings->line_exist(section, "explosion_on_hit");
+    m_detonate_on_hit = READ_IF_EXISTS(pSettings, r_bool, section, "explosion_on_hit", false);
+    m_detonate_before_activation =
+        READ_IF_EXISTS(pSettings, r_bool, section, "explosive_while_not_activated", true);
+    m_detonation_hit_types.clear();
+    if (m_detonate_on_hit) {
+        const LPCSTR types = READ_IF_EXISTS(pSettings, r_string, section, "explosion_hit_types", nullptr);
+        if (!types) {
+            m_detonation_hit_types.push_back(ALife::eHitTypeExplosion);
+        } else {
+            for (u32 i = 0, count = _GetItemCount(types); i < count; ++i) {
+                string32 type;
+                _GetItem(types, i, type);
+                char* end = nullptr;
+                const long value = std::strtol(type, &end, 10);
+                if (end != type && !*end && value >= 0 && value < ALife::eHitTypeMax)
+                    m_detonation_hit_types.push_back(static_cast<ALife::EHitType>(value));
+            }
+        }
+    }
+
+    m_detonate_on_impact = READ_IF_EXISTS(pSettings, r_bool, section, "explosion_on_kick", false);
+    m_disarm_on_slow_impact =
+        READ_IF_EXISTS(pSettings, r_bool, section, "deactivate_on_minimal_speed_contact", false);
+    m_impact_safe_time = READ_IF_EXISTS(pSettings, r_u32, section, "safe_time", 0);
+    m_impact_arm_delay = READ_IF_EXISTS(pSettings, r_u32, section, "delay_time", 0);
+    m_min_impact_speed = READ_IF_EXISTS(pSettings, r_float, section, "min_explosion_speed", 0.f);
 }
 
 void CGrenade::Hit(SHit* pHDS) {
-    if (ALife::eHitTypeExplosion == pHDS->hit_type &&
-        m_grenade_detonation_threshold_hit < pHDS->damage() && CExplosive::Initiator() == u16(-1)) {
-        CExplosive::SetCurrentParentID(pHDS->who->ID());
-        Destroy();
+    if (OnServer() && Local() && CExplosive::Useful() &&
+        pHDS->damage() > m_grenade_detonation_threshold_hit) {
+        const bool legacy_blast = !m_configured_hit_detonation &&
+            pHDS->hit_type == ALife::eHitTypeExplosion && CExplosive::Initiator() == u16(-1);
+        const bool configured_hit = m_detonate_on_hit && !H_Parent() &&
+            (m_detonate_before_activation || m_dwDestroyTime != u32(-1)) &&
+            std::find(m_detonation_hit_types.begin(), m_detonation_hit_types.end(), pHDS->hit_type) !=
+                m_detonation_hit_types.end();
+        if (legacy_blast || configured_hit) {
+            if (pHDS->who)
+                CExplosive::SetCurrentParentID(pHDS->who->ID());
+            Destroy();
+        }
     }
     inherited::Hit(pHDS);
+}
+
+void CGrenade::OnPhysicsContact() {
+    if ((!m_detonate_on_impact && !m_impact_safe_time) || !Local() || !OnServer() ||
+        H_Parent() || !m_pPhysicsShell || !CExplosive::Useful())
+        return;
+
+    const u32 now = Device.dwTimeGlobal;
+    if (m_dwDestroyTime == u32(-1) || m_dwDestroyTime <= now)
+        return;
+
+    const u32 remaining = m_dwDestroyTime - now;
+    const u32 elapsed = remaining < m_dwDestroyTimeMax ? m_dwDestroyTimeMax - remaining : 0;
+    if (elapsed < m_impact_safe_time) {
+        m_dwDestroyTime = u32(-1);
+        return;
+    }
+    if (!m_detonate_on_impact || elapsed < m_impact_arm_delay)
+        return;
+
+    if (m_min_impact_speed > 0.f) {
+        Fvector velocity;
+        m_pPhysicsShell->get_LinearVel(velocity);
+        if (velocity.square_magnitude() < m_min_impact_speed * m_min_impact_speed) {
+            if (m_disarm_on_slow_impact)
+                m_dwDestroyTime = u32(-1);
+            return;
+        }
+    }
+
+    // CMissile processes the expired fuse outside the physics callback.
+    m_dwDestroyTime = now;
 }
 
 BOOL CGrenade::net_Spawn(CSE_Abstract* DC) {
@@ -180,6 +251,10 @@ void CGrenade::Throw() {
 }
 
 void CGrenade::Destroy() {
+    if (!CExplosive::Useful())
+        return;
+
+    m_dwDestroyTime = u32(-1);
     // Generate Expode event
     Fvector normal;
 
