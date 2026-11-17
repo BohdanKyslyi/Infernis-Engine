@@ -54,6 +54,14 @@ struct hud_item_measures {
     void load(const shared_str& sect_name, IKinematics* K, const shared_str& pose_section = {});
 };
 
+struct HudInertionParams {
+    Fvector pitch_offsets{-0.017f, -0.012f, -0.02f};
+    float origin_offset = 0.05f;
+    float speed = 5.f;
+
+    void Load(LPCSTR section, LPCSTR prefix, LPCSTR suffix = "", bool allow_negative = false);
+};
+
 struct attachable_hud_item {
     player_hud* m_parent;
     CHudItem* m_parent_hud_item;
@@ -71,6 +79,11 @@ struct attachable_hud_item {
     float m_hud_fov;
     // Absolute HUD projection FOV in degrees. Takes priority over m_hud_fov.
     float m_hud_fov_degrees;
+    float m_hud_fov_factor = 1.f;
+    bool m_hud_inertion = true;
+    HudInertionParams m_hip_inertion;
+    HudInertionParams m_aim_inertion;
+    HudInertionParams m_grenade_inertion;
     // Optional per-section override of [hud_extensions] viewport_near.
     // Zero means that the global engine_external.ltx value must be used.
     float m_viewport_near;

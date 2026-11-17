@@ -24,6 +24,7 @@ class CParticlesObject;
 class CUIWindow;
 class CBinocularsVision;
 class CNightVisionEffector;
+struct HudInertionParams;
 
 class CWeapon : public CHudItemObject, public CShootingObject {
 private:
@@ -166,7 +167,8 @@ public:
     shared_str AlternativeAimSettingSection(LPCSTR key) const;
     bool IsAlternativeAimAllowed() const;
     bool IsAlternativeAimActive() const { return m_bAlternativeAimActive; }
-    float AlternativeHudFovFactor() const;
+    float HudFovFactor(float hip_factor) const;
+    HudInertionParams GetHudInertionParams(const attachable_hud_item& hud) const;
     bool IsSilencerAttached() const;
 
     virtual bool GrenadeLauncherAttachable();
@@ -460,7 +462,17 @@ private:
     LPCSTR m_hud_lookout_transition = nullptr;
     float m_hud_lookout_time = 0.f;
 
+    float m_detector_dispersion_factor = 1.f;
     bool m_advanced_ammo_bones = false;
+    struct LegacyAmmoBones {
+        shared_str visible, hidden, variant;
+        int first = 0;
+        int last = 0;
+        int divisor = 1;
+        bool round_up = false;
+        bool extra_when_jammed = false;
+    } m_legacy_ammo_bones;
+    void UpdateLegacyAmmoBones();
     shared_str m_last_shot_ammo_section;
 
 protected:
@@ -471,6 +483,7 @@ protected:
     virtual void OnUpgradeHudChanged() {}
     virtual shared_str WeaponActionMotion(LPCSTR base) const;
     virtual bool UpgradeGrenadeMode() const { return false; }
+    virtual size_t GetHudMagazineSize() const { return m_magazine.size(); }
 
 public:
     bool IsHudActionLocked() const;

@@ -44,6 +44,9 @@ public:
     virtual void ReloadMagazine();
     void UnloadMagazine(bool spawn_ammo = true) override;
     bool UpgradeGrenadeMode() const override { return m_bGrenadeMode; }
+    size_t GetHudMagazineSize() const override {
+        return (m_bGrenadeMode ? m_magazine2 : m_magazine).size();
+    }
     BOOL IsMisfire() const override { return !m_bGrenadeMode && inherited::IsMisfire(); }
     bool HasChamberRound() const override { return !m_bGrenadeMode && inherited::HasChamberRound(); }
 

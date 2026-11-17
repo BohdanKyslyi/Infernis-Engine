@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include "Weapon.h"
 #include "ItemUseController.h"
@@ -224,6 +225,21 @@ void CWeapon::LoadHudFeatureFlags() {
         READ_IF_EXISTS(pSettings, r_bool, HudSection(), "gunslinger_hud_movement", false);
     m_advanced_ammo_bones =
         READ_IF_EXISTS(pSettings, r_bool, HudSection(), "use_advanced_ammo_bones", false);
+    m_legacy_ammo_bones = {};
+    const auto& hud = HudSection();
+    if (!m_advanced_ammo_bones && READ_IF_EXISTS(pSettings, r_bool, hud, "use_ammo_bones", false)) {
+        auto& bones = m_legacy_ammo_bones;
+        bones.visible = READ_IF_EXISTS(pSettings, r_string, hud, "ammo_bones_prefix", nullptr);
+        bones.hidden = READ_IF_EXISTS(pSettings, r_string, hud, "ammo_hide_bones_prefix", nullptr);
+        bones.variant = READ_IF_EXISTS(pSettings, r_string, hud, "ammo_var_bones_prefix", nullptr);
+        bones.first = READ_IF_EXISTS(pSettings, r_s32, hud, "start_ammo_bone_index", 0);
+        bones.last = READ_IF_EXISTS(pSettings, r_s32, hud, "end_ammo_bone_index", 0);
+        bones.round_up = pSettings->line_exist(hud, "ammo_divisor_up");
+        const LPCSTR divisor_key = bones.round_up ? "ammo_divisor_up" : "ammo_divisor_down";
+        bones.divisor = std::max(1, READ_IF_EXISTS(pSettings, r_s32, hud, divisor_key, 1));
+        bones.extra_when_jammed =
+            READ_IF_EXISTS(pSettings, r_bool, hud, "additional_ammo_bone_when_jammed", false);
+    }
 }
 
 void CWeapon::RefreshUpgradeHud() {
@@ -322,6 +338,10 @@ void CWeapon::Load(LPCSTR section) {
 
     m_base_upgrade_hud = HudSection();
     CShootingObject::Load(section);
+    m_detector_dispersion_factor =
+        READ_IF_EXISTS(pSettings, r_float, section, "detector_disp_factor", 1.f);
+    if (!(m_detector_dispersion_factor >= 0.f) || !std::isfinite(m_detector_dispersion_factor))
+        m_detector_dispersion_factor = 1.f;
     LoadHudFeatureFlags();
     m_sounds.LoadSound(section, "snd_boring", "sndInspect", true);
     for (u32 i = 0; i < 3; ++i) {
@@ -897,6 +917,7 @@ void CWeapon::OnH_A_Chield() {
 void CWeapon::on_a_hud_attach() {
     inherited::on_a_hud_attach();
     UpdateHUDAddonsVisibility();
+    UpdateLegacyAmmoBones();
 }
 
 void CWeapon::OnActiveItem() {
@@ -964,6 +985,7 @@ void CWeapon::UpdateCL() {
     UpdateWeaponLaser();
     UpdateBayonetStrike();
     UpdateHUDAddonsVisibility();
+    UpdateLegacyAmmoBones();
     //ïîäñâåòêà îò âûñòðåëà
     UpdateLight();
 
@@ -1451,25 +1473,72 @@ bool CWeapon::IsAlternativeAimAllowed() const {
     return section.size() && pSettings->r_bool(section, "alter_zoom_allowed");
 }
 
-float CWeapon::AlternativeHudFovFactor() const {
-    // When alternative aim starts from hip, its HUD offset factor is set to
-    // one immediately because the regular ADS transition supplies the offset
-    // blend. Combine both factors so HUD FOV follows that transition too.
-    const float blend =
-        m_fAlternativeAimFactor * m_zoom_params.m_fZoomRotationFactor;
+float CWeapon::HudFovFactor(float hip_factor) const {
+    const bool scoped = m_eScopeStatus == ALife::eAddonAttachable && IsScopeAttached();
+    const auto read_factor = [](const shared_str& section, LPCSTR key, float fallback) {
+        const float value = READ_IF_EXISTS(pSettings, r_float, section, key, fallback);
+        return value > EPS_S && std::isfinite(value) ? value : fallback;
+    };
+
+    if (scoped)
+        hip_factor *= read_factor(ScopeSettingSection("hud_fov_factor"), "hud_fov_factor", 1.f);
+
+    const float aim = m_zoom_params.m_fZoomRotationFactor;
+    if (aim <= EPS_S)
+        return hip_factor;
+
+    if (UpgradeGrenadeMode()) {
+        const float grenade_factor =
+            read_factor(HudSection(), "hud_fov_gl_zoom_factor", hip_factor);
+        return hip_factor + (grenade_factor - hip_factor) * aim;
+    }
+
+    const LPCSTR key = "hud_fov_zoom_factor";
+    const shared_str section = scoped ? ScopeSettingSection(key) : HudSection();
+    float zoom_factor = read_factor(section, key, hip_factor);
+    if (m_fAlternativeAimFactor > EPS_S) {
+        const LPCSTR alternative_key = "hud_fov_alter_zoom_factor";
+        const auto alternative_section = AlternativeAimSettingSection(alternative_key);
+        if (alternative_section.size()) {
+            const float alternative_factor =
+                read_factor(alternative_section, alternative_key, zoom_factor);
+            zoom_factor += (alternative_factor - zoom_factor) * m_fAlternativeAimFactor;
+        }
+    }
+    return hip_factor + (zoom_factor - hip_factor) * aim;
+}
+
+HudInertionParams CWeapon::GetHudInertionParams(const attachable_hud_item& hud) const {
+    auto hip = hud.m_hip_inertion;
+    const bool scoped = m_eScopeStatus == ALife::eAddonAttachable && IsScopeAttached() &&
+        m_cur_scope < m_scopes.size();
+    const shared_str optic = scoped ? GetScopeName() : shared_str();
+    const LPCSTR wrapper = scoped ? m_scopes[m_cur_scope].c_str() : nullptr;
+    if (scoped) {
+        HudInertionParams factors{Fvector().set(1.f, 1.f, 1.f), 1.f, 1.f};
+        factors.Load(optic.c_str(), "inertion_", "_factor", true);
+        factors.Load(wrapper, "inertion_", "_factor", true);
+        hip.pitch_offsets.mul(factors.pitch_offsets);
+        hip.origin_offset *= factors.origin_offset;
+        hip.speed *= factors.speed;
+    }
+
+    const float blend = m_zoom_params.m_fZoomRotationFactor;
     if (blend <= EPS_S)
-        return 1.f;
+        return hip;
 
-    const shared_str section =
-        AlternativeAimSettingSection("hud_fov_alter_zoom_factor");
-    if (!section.size())
-        return 1.f;
+    const bool grenade_mode = UpgradeGrenadeMode();
+    auto aim = grenade_mode ? hud.m_grenade_inertion : hud.m_aim_inertion;
+    if (scoped) {
+        const LPCSTR prefix = grenade_mode ? "inertion_gl_" : "inertion_aim_";
+        aim.Load(optic.c_str(), prefix);
+        aim.Load(wrapper, prefix);
+    }
 
-    const float factor = pSettings->r_float(section, "hud_fov_alter_zoom_factor");
-    if (factor <= EPS_S)
-        return 1.f;
-
-    return 1.f + (factor - 1.f) * blend;
+    hip.pitch_offsets.lerp(hip.pitch_offsets, aim.pitch_offsets, blend);
+    hip.origin_offset += (aim.origin_offset - hip.origin_offset) * blend;
+    hip.speed += (aim.speed - hip.speed) * blend;
+    return hip;
 }
 
 bool CWeapon::IsScopeCollimator() const {
@@ -2677,6 +2746,47 @@ void CWeapon::PerformBayonetHit() {
     }
 }
 
+void CWeapon::UpdateLegacyAmmoBones() {
+    const auto& bones = m_legacy_ammo_bones;
+    if (!bones.visible.size() || bones.first < 0 || bones.last < bones.first ||
+        bones.last >= BI_NONE)
+        return;
+
+    auto* hud = GetHUDmode() ? HudItemData() : nullptr;
+    auto* world = smart_cast<IKinematics*>(Visual());
+    const double finish_index = static_cast<double>(bones.first) + GetHudMagazineSize() - 1.0 +
+        (bones.extra_when_jammed && IsMisfire() ? 1.0 : 0.0);
+    const double divided_index = finish_index / bones.divisor;
+    const int last_visible = static_cast<int>(std::min(static_cast<double>(bones.last),
+        bones.round_up ? std::ceil(divided_index) : std::floor(divided_index)));
+
+    const auto set_visible = [](IKinematics* model, LPCSTR name, BOOL visible) {
+        if (!model)
+            return;
+        const u16 bone = model->LL_BoneID(name);
+        if (bone != BI_NONE && model->LL_GetBoneVisible(bone) != visible)
+            model->LL_SetBoneVisible(bone, visible, FALSE);
+    };
+    const auto set_numbered = [&](const shared_str& prefix, int index, BOOL visible) {
+        if (!prefix.size())
+            return;
+        string256 name;
+        const int length = std::snprintf(name, sizeof(name), "%s%d", prefix.c_str(), index);
+        if (length < 0 || static_cast<size_t>(length) >= sizeof(name))
+            return;
+        set_visible(hud ? hud->m_model : nullptr, name, visible);
+        set_visible(world, name, visible);
+    };
+
+    for (int i = bones.first; i <= bones.last; ++i) {
+        const bool visible = i <= last_visible;
+        set_numbered(bones.visible, i, visible);
+        set_numbered(bones.hidden, i, !visible);
+    }
+    for (int i = bones.first - 1; bones.variant.size() && i <= bones.last; ++i)
+        set_numbered(bones.variant, i, i == last_visible);
+}
+
 void CWeapon::UpdateHudAmmoBones(const CCartridge* fired) {
     if (!m_advanced_ammo_bones || IsGrenadeLauncherAttached())
         return;
@@ -2855,6 +2965,7 @@ void CWeapon::UpdateAddonsVisibility() {
     }
 
     ApplyConfiguredBoneVisibility(pWeaponVisual);
+    UpdateLegacyAmmoBones();
     UpdateWorldAnimation(H_Parent() ? GetState() : u32(eIdle));
     pWeaponVisual->CalculateBones_Invalidate();
     pWeaponVisual->CalculateBones(TRUE);
@@ -2952,7 +3063,7 @@ void CWeapon::OnZoomIn() {
         SetZoomFactor(m_fRTZoomFactor);
     }
 
-    EnableHudInertion(FALSE);
+    EnableHudInertion(READ_IF_EXISTS(pSettings, r_bool, HudSection(), "zoom_inertion", false));
 
     // if(m_zoom_params.m_bZoomDofEnabled && !IsScopeAttached())
     //	GamePersistent().SetEffectorDOF	(m_zoom_params.m_ZoomDof);

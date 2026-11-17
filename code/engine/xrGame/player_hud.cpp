@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <cmath>
 #include "player_hud.h"
 #include "player_hud_legs.h"
 #include "HudItem.h"
@@ -426,6 +427,24 @@ attachable_hud_item::~attachable_hud_item() {
     m_model = NULL;
 }
 
+void HudInertionParams::Load(LPCSTR section, LPCSTR prefix, LPCSTR suffix, bool allow_negative) {
+    if (!section || !pSettings->section_exist(section))
+        return;
+
+    const auto read = [&](LPCSTR name, float fallback) {
+        string64 key;
+        xr_sprintf(key, "%s%s%s", prefix, name, suffix);
+        const float value = READ_IF_EXISTS(pSettings, r_float, section, key, fallback);
+        return std::isfinite(value) && (allow_negative || value >= 0.f) ? value : fallback;
+    };
+
+    pitch_offsets.x = read("pitch_offset_r", pitch_offsets.x);
+    pitch_offsets.y = read("pitch_offset_n", pitch_offsets.y);
+    pitch_offsets.z = read("pitch_offset_d", pitch_offsets.z);
+    origin_offset = read("origin_offset", origin_offset);
+    speed = read("speed", speed);
+}
+
 void attachable_hud_item::load(const shared_str& sect_name) {
     m_sect_name = sect_name;
 
@@ -434,6 +453,19 @@ void attachable_hud_item::load(const shared_str& sect_name) {
     m_hud_fov = 0.f;
     m_hud_fov_degrees = 0.f;
     m_viewport_near = 0.f;
+    m_hud_fov_factor = READ_IF_EXISTS(pSettings, r_float, sect_name, "hud_fov_factor", 1.f);
+    if (!(m_hud_fov_factor > EPS_S) || !std::isfinite(m_hud_fov_factor))
+        m_hud_fov_factor = 1.f;
+
+    m_hud_inertion = READ_IF_EXISTS(pSettings, r_bool, sect_name, "hud_inertion", true);
+    m_hip_inertion = HudInertionParams{};
+    m_hip_inertion.Load("gunslinger_base", "inertion_default_", "", true);
+    m_aim_inertion = m_hip_inertion;
+    m_aim_inertion.Load("gunslinger_base", "inertion_aim_default_", "", true);
+    m_grenade_inertion = m_aim_inertion;
+    m_hip_inertion.Load(sect_name.c_str(), "inertion_");
+    m_aim_inertion.Load(sect_name.c_str(), "inertion_aim_");
+    m_grenade_inertion.Load(sect_name.c_str(), "inertion_gl_");
 
     if (pSettings->line_exist(sect_name, "hud_fov")) {
         const float configured_hud_fov = pSettings->r_float(sect_name, "hud_fov");
@@ -1188,14 +1220,15 @@ void player_hud::update_additional(Fmatrix& trans) {
         m_attached_items[1]->update_hud_additional(trans);
 }
 
-static const float PITCH_OFFSET_R = 0.017f;
-static const float PITCH_OFFSET_N = 0.012f;
-static const float PITCH_OFFSET_D = 0.02f;
-static const float ORIGIN_OFFSET = -0.05f;
-static const float TENDTO_SPEED = 5.f;
-
 void player_hud::update_inertion(Fmatrix& trans) {
     if (inertion_allowed()) {
+        const auto* hud = m_attached_items[0] ? m_attached_items[0] : m_attached_items[1];
+        HudInertionParams params;
+        if (hud) {
+            const auto* weapon = smart_cast<const CWeapon*>(hud->m_parent_hud_item);
+            params = weapon ? weapon->GetHudInertionParams(*hud) : hud->m_hip_inertion;
+        }
+
         Fmatrix xform;
         Fvector& origin = trans.c;
         xform = trans;
@@ -1218,14 +1251,14 @@ void player_hud::update_inertion(Fmatrix& trans) {
         }
 
         // tend to forward
-        st_last_dir.mad(diff_dir, TENDTO_SPEED * Device.fTimeDelta);
-        origin.mad(diff_dir, ORIGIN_OFFSET);
+        st_last_dir.mad(diff_dir, params.speed * Device.fTimeDelta);
+        origin.mad(diff_dir, -params.origin_offset);
 
         // pitch compensation
-        float pitch = angle_normalize_signed(xform.k.getP());
-        origin.mad(xform.k, -pitch * PITCH_OFFSET_D);
-        origin.mad(xform.i, -pitch * PITCH_OFFSET_R);
-        origin.mad(xform.j, -pitch * PITCH_OFFSET_N);
+        const float pitch = angle_normalize_signed(xform.k.getP());
+        origin.mad(xform.k, pitch * params.pitch_offsets.z);
+        origin.mad(xform.i, pitch * params.pitch_offsets.x);
+        origin.mad(xform.j, pitch * params.pitch_offsets.y);
     }
 }
 
@@ -1363,11 +1396,11 @@ void player_hud::UpdateHudProjection() {
             ? source->m_hud_fov_degrees / std::max(Device.fFOV, EPS_S)
             : (source ? source->m_hud_fov : 0.f);
 
-    float item_fov_factor = 1.f;
+    float item_fov_factor = source ? source->m_hud_fov_factor : 1.f;
     if (source && source->m_parent_hud_item) {
-        CWeapon* weapon = smart_cast<CWeapon*>(source->m_parent_hud_item);
+        const auto* weapon = smart_cast<const CWeapon*>(source->m_parent_hud_item);
         if (weapon)
-            item_fov_factor = weapon->AlternativeHudFovFactor();
+            item_fov_factor = weapon->HudFovFactor(item_fov_factor);
     }
 
     if (!fsimilar(item_fov_factor, 1.f)) {
@@ -1438,10 +1471,12 @@ void player_hud::calc_transform(u16 attach_slot_idx, const Fmatrix& offset, Fmat
 }
 
 bool player_hud::inertion_allowed() {
-    attachable_hud_item* hi = m_attached_items[0];
+    const auto* hi = m_attached_items[0] ? m_attached_items[0] : m_attached_items[1];
 
     if (!hi)
         return true;
+    if (!hi->m_hud_inertion)
+        return false;
 
     // Controller-owned HUD item не має CHudItem parent.
     if (hi->m_controller_owned || !hi->m_parent_hud_item)
