@@ -132,7 +132,7 @@ public:
     BOOL IsUpdating();
 
     virtual BOOL IsMisfire() const;
-    BOOL CheckForMisfire();
+    BOOL CheckForMisfire(bool forced = false);
 
     BOOL AutoSpawnAmmo() const { return m_bAutoSpawnAmmo; };
     bool IsTriStateReload() const { return m_bTriStateReload; }
@@ -542,6 +542,8 @@ protected:
     virtual void OnAnimationEnd(u32 state);
     virtual shared_str InspectMotion() const;
     virtual bool RollForMisfire();
+    bool CanOwnerFire();
+    bool HasElectronicsMisfire() const;
 
     //òðàññèðîâàíèå ïîëåòà ïóëè
     virtual void FireTrace(const Fvector& P, const Fvector& D);
@@ -586,6 +588,8 @@ protected:
     // modified by Peacemaker [17.10.08]
     //	float					misfireProbability;
     //	float					misfireConditionK;
+    bool m_actor_can_shoot = true;
+    float m_electronics_misfire_level = 10.f;
     float misfireStartCondition;   //èçíîøåííîñòü, ïðè êîòîðîé ïîÿâëÿåòñÿ øàíñ îñå÷êè
     float misfireEndCondition;     //èçíîøåíîñòü ïðè êîòîðîé øàíñ îñå÷êè ñòàíîâèòñÿ êîíñòàíòíûì
     float misfireStartProbability; //øàíñ îñå÷êè ïðè èçíîøåíîñòè áîëüøå ÷åì misfireStartCondition

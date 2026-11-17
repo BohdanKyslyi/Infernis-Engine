@@ -245,7 +245,7 @@ float CWeaponMagazined::RechargeProgress() const {
 }
 
 void CWeaponMagazined::FireStart() {
-    if (!IsMisfire() && RechargeProgress() < 1.f)
+    if (!CanOwnerFire() || (!IsMisfire() && RechargeProgress() < 1.f))
         return;
 
     if (!IsMisfire()) {
@@ -1343,7 +1343,9 @@ void CWeaponMagazined::state_Fire(float dt) {
             if (autoaim_time != 0.f && !AutoAimAllowsShot(p1, d, autoaim_time))
                 return;
             m_autoaim_waiting = false;
-            const bool jam_this_shot = gunslinger_jam && RollForMisfire();
+            // RPG-7 checks electronics when it launches the rocket.
+            const bool electronics_jam = HasElectronicsMisfire() && !smart_cast<CWeaponRPG7*>(this);
+            const bool jam_this_shot = gunslinger_jam && (RollForMisfire() || electronics_jam);
             if (jam_this_shot && RollForLightMisfire()) {
                 PlayLightMisfire();
                 return;
@@ -1363,7 +1365,7 @@ void CWeaponMagazined::state_Fire(float dt) {
                 }
                 return;
             }
-            if (!gunslinger_jam && CheckForMisfire()) {
+            if (!gunslinger_jam && CheckForMisfire(electronics_jam)) {
                 StopShooting();
                 return;
             }
@@ -1894,6 +1896,8 @@ bool CWeaponMagazined::HandleTimedFireInput(u32 flags) {
     }
     if (!(flags & CMD_START))
         return false;
+    if (!CanOwnerFire())
+        return true;
 
     if (!IsPending())
         m_autoaim_trigger_held = true;

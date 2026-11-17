@@ -499,6 +499,9 @@ void CWeapon::Load(LPCSTR section) {
     misfireStartProbability =
         READ_IF_EXISTS(pSettings, r_float, section, "misfire_start_prob", 0.f);
     misfireEndProbability = pSettings->r_float(section, "misfire_end_prob");
+    m_actor_can_shoot = READ_IF_EXISTS(pSettings, r_bool, section, "actor_can_shoot", true);
+    m_electronics_misfire_level =
+        READ_IF_EXISTS(pSettings, r_float, section, "misfire_after_problems_level", 10.f);
     conditionDecreasePerShot = pSettings->r_float(section, "condition_shot_dec");
     conditionDecreasePerQueueShot = READ_IF_EXISTS(
         pSettings, r_float, section, "condition_queue_shot_dec", conditionDecreasePerShot);
@@ -1393,8 +1396,18 @@ bool CWeapon::RollForMisfire() {
     return !OnClient() && ::Random.randF(0.f, 1.f) < GetConditionMisfireProbability();
 }
 
-BOOL CWeapon::CheckForMisfire() {
-    if (RollForMisfire()) {
+bool CWeapon::CanOwnerFire() {
+    return m_actor_can_shoot || !IsGameTypeSingle() || !ParentIsActor();
+}
+
+bool CWeapon::HasElectronicsMisfire() const {
+    return !OnClient() && g_pGameLevel && IsGameTypeSingle() &&
+        std::isfinite(m_electronics_misfire_level) && m_electronics_misfire_level > 0.f &&
+        Level().ElectronicsProblems() >= m_electronics_misfire_level;
+}
+
+BOOL CWeapon::CheckForMisfire(bool forced) {
+    if (RollForMisfire() || forced) {
         FireEnd();
 
         bMisfire = true;

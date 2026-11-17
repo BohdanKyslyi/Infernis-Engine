@@ -200,6 +200,12 @@ void CWeaponRPG7::switch2_Fire() {
     bWorking = false;
 
     if (GetState() == eFire && getRocketCount() && H_Parent()) {
+        if (HasElectronicsMisfire()) {
+            m_bFireSingleShot = false;
+            CheckForMisfire(true);
+            return;
+        }
+
         Fvector p1, d1, p;
         Fvector p2, d2, d;
         p1.set(get_LastFP());
