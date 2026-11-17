@@ -818,22 +818,37 @@ float CActor::currentFOV() {
 void CActor::UpdateCL() {
     if (OnServer() && g_Alive() && !GodMode() && Level().CurrentControlEntity() == this &&
         conditions().IsBurning()) {
-        constexpr LPCSTR section = "gunslinger_base";
-        float rate = READ_IF_EXISTS(pSettings, r_float, section, "actor_burn_restore_speed", 0.000001f);
-        const LPCSTR materials = READ_IF_EXISTS(pSettings, r_string, section, "burn_restore_materials", nullptr);
-        const u16 index = material().last_material_idx();
-        if (materials && materials[0] && index != GAMEMTL_NONE_IDX) {
-            const shared_str& current = GMLib.GetMaterialByIdx(index)->m_Name;
-            for (u32 i = 0, count = _GetItemCount(materials); i < count; ++i) {
-                string256 name;
-                _GetItem(materials, i, name);
-                if (current == name) {
-                    rate += READ_IF_EXISTS(pSettings, r_float, section, "burn_restore_material_speed", 0.f);
-                    break;
+        // GUNSLINGER's burn and equipment-wear rates are per millisecond.
+        const float elapsed_ms = Device.fTimeDelta * 1000.f;
+        const auto wear_burning_equipment = [elapsed_ms](CInventoryItem* item) {
+            if (!item)
+                return;
+
+            const float immunity = item->GetHitImmunity(ALife::eHitTypeBurn);
+            if (std::isfinite(immunity) && immunity > 0.f)
+                item->ChangeCondition(-elapsed_ms * immunity * 0.0003f);
+        };
+        wear_burning_equipment(GetOutfit());
+        wear_burning_equipment(inventory().ItemFromSlot(HELMET_SLOT));
+
+        if (!m_item_use || !m_item_use->IsSelfExtinguishing()) {
+            constexpr LPCSTR section = "gunslinger_base";
+            float rate = READ_IF_EXISTS(pSettings, r_float, section, "actor_burn_restore_speed", 0.000001f);
+            const LPCSTR materials = READ_IF_EXISTS(pSettings, r_string, section, "burn_restore_materials", nullptr);
+            const u16 index = material().last_material_idx();
+            if (materials && materials[0] && index != GAMEMTL_NONE_IDX) {
+                const shared_str& current = GMLib.GetMaterialByIdx(index)->m_Name;
+                for (u32 i = 0, count = _GetItemCount(materials); i < count; ++i) {
+                    string256 name;
+                    _GetItem(materials, i, name);
+                    if (current == name) {
+                        rate += READ_IF_EXISTS(pSettings, r_float, section, "burn_restore_material_speed", 0.f);
+                        break;
+                    }
                 }
             }
+            conditions().ReduceBurning(rate * elapsed_ms);
         }
-        conditions().ReduceBurning(rate * Device.fTimeDelta);
     }
 
     // Wait for the ownership change and for the active HUD action to finish.

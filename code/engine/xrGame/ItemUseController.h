@@ -40,6 +40,7 @@ public:
     bool StartHudAnimationOnce(const shared_str& hud_section);
     bool StartMonsterHitReaction(LPCSTR animation_group);
     bool StartSelfExtinguish();
+    bool IsSelfExtinguishing() const;
     void RequestHudAnimationHide();
     bool IsHudAnimationActive() const;
     bool IsHudAnimationIdle() const;

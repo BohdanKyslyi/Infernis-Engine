@@ -922,13 +922,33 @@ bool CItemUseController::StartSelfExtinguish() {
     if (!animator || !animator[0])
         return false;
 
-    const float rate = READ_IF_EXISTS(pSettings, r_float, animator, "burn_restore", 0.f);
+    // Keep the LTX rate in units per millisecond and convert it for Update's seconds.
+    const float rate = READ_IF_EXISTS(pSettings, r_float, animator, "burn_restore", 0.f) * 1000.f;
     const shared_str hud = READ_IF_EXISTS(pSettings, r_string, animator, "hud", nullptr);
     if (!std::isfinite(rate) || rate <= 0.f || !StartHudAnimationInternal(hud, false, true, true))
         return false;
 
     m_burn_restore_rate = rate;
+    const LPCSTR flame = READ_IF_EXISTS(pSettings, r_string, animator, "flame_particles", nullptr);
+    if (!flame || !flame[0] || !xr_strcmp(flame, "none"))
+        return true;
+
+    if (!::Render->model_HasParticles(flame)) {
+        Msg("! ItemUse: self-extinguish particle [%s] not found", flame);
+        return true;
+    }
+
+    const LPCSTR fire_bone = READ_IF_EXISTS(pSettings, r_string, hud.c_str(), "fire_bone", nullptr);
+    if (fire_bone && fire_bone[0] && pSettings->line_exist(hud.c_str(), "fire_point")) {
+        m_use_particles_name = flame;
+        m_use_particles_bone = fire_bone;
+        m_use_particles_offset = pSettings->r_fvector3(hud.c_str(), "fire_point");
+    }
     return true;
+}
+
+bool CItemUseController::IsSelfExtinguishing() const {
+    return m_burn_restore_rate > 0.f && m_hud_animation_phase == eHudAnimationShow;
 }
 
 bool CItemUseController::StartMonsterHitReaction(LPCSTR animation_group) {
@@ -1492,6 +1512,8 @@ void CItemUseController::BeginAnimation()
         }
 
         PlayHudAnimationSound("snd_show");
+        if (IsSelfExtinguishing() && m_actor->conditions().IsBurning())
+            StartUseParticles();
         StartCameraEffector(played_motion_name);
         UpdatePPEffect();
 
@@ -2030,9 +2052,14 @@ void CItemUseController::Update(float dt)
 
     if (m_controller_mode == eControllerModeHudAnimation ||
         m_controller_mode == eControllerModeHudAnimationOneShot) {
-        if (m_burn_restore_rate > 0.f && m_hud_animation_phase == eHudAnimationShow &&
-            OnServer() && !GodMode() && Level().CurrentControlEntity() == m_actor)
+        if (IsSelfExtinguishing() && OnServer() && !GodMode() &&
+            Level().CurrentControlEntity() == m_actor) {
             m_actor->conditions().ReduceBurning(m_burn_restore_rate * dt);
+            if (m_actor->conditions().IsBurning())
+                UpdateUseParticles();
+            else
+                StopUseParticles();
+        }
 
         UpdateHudAnimation();
         return;
