@@ -31,6 +31,8 @@ public:
     CHUDTarget();
     ~CHUDTarget();
     void CursorOnFrame();
+    static float TraceAimDistance(const Fvector& position, const Fvector& direction,
+                                  float range, CObject* ignore);
     void Render();
     void Load();
     collide::rq_result& GetRQ() { return PP.RQ; };

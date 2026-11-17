@@ -491,6 +491,7 @@ protected:
         UpdateFireDependencies_internal();
     };
 
+    bool TryGetGunslingerShotParams(CEntity& shooter, Fvector& position, Fvector& direction);
     virtual void LoadFireParams(LPCSTR section);
 
 public:

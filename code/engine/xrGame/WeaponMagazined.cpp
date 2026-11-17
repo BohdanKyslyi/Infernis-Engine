@@ -1314,7 +1314,8 @@ void CWeaponMagazined::state_Fire(float dt) {
         }
 
         CEntity* E = smart_cast<CEntity*>(H_Parent());
-        E->g_fireParams(this, p1, d);
+        if (!TryGetGunslingerShotParams(*E, p1, d))
+            E->g_fireParams(this, p1, d);
 
         const bool jam_prevents_shot = JamPreventsShot();
         const bool gunslinger_jam = IsGameTypeSingle() && ParentIsActor() &&

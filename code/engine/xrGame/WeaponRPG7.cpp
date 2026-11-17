@@ -207,7 +207,7 @@ void CWeaponRPG7::switch2_Fire() {
         p = p1;
         d = d1;
         CEntity* E = smart_cast<CEntity*>(H_Parent());
-        if (E) {
+        if (E && !TryGetGunslingerShotParams(*E, p, d)) {
             E->g_fireParams(this, p2, d2);
             p = p2;
             d = d2;

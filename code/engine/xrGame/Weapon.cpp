@@ -2346,9 +2346,12 @@ bool CWeapon::TraceHudLaserImpact(Fvector& position, bool& green) {
     if (!laser.draw_hud_impact || !GetHUDmode() || !AllowsWeaponLaserEffects())
         return false;
 
-    // Use the crosshair's world ray independently of HUD animation and weapon sway.
-    const Fvector& origin = Device.vCameraPosition;
-    const Fvector& direction = Device.vCameraDirection;
+    Fvector origin = Device.vCameraPosition;
+    Fvector direction = Device.vCameraDirection;
+    if (!IsZoomed() && GetZoomRotationFactor() <= EPS_S && HasActiveHudLaser()) {
+        if (auto* shooter = smart_cast<CEntity*>(H_Parent()))
+            TryGetGunslingerShotParams(*shooter, origin, direction);
+    }
     collide::rq_result hit;
     if (!Level().ObjectSpace.RayPick(origin, direction, 300.f, collide::rqtBoth, hit, H_Parent()))
         return false;

@@ -84,6 +84,17 @@ ICF static BOOL pick_trace_callback(collide::rq_result& result, LPVOID params) {
     return FALSE;
 }
 
+float CHUDTarget::TraceAimDistance(const Fvector& position, const Fvector& direction,
+                                   float range, CObject* ignore) {
+    SPickParam pick{};
+    pick.RQ.set(nullptr, range, -1);
+    pick.power = 1.f;
+    collide::ray_defs ray(position, direction, range, CDB::OPT_CULL, collide::rqtBoth);
+    collide::rq_results results;
+    Level().ObjectSpace.RayQuery(results, ray, pick_trace_callback, &pick, nullptr, ignore);
+    return pick.RQ.range;
+}
+
 void CHUDTarget::CursorOnFrame() {
     Fvector p1, dir;
 
