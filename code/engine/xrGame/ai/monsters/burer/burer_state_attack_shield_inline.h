@@ -12,6 +12,9 @@ void CStateBurerShield<Object>::initialize() {
     inherited::initialize();
     this->object->set_script_capture(false);
     m_last_shield_started = current_time();
+    m_aim_last_tick = m_last_shield_started;
+    m_aim_hold_time = this->object->AimShieldDelay();
+    m_was_threatened = false;
     m_next_particle_allowed = 0;
     m_started = false;
 
@@ -69,20 +72,18 @@ bool CStateBurerShield<Object>::check_start_conditions() {
 
 template <class Object>
 bool CStateBurerShield<Object>::check_completion() {
-    if (current_time() > m_last_shield_started + this->object->m_shield_time)
+    const auto* enemy = this->object->EnemyMan.get_enemy();
+    if (!enemy || (enemy == Actor() && actor_is_reloading_weapon()))
         return true;
 
-    CEntityAlive const* enemy = this->object->EnemyMan.get_enemy();
-    if (!enemy)
-        return true;
-
-    if (enemy == Actor()) {
-        if (actor_is_reloading_weapon())
-            return true;
+    const TTime now = current_time();
+    const bool duration_elapsed = now - m_last_shield_started > this->object->m_shield_time;
+    if (this->object->GetActorThreat() != Object::ActorThreat::None) {
+        m_aim_last_tick = now;
+        m_was_threatened = true;
+        return duration_elapsed && Random.randF() < this->object->m_shielded_risky_factor;
     }
-
-    if (!this->object->EnemyMan.get_enemy())
-        return true;
-
-    return false;
+    if (enemy == Actor() && m_was_threatened && now - m_aim_last_tick < m_aim_hold_time)
+        return false;
+    return duration_elapsed;
 }

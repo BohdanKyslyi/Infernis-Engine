@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "anti_aim_ability.h"
 #include "basemonster/base_monster.h"
+#include "burer/burer.h"
 #include "../../Actor.h"
 #include "../../ActorEffector.h"
 #include "../../../xrCore/_vector3d_ext.h"
@@ -100,9 +101,12 @@ bool anti_aim_ability::check_start_condition() {
         return false;
     }
 
-    if (m_detection_level < 1.f && !m_object->get_force_anti_aim()) {
+    const bool healing = can_interrupt_healing();
+    if (healing && Device.dwTimeGlobal - m_last_activated_tick < TTime(m_timeout * 1000.f))
         return false;
-    }
+
+    if (m_detection_level < 1.f && !m_object->get_force_anti_aim() && !healing)
+        return false;
 
     if (!can_detect()) {
         return false;
@@ -121,6 +125,7 @@ void anti_aim_ability::activate() {
     m_man->move_stop(this);
 
     m_last_activated_tick = Device.dwTimeGlobal;
+    m_interrupting_healing = can_interrupt_healing();
 
     m_animation_hit_tick =
         Device.dwTimeGlobal +
@@ -197,6 +202,7 @@ void anti_aim_ability::deactivate() {
     }
 
     m_effector_id = 0;
+    m_interrupting_healing = false;
     m_last_detection_tick = Device.dwTimeGlobal;
     m_last_angle = M_PI;
     m_detection_level = 0.f;
@@ -229,7 +235,12 @@ float anti_aim_ability::calculate_angle() const {
 
 extern CActor* g_actor;
 
-bool anti_aim_ability::check_update_condition() const {
+bool anti_aim_ability::can_interrupt_healing() const {
+    auto* burer = smart_cast<CBurer*>(m_object);
+    return burer && burer->CanInterruptActorHealing();
+}
+
+bool anti_aim_ability::check_update_condition() {
     if (!m_object->g_Alive() || !g_actor || !Actor()->g_Alive())
         return false;
 
@@ -237,10 +248,8 @@ bool anti_aim_ability::check_update_condition() const {
     if (enemy != Actor())
         return false;
 
-    if (!smart_cast<CWeapon*>(Actor()->inventory().ActiveItem()))
-        return false;
-
-    return true;
+    return (is_active() && m_interrupting_healing) ||
+        smart_cast<CWeapon*>(Actor()->inventory().ActiveItem()) || can_interrupt_healing();
 }
 
 void anti_aim_ability::update_schedule() {

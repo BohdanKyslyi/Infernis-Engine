@@ -951,6 +951,18 @@ bool CItemUseController::IsSelfExtinguishing() const {
     return m_burn_restore_rate > 0.f && m_hud_animation_phase == eHudAnimationShow;
 }
 
+bool CItemUseController::IsHealing() const {
+    if (!m_active || m_controller_mode != eControllerModeConsumable || m_waiting_for_weapon_hide ||
+        m_effect_applied || !m_item_section.size())
+        return false;
+
+    const auto& section = m_item_section;
+    return READ_IF_EXISTS(pSettings, r_float, section, "eat_health", 0.f) > 0.f ||
+        READ_IF_EXISTS(pSettings, r_float, section, "wounds_heal_perc", 0.f) > 0.f ||
+        READ_IF_EXISTS(pSettings, r_float, section, "boost_health_restore", 0.f) > 0.f ||
+        READ_IF_EXISTS(pSettings, r_float, section, "boost_bleeding_restore", 0.f) > 0.f;
+}
+
 bool CItemUseController::StartMonsterHitReaction(LPCSTR animation_group) {
     if (READ_IF_EXISTS(pSettings, r_bool, "gunslinger_base", "disable_planned_kicks", false))
         return false;

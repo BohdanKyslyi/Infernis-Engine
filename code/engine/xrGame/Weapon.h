@@ -131,6 +131,7 @@ public:
     // Does weapon need's update?
     BOOL IsUpdating();
 
+    bool CanOwnerFire();
     virtual BOOL IsMisfire() const;
     BOOL CheckForMisfire(bool forced = false);
 
@@ -542,7 +543,6 @@ protected:
     virtual void OnAnimationEnd(u32 state);
     virtual shared_str InspectMotion() const;
     virtual bool RollForMisfire();
-    bool CanOwnerFire();
     bool HasElectronicsMisfire() const;
 
     //òðàññèðîâàíèå ïîëåòà ïóëè

@@ -70,6 +70,7 @@
 #include "ItemUseController.h"
 #include "ai/monsters/basemonster/base_monster.h"
 #include "ai/monsters/boar/boar.h"
+#include "ai/monsters/pseudogigant/pseudo_gigant.h"
 #include "WeaponMagazined.h"
 #include <cmath>
 #include "ssfx_script_bridge.h"
@@ -399,37 +400,54 @@ void CActor::Load(LPCSTR section) {
 void CActor::PHHit(SHit& H) { m_pPhysics_support->in_Hit(H, false); }
 
 namespace {
-void ApplyBoarImpact(CActor& actor, const SHit& hit, float power) {
+void ApplyMonsterImpact(CActor& actor, const SHit& hit, float power) {
     if (!actor.g_Alive() || !OnServer() || Level().CurrentControlEntity() != &actor ||
-        !smart_cast<CAI_Boar*>(hit.who) || !std::isfinite(power) || power <= 0.f)
+        !std::isfinite(power) || power <= 0.f)
         return;
 
+    const bool giant = smart_cast<CPseudoGigant*>(hit.who) != nullptr;
+    if (!giant && !smart_cast<CAI_Boar*>(hit.who))
+        return;
+
+    // The stomp sends a vertical Strike hit. The regular attack sends Wound.
+    const bool stomp = giant && hit.hit_type == ALife::eHitTypeStrike &&
+        hit.dir.similar(Fvector().set(0.f, 1.f, 0.f));
+    const LPCSTR prefix = stomp ? "pseudogiant_threaten" : (giant ? "pseudogiant_hit" : "boar_hit");
+    const LPCSTR stamina_key = stomp ? "pseudogiant_threaten_stamina_hit_k" :
+        (giant ? "pseudogiant_stamina_hit_k" : "boar_stamina_hit_k");
     constexpr LPCSTR section = "gunslinger_base";
-    const float factor = READ_IF_EXISTS(pSettings, r_float, section, "boar_stamina_hit_k", 1.f);
-    const float drain = power * factor;
+    const auto setting = [prefix, section](LPCSTR suffix, float fallback) {
+        string128 key;
+        xr_sprintf(key, "%s_%s", prefix, suffix);
+        return READ_IF_EXISTS(pSettings, r_float, section, key, fallback);
+    };
+
+    const float drain = power * READ_IF_EXISTS(pSettings, r_float, section, stamina_key, 1.f);
     if (!std::isfinite(drain) || drain < 0.f)
         return;
 
     const float stamina = actor.conditions().GetPower();
     if (drain > 0.f)
         actor.conditions().PowerHit(drain, false);
-    const Fvector to_boar = Fvector().sub(hit.who->Position(), actor.Position());
-    const float forced_distance = READ_IF_EXISTS(pSettings, r_float, section,
-        "boar_hit_unconditional_weapon_drop_dist", 0.f);
-    const bool force_drop = forced_distance > 0.f && to_boar.square_magnitude() < forced_distance * forced_distance;
+    const Fvector to_monster = Fvector().sub(hit.who->Position(), actor.Position());
+    const float forced_distance = setting("unconditional_weapon_drop_dist", stomp ? 5.f : 0.f);
+    const bool force_drop = forced_distance > 0.f &&
+        to_monster.square_magnitude() < forced_distance * forced_distance;
     if (!force_drop && drain <= stamina)
         return;
 
-    const bool front = Device.vCameraDirection.dotproduct(to_boar) >= 0.f;
-    const LPCSTR animation_group = front ? "boar_front_kicks" : "boar_back_kicks";
+    const bool front = Device.vCameraDirection.dotproduct(to_monster) >= 0.f;
+    const LPCSTR animation_group = stomp ? "pseudogiant_threaten_kicks" :
+        (giant ? (front ? "pseudogiant_front_kicks" : "pseudogiant_back_kicks") :
+                 (front ? "boar_front_kicks" : "boar_back_kicks"));
     if (PIItem item = actor.inventory().ActiveItem()) {
         if ((!force_drop && Random.randF() >= drain - stamina) ||
             !actor.RequestMonsterDisarm(animation_group))
             return;
 
         if (auto* weapon = smart_cast<CWeaponMagazined*>(item)) {
-            const float minimum = READ_IF_EXISTS(pSettings, r_float, section, "boar_hit_conditiondecmin", 0.f);
-            const float maximum = READ_IF_EXISTS(pSettings, r_float, section, "boar_hit_conditiondecmax", minimum);
+            const float minimum = setting("conditiondecmin", giant ? 0.15f : 0.f);
+            const float maximum = setting("conditiondecmax", giant ? 0.3f : minimum);
             if (std::isfinite(minimum) && std::isfinite(maximum) && minimum >= 0.f && maximum >= minimum)
                 weapon->ChangeCondition(-Random.randF(minimum, maximum));
         }
@@ -548,7 +566,7 @@ void CActor::Hit(SHit* pHDS) {
             HDS.power = hit_power;
             HDS.add_wound = true;
             inherited::Hit(&HDS);
-            ApplyBoarImpact(*this, HDS, original_power);
+            ApplyMonsterImpact(*this, HDS, original_power);
         }
     } else {
         m_bWasBackStabbed = false;

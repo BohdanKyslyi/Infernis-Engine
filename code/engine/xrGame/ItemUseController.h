@@ -41,6 +41,7 @@ public:
     bool StartMonsterHitReaction(LPCSTR animation_group);
     bool StartSelfExtinguish();
     bool IsSelfExtinguishing() const;
+    bool IsHealing() const;
     void RequestHudAnimationHide();
     bool IsHudAnimationActive() const;
     bool IsHudAnimationIdle() const;

@@ -21,6 +21,11 @@
 #include "../../../ActorCondition.h"
 #include "../../../xr_level_controller.h"
 #include "../../../WeaponMagazined.h"
+#include "../../../WeaponBinoculars.h"
+#include "../../../WeaponKnife.h"
+#include "../../../HUDManager.h"
+#include "../../../ItemUseController.h"
+#include "../../../game_cl_single.h"
 #include <cmath>
 
 #include "../../../../xrCore/_vector3d_ext.h"
@@ -116,6 +121,16 @@ void CBurer::Load(LPCSTR section) {
 
     m_shield_cooldown = READ_IF_EXISTS(pSettings, r_u32, section, "shield_cooldown", 4000);
     m_shield_time = READ_IF_EXISTS(pSettings, r_u32, section, "shield_time", 3000);
+    constexpr LPCSTR gunslinger = "gunslinger_base";
+    m_force_shield_dist = READ_IF_EXISTS(pSettings, r_float, gunslinger, "burer_forceshield_dist", 3.f);
+    m_force_anti_aim_dist =
+        READ_IF_EXISTS(pSettings, r_float, gunslinger, "burer_forceantiaim_dist", 7.f);
+    m_aim_shield_delay =
+        (std::max)(0, READ_IF_EXISTS(pSettings, r_s32, gunslinger, "burer_aim_shield_delay_const", 500));
+    m_aim_shield_random =
+        (std::max)(0, READ_IF_EXISTS(pSettings, r_s32, gunslinger, "burer_aim_shield_delay_random", 1000));
+    m_shielded_risky_factor = clampr(READ_IF_EXISTS(pSettings, r_float, gunslinger,
+        "burer_shielded_risky_factor", 0.02f), 0.f, 1.f);
     m_shield_keep_particle =
         READ_IF_EXISTS(pSettings, r_string, section, "shield_keep_particle", 0);
     m_shield_keep_particle_period =
@@ -246,10 +261,74 @@ void CBurer::shedule_Update(u32 dt) {
 
 void CBurer::CheckSpecParams(u32 spec_params) {}
 
+CActor* CBurer::VisibleActorEnemy() {
+    auto* actor = Actor();
+    if (!IsGameTypeSingle() || !actor || !actor->g_Alive() || EnemyMan.get_enemy() != actor ||
+        Level().CurrentControlEntity() != actor || !EnemyMan.see_enemy_now(actor))
+        return nullptr;
+    return actor;
+}
+
+bool CBurer::CanInterruptActorHealing() {
+    if (!OnServer() || g_SingleGameDifficulty < egdStalker)
+        return false;
+    const auto* actor = VisibleActorEnemy();
+    const auto* controller = actor ? actor->GetItemUseController() : nullptr;
+    return controller && controller->IsHealing();
+}
+
+CBurer::ActorThreat CBurer::GetActorThreat() {
+    const auto* actor = VisibleActorEnemy();
+    if (!actor || Level().CurrentViewEntity() != actor)
+        return ActorThreat::None;
+
+    auto* weapon = smart_cast<CWeapon*>(actor->inventory().ActiveItem());
+    if (!weapon || smart_cast<CWeaponBinoculars*>(weapon) || !weapon->CanOwnerFire())
+        return ActorThreat::None;
+
+    const float distance = Position().distance_to(actor->Position());
+    if (smart_cast<CWeaponKnife*>(weapon)) {
+        if (distance >= m_force_anti_aim_dist)
+            return ActorThreat::None;
+    } else if (!weapon->GetAmmoElapsed() || weapon->IsMisfire() ||
+               weapon->GetState() == CWeapon::eReload || weapon->GetNextState() == CWeapon::eReload) {
+        return ActorThreat::None;
+    }
+
+    Fvector toward_burer;
+    Center(toward_burer);
+    toward_burer.sub(Device.vCameraPosition);
+    const float camera_distance = toward_burer.magnitude();
+    const float alignment = Device.vCameraDirection.dotproduct(toward_burer);
+    if (distance < m_force_shield_dist && alignment > 0.f)
+        return ActorThreat::CloseWeapon;
+
+    if (g_hud && camera_distance > EPS_S) {
+        const auto& ray = HUD().GetCurrentRayQuery();
+        const bool sniper = READ_IF_EXISTS(pSettings, r_bool, weapon->cNameSect(),
+            "is_burer_see_sniper_weapon", false);
+        const float aim_cone = sniper ? 0.88f : 0.94f;
+        if (ray.O == this || (alignment > camera_distance * aim_cone &&
+                              ray.range > camera_distance * 0.5f))
+            return ActorThreat::AimedWeapon;
+    }
+    return ActorThreat::None;
+}
+
+TTime CBurer::AimShieldDelay() const {
+    return TTime(m_aim_shield_delay) +
+        (m_aim_shield_random > 0 ? TTime(Random.randI(m_aim_shield_random)) : 0);
+}
+
 void xr_stdcall CBurer::StaminaHit() {
     auto* actor = Actor();
     if (!actor || !actor->g_Alive() || GodMode())
         return;
+
+    if (CanInterruptActorHealing()) {
+        actor->GetItemUseController()->Cancel();
+        return;
+    }
 
     auto* weapon = smart_cast<CWeapon*>(actor->inventory().ActiveItem());
     if (!weapon)
