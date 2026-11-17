@@ -13,6 +13,7 @@
 #include "ActorHelmet.h"
 #include "UserBackpack.h"
 #include "NoirInventorySlots.h"
+#include <cmath>
 
 #define MAX_HEALTH 1.0f
 #define MIN_HEALTH -0.01f
@@ -169,10 +170,34 @@ void CEntityCondition::ChangePsyHealth(const float value) { m_fDeltaPsyHealth +=
 void CEntityCondition::ChangeCircumspection(const float value) { m_fDeltaCircumspection += value; }
 void CEntityCondition::ChangeEntityMorale(const float value) { m_fDeltaEntityMorale += value; }
 
+bool CEntityCondition::UsesPersistentBurning() const {
+    return IsGameTypeSingle() && m_object && m_object->cast_actor() &&
+        READ_IF_EXISTS(pSettings, r_bool, "gunslinger_base", "enable_actor_burning", false);
+}
+
+bool CEntityCondition::IsBurning() const {
+    return UsesPersistentBurning() && std::any_of(m_WoundVector.begin(), m_WoundVector.end(),
+        [](CWound* wound) {
+            return !wound->GetDestroy() && wound->TypeSize(ALife::eHitTypeBurn) > 0.f;
+        });
+}
+
+void CEntityCondition::ReduceBurning(float amount) {
+    if (!CanBeHarmed() || !UsesPersistentBurning() || !std::isfinite(amount) || amount <= 0.f)
+        return;
+
+    for (auto* wound : m_WoundVector) {
+        const float burn = wound->TypeSize(ALife::eHitTypeBurn);
+        if (!wound->GetDestroy() && burn > 0.f)
+            wound->AddHit(burn - amount <= m_fMinWoundSize ? -burn : -amount, ALife::eHitTypeBurn);
+    }
+}
+
 void CEntityCondition::ChangeBleeding(const float percent) {
+    const bool preserve_burn = UsesPersistentBurning();
     //затянуть раны
     for (auto it = m_WoundVector.begin(); m_WoundVector.end() != it; ++it) {
-        (*it)->Incarnation(percent, m_fMinWoundSize);
+        (*it)->Incarnation(percent, m_fMinWoundSize, preserve_burn);
         if (0 == (*it)->TotalSize())
             (*it)->SetDestroy(true);
     }
@@ -384,8 +409,8 @@ CWound* CEntityCondition::ConditionHit(SHit* pHDS) {
         m_fHealthLost = hit_power * m_fHealthHitPart * m_fHitBoneScale;
         m_fDeltaHealth -= CanBeHarmed() ? m_fHealthLost : 0;
         m_fDeltaPower -= hit_power * m_fPowerHitPart;
-        //		bAddWound		=  is_special_hit_2_self;
-        bAddWound = false;
+        bAddWound = pHDS->hit_type == ALife::eHitTypeBurn &&
+            UsesPersistentBurning() && CanBeHarmed() && hit_power > 0.f;
         break;
     case ALife::eHitTypeChemicalBurn:
         hit_power -= m_fBoostChemicalBurnProtection;

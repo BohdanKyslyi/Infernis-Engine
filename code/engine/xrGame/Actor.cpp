@@ -816,6 +816,26 @@ float CActor::currentFOV() {
 }
 
 void CActor::UpdateCL() {
+    if (OnServer() && g_Alive() && !GodMode() && Level().CurrentControlEntity() == this &&
+        conditions().IsBurning()) {
+        constexpr LPCSTR section = "gunslinger_base";
+        float rate = READ_IF_EXISTS(pSettings, r_float, section, "actor_burn_restore_speed", 0.000001f);
+        const LPCSTR materials = READ_IF_EXISTS(pSettings, r_string, section, "burn_restore_materials", nullptr);
+        const u16 index = material().last_material_idx();
+        if (materials && materials[0] && index != GAMEMTL_NONE_IDX) {
+            const shared_str& current = GMLib.GetMaterialByIdx(index)->m_Name;
+            for (u32 i = 0, count = _GetItemCount(materials); i < count; ++i) {
+                string256 name;
+                _GetItem(materials, i, name);
+                if (current == name) {
+                    rate += READ_IF_EXISTS(pSettings, r_float, section, "burn_restore_material_speed", 0.f);
+                    break;
+                }
+            }
+        }
+        conditions().ReduceBurning(rate * Device.fTimeDelta);
+    }
+
     // Wait for the ownership change and for the active HUD action to finish.
     if (m_monster_disarm_animation.size()) {
         if (!g_Alive() || Level().CurrentControlEntity() != this ||

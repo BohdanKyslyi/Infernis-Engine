@@ -10,6 +10,8 @@
 #include "ItemUseController.h"
 
 #include "Actor.h"
+#include "ActorCondition.h"
+#include "Actor_Flags.h"
 #include "CustomMonster.h"
 #include "Weapon.h"
 #include "WeaponKnife.h"
@@ -908,6 +910,25 @@ bool CItemUseController::StartHudAnimation(const shared_str& hud_section,
 
 bool CItemUseController::StartHudAnimationOnce(const shared_str& hud_section) {
     return StartHudAnimationInternal(hud_section, false, true);
+}
+
+bool CItemUseController::StartSelfExtinguish() {
+    if (!m_actor || !m_actor->g_Alive() || !OnServer() || GodMode() ||
+        Level().CurrentControlEntity() != m_actor || !m_actor->HUDview() ||
+        !m_actor->conditions().IsBurning())
+        return false;
+
+    const LPCSTR animator = READ_IF_EXISTS(pSettings, r_string, "gunslinger_base", "burn_animator", nullptr);
+    if (!animator || !animator[0])
+        return false;
+
+    const float rate = READ_IF_EXISTS(pSettings, r_float, animator, "burn_restore", 0.f);
+    const shared_str hud = READ_IF_EXISTS(pSettings, r_string, animator, "hud", nullptr);
+    if (!std::isfinite(rate) || rate <= 0.f || !StartHudAnimationInternal(hud, false, true, true))
+        return false;
+
+    m_burn_restore_rate = rate;
+    return true;
 }
 
 bool CItemUseController::StartMonsterHitReaction(LPCSTR animation_group) {
@@ -1935,7 +1956,6 @@ void CItemUseController::UpdateEquipmentToggleAnimation() {
 
 void CItemUseController::Update(float dt)
 {
-    (void)dt;
 
     if (m_deferred_hud_animation_section.size()) {
         const shared_str deferred_hud_animation_section =
@@ -2010,6 +2030,10 @@ void CItemUseController::Update(float dt)
 
     if (m_controller_mode == eControllerModeHudAnimation ||
         m_controller_mode == eControllerModeHudAnimationOneShot) {
+        if (m_burn_restore_rate > 0.f && m_hud_animation_phase == eHudAnimationShow &&
+            OnServer() && !GodMode() && Level().CurrentControlEntity() == m_actor)
+            m_actor->conditions().ReduceBurning(m_burn_restore_rate * dt);
+
         UpdateHudAnimation();
         return;
     }
@@ -2307,6 +2331,7 @@ void CItemUseController::Reset()
 
     m_controller_mode = eControllerModeNone;
     m_hud_show_only = false;
+    m_burn_restore_rate = 0.f;
     m_hud_animation_phase = eHudAnimationNone;
     m_hud_animation_hide_requested = false;
     m_hud_animation_allow_inventory = false;

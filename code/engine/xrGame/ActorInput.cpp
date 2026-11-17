@@ -291,6 +291,8 @@ void CActor::IR_OnKeyboardPress(int cmd) {
                     }break;
     */
     case kUSE:
+        if (m_item_use && m_item_use->StartSelfExtinguish())
+            return;
         ActorUse();
         break;
     case kDROP:

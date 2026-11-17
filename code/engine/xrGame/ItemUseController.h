@@ -39,6 +39,7 @@ public:
     // Only anm_show/snd_show are played; anm_idle and anm_hide are ignored.
     bool StartHudAnimationOnce(const shared_str& hud_section);
     bool StartMonsterHitReaction(LPCSTR animation_group);
+    bool StartSelfExtinguish();
     void RequestHudAnimationHide();
     bool IsHudAnimationActive() const;
     bool IsHudAnimationIdle() const;
@@ -106,6 +107,7 @@ private:
     void BeginHudBlowout();
     bool m_hud_blowout_played = false;
     bool m_hud_show_only = false;
+    float m_burn_restore_rate = 0.f;
     void UpdateMutantLootAnimation();
     void UpdateQuickKnifeAnimation();
     void UpdatePickupAnimation();
