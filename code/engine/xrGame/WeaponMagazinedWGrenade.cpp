@@ -5,6 +5,7 @@
 #include "entity.h"
 #include "ParticlesObject.h"
 #include "GrenadeLauncher.h"
+#include "ai/monsters/controller/controller.h"
 #include "xrserver_objects_alife_items.h"
 #include "ExplosiveRocket.h"
 #include "Actor.h"
@@ -271,13 +272,25 @@ void CWeaponMagazinedWGrenade::OnEvent(NET_Packet& P, u16 type) {
     }
 }
 
-void CWeaponMagazinedWGrenade::LaunchGrenade() {
-    if (!m_bGrenadeMode || m_magazine.empty() || !getRocketCount() || IsPending())
-        return;
+bool CWeaponMagazinedWGrenade::CanFireControllerGrenade(const CController& attacker) const {
+    if (!m_bGrenadeMode || !IsGrenadeLauncherAttached() || m_magazine.empty() || !H_Parent() ||
+        !READ_IF_EXISTS(pSettings, r_bool, HudSection(), "controller_can_shoot_gl", false))
+        return false;
+
+    const float min_distance = READ_IF_EXISTS(
+        pSettings, r_float, HudSection(), "controller_shoot_gl_min_dist", 10.f);
+    return std::isfinite(min_distance) && min_distance >= 0.f &&
+        H_Parent()->Position().distance_to(attacker.Position()) > min_distance;
+}
+
+bool CWeaponMagazinedWGrenade::LaunchGrenade(bool controller_attack) {
+    if (!m_bGrenadeMode || m_magazine.empty() || !getRocketCount() || !H_Parent() ||
+        (controller_attack ? GetState() != eControllerAttack : IsPending()))
+        return false;
 
     const LPCSTR rocket_section = pSettings->r_string(m_magazine.back().m_ammoSect, "fake_grenade_name");
     if (xr_strcmp(getCurrentRocket()->cNameSect(), rocket_section))
-        return;
+        return false;
     {
         Fvector p1, d;
         p1.set(get_LastFP2());
@@ -296,6 +309,10 @@ void CWeaponMagazinedWGrenade::LaunchGrenade() {
         }
         if (IsGameTypeSingle())
             p1.set(get_LastFP2());
+        if (controller_attack) {
+            d.y = -1.f;
+            d.normalize_safe();
+        }
 
         Fmatrix launch_matrix;
         launch_matrix.identity();
@@ -304,7 +321,7 @@ void CWeaponMagazinedWGrenade::LaunchGrenade() {
 
         launch_matrix.c.set(p1);
 
-        if (IsGameTypeSingle() && IsZoomed() && smart_cast<CActor*>(H_Parent())) {
+        if (!controller_attack && IsGameTypeSingle() && IsZoomed() && smart_cast<CActor*>(H_Parent())) {
             H_Parent()->setEnabled(FALSE);
             setEnabled(FALSE);
 
@@ -361,6 +378,7 @@ void CWeaponMagazinedWGrenade::LaunchGrenade() {
             u_EventSend(P);
         };
     }
+    return true;
 }
 
 void CWeaponMagazinedWGrenade::FireEnd() {
@@ -727,7 +745,7 @@ void CWeaponMagazinedWGrenade::PlayAnimShoot() {
                 if (!motion.c_str())
                     motion = FindLauncherMotion(bases[i], variant);
                 if (motion.c_str()) {
-                    PlayHUDMotion(motion, MixShootAfterIdle(), this, GetState());
+                    PlayFireMotion(motion);
                     return;
                 }
             }
@@ -736,7 +754,7 @@ void CWeaponMagazinedWGrenade::PlayAnimShoot() {
         }
 
         if (const LPCSTR legacy = OptionalHudMotion("anm_shots_w_gl", nullptr)) {
-            PlayHUDMotion(legacy, FALSE, this, GetState());
+            PlayFireMotion(legacy);
             return;
         }
     }

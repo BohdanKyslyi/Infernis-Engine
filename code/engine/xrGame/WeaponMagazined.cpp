@@ -6,6 +6,7 @@
 
 #include "WeaponMagazined.h"
 #include "WeaponRPG7.h"
+#include "WeaponMagazinedWGrenade.h"
 #include "actor.h"
 #include "ActorCondition.h"
 #include "ai/monsters/controller/controller.h"
@@ -245,7 +246,7 @@ float CWeaponMagazined::RechargeProgress() const {
 }
 
 void CWeaponMagazined::FireStart() {
-    if (!CanOwnerFire() || (!IsMisfire() && RechargeProgress() < 1.f))
+    if (IsEnteringAim() || !CanOwnerFire() || (!IsMisfire() && RechargeProgress() < 1.f))
         return;
 
     if (!IsMisfire()) {
@@ -283,6 +284,7 @@ void CWeaponMagazined::FireStart() {
 }
 
 void CWeaponMagazined::FireEnd() {
+    StopCyclicShotSound();
     inherited::FireEnd();
 
     CActor* actor = smart_cast<CActor*>(H_Parent());
@@ -603,7 +605,7 @@ bool CWeaponMagazined::RequestControllerAttack(CController& attacker) {
         actor != Level().CurrentControlEntity() || actor->inventory().ActiveItem() != this ||
         GetState() != eIdle || GetNextState() != eIdle || IsPending() ||
         IsHudTransitionLocked() || m_bStopAtEndAnimIsRunning || m_magazine.empty() || IsMisfire() ||
-        UpgradeGrenadeMode() || RechargeProgress() < 1.f || !GetHUDmode() ||
+        RechargeProgress() < 1.f || !GetHUDmode() ||
         g_player_hud->attached_item(1) || HasControllerPsyBlockade(*actor) ||
         (actor->GetItemUseController() && actor->GetItemUseController()->IsBusy()) ||
         (CurrentGameUI() && CurrentGameUI()->TopInputReceiver()))
@@ -612,6 +614,12 @@ bool CWeaponMagazined::RequestControllerAttack(CController& attacker) {
     if (READ_IF_EXISTS(pSettings, r_bool, HudSection(), "prohibit_suicide", false) ||
         !READ_IF_EXISTS(pSettings, r_bool, HudSection(), "suicide_by_animation", false))
         return false;
+
+    if (UpgradeGrenadeMode()) {
+        const auto* launcher = smart_cast<const CWeaponMagazinedWGrenade*>(this);
+        if (!launcher || !CanOwnerFire() || !launcher->CanFireControllerGrenade(attacker))
+            return false;
+    }
 
     const auto motion = ControllerMotion("anm_suicide");
     if (!motion.size())
@@ -668,6 +676,15 @@ void CWeaponMagazined::UpdateControllerAttack() {
     }
 
     const u32 elapsed = Device.dwTimeGlobal - m_controller_phase_start;
+    if (m_controller_phase == ControllerPhase::GrenadeShot) {
+        if (!(m_bStopAtEndAnimIsRunning && m_startedMotionState == eFire) &&
+            elapsed >= m_controller_phase_duration) {
+            SetPending(FALSE);
+            SwitchState(eIdle);
+        }
+        return;
+    }
+
     if (m_controller_phase == ControllerPhase::Shot) {
         if (elapsed >= m_controller_phase_duration) {
             StopFlameParticles();
@@ -692,7 +709,9 @@ void CWeaponMagazined::UpdateControllerAttack() {
         ? smart_cast<CController*>(Level().Objects.net_Find(m_controller_attacker)) : nullptr;
     const bool controlled = attacker && !attacker->getDestroy() && attacker->g_Alive() &&
         attacker->EnemyMan.see_enemy_now(actor) && !HasControllerPsyBlockade(*actor);
-    if (!controlled || IsMisfire() || m_magazine.empty()) {
+    auto* launcher = UpgradeGrenadeMode() ? smart_cast<CWeaponMagazinedWGrenade*>(this) : nullptr;
+    if (!controlled || IsMisfire() || m_magazine.empty() ||
+        (launcher && (!CanOwnerFire() || !launcher->CanFireControllerGrenade(*attacker)))) {
         m_controller_phase = ControllerPhase::Recover;
         m_controller_attacker = u16(-1);
         m_controller_phase_start = Device.dwTimeGlobal;
@@ -700,7 +719,16 @@ void CWeaponMagazined::UpdateControllerAttack() {
         m_controller_phase_duration = PlayControllerMotion(ControllerMotion("anm_stop_suicide"),
             m_has_controller_recovery_sound ? "sndStopSuicide" : nullptr);
     } else if (elapsed >= m_controller_phase_duration) {
-        FireControllerShot();
+        if (!launcher) {
+            FireControllerShot();
+            return;
+        }
+
+        StopCurrentAnimWithoutCallback();
+        m_controller_phase_start = Device.dwTimeGlobal;
+        m_controller_phase_duration = 250;
+        m_controller_phase = launcher->LaunchGrenade(true)
+            ? ControllerPhase::GrenadeShot : ControllerPhase::Recover;
     }
 }
 
@@ -945,6 +973,8 @@ void CWeaponMagazined::ReloadMagazine() {
 }
 
 void CWeaponMagazined::OnStateSwitch(u32 S) {
+    if (S != eFire)
+        StopCyclicShotSound();
     if (S != eUnloadMagazine)
         m_unload_motion = nullptr;
     if (S != eSilencerAction) {
@@ -966,6 +996,7 @@ void CWeaponMagazined::OnStateSwitch(u32 S) {
         m_timed_hud_motion = nullptr;
         m_deferred_aim_exit = false;
         m_autoaim_trigger_held = false;
+        m_fire_press_blocked_by_aim = false;
     }
     inherited::OnStateSwitch(S);
     CInventoryOwner* owner = smart_cast<CInventoryOwner*>(this->H_Parent());
@@ -1184,7 +1215,8 @@ void CWeaponMagazined::UpdateSounds() {
     Fvector P = get_LastFP();
     m_sounds.SetPosition("sndShow", P);
     m_sounds.SetPosition("sndHide", P);
-    //. nah	m_sounds.SetPosition("sndShot", P);
+    if (m_cyclic_shot_sound.size())
+        m_sounds.SetPosition(m_cyclic_shot_sound.c_str(), P);
     m_sounds.SetPosition("sndReload", P);
     if (m_has_breechblock_sound)
         m_sounds.SetPosition("sndBreechblock", P);
@@ -1459,9 +1491,46 @@ void CWeaponMagazined::OnShot() {
     PlayMagazineShotEffects();
 }
 
-void CWeaponMagazined::PlayMagazineShotEffects() {
+void CWeaponMagazined::StopCyclicShotSound() {
+    if (m_cyclic_shot_sound.size()) {
+        m_sounds.StopSound(m_cyclic_shot_sound.c_str());
+        m_cyclic_shot_sound = nullptr;
+    }
+}
+
+void CWeaponMagazined::PlayMagazineShotSound() {
+    if (!IsMisfire() && GetState() == eFire &&
+        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "cyclic_shoot_sound", false)) {
+        if (m_cyclic_shot_sound.size())
+            return;
+
+        LPCSTR alias = ShotSound();
+        string256 motion_key, motion_alias, sound_path;
+        if (m_current_motion.size()) {
+            xr_sprintf(motion_key, "snd_%s", m_current_motion.c_str());
+            const LPCSTR sound = READ_IF_EXISTS(pSettings, r_string, HudSection(), motion_key, nullptr);
+            if (sound && sound[0]) {
+                _GetItem(sound, 0, sound_path);
+                if (sound_path[0] && xr_strcmp(sound_path, "$silent") != 0) {
+                    xr_sprintf(motion_alias, "%s:%s", HudSection().c_str(), motion_key);
+                    alias = motion_alias;
+                }
+            }
+        }
+
+        if (alias && alias[0]) {
+            m_sounds.PlaySound(alias, get_LastFP(), H_Root(), !!GetHUDmode(), true);
+            m_cyclic_shot_sound = alias;
+        }
+        return;
+    }
+
     if (m_motion_play_frame != Device.dwFrame || !PlayHudActionSound(m_current_motion))
         PlaySound(ShotSound(), get_LastFP());
+}
+
+void CWeaponMagazined::PlayMagazineShotEffects() {
+    PlayMagazineShotSound();
     if (IsMisfire()) {
         if (m_has_shot_jam_sound)
             PlaySound("sndShotJam", get_LastFP());
@@ -1887,15 +1956,45 @@ bool CWeaponMagazined::IsHudTransitionLocked() const {
         Device.dwTimeGlobal - m_hud_transition_start < m_hud_transition_lock;
 }
 
+bool CWeaponMagazined::IsEnteringAim() {
+    if (!IsGameTypeSingle() || !IsZoomed() || !HudItemData() ||
+        H_Parent() != Level().CurrentControlEntity())
+        return false;
+
+    const LPCSTR motion = m_current_motion.c_str();
+    const bool entry_motion = motion &&
+        std::strncmp(motion, "anm_idle_aim_start", sizeof("anm_idle_aim_start") - 1) == 0;
+    return IsRotatingToZoom() || (IsAlternativeAimActive() && m_fAlternativeAimFactor < 1.f) ||
+        (entry_motion && (m_bStopAtEndAnimIsRunning || IsHudTransitionLocked()));
+}
+
+bool CWeaponMagazined::HasFireActionInProgress() {
+    const LPCSTR motion = m_current_motion.c_str();
+    const bool shot_motion = m_startedMotionState == eFire || (motion &&
+        std::strncmp(motion, "anm_fakeshoot", sizeof("anm_fakeshoot") - 1) == 0);
+    return IsWorking() || m_deferred_hud_shot || m_autoaim_waiting ||
+        GetState() == eFire || GetNextState() == eFire ||
+        GetState() == eFire2 || GetNextState() == eFire2 ||
+        (m_bStopAtEndAnimIsRunning && shot_motion);
+}
+
 bool CWeaponMagazined::HandleTimedFireInput(u32 flags) {
     if (flags & CMD_STOP) {
         m_autoaim_trigger_held = false;
+        if (m_fire_press_blocked_by_aim) {
+            m_fire_press_blocked_by_aim = false;
+            return true;
+        }
         // The preceding press only queued a shot. It did not start firing or empty-mag reload.
         return GetState() == eIdle && GetNextState() == eIdle &&
             (m_deferred_hud_shot || IsHudTransitionLocked());
     }
     if (!(flags & CMD_START))
         return false;
+    m_fire_press_blocked_by_aim = IsEnteringAim();
+    if (m_fire_press_blocked_by_aim)
+        return true;
+
     if (!CanOwnerFire())
         return true;
 
@@ -1916,7 +2015,10 @@ bool CWeaponMagazined::HandleTimedFireInput(u32 flags) {
             return true;
         }
     }
-    if (IsHudTransitionLocked()) {
+    const LPCSTR motion = m_current_motion.c_str();
+    const bool leaving_aim = !IsZoomed() && motion &&
+        std::strncmp(motion, "anm_idle_aim_end", sizeof("anm_idle_aim_end") - 1) == 0;
+    if (IsHudTransitionLocked() && !leaving_aim) {
         string256 key;
         xr_sprintf(key, "autoshoot_%s", m_current_motion.c_str());
         m_deferred_hud_shot |= READ_IF_EXISTS(pSettings, r_bool, HudSection(), key, false);
@@ -2008,6 +2110,12 @@ bool CWeaponMagazined::Action(u16 cmd, u32 flags) {
         return true;
 
     if (cmd == kWPN_ZOOM || cmd == kWPN_ZOOM_ALTER) {
+        const bool entering_aim = !IsZoomed() ||
+            (cmd == kWPN_ZOOM_ALTER && !IsAlternativeAimActive());
+        if ((flags & CMD_START) && entering_aim && IsGameTypeSingle() &&
+            H_Parent() == Level().CurrentControlEntity() && HasFireActionInProgress())
+            return true;
+
         if ((flags & CMD_START) && m_deferred_aim_exit) {
             m_deferred_aim_exit = false;
             return true;
@@ -2626,10 +2734,38 @@ LPCSTR CWeaponMagazined::ShootMotion(LPCSTR fallback) const {
     return fallback;
 }
 
-BOOL CWeaponMagazined::MixShootAfterIdle() const {
-    LPCSTR motion = m_current_motion.c_str();
-    return motion && std::strncmp(motion, "anm_idle", sizeof("anm_idle") - 1) == 0 &&
-           READ_IF_EXISTS(pSettings, r_bool, HudSection(), "mix_shoot_after_idle", false);
+BOOL CWeaponMagazined::MixShootMotion() const {
+    const LPCSTR motion = m_current_motion.c_str();
+    if (!motion)
+        return FALSE;
+    if (std::strncmp(motion, "anm_idle", sizeof("anm_idle") - 1) == 0)
+        return READ_IF_EXISTS(pSettings, r_bool, HudSection(), "mix_shoot_after_idle", false);
+    return GetQueueSize() < 0 && m_iShotNum > 1 &&
+        std::strncmp(motion, "anm_shoot", sizeof("anm_shoot") - 1) == 0 &&
+        READ_IF_EXISTS(pSettings, r_bool, HudSection(), "mix_shoot_after_shoot_in_queue", false);
+}
+
+void CWeaponMagazined::PlayFireMotion(const shared_str& motion) {
+    if (!IsMisfire() && READ_IF_EXISTS(pSettings, r_bool, HudSection(), "cyclic_shoot_animations", false)) {
+        const bool start = READ_IF_EXISTS(
+            pSettings, r_bool, HudSection(), "cyclic_shoot_start_animation", false);
+        if (start && m_iShotNum == 1) {
+            LPCSTR entry = "anm_shoot_start";
+            if (IsZoomed() && !IsRotatingToZoom())
+                entry = OptionalHudMotion("anm_shoot_start_aim", entry);
+            if (HasWeaponActionMotion(entry)) {
+                PlayHUDMotion(entry, MixShootMotion(), this, eFire);
+                return;
+            }
+        }
+
+        const LPCSTR current = m_current_motion.c_str();
+        const bool in_start = current && m_bStopAtEndAnimIsRunning &&
+            std::strncmp(current, "anm_shoot_start", sizeof("anm_shoot_start") - 1) == 0;
+        if (m_iShotNum > 1 && (in_start || m_current_motion == motion))
+            return;
+    }
+    PlayHUDMotion(motion, MixShootMotion(), this, GetState());
 }
 
 void CWeaponMagazined::PlayAnimShoot() {
@@ -2637,7 +2773,7 @@ void CWeaponMagazined::PlayAnimShoot() {
     const LPCSTR motion = ShootMotion(OptionalHudMotion("anm_shots", "anm_shoot"));
     const LPCSTR prefix = std::strncmp(motion, "anm_shoot_aim", sizeof("anm_shoot_aim") - 1) == 0
         ? "anm_shoot_aim" : "anm_shoot";
-    PlayHUDMotion(MaskedHudMotion(motion, prefix), MixShootAfterIdle(), this, GetState());
+    PlayFireMotion(MaskedHudMotion(motion, prefix));
 }
 
 void CWeaponMagazined::OnZoomIn() {

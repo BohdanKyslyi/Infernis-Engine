@@ -323,6 +323,7 @@ void CWeapon::Load(LPCSTR section) {
     m_pending_upgrade_hud = shared_str();
     m_upgrade_world_visual = shared_str();
     inherited::Load(section);
+    m_zoom_mouse_sensitivity_delta = 0.f;
     SetTacticalTorchEffects(false);
     m_tactical_torch = TacticalTorch();
     if (READ_IF_EXISTS(pSettings, r_bool, section, "torch_installed", false))
@@ -1500,6 +1501,76 @@ shared_str CWeapon::AlternativeAimSettingSection(LPCSTR key) const {
         return cNameSect();
 
     return shared_str();
+}
+
+float CWeapon::AimMouseSensitivity() const {
+    if (!IsZoomed() || !IsGameTypeSingle())
+        return 1.f;
+
+    const LPCSTR key = UpgradeGrenadeMode() ? "zoom_gl_mouse_sense_koef" : "zoom_mouse_sense_koef";
+    const shared_str section = !UpgradeGrenadeMode() && IsScopeAttached() && !IsAlternativeAimActive()
+        ? ScopeSettingSection(key) : cNameSect();
+    float factor = READ_IF_EXISTS(pSettings, r_float, section, key, 1.f);
+    if (!UpgradeGrenadeMode())
+        factor += m_zoom_mouse_sensitivity_delta;
+    return std::isfinite(factor) && factor > 0.f ? factor : 1.f;
+}
+
+bool CWeapon::AimDofProfile(Fvector& profile, float& speed) {
+    if (!IsGameTypeSingle() || !IsZoomed() || !HudItemData())
+        return false;
+
+    const shared_str& hud = HudSection();
+    bool configured = false;
+    auto apply = [&](const shared_str& section, LPCSTR prefix) {
+        const LPCSTR suffixes[] = {"near", "focus", "far"};
+        float* values[] = {&profile.x, &profile.y, &profile.z};
+        for (u32 i = 0; i < 3; ++i) {
+            string64 key;
+            xr_sprintf(key, "%s%s", prefix, suffixes[i]);
+            if (pSettings->line_exist(section, key)) {
+                *values[i] = pSettings->r_float(section, key);
+                configured = true;
+            }
+        }
+    };
+
+    profile.set(0.25f, 0.5f, 180.f);
+    if (pSettings->line_exist(cNameSect(), "zoom_dof")) {
+        profile = pSettings->r_fvector3(cNameSect(), "zoom_dof");
+        configured = profile.x != -1.f || profile.y != -1.f || profile.z != -1.f;
+        if (!configured)
+            profile.set(0.25f, 0.5f, 180.f);
+    }
+
+    LPCSTR speed_key = "zoom_in_dof_speed";
+    if (UpgradeGrenadeMode()) {
+        apply(hud, "gl_dof_");
+        speed_key = "gl_in_dof_speed";
+    } else if (IsAlternativeAimActive()) {
+        apply(hud, "zoom_dof_");
+        apply(hud, "alter_zoom_dof_");
+        speed_key = "alter_zoom_in_dof_speed";
+    } else if (UsesGunslingerScopeLens() || Is3DScopeEnabled()) {
+        apply(hud, "lens_dof_");
+        const LPCSTR keys[] = {"lens_dof_near", "lens_dof_focus", "lens_dof_far"};
+        float* values[] = {&profile.x, &profile.y, &profile.z};
+        for (u32 i = 0; i < 3; ++i) {
+            const shared_str optic = ScopeLensUpgradeSection(keys[i]);
+            if (pSettings->line_exist(optic, keys[i])) {
+                *values[i] = pSettings->r_float(optic, keys[i]);
+                configured = true;
+            }
+        }
+    } else {
+        apply(hud, "zoom_dof_");
+    }
+
+    speed = READ_IF_EXISTS(pSettings, r_float, hud, speed_key, 5.f);
+    if (!std::isfinite(speed) || speed <= 0.f)
+        speed = 5.f;
+    return configured && std::isfinite(profile.x) && std::isfinite(profile.y) &&
+        std::isfinite(profile.z) && profile.x <= profile.y && profile.y <= profile.z;
 }
 
 bool CWeapon::CanAimInGrenadeMode() const {

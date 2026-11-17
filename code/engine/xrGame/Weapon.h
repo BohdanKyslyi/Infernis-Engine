@@ -169,6 +169,8 @@ public:
     bool IsAlternativeAimAllowed() const;
     bool CanAimInGrenadeMode() const;
     bool IsAlternativeAimActive() const { return m_bAlternativeAimActive; }
+    float AimMouseSensitivity() const;
+    bool AimDofProfile(Fvector& profile, float& speed);
     float HudFovFactor(float hip_factor) const;
     HudInertionParams GetHudInertionParams(const attachable_hud_item& hud) const;
     bool IsSilencerAttached() const;
@@ -366,6 +368,7 @@ protected:
     bool m_bAlternativeAimOwnsZoom;
     float m_fAlternativeAimFactor;
     float m_fZoomFactorBeforeAlternativeAim;
+    float m_zoom_mouse_sensitivity_delta = 0.f;
 
     bool m_gunslinger_zoom = false;
     bool UsesGunslingerZoom() const;

@@ -328,7 +328,7 @@ void CWeaponAutomaticShotgun::PlayAnimShoot() {
     if (!motion)
         motion = OptionalHudMotion("anm_shoot_first", nullptr);
     if (motion)
-        PlayHUDMotion(motion, MixShootAfterIdle(), this, GetState());
+        PlayFireMotion(motion);
     else
         inherited::PlayAnimShoot();
 }

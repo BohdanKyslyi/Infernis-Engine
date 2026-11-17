@@ -32,7 +32,8 @@ public:
     virtual float CurrentZoomFactor();
     virtual u8 GetCurrentHudOffsetIdx();
     virtual void FireEnd();
-    void LaunchGrenade();
+    bool LaunchGrenade(bool controller_attack = false);
+    bool CanFireControllerGrenade(const CController& attacker) const;
 
     virtual void OnStateSwitch(u32 S);
 

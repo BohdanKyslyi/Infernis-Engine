@@ -11,6 +11,7 @@
 #include "xr_level_controller.h"
 #include "game_cl_base.h"
 #include "xrserver_objects_alife.h"
+#include "xrRender/Kinematics.h"
 #include <algorithm>
 #include <cstdlib>
 
@@ -27,6 +28,7 @@ CGrenade::~CGrenade(void) {}
 void CGrenade::Load(LPCSTR section) {
     inherited::Load(section);
     CExplosive::Load(section);
+    m_checkout_bones = READ_IF_EXISTS(pSettings, r_string, section, "checkout_bones", nullptr);
 
     m_sounds.LoadSound(section, "snd_checkout", "sndCheckout", false, m_eSoundCheckout);
     if (pSettings->line_exist(section, "snd_throw_quick"))
@@ -267,6 +269,29 @@ void CGrenade::Destroy() {
     CExplosive::GenExplodeEvent(Position(), normal);
 }
 
+bool CGrenade::IsPreparingThrow() const {
+    const auto throwing = [](u32 state) {
+        return state == eThrowStart || state == eReady || state == eThrow || state == eThrowQuick;
+    };
+    return throwing(GetState()) || throwing(GetNextState());
+}
+
+void CGrenade::UpdateCheckoutBones() {
+    if (!m_checkout_bones.size() || H_Parent() || Useful() || !Visual())
+        return;
+
+    auto* model = Visual()->dcast_PKinematics();
+    if (!model)
+        return;
+    string128 name;
+    for (int i = 0, count = _GetItemCount(m_checkout_bones.c_str()); i < count; ++i) {
+        _GetItem(m_checkout_bones.c_str(), i, name);
+        const u16 bone = model->LL_BoneID(name);
+        if (bone != BI_NONE && model->LL_GetBoneVisible(bone))
+            model->LL_SetBoneVisible(bone, FALSE, TRUE);
+    }
+}
+
 bool CGrenade::Useful() const {
 
     bool res = (/* !m_throw && */ m_dwDestroyTime == 0xffffffff && CExplosive::Useful() &&
@@ -334,6 +359,7 @@ void CGrenade::OnAnimationEnd(u32 state) {
 void CGrenade::UpdateCL() {
     inherited::UpdateCL();
     CExplosive::UpdateCL();
+    UpdateCheckoutBones();
 
     if (!IsGameTypeSingle())
         make_Interpolation();

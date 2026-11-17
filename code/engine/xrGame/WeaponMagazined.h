@@ -205,7 +205,7 @@ protected:
     void StartDetectorTransition();
     void UpdateDetectorTransition();
 
-    enum class ControllerPhase { Prepare, Recover, Shot };
+    enum class ControllerPhase { Prepare, Recover, Shot, GrenadeShot };
     ControllerPhase m_controller_phase = ControllerPhase::Prepare;
     u16 m_controller_attacker = u16(-1);
     u32 m_controller_phase_start = 0;
@@ -219,6 +219,9 @@ protected:
     void UpdateControllerAttack();
     void FireControllerShot();
     void PlayMagazineShotEffects();
+    void PlayMagazineShotSound();
+    void StopCyclicShotSound();
+    shared_str m_cyclic_shot_sound;
 
     s32 HudLockTime(LPCSTR prefix, LPCSTR motion) const;
     bool PlayMagazineReloadMotion(const shared_str& motion, BOOL mix);
@@ -242,6 +245,9 @@ protected:
     u32 m_hud_transition_lock = 0;
     bool m_deferred_hud_shot = false;
     bool m_deferred_aim_exit = false;
+    bool m_fire_press_blocked_by_aim = false;
+    bool IsEnteringAim();
+    bool HasFireActionInProgress();
 
     //ïåðåìåííàÿ áëîêèðóåò èñïîëüçîâàíèå
     //òîëüêî ðàçíûõ òèïîâ ïàòðîíîâ
@@ -307,7 +313,8 @@ protected:
     bool CanPlayHipIdleDuringRecharge();
     void UpdateGunslingerMovementIdle();
     shared_str GunslingerMovementIdle(u32 movement) const;
-    BOOL MixShootAfterIdle() const;
+    BOOL MixShootMotion() const;
+    void PlayFireMotion(const shared_str& motion);
 
     virtual int ShotsFired() { return m_iShotNum; }
     virtual float GetWeaponDeterioration();

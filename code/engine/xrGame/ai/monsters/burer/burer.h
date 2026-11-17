@@ -148,7 +148,7 @@ public:
     void StartTeleObjectParticle(CGameObject* pO);
     void StopTeleObjectParticle(CGameObject* pO);
 
-    enum class ActorThreat { None, CloseWeapon, AimedWeapon };
+    enum class ActorThreat { None, CloseWeapon, AimedWeapon, HeldGrenade, PrimedGrenade, ExplosiveWeapon };
     ActorThreat GetActorThreat();
     bool CanInterruptActorHealing();
     TTime AimShieldDelay() const;

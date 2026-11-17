@@ -78,7 +78,10 @@ bool CStateBurerShield<Object>::check_completion() {
 
     const TTime now = current_time();
     const bool duration_elapsed = now - m_last_shield_started > this->object->m_shield_time;
-    if (this->object->GetActorThreat() != Object::ActorThreat::None) {
+    const auto threat = this->object->GetActorThreat();
+    if (threat == Object::ActorThreat::HeldGrenade || threat == Object::ActorThreat::PrimedGrenade)
+        return true;
+    if (threat != Object::ActorThreat::None) {
         m_aim_last_tick = now;
         m_was_threatened = true;
         return duration_elapsed && Random.randF() < this->object->m_shielded_risky_factor;

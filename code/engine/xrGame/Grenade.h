@@ -32,6 +32,7 @@ public:
 
     virtual bool Action(u16 cmd, u32 flags);
     virtual bool Useful() const;
+    bool IsPreparingThrow() const;
     virtual void State(u32 state);
 
     virtual void OnH_B_Chield() { inherited::OnH_B_Chield(); }
@@ -50,6 +51,8 @@ public:
     virtual void
     SendHiddenItem(); // same as OnHiddenItem but for client... (sends message to a server)...
 protected:
+    shared_str m_checkout_bones;
+    void UpdateCheckoutBones();
     ALife::_TIME_ID m_dwGrenadeRemoveTime;
     ALife::_TIME_ID m_dwGrenadeIndependencyTime;
 

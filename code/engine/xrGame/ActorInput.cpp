@@ -259,7 +259,8 @@ void CActor::IR_OnKeyboardPress(int cmd) {
             break;
 
         CGrenade* grenade = smart_cast<CGrenade*>(inventory().ItemFromSlot(GRENADE_SLOT));
-        if (grenade) {
+        if (grenade && READ_IF_EXISTS(pSettings, r_bool, grenade->cNameSect(),
+                                      "supports_quick_throw", true)) {
             const u16 return_slot = inventory().GetActiveSlot();
             inventory().Activate(GRENADE_SLOT);
             if (inventory().GetNextActiveSlot() == GRENADE_SLOT)
@@ -487,6 +488,8 @@ void CActor::IR_OnMouseMove(int dx, int dy) {
 
     CCameraBase* C = cameras[cam_active];
     float scale = (C->f_fov / g_fov) * psMouseSens * psMouseSensScale / 50.f / LookFactor;
+    if (auto* weapon = iitem ? iitem->cast_weapon() : nullptr)
+        scale *= weapon->AimMouseSensitivity();
     if (dx) {
         float d = float(dx) * scale;
         cam_Active()->Move((d < 0) ? kLEFT : kRIGHT, xr::abs(d));

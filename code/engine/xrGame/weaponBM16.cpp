@@ -397,7 +397,7 @@ void CWeaponBM16::PlayAnimShoot() {
         if (!motion.c_str())
             motion = NumberedMotion("anm_shoot");
         if (motion.c_str())
-            PlayHUDMotion(motion, MixShootAfterIdle(), this, GetState());
+            PlayFireMotion(motion);
         return;
     }
     switch (m_magazine.size()) {

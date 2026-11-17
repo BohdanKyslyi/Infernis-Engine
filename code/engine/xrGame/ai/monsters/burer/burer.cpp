@@ -23,6 +23,10 @@
 #include "../../../WeaponMagazined.h"
 #include "../../../WeaponBinoculars.h"
 #include "../../../WeaponKnife.h"
+#include "../../../WeaponMagazinedWGrenade.h"
+#include "../../../WeaponRPG7.h"
+#include "../../../WeaponRG6.h"
+#include "../../../Grenade.h"
 #include "../../../HUDManager.h"
 #include "../../../ItemUseController.h"
 #include "../../../game_cl_single.h"
@@ -282,7 +286,11 @@ CBurer::ActorThreat CBurer::GetActorThreat() {
     if (!actor || Level().CurrentViewEntity() != actor)
         return ActorThreat::None;
 
-    auto* weapon = smart_cast<CWeapon*>(actor->inventory().ActiveItem());
+    PIItem item = actor->inventory().ActiveItem();
+    if (const auto* grenade = smart_cast<const CGrenade*>(item))
+        return grenade->IsPreparingThrow() ? ActorThreat::PrimedGrenade : ActorThreat::HeldGrenade;
+
+    auto* weapon = item ? item->cast_weapon() : nullptr;
     if (!weapon || smart_cast<CWeaponBinoculars*>(weapon) || !weapon->CanOwnerFire())
         return ActorThreat::None;
 
@@ -300,6 +308,10 @@ CBurer::ActorThreat CBurer::GetActorThreat() {
     toward_burer.sub(Device.vCameraPosition);
     const float camera_distance = toward_burer.magnitude();
     const float alignment = Device.vCameraDirection.dotproduct(toward_burer);
+    const auto* launcher = smart_cast<const CWeaponMagazinedWGrenade*>(weapon);
+    if (alignment > 0.f && (smart_cast<const CWeaponRPG7*>(weapon) ||
+        smart_cast<const CWeaponRG6*>(weapon) || (launcher && launcher->UpgradeGrenadeMode())))
+        return ActorThreat::ExplosiveWeapon;
     if (distance < m_force_shield_dist && alignment > 0.f)
         return ActorThreat::CloseWeapon;
 
