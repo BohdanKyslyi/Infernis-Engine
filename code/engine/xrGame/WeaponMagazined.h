@@ -156,6 +156,8 @@ protected:
     void ChangeFireMode(int step);
     shared_str m_fire_mode_motion;
     u32 m_fire_mode_duration = 0;
+    float m_fBaseDispersionedBulletsTimeDelta = 0.f;
+    float m_fSingleShotsTimeDelta = 0.f;
     float m_recharge_time = 0.f;
     u32 m_last_recharge_shot = 0;
     bool m_has_recharge_shot = false;

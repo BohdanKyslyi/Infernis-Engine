@@ -155,6 +155,10 @@ void CWeaponMagazined::Load(LPCSTR section) {
         READ_IF_EXISTS(pSettings, r_u8, section, "base_dispersioned_bullets_count", 0);
     m_fBaseDispersionedBulletsSpeed = READ_IF_EXISTS(
         pSettings, r_float, section, "base_dispersioned_bullets_speed", m_fStartBulletSpeed);
+    m_fBaseDispersionedBulletsTimeDelta = READ_IF_EXISTS(
+        pSettings, r_float, section, "base_dispersioned_bullets_time_delta", 0.f);
+    m_fSingleShotsTimeDelta =
+        READ_IF_EXISTS(pSettings, r_float, section, "singleshoots_time_delta", 0.f);
 
     if (pSettings->line_exist(section, "fire_modes")) {
         m_bHasDifferentFireModes = true;
@@ -1365,10 +1369,22 @@ void CWeaponMagazined::state_Fire(float dt) {
 
             m_bFireSingleShot = false;
 
-            if (std::isfinite(m_recharge_time) && m_recharge_time > fOneShotTime) {
+            float shot_interval = fOneShotTime;
+            if (m_iQueueSize == 1) {
+                if (std::isfinite(m_fSingleShotsTimeDelta) && m_fSingleShotsTimeDelta > 0.f)
+                    shot_interval = m_fSingleShotsTimeDelta;
+            } else if (m_iBaseDispersionedBulletsCount > 1 &&
+                       m_iShotNum < m_iBaseDispersionedBulletsCount - 1 &&
+                       std::isfinite(m_fBaseDispersionedBulletsTimeDelta) &&
+                       m_fBaseDispersionedBulletsTimeDelta > 0.f) {
+                // m_iShotNum still excludes this shot. Shorten only the gaps within the initial burst.
+                shot_interval = m_fBaseDispersionedBulletsTimeDelta;
+            }
+
+            if (std::isfinite(m_recharge_time) && m_recharge_time > shot_interval) {
                 fShotTimeCounter = m_recharge_time;
             } else {
-                fShotTimeCounter += fOneShotTime;
+                fShotTimeCounter += shot_interval;
             }
             m_last_recharge_shot = Device.dwTimeGlobal;
             m_has_recharge_shot = true;
