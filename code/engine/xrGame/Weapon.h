@@ -152,6 +152,7 @@ public:
     bool IsGrenadeLauncherAttached() const;
     bool IsScopeAttached() const;
     bool TraceHudLaserImpact(Fvector& position, bool& green);
+    float HudLaserDotRadius(float distance) const;
     bool HasActiveHudLaser();
     shared_str EquipmentToggleMotion(bool night_vision, bool switch_on);
     void StopEquipmentToggleMotion(const shared_str& motion);
@@ -272,10 +273,15 @@ protected:
         shared_str effect;
         float distance;
     };
+    struct LaserDistanceScale {
+        float threshold;
+        float multiplier;
+    };
     struct WeaponLaser {
         shared_str section;
         shared_str bone;
         xr_vector<LaserDot> dots;
+        xr_vector<LaserDistanceScale> distance_scales;
         Fvector hud_offset{};
         Fvector world_offset{};
         Fvector breaking{};

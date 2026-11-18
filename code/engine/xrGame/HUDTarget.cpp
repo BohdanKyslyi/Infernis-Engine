@@ -147,7 +147,7 @@ void CHUDTarget::RenderLaserImpact() {
     }
     const float x = (projected.x * 0.5f + 0.5f) * Device.dwWidth;
     const float y = (0.5f - projected.y * 0.5f) * Device.dwHeight;
-    const float radius = clampr(4.f + 4.f / distance, 4.f, 8.f) * Device.dwHeight / 1080.f;
+    const float radius = weapon->HudLaserDotRadius(distance) * Device.dwHeight / 1080.f;
     const u32 color = green ? color_rgba(75, 255, 65, 255) : color_rgba(255, 40, 24, 255);
     UIRender->SetShader(*m_laser_shader);
     UIRender->StartPrimitive(6, IUIRender::ptTriList, IUIRender::pttTL);

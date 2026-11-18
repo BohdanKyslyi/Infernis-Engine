@@ -2494,6 +2494,7 @@ void CWeapon::LoadWeaponLaser(LPCSTR section) {
     laser.section = section;
     laser.bone = READ_IF_EXISTS(pSettings, r_string, section, "laserdot_attach_bone", nullptr);
     laser.dots.clear();
+    laser.distance_scales.clear();
     laser.green = false;
     laser.checked_effects = false;
     laser.damaged = false;
@@ -2522,6 +2523,23 @@ void CWeapon::LoadWeaponLaser(LPCSTR section) {
                 laser.green = std::strstr(effect, "green") != nullptr;
             laser.dots.push_back({effect, previous_distance});
         }
+    }
+
+    const int scale_count = clampr(
+        READ_IF_EXISTS(pSettings, r_s32, section, "laserdot_dists_count", 0), 0, 64);
+    float previous_threshold = 0.f;
+    for (int i = 1; i <= scale_count; ++i) {
+        string64 key;
+        xr_sprintf(key, "laserdot_dist_treshold_%d", i);
+        const float threshold = READ_IF_EXISTS(pSettings, r_float, section, key, -1.f);
+        xr_sprintf(key, "laserdot_dist_scale_%d", i);
+        const float multiplier = READ_IF_EXISTS(pSettings, r_float, section, key, -1.f);
+        if (!std::isfinite(threshold) || threshold < 0.f ||
+            !std::isfinite(multiplier) || multiplier < 0.f)
+            continue;
+
+        previous_threshold = std::max(previous_threshold, threshold);
+        laser.distance_scales.push_back({previous_threshold, multiplier});
     }
 
     const shared_str weapon = cNameSect();
@@ -2623,6 +2641,29 @@ bool CWeapon::TraceHudLaserImpact(Fvector& position, bool& green) {
     position.mad(origin, direction, hit.range);
     green = laser.green;
     return true;
+}
+
+float CWeapon::HudLaserDotRadius(float distance) const {
+    const auto& scales = m_weapon_laser.distance_scales;
+    if (scales.empty())
+        return clampr(4.f + 4.f / distance, 4.f, 8.f);
+
+    float corrected_distance = 0.f;
+    float previous_threshold = 0.f;
+    float multiplier = 1.f;
+    for (const auto& scale : scales) {
+        if (distance <= scale.threshold)
+            break;
+
+        corrected_distance += (scale.threshold - previous_threshold) * multiplier;
+        previous_threshold = scale.threshold;
+        multiplier = scale.multiplier;
+    }
+    corrected_distance += (distance - previous_threshold) * multiplier;
+
+    // The original moves its particle along the viewing ray. For a projected
+    // HUD sprite, only the apparent size depends on that corrected distance.
+    return clampr(4.f / std::max(0.5f, corrected_distance), 1.f, 8.f);
 }
 
 void CWeapon::StopWeaponLaserEffects() {
