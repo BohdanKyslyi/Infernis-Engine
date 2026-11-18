@@ -575,7 +575,8 @@ bool CUIHudEditor::SelectActiveWeapon(bool force) {
     constexpr LPCSTR crosshair_key = "zoom_hide_crosshair";
     const auto source = weapon->HudPoseSettingSection(crosshair_key);
     const bool fallback = READ_IF_EXISTS(pSettings, r_bool, m_section, crosshair_key, true);
-    m_snapshot_hide_crosshair = READ_IF_EXISTS(pSettings, r_bool, source, crosshair_key, fallback);
+    m_snapshot_hide_crosshair = source.size()
+        ? READ_IF_EXISTS(pSettings, r_bool, source, crosshair_key, fallback) : fallback;
     m_hide_crosshair->SetCheck(m_snapshot_hide_crosshair);
     SyncControls();
     SetStatus("ui_hud_editor_status_ready");

@@ -4057,9 +4057,14 @@ float CWeapon::Weight() const {
 bool CWeapon::ZoomHideCrosshair() {
     constexpr LPCSTR key = "zoom_hide_crosshair";
     const auto section = HudPoseSettingSection(key);
-    const bool base = READ_IF_EXISTS(pSettings, r_bool, HudSection(), key,
-                                    m_zoom_params.m_bHideCrosshairInZoom);
-    return READ_IF_EXISTS(pSettings, r_bool, section, key, base) || ZoomTexture();
+    const auto hud = HudSection();
+    const bool base = hud.size() ? READ_IF_EXISTS(pSettings, r_bool, hud, key,
+                                                 m_zoom_params.m_bHideCrosshairInZoom)
+                                : m_zoom_params.m_bHideCrosshairInZoom;
+    // An unscoped or permanent-scope weapon has no attachable pose section.
+    const bool hide = section.size() ? READ_IF_EXISTS(pSettings, r_bool, section, key, base)
+                                    : base;
+    return hide || ZoomTexture();
 }
 
 bool CWeapon::show_crosshair() { return !IsPending() && (!IsZoomed() || !ZoomHideCrosshair()); }
