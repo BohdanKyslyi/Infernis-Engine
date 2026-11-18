@@ -4,6 +4,7 @@
 #include "player_hud_legs.h"
 #include "HudItem.h"
 #include "Weapon.h"
+#include "ui/UIHudEditor.h"
 #include "ui_base.h"
 #include "actor.h"
 #include "physic_item.h"
@@ -896,9 +897,21 @@ void player_hud::update(const Fmatrix& cam_trans) {
     update_additional(trans);
 
     Fvector ypr = attach_rot();
+    Fvector position = attach_pos();
+    if (const auto* hud = m_attached_items[0]) {
+        if (const auto* weapon = smart_cast<const CWeapon*>(hud->m_parent_hud_item)) {
+            if (weapon->IsScopeAttached()) {
+                const bool wide = hud->m_measures.m_prop_flags.test(
+                    hud_item_measures::e_16x9_mode_now);
+                weapon->ApplyHudPoseSettings("hands_position", "hands_orientation", wide,
+                                             false, position, ypr);
+            }
+            HudEditorHandsOverride(weapon, position, ypr);
+        }
+    }
     ypr.mul(PI / 180.f);
     m_attach_offset.setHPB(ypr.x, ypr.y, ypr.z);
-    m_attach_offset.translate_over(attach_pos());
+    m_attach_offset.translate_over(position);
     m_transform.mul(trans, m_attach_offset);
     // insert inertion here
 

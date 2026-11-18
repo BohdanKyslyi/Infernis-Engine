@@ -174,6 +174,12 @@ public:
     bool AimDofProfile(Fvector& profile, float& speed);
     float HudFovFactor(float hip_factor) const;
     HudInertionParams GetHudInertionParams(const attachable_hud_item& hud) const;
+    shared_str AttachedScopeWrapper() const;
+    shared_str ScopeHudPoseSection() const;
+    shared_str HudPoseSettingSection(LPCSTR key, bool alternative = false) const;
+    void ApplyHudPoseSettings(LPCSTR pos_key, LPCSTR rot_key, bool wide, bool alternative,
+                              Fvector& pos, Fvector& rot) const;
+    bool UsesGrenadeHudPose() const { return UpgradeGrenadeMode(); }
     bool IsSilencerAttached() const;
 
     virtual bool GrenadeLauncherAttachable();
@@ -423,7 +429,7 @@ public:
     IC bool IsZoomed() const { return m_zoom_params.m_bIsZoomModeNow; };
     CUIWindow* ZoomTexture();
 
-    bool ZoomHideCrosshair() { return m_zoom_params.m_bHideCrosshairInZoom || ZoomTexture(); }
+    bool ZoomHideCrosshair();
 
     IC float GetZoomFactor() const { return m_zoom_params.m_fCurrentZoomFactor; }
     IC void SetZoomFactor(float f) { m_zoom_params.m_fCurrentZoomFactor = f; }

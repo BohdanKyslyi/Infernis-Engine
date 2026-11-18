@@ -30,6 +30,7 @@
 #include "weaponBinocularsVision.h"
 #include "ui/UIWindow.h"
 #include "ui/UIXmlInit.h"
+#include "ui/UIHudEditor.h"
 #include "ui_base.h"
 #include "Torch.h"
 #include "Entity.h"
@@ -1531,6 +1532,55 @@ shared_str CWeapon::AlternativeAimSettingSection(LPCSTR key) const {
         return cNameSect();
 
     return shared_str();
+}
+
+shared_str CWeapon::AttachedScopeWrapper() const {
+    if (IsScopeAttached() && m_eScopeStatus == ALife::eAddonAttachable &&
+        m_cur_scope < m_scopes.size())
+        return m_scopes[m_cur_scope];
+    return {};
+}
+
+shared_str CWeapon::ScopeHudPoseSection() const {
+    const shared_str wrapper = AttachedScopeWrapper();
+    if (!wrapper.size())
+        return {};
+
+    // A wrapper can put its pose into a dedicated HUD section. The active
+    // HUD model and motions still come from the weapon's selected HUD.
+    const shared_str hud = READ_IF_EXISTS(pSettings, r_string, wrapper, "hud", nullptr);
+    if (hud.size() && hud != HudSection() && pSettings->section_exist(hud))
+        return hud;
+    return wrapper;
+}
+
+shared_str CWeapon::HudPoseSettingSection(LPCSTR key, bool alternative) const {
+    const auto pose = ScopeHudPoseSection();
+    if (pose.size() && pSettings->line_exist(pose, key))
+        return pose;
+    if (alternative)
+        return AlternativeAimSettingSection(key);
+    return pose.size() ? ScopeSettingSection(key) : shared_str();
+}
+
+void CWeapon::ApplyHudPoseSettings(LPCSTR pos_key, LPCSTR rot_key, bool wide, bool alternative,
+                                   Fvector& pos, Fvector& rot) const {
+    const auto apply = [&](LPCSTR key, Fvector& value) {
+        string64 wide_key;
+        if (wide) {
+            xr_sprintf(wide_key, "%s_16x9", key);
+            const auto section = HudPoseSettingSection(wide_key, alternative);
+            if (section.size() && pSettings->line_exist(section, wide_key)) {
+                value = pSettings->r_fvector3(section, wide_key);
+                return;
+            }
+        }
+        const auto section = HudPoseSettingSection(key, alternative);
+        if (section.size() && pSettings->line_exist(section, key))
+            value = pSettings->r_fvector3(section, key);
+    };
+    apply(pos_key, pos);
+    apply(rot_key, rot);
 }
 
 float CWeapon::AimMouseSensitivity() const {
@@ -3688,60 +3738,24 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
         curr_offs = hi->m_measures.m_hands_offset[0][idx]; // pos,aim
         curr_rot = hi->m_measures.m_hands_offset[1][idx];  // rot,aim
 
-        if (idx == 1 && IsScopeAttached() &&
-            m_eScopeStatus == ALife::eAddonAttachable) {
-            const bool widescreen =
-                hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
-            LPCSTR pos_key = widescreen ? "aim_hud_offset_pos_16x9"
-                                        : "aim_hud_offset_pos";
-            LPCSTR rot_key = widescreen ? "aim_hud_offset_rot_16x9"
-                                        : "aim_hud_offset_rot";
-            if (pSettings->line_exist(ScopeSettingSection(pos_key), pos_key))
-                curr_offs = pSettings->r_fvector3(ScopeSettingSection(pos_key), pos_key);
-            else if (widescreen && pSettings->line_exist(
-                         ScopeSettingSection("aim_hud_offset_pos"),
-                         "aim_hud_offset_pos"))
-                curr_offs = pSettings->r_fvector3(
-                    ScopeSettingSection("aim_hud_offset_pos"), "aim_hud_offset_pos");
-            if (pSettings->line_exist(ScopeSettingSection(rot_key), rot_key))
-                curr_rot = pSettings->r_fvector3(ScopeSettingSection(rot_key), rot_key);
-            else if (widescreen && pSettings->line_exist(
-                         ScopeSettingSection("aim_hud_offset_rot"),
-                         "aim_hud_offset_rot"))
-                curr_rot = pSettings->r_fvector3(
-                    ScopeSettingSection("aim_hud_offset_rot"), "aim_hud_offset_rot");
-        }
+        if (idx == 1) {
+            const bool wide = hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
+            ApplyHudPoseSettings("aim_hud_offset_pos", "aim_hud_offset_rot", wide, false,
+                                 curr_offs, curr_rot);
+            HudEditorAimOverride(this, EHudEditorAim::Primary, curr_offs, curr_rot);
 
-        if (idx == 1 && m_fAlternativeAimFactor > EPS_S) {
-            const Fvector primary_offs = curr_offs;
-            const Fvector primary_rot = curr_rot;
-            Fvector alternative_offs = primary_offs;
-            Fvector alternative_rot = primary_rot;
-            const bool widescreen =
-                hi->m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now);
-            LPCSTR pos_key = widescreen ? "alter_aim_hud_offset_pos_16x9"
-                                        : "alter_aim_hud_offset_pos";
-            LPCSTR rot_key = widescreen ? "alter_aim_hud_offset_rot_16x9"
-                                        : "alter_aim_hud_offset_rot";
-            shared_str pos_section = AlternativeAimSettingSection(pos_key);
-            shared_str rot_section = AlternativeAimSettingSection(rot_key);
-
-            if (!pos_section.size() && widescreen) {
-                pos_key = "alter_aim_hud_offset_pos";
-                pos_section = AlternativeAimSettingSection(pos_key);
+            if (m_fAlternativeAimFactor > EPS_S) {
+                Fvector alternative_offs = curr_offs;
+                Fvector alternative_rot = curr_rot;
+                ApplyHudPoseSettings("alter_aim_hud_offset_pos", "alter_aim_hud_offset_rot", wide,
+                                     true, alternative_offs, alternative_rot);
+                HudEditorAimOverride(this, EHudEditorAim::Alternative, alternative_offs,
+                                     alternative_rot);
+                curr_offs.lerp(curr_offs, alternative_offs, m_fAlternativeAimFactor);
+                curr_rot.lerp(curr_rot, alternative_rot, m_fAlternativeAimFactor);
             }
-            if (!rot_section.size() && widescreen) {
-                rot_key = "alter_aim_hud_offset_rot";
-                rot_section = AlternativeAimSettingSection(rot_key);
-            }
-
-            if (pos_section.size())
-                alternative_offs = pSettings->r_fvector3(pos_section, pos_key);
-            if (rot_section.size())
-                alternative_rot = pSettings->r_fvector3(rot_section, rot_key);
-
-            curr_offs.lerp(primary_offs, alternative_offs, m_fAlternativeAimFactor);
-            curr_rot.lerp(primary_rot, alternative_rot, m_fAlternativeAimFactor);
+        } else if (idx == 2) {
+            HudEditorAimOverride(this, EHudEditorAim::Grenade, curr_offs, curr_rot);
         }
         curr_offs.mul(m_zoom_params.m_fZoomRotationFactor);
         curr_rot.mul(m_zoom_params.m_fZoomRotationFactor);
@@ -4038,6 +4052,14 @@ float CWeapon::Weight() const {
         res += w * (iAmmoElapsed / bs);
     }
     return res;
+}
+
+bool CWeapon::ZoomHideCrosshair() {
+    constexpr LPCSTR key = "zoom_hide_crosshair";
+    const auto section = HudPoseSettingSection(key);
+    const bool base = READ_IF_EXISTS(pSettings, r_bool, HudSection(), key,
+                                    m_zoom_params.m_bHideCrosshairInZoom);
+    return READ_IF_EXISTS(pSettings, r_bool, section, key, base) || ZoomTexture();
 }
 
 bool CWeapon::show_crosshair() { return !IsPending() && (!IsZoomed() || !ZoomHideCrosshair()); }
