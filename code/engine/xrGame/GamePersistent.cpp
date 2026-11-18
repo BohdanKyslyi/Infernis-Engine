@@ -727,10 +727,13 @@ void CGamePersistent::LoadTitle(bool change_tip, shared_str map_name) {
 bool CGamePersistent::CanBePaused() {
     return IsGameTypeSingle() || (g_pGameLevel && Level().IsDemoPlay());
 }
-void CGamePersistent::SetPickableEffectorDOF(bool bSet) {
+void CGamePersistent::SetPickableEffectorDOF(bool bSet, float restore_speed) {
     m_bPickableDOF = bSet;
-    if (!bSet)
+    if (!bSet) {
         RestoreEffectorDOF();
+        if (std::isfinite(restore_speed) && restore_speed > 0.f)
+            m_dof_transition_speed = restore_speed;
+    }
 }
 
 void CGamePersistent::GetCurrentDof(Fvector3& dof) { dof = m_dof[1]; }
@@ -744,6 +747,7 @@ void CGamePersistent::SetEffectorDOF(const Fvector& needed_dof) {
         return;
     m_dof[0] = needed_dof;
     m_dof[2] = m_dof[1]; // current
+    m_dof_transition_speed = 5.f;
 }
 
 void CGamePersistent::RestoreEffectorDOF() { SetEffectorDOF(m_dof[3]); }
@@ -754,8 +758,9 @@ void CGamePersistent::UpdateDof() {
     static float diff_far = pSettings->r_float("zone_pick_dof", "far");   // 70.0f;
     static float diff_near = pSettings->r_float("zone_pick_dof", "near"); //-70.0f;
 
-    float speed = 5.f;
+    float speed = m_dof_transition_speed;
     if (m_bPickableDOF) {
+        speed = 5.f;
         Fvector target;
         const auto* actor = g_pGameLevel ? smart_cast<const CActor*>(Level().CurrentViewEntity()) : nullptr;
         PIItem item = actor ? actor->inventory().ActiveItem() : nullptr;
@@ -767,6 +772,7 @@ void CGamePersistent::UpdateDof() {
             target = m_dof[3];
         } else if (!weapon || !weapon->AimDofProfile(target, speed)) {
             ray_focus = true;
+            speed = 5.f;
             target.y = HUD().GetCurrentRayQuery().range;
             target.x = target.y + diff_near;
             target.z = target.y + diff_far;

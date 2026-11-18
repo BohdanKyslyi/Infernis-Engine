@@ -27,6 +27,7 @@ class CGamePersistent : public IGame_Persistent, public IEventReceiver {
     CUISequencer* m_intro;
     EVENT eQuickLoad;
     Fvector m_dof[4]; // 0-dest 1-current 2-from 3-original
+    float m_dof_transition_speed = 5.f;
 
     fastdelegate::FastDelegate0<> m_intro_event;
 
@@ -83,7 +84,7 @@ public:
 
     virtual bool CanBePaused();
 
-    void SetPickableEffectorDOF(bool bSet);
+    void SetPickableEffectorDOF(bool bSet, float restore_speed = 5.f);
     void SetEffectorDOF(const Fvector& needed_dof);
     void RestoreEffectorDOF();
 

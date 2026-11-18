@@ -51,6 +51,7 @@ enum ECallbackType {
 
     eInvBoxItemTake,
     eWeaponNoAmmoAvailable,
+    eOnActorBoltThrow,
 
     eDummy = u32(-1),
 };

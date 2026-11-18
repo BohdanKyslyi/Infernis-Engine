@@ -15,6 +15,7 @@
 #include "../xrphysics/MathUtils.h"
 #include "characterphysicssupport.h"
 #include "inventory.h"
+#include "player_hud.h"
 #include "../xrEngine/IGame_Persistent.h"
 #ifdef DEBUG
 #include "phdebug.h"
@@ -442,6 +443,53 @@ void CMissile::setup_throw_params() {
         }
 
         entity->g_fireParams(this, FirePos, FireDir);
+        if (auto* actor = smart_cast<CActor*>(entity); actor && IsGameTypeSingle()) {
+            const LPCSTR section = cNameSect().c_str();
+            const shared_str& hud_section = HudSection();
+            const bool hud_mode = GetHUDmode();
+            bool changed_origin = false;
+            if (hud_mode) {
+                const LPCSTR bone_name = READ_IF_EXISTS(pSettings, r_string, hud_section,
+                    "throw_point_bone", READ_IF_EXISTS(pSettings, r_string, section, "throw_point_bone", nullptr));
+                const Fvector point = READ_IF_EXISTS(pSettings, r_fvector3, hud_section,
+                    "throw_point", m_vThrowPoint);
+                auto* hud = HudItemData();
+                const u16 bone = bone_name && bone_name[0] && hud->m_model
+                    ? hud->m_model->LL_BoneID(bone_name) : BI_NONE;
+                if (bone != BI_NONE) {
+                    hud->update(false);
+                    Fvector bone_point;
+                    hud->m_model->LL_GetTransform(bone).transform_tiny(bone_point, point);
+                    hud->m_item_transform.transform_tiny(FirePos, bone_point);
+                    changed_origin = true;
+                } else if (pSettings->line_exist(hud_section, "throw_point")) {
+                    actor->XFORM().transform_dir(FirePos, point);
+                    FirePos.add(actor->Cameras().Position());
+                    changed_origin = true;
+                }
+            } else {
+                constexpr LPCSTR key = "third_person_throw_point_offset";
+                const shared_str offset_section = pSettings->line_exist(hud_section, key)
+                    ? hud_section : cNameSect();
+                if (pSettings->line_exist(offset_section, key)) {
+                    actor->XFORM().transform_tiny(FirePos, pSettings->r_fvector3(offset_section, key));
+                    changed_origin = true;
+                }
+            }
+            if (changed_origin) {
+                Fvector origin = actor->Cameras().Position();
+                if (!hud_mode)
+                    actor->Center(origin);
+                Fvector path;
+                path.sub(FirePos, origin);
+                const float distance = path.magnitude();
+                collide::rq_result hit;
+                if (distance > EPS_S && Level().ObjectSpace.RayPick(origin, path.div(distance),
+                    distance, collide::rqtStatic, hit, actor)) {
+                    FirePos.mad(origin, path, std::max(0.f, hit.range - 0.03f));
+                }
+            }
+        }
     } else {
         FirePos = XFORM().c;
         FireDir = XFORM().k;

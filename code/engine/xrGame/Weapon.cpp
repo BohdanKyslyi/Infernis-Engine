@@ -648,22 +648,52 @@ void CWeapon::LoadFireParams(LPCSTR section) {
     CShootingObject::LoadFireParams(section);
 };
 
+namespace {
+bool IsBannedWeaponVisual(LPCSTR section, LPCSTR visual) {
+    const LPCSTR banned = READ_IF_EXISTS(pSettings, r_string, section, "banned_visuals", nullptr);
+    if (!banned || !visual || !visual[0])
+        return false;
+
+    string_path candidate, entry;
+    xr_strcpy(candidate, visual);
+    if (auto* extension = strext(candidate))
+        *extension = 0;
+    for (int i = 0, count = _GetItemCount(banned); i < count; ++i) {
+        _GetItem(banned, i, entry);
+        if (auto* extension = strext(entry))
+            *extension = 0;
+        if (_stricmp(candidate, entry) == 0)
+            return true;
+    }
+    return false;
+}
+} // namespace
+
 LPCSTR CWeapon::visual_name(CSE_Abstract* server_entity) {
     // Resolve the visual before PhysicItem builds the shell for a dropped weapon.
     if (m_upgrade_world_visual.size())
         return m_upgrade_world_visual.c_str();
 
     const LPCSTR section = server_entity->s_name.c_str();
-    if (READ_IF_EXISTS(pSettings, r_bool, section, "force_reset_visual_on_load", false)) {
+    const LPCSTR loaded_visual = inherited::visual_name(server_entity);
+    if (READ_IF_EXISTS(pSettings, r_bool, section, "force_reset_visual_on_load", false) ||
+        IsBannedWeaponVisual(section, loaded_visual)) {
         const LPCSTR visual = READ_IF_EXISTS(pSettings, r_string, section, "visual", nullptr);
         if (visual && visual[0])
             return visual;
     }
 
-    return inherited::visual_name(server_entity);
+    return loaded_visual;
 }
 
 bool CWeapon::SetUpgradeWorldVisual(LPCSTR visual) {
+    const shared_str section = cNameSect();
+    if (IsBannedWeaponVisual(section.c_str(), visual)) {
+        visual = READ_IF_EXISTS(pSettings, r_string, section, "visual", nullptr);
+        if (!visual || !visual[0])
+            return false;
+    }
+
     string_path model;
     xr_strcpy(model, visual);
     if (auto* ext = strext(model))
@@ -2562,15 +2592,22 @@ void CWeapon::StopLaserDot() {
     m_weapon_laser.draw_hud_impact = false;
 }
 
+bool CWeapon::IsLaserInterfered() const {
+    const float threshold = m_weapon_laser.problems_level;
+    return IsGameTypeSingle() && g_pGameLevel && threshold > 0.f &&
+        Level().ElectronicsProblems() >= threshold;
+}
+
 bool CWeapon::HasActiveHudLaser() {
     const auto& laser = m_weapon_laser;
-    return laser.enabled && !laser.damaged && GetHUDmode() && !IsHidden() &&
+    return laser.enabled && !laser.damaged && !IsLaserInterfered() &&
+        GetHUDmode() && !IsHidden() &&
         GetState() != eHiding && GetNextState() != eHiding;
 }
 
 bool CWeapon::TraceHudLaserImpact(Fvector& position, bool& green) {
     const auto& laser = m_weapon_laser;
-    if (!laser.draw_hud_impact || !GetHUDmode() || !AllowsWeaponLaserEffects())
+    if (!laser.draw_hud_impact || !HasActiveHudLaser() || !AllowsWeaponLaserEffects())
         return false;
 
     Fvector origin = Device.vCameraPosition;
@@ -2652,9 +2689,7 @@ void CWeapon::UpdateWeaponLaser() {
         laser.damaged = ::Random.randF(0.f, 1.f) < chance + progress * (1.f - chance);
         laser.damage_checked_at = now;
     }
-    const bool jammed = IsGameTypeSingle() && laser.problems_level > 0.f &&
-        Level().ElectronicsProblems() >= laser.problems_level;
-    if (laser.damaged || jammed) {
+    if (laser.damaged || IsLaserInterfered()) {
         StopWeaponLaserEffects();
         return;
     }
@@ -3257,6 +3292,7 @@ void CWeapon::OnZoomOut() {
     if (H_Parent() == static_cast<CObject*>(Actor()))
         ssfx_script_bridge::on_weapon_zoom(false);
     const bool was_alternative_aim = m_bAlternativeAimActive;
+    const bool was_zoomed = IsZoomed();
     if (IsZoomed() && UsesScopeZoom() && m_zoom_params.m_bUseDynamicZoom)
         m_fRTZoomFactor = GetZoomFactor();
     m_zoom_params.m_bIsZoomModeNow = false;
@@ -3270,8 +3306,11 @@ void CWeapon::OnZoomOut() {
 
     // 	GamePersistent().RestoreEffectorDOF	();
 
-    if (GetHUDmode())
-        GamePersistent().SetPickableEffectorDOF(false);
+    if (GetHUDmode()) {
+        const float restore_speed = was_zoomed && IsGameTypeSingle()
+            ? READ_IF_EXISTS(pSettings, r_float, HudSection(), "zoom_out_dof_speed", 5.f) : 5.f;
+        GamePersistent().SetPickableEffectorDOF(false, restore_speed);
+    }
 
     ResetSubStateTime();
 
@@ -3580,8 +3619,17 @@ void CWeapon::UpdateHudAdditonal(Fmatrix& trans) {
     if (!pActor)
         return;
 
-    const float alternative_step =
+    float alternative_step =
         Device.fTimeDelta / std::max(m_zoom_params.m_fZoomRotateTime, EPS_S);
+    if (IsGameTypeSingle() && IsZoomed() &&
+        (m_bAlternativeAimActive ? m_fAlternativeAimFactor < 1.f : m_fAlternativeAimFactor > 0.f)) {
+        constexpr LPCSTR key = "alter_zoom_direct_switch_speed";
+        const float hud_speed = READ_IF_EXISTS(pSettings, r_float, HudSection(), key, -1.f);
+        const float speed = IsScopeAttached()
+            ? READ_IF_EXISTS(pSettings, r_float, ScopeSettingSection(key), key, hud_speed) : hud_speed;
+        if (std::isfinite(speed) && speed >= 0.f)
+            alternative_step = speed > EPS_S ? Device.fTimeDelta * speed : 1.f;
+    }
     if (m_bAlternativeAimActive)
         m_fAlternativeAimFactor += alternative_step;
     else

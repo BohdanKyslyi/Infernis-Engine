@@ -296,6 +296,7 @@ protected:
         float problems_level = 0.f;
     } m_weapon_laser;
     void LoadWeaponLaser(LPCSTR section);
+    bool IsLaserInterfered() const;
     struct CollimatorSight {
         Fvector breaking;
         float problems_level = 0.f;

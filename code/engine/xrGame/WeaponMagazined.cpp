@@ -72,6 +72,7 @@ CWeaponMagazined::~CWeaponMagazined() {
 void CWeaponMagazined::net_Destroy() { inherited::net_Destroy(); }
 
 void CWeaponMagazined::Load(LPCSTR section) {
+    m_max_queue_size = READ_IF_EXISTS(pSettings, r_s32, section, "max_queue_size", 0);
     inherited::Load(section);
     m_ammo_capacity_upgrades.clear();
     m_upgrade_scope_zoom = 0.f;
@@ -1321,7 +1322,14 @@ bool CWeaponMagazined::AutoAimAllowsShot(const Fvector& origin, const Fvector& d
     return target || float(now - m_autoaim_start_time) * 0.001f >= wait;
 }
 
+int CWeaponMagazined::EffectiveQueueSize() const {
+    if (!IsGameTypeSingle() || m_max_queue_size <= 0)
+        return m_iQueueSize;
+    return m_iQueueSize < 0 ? m_max_queue_size : std::min(m_max_queue_size, m_iQueueSize);
+}
+
 void CWeaponMagazined::state_Fire(float dt) {
+    const int queue_size = EffectiveQueueSize();
     if (IsHudTransitionLocked()) {
         fShotTimeCounter = (std::max)(fShotTimeCounter - dt, -dt);
         return;
@@ -1371,7 +1379,7 @@ void CWeaponMagazined::state_Fire(float dt) {
         while (!m_magazine.empty() && fShotTimeCounter < 0 &&
                (IsWorking() || m_bFireSingleShot || (autoaim_time != 0.f && m_autoaim_trigger_held) ||
                 (waiting_after_release && m_autoaim_waiting)) &&
-               (m_iQueueSize < 0 || m_iShotNum < m_iQueueSize)) {
+               (queue_size < 0 || m_iShotNum < queue_size)) {
             if (autoaim_time != 0.f && !AutoAimAllowsShot(p1, d, autoaim_time))
                 return;
             m_autoaim_waiting = false;
@@ -1441,7 +1449,7 @@ void CWeaponMagazined::state_Fire(float dt) {
                 break;
         }
 
-        if (m_iShotNum == m_iQueueSize)
+        if (m_iShotNum == queue_size)
             m_bStopedAfterQueueFired = true;
 
         UpdateSounds();
@@ -1682,6 +1690,8 @@ void CWeaponMagazined::OnAnimationEnd(u32 state) {
 }
 
 void CWeaponMagazined::switch2_Idle() {
+    if (READ_IF_EXISTS(pSettings, r_bool, HudSection(), "stop_all_sounds_before_idle", false))
+        m_sounds.StopAllSounds();
     m_iShotNum = 0;
     m_autoaim_waiting = false;
     if (m_fOldBulletSpeed != 0.f)
@@ -2740,6 +2750,8 @@ BOOL CWeaponMagazined::MixShootMotion() const {
         return FALSE;
     if (std::strncmp(motion, "anm_idle", sizeof("anm_idle") - 1) == 0)
         return READ_IF_EXISTS(pSettings, r_bool, HudSection(), "mix_shoot_after_idle", false);
+    if (std::strncmp(motion, "anm_reload", sizeof("anm_reload") - 1) == 0)
+        return READ_IF_EXISTS(pSettings, r_bool, HudSection(), "mix_shoot_after_reload", false);
     return GetQueueSize() < 0 && m_iShotNum > 1 &&
         std::strncmp(motion, "anm_shoot", sizeof("anm_shoot") - 1) == 0 &&
         READ_IF_EXISTS(pSettings, r_bool, HudSection(), "mix_shoot_after_shoot_in_queue", false);
@@ -3008,6 +3020,7 @@ bool CWeaponMagazined::install_upgrade_impl(LPCSTR section, bool test) {
 
     LPCSTR str;
     result |= process_if_exists(section, "recharge_time", &CInifile::r_float, m_recharge_time, test);
+    result |= process_if_exists_set(section, "max_queue_size", &CInifile::r_s32, m_max_queue_size, test);
     result |= process_if_exists_set(section, "autoaim_time", &CInifile::r_float, m_autoaim_time, test);
     result |= process_if_exists_set(section, "autoaim_modes", &CInifile::r_string_wb, m_autoaim_modes, test);
     result |= process_if_exists_set(section, "autoaim_only_alive", &CInifile::r_bool, m_autoaim_only_alive, test);
