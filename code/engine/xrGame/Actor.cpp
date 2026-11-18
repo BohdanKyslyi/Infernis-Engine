@@ -68,6 +68,7 @@
 #include "player_hud.h"
 #include "ui/UIHudEditor.h"
 #include "ItemUseController.h"
+#include "GunslingerMonsterSettings.h"
 #include "ai/monsters/basemonster/base_monster.h"
 #include "ai/monsters/boar/boar.h"
 #include "ai/monsters/pseudogigant/pseudo_gigant.h"
@@ -407,6 +408,8 @@ void ApplyMonsterImpact(CActor& actor, const SHit& hit, float power) {
 
     const bool giant = smart_cast<CPseudoGigant*>(hit.who) != nullptr;
     if (!giant && !smart_cast<CAI_Boar*>(hit.who))
+        return;
+    if (!GunslingerMonsterFeatureEnabled(giant ? "pseudogiant_impact" : "boar_impact"))
         return;
 
     // The stomp sends a vertical Strike hit. The regular attack sends Wound.

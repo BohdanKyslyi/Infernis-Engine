@@ -29,6 +29,7 @@
 #include "../../../Grenade.h"
 #include "../../../HUDManager.h"
 #include "../../../ItemUseController.h"
+#include "../../../GunslingerMonsterSettings.h"
 #include "../../../game_cl_single.h"
 #include <cmath>
 
@@ -140,7 +141,8 @@ void CBurer::Load(LPCSTR section) {
     m_shield_keep_particle_period =
         READ_IF_EXISTS(pSettings, r_u32, section, "shield_keep_particle_period", 1000);
 
-    m_tele_weapon_shooting = READ_IF_EXISTS(pSettings, r_bool, section, "Tele_Shooting_From_Weapon_Enable", true);
+    m_tele_weapon_shooting = GunslingerMonsterFeatureEnabled("burer_telekinetic_shooting") &&
+        READ_IF_EXISTS(pSettings, r_bool, section, "Tele_Shooting_From_Weapon_Enable", true);
     m_tele_max_weapons = READ_IF_EXISTS(pSettings, r_u32, section, "Tele_Max_Pickuped_Weapons", 1);
     m_tele_max_handled_objects = pSettings->r_u32(section, "Tele_Max_Handled_Objects");
     m_tele_max_time = READ_IF_EXISTS(pSettings, r_u32, section, "Tele_Max_Time", 10000);
@@ -274,7 +276,8 @@ CActor* CBurer::VisibleActorEnemy() {
 }
 
 bool CBurer::CanInterruptActorHealing() {
-    if (!OnServer() || g_SingleGameDifficulty < egdStalker)
+    if (!OnServer() || g_SingleGameDifficulty < egdStalker ||
+        !GunslingerMonsterFeatureEnabled("burer_tactics"))
         return false;
     const auto* actor = VisibleActorEnemy();
     const auto* controller = actor ? actor->GetItemUseController() : nullptr;
@@ -282,6 +285,9 @@ bool CBurer::CanInterruptActorHealing() {
 }
 
 CBurer::ActorThreat CBurer::GetActorThreat() {
+    if (!GunslingerMonsterFeatureEnabled("burer_tactics"))
+        return ActorThreat::None;
+
     const auto* actor = VisibleActorEnemy();
     if (!actor || Level().CurrentViewEntity() != actor)
         return ActorThreat::None;
@@ -328,6 +334,9 @@ CBurer::ActorThreat CBurer::GetActorThreat() {
 }
 
 TTime CBurer::AimShieldDelay() const {
+    if (!GunslingerMonsterFeatureEnabled("burer_tactics"))
+        return 0;
+
     return TTime(m_aim_shield_delay) +
         (m_aim_shield_random > 0 ? TTime(Random.randI(m_aim_shield_random)) : 0);
 }
@@ -349,7 +358,10 @@ void xr_stdcall CBurer::StaminaHit() {
     float stamina_hit = weapon->Weight() * m_weight_to_stamina_hit;
     bool strong_hit = false;
     constexpr LPCSTR section = "gunslinger_base";
-    if (IsGameTypeSingle() && OnServer() && actor == Level().CurrentControlEntity()) {
+    const bool enhanced_wave = IsGameTypeSingle() && OnServer() &&
+        actor == Level().CurrentControlEntity() &&
+        GunslingerMonsterFeatureEnabled("burer_enhanced_stamina_wave");
+    if (enhanced_wave) {
         const float value = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_value", 0.f);
         if (std::isfinite(value) && value > 0.f && EnemyMan.see_enemy_now(actor)) {
             const Fvector to_burer = Fvector().sub(Position(), actor->Position());
@@ -383,7 +395,7 @@ void xr_stdcall CBurer::StaminaHit() {
         dir.y = -dir.y;
     weapon->SetActivationSpeedOverride(normalize(dir) * m_weapon_drop_velocity);
 
-    if (IsGameTypeSingle() && OnServer() && actor == Level().CurrentControlEntity()) {
+    if (enhanced_wave) {
         actor->RequestMonsterDisarm("burer_kicks");
     } else if (!actor->inventory().Action((u16)kDROP, CMD_STOP)) {
         actor->g_PerformDrop();

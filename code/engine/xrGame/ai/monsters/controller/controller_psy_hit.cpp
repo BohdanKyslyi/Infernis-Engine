@@ -15,6 +15,7 @@
 #include "../../../HudManager.h"
 #include "../../../inventory.h"
 #include "../../../WeaponMagazined.h"
+#include "../../../GunslingerMonsterSettings.h"
 
 void CControllerPsyHit::load(LPCSTR section) {
     m_min_tube_dist = pSettings->r_float(section, "tube_condition_min_distance");
@@ -215,7 +216,8 @@ void CControllerPsyHit::death_glide_start() {
 
     auto* weapon = smart_cast<CWeaponMagazined*>(Actor()->inventory().ActiveItem());
     auto* attacker = smart_cast<CController*>(m_object);
-    if (weapon && attacker && weapon->RequestControllerAttack(*attacker)) {
+    if (weapon && attacker && GunslingerMonsterFeatureEnabled("controller_weapon_attack") &&
+        weapon->RequestControllerAttack(*attacker)) {
         m_time_last_tube = Device.dwTimeGlobal;
         m_man->deactivate(this);
         return;
