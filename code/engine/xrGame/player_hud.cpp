@@ -461,6 +461,8 @@ void attachable_hud_item::load(const shared_str& sect_name) {
     m_hip_inertion = HudInertionParams{};
     m_hip_inertion.Load("gunslinger_base", "inertion_default_", "", true);
     m_aim_inertion = m_hip_inertion;
+    // ADS defaults to zero camera-pitch compensation, even with partial LTX profiles.
+    m_aim_inertion.pitch_offsets.set(0.f, 0.f, 0.f);
     m_aim_inertion.Load("gunslinger_base", "inertion_aim_default_", "", true);
     m_grenade_inertion = m_aim_inertion;
     m_hip_inertion.Load(sect_name.c_str(), "inertion_");
@@ -1221,19 +1223,36 @@ void player_hud::update_additional(Fmatrix& trans) {
 }
 
 void player_hud::update_inertion(Fmatrix& trans) {
+    const auto* hud = m_attached_items[0] ? m_attached_items[0] : m_attached_items[1];
+    const auto* weapon = hud
+        ? smart_cast<const CWeapon*>(hud->m_parent_hud_item) : nullptr;
+    const bool zoomed = weapon && weapon->IsZoomed();
+
+    Fmatrix xform;
+    Fvector& origin = trans.c;
+    xform = trans;
+
+    static Fvector st_last_dir = { 0, 0, 0 };
+    static const attachable_hud_item* st_last_hud = nullptr;
+    static bool st_initialized = false;
+    static bool st_zoomed = false;
+
+    // The vanilla history is shared between hip and ADS and is not updated
+    // while inertion is disabled. Never carry that stale camera direction
+    // into another item or across an ADS boundary.
+    const bool reset_history = !st_initialized || st_last_hud != hud ||
+        st_zoomed != zoomed || !inertion_allowed();
+    if (reset_history) {
+        st_last_dir.set(xform.k);
+        st_last_hud = hud;
+        st_initialized = true;
+        st_zoomed = zoomed;
+    }
+
     if (inertion_allowed()) {
-        const auto* hud = m_attached_items[0] ? m_attached_items[0] : m_attached_items[1];
         HudInertionParams params;
-        if (hud) {
-            const auto* weapon = smart_cast<const CWeapon*>(hud->m_parent_hud_item);
+        if (hud)
             params = weapon ? weapon->GetHudInertionParams(*hud) : hud->m_hip_inertion;
-        }
-
-        Fmatrix xform;
-        Fvector& origin = trans.c;
-        xform = trans;
-
-        static Fvector st_last_dir = { 0, 0, 0 };
 
         // calc difference
         Fvector diff_dir;
@@ -1251,7 +1270,12 @@ void player_hud::update_inertion(Fmatrix& trans) {
         }
 
         // tend to forward
-        st_last_dir.mad(diff_dir, params.speed * Device.fTimeDelta);
+        // Exponential damping cannot overshoot after a long frame and keeps
+        // the same response at every frame rate. Zero speed means that the
+        // profile requests no lag, not a permanently frozen camera history.
+        const float follow = params.speed > EPS_S
+            ? 1.f - std::exp(-params.speed * Device.fTimeDelta) : 1.f;
+        st_last_dir.mad(diff_dir, follow);
         origin.mad(diff_dir, -params.origin_offset);
 
         // pitch compensation
