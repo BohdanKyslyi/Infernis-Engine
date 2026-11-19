@@ -210,10 +210,21 @@ void CPhysicObject::RunStartupAnim(CSE_Abstract* D) {
             R_ASSERT(visual);
             R_ASSERT2(*visual->startup_animation, "no startup animation");
 
-            VERIFY2((!!PKinematicsAnimated->LL_MotionID(visual->startup_animation.c_str()).valid()),
-                    (make_string(" animation %s not faund ", visual->startup_animation.c_str()) +
-                     dbg_object_base_dump_string(this))
-                        .c_str());
+            
+            const LPCSTR anim_name = visual->startup_animation.c_str();
+                        MotionID motion = PKinematicsAnimated->LL_MotionID(anim_name);
+            
+                        if (!motion.valid()) {
+                            Msg("! [PHYS STARTUP ANIM] Missing animation!");
+                            Msg("! Object: %s", cName().c_str());
+                            Msg("! Section: %s", cNameSect().c_str());
+                            Msg("! Visual: %s", cNameVisual().c_str());
+                            Msg("! Animation: %s", anim_name);
+                            Msg("! Object ID: %u", ID());
+            
+                            R_ASSERT2(false, "Physical object startup animation not found. See log.");
+                        }
+            
             m_anim_blend =
                 m_anim_script_callback.play_cycle(PKinematicsAnimated, visual->startup_animation);
         }
