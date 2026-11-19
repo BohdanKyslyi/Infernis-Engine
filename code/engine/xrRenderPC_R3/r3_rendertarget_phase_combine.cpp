@@ -481,6 +481,12 @@ void CRenderTarget::phase_combine() {
         RCache.set_ColorWriteEnable();
         RImplementation.r_dsgraph_render_sorted();
     }
+    if (!Device.scopeLensPass && RImplementation.mapHUDDisplay.size()) {
+        RCache.set_CullMode(CULL_CCW);
+        RCache.set_Stencil(FALSE);
+        RCache.set_ColorWriteEnable();
+        RImplementation.r_dsgraph_render_hud_display();
+    }
 
     //	Re-adapt luminance
     RCache.set_Stencil(FALSE);

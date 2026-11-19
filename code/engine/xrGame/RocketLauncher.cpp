@@ -6,6 +6,7 @@
 #include "stdafx.h"
 #include "RocketLauncher.h"
 #include "CustomRocket.h"
+#include "ExplosiveRocket.h"
 #include "xrserver_objects_alife_items.h"
 #include "level.h"
 #include "ai_object_location.h"
@@ -86,6 +87,36 @@ void CRocketLauncher::LaunchRocket(const Fmatrix& xform, const Fvector& vel,
     getCurrentRocket()->SetLaunchParams(xform, vel, angular_vel);
 
     m_launched_rockets.push_back(getCurrentRocket());
+}
+
+bool CRocketLauncher::CanLaunchTelekineticRocket(LPCSTR rocket_section) const {
+    return rocket_section && rocket_section[0] && !m_rockets.empty() &&
+        !m_rockets.back()->getDestroy() && m_fLaunchSpeed > 0.f &&
+        std::find(m_launched_rockets.begin(), m_launched_rockets.end(), m_rockets.back()) == m_launched_rockets.end() &&
+        m_rockets.back()->cNameSect() == rocket_section &&
+        smart_cast<CExplosiveRocket*>(m_rockets.back());
+}
+
+u16 CRocketLauncher::LaunchTelekineticRocket(CGameObject& weapon, u16 initiator, LPCSTR rocket_section,
+                                               const Fvector& pos, const Fvector& dir) {
+    if (!CanLaunchTelekineticRocket(rocket_section))
+        return u16(-1);
+
+    auto* rocket = smart_cast<CExplosiveRocket*>(getCurrentRocket());
+    if (rocket->H_Parent() != &weapon)
+        return u16(-1);
+
+    Fmatrix launch;
+    launch.identity();
+    launch.k = dir;
+    Fvector::generate_orthonormal_basis(launch.k, launch.j, launch.i);
+    launch.c = pos;
+
+    const u16 id = rocket->ID();
+    rocket->SetInitiator(initiator);
+    LaunchRocket(launch, Fvector().mul(dir, m_fLaunchSpeed), Fvector().set(0.f, 0.f, 0.f));
+    dropCurrentRocket();
+    return id;
 }
 
 CCustomRocket* CRocketLauncher::getCurrentRocket() {

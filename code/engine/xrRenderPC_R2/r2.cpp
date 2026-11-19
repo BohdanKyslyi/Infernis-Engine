@@ -80,6 +80,15 @@ static class cl_scope_lens_basic : public R_constant_setup {
     }
 } binder_scope_lens_basic;
 
+static class cl_gunslinger_scope_state : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        const bool active = Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel;
+        const float blend = active ? g_pGameLevel->ScopeLensBlend() : 0.f;
+        const float mode = active ? float(g_pGameLevel->ScopeLensMode()) : 0.f;
+        RCache.set_c(C, blend, mode, float(Device.dwHeight), float(Device.dwWidth));
+    }
+} binder_gunslinger_scope_state;
+
 static class cl_water_intensity : public R_constant_setup {
     virtual void setup(R_constant* C) {
         CEnvDescriptor& E = *g_pGamePersistent->Environment().CurrentEnv;
@@ -282,6 +291,7 @@ void CRender::create() {
     // constants
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("parallax", &binder_parallax);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("scope_lens_basic", &binder_scope_lens_basic);
+    dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("gunslinger_scope_state", &binder_gunslinger_scope_state);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("water_intensity",
                                                                       &binder_water_intensity);
     dxRenderDeviceRender::Instance().Resources->RegisterConstantSetup("sun_shafts_intensity",

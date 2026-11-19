@@ -16,6 +16,8 @@
 
 #include "ActorEffector.h"
 #include "actor.h"
+#include "Inventory.h"
+#include "Weapon.h"
 #include "spectator.h"
 
 #include "UI/UItextureMaster.h"
@@ -725,10 +727,13 @@ void CGamePersistent::LoadTitle(bool change_tip, shared_str map_name) {
 bool CGamePersistent::CanBePaused() {
     return IsGameTypeSingle() || (g_pGameLevel && Level().IsDemoPlay());
 }
-void CGamePersistent::SetPickableEffectorDOF(bool bSet) {
+void CGamePersistent::SetPickableEffectorDOF(bool bSet, float restore_speed) {
     m_bPickableDOF = bSet;
-    if (!bSet)
+    if (!bSet) {
         RestoreEffectorDOF();
+        if (std::isfinite(restore_speed) && restore_speed > 0.f)
+            m_dof_transition_speed = restore_speed;
+    }
 }
 
 void CGamePersistent::GetCurrentDof(Fvector3& dof) { dof = m_dof[1]; }
@@ -742,6 +747,7 @@ void CGamePersistent::SetEffectorDOF(const Fvector& needed_dof) {
         return;
     m_dof[0] = needed_dof;
     m_dof[2] = m_dof[1]; // current
+    m_dof_transition_speed = 5.f;
 }
 
 void CGamePersistent::RestoreEffectorDOF() { SetEffectorDOF(m_dof[3]); }
@@ -752,13 +758,28 @@ void CGamePersistent::UpdateDof() {
     static float diff_far = pSettings->r_float("zone_pick_dof", "far");   // 70.0f;
     static float diff_near = pSettings->r_float("zone_pick_dof", "near"); //-70.0f;
 
+    float speed = m_dof_transition_speed;
     if (m_bPickableDOF) {
-        Fvector pick_dof;
-        pick_dof.y = HUD().GetCurrentRayQuery().range;
-        pick_dof.x = pick_dof.y + diff_near;
-        pick_dof.z = pick_dof.y + diff_far;
-        m_dof[0] = pick_dof;
-        m_dof[2] = m_dof[1]; // current
+        speed = 5.f;
+        Fvector target;
+        const auto* actor = g_pGameLevel ? smart_cast<const CActor*>(Level().CurrentViewEntity()) : nullptr;
+        PIItem item = actor ? actor->inventory().ActiveItem() : nullptr;
+        auto* weapon = item ? item->cast_weapon() : nullptr;
+        const bool disabled = weapon && READ_IF_EXISTS(pSettings, r_bool, weapon->cNameSect(),
+            "disable_zoom_dof", false);
+        bool ray_focus = false;
+        if (disabled) {
+            target = m_dof[3];
+        } else if (!weapon || !weapon->AimDofProfile(target, speed)) {
+            ray_focus = true;
+            speed = 5.f;
+            target.y = HUD().GetCurrentRayQuery().range;
+            target.x = target.y + diff_near;
+            target.z = target.y + diff_far;
+        }
+        if (ray_focus || !m_dof[0].similar(target))
+            m_dof[2] = m_dof[1];
+        m_dof[0] = target;
     }
     if (m_dof[1].similar(m_dof[0]))
         return;
@@ -766,7 +787,7 @@ void CGamePersistent::UpdateDof() {
     float td = Device.fTimeDelta;
     Fvector diff;
     diff.sub(m_dof[0], m_dof[2]);
-    diff.mul(td / 0.2f); // 0.2 sec
+    diff.mul(td * speed);
     m_dof[1].add(diff);
     (m_dof[0].x < m_dof[2].x) ? clamp(m_dof[1].x, m_dof[0].x, m_dof[2].x)
                               : clamp(m_dof[1].x, m_dof[2].x, m_dof[0].x);

@@ -1,0 +1,13 @@
+#include "common.h"
+
+struct v2p
+{
+    half2 tc0 : TEXCOORD0;
+    half4 color : COLOR0;
+};
+
+half4 main_ps_1_1(v2p input) : COLOR
+{
+    half4 base = tex2D(s_base, input.tc0);
+    return half4(base.rgb, base.a * input.color.a);
+}

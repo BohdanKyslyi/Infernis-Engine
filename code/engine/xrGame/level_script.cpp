@@ -9,6 +9,7 @@
 #include "pch_script.h"
 #include "level.h"
 #include "actor.h"
+#include "ActorEffector.h"
 #include "script_game_object.h"
 #include "patrol_path_storage.h"
 #include "xrServer.h"
@@ -189,6 +190,11 @@ void set_time_factor(float time_factor) {
 }
 
 float get_time_factor() { return (Level().GetGameTimeFactor()); }
+
+static bool electronics_break() { return g_pGameLevel && Level().ChangeElectronicsProblems(1); }
+static bool electronics_restore() { return g_pGameLevel && Level().ChangeElectronicsProblems(-1); }
+static bool electronics_reset() { return g_pGameLevel && Level().ResetElectronicsProblems(); }
+static bool electronics_apply() { return g_pGameLevel && Level().ApplyElectronicsProblems(); }
 
 void set_game_difficulty(ESingleGameDifficulty dif) {
     g_SingleGameDifficulty = dif;
@@ -858,6 +864,21 @@ void hide_cinematic_borders_script(int disappear_type, u32 duration_ms) {
     }
 }
 
+static bool is_ui_shown() {
+    auto* ui = g_pGameLevel ? CurrentGameUI() : nullptr;
+    return ui && ui->GameIndicatorsShown();
+}
+
+static bool indicators_shown() {
+    if (!is_ui_shown() || !psHUD_Flags.is(HUD_DRAW))
+        return false;
+
+    const auto* actor = smart_cast<const CActor*>(Level().CurrentViewEntity());
+    PIItem item = actor && actor->HUDview() ? actor->inventory().ActiveItem() : nullptr;
+    auto* weapon = item ? item->cast_weapon() : nullptr;
+    return weapon ? weapon->show_indicators() : psHUD_Flags.is(HUD_DRAW_RT);
+}
+
 void show_indicators() {
     if (CurrentGameUI()) {
         CurrentGameUI()->ShowGameIndicators(true);
@@ -1237,6 +1258,10 @@ void CLevel::script_register(lua_State* L) {
         class_<CEnvironment>("CEnvironment").def("current", current_environment);
 
     module(L, "level")[
+        def("electronics_break", electronics_break),
+        def("electronics_restore", electronics_restore),
+        def("electronics_reset", electronics_reset),
+        def("electronics_apply", electronics_apply),
         // obsolete\deprecated
         def("object_by_id", get_object_by_id),
 #ifdef DEBUG
@@ -1283,6 +1308,7 @@ void CLevel::script_register(lua_State* L) {
         def("hide_indicators", hide_indicators), def("hide_indicators_safe", hide_indicators_safe),
 
         def("show_indicators", show_indicators), def("show_weapon", show_weapon),
+        def("is_ui_shown", is_ui_shown), def("indicators_shown", indicators_shown),
 
         def("activate_hud_controller", &activate_hud_controller_script),
         def("is_hud_controller_active", &is_hud_controller_active_script),

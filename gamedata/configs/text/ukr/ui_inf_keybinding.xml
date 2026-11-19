@@ -24,4 +24,20 @@
 	<string id="inf_mm_wipe_visor">
 		<text>Протерти екран</text>
 	</string>
+	
+	<!-->Перекласти на інші мови - версія 0.2.8<-->
+	
+	<string id="inf_mm_tac_torch">
+		<text>Тактичний ліхтар</text>
+	</string>
+	<string id="inf_mm_laser">
+		<text>Лазерний цілевказівник</text>
+	</string>
+	<string id="inf_mm_scope_brightness_plus">
+		<text>Яскравість прицілу +</text>
+	</string>
+	<string id="inf_mm_scope_brightness_minus">
+		<text>Яскравість прицілу -</text>
+	</string>
+	
 </string_table>

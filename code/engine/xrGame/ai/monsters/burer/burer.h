@@ -7,6 +7,7 @@
 
 class CCharacterPhysicsSupport;
 class CBurerFastGravi;
+class CActor;
 
 class CBurer : public CBaseMonster, public CTelekinesis {
 
@@ -85,7 +86,12 @@ public:
 
     } m_gravi;
 
+    bool CanUseTelekineticWeapon(CPhysicsShellHolder* object) const;
+    void UpdateTelekineticWeapons();
+
     u32 m_tele_max_handled_objects;
+    u32 m_tele_max_weapons = 1;
+    bool m_tele_weapon_shooting = true;
     u32 m_tele_time_to_hold;
     u32 m_tele_max_time;
     float m_tele_object_min_mass;
@@ -107,6 +113,7 @@ public:
 
     TTime m_shield_cooldown;
     TTime m_shield_time;
+    float m_shielded_risky_factor = 0.02f;
     bool m_shield_active;
     LPCSTR m_shield_keep_particle;
     TTime m_shield_keep_particle_period;
@@ -141,6 +148,11 @@ public:
     void StartTeleObjectParticle(CGameObject* pO);
     void StopTeleObjectParticle(CGameObject* pO);
 
+    enum class ActorThreat { None, CloseWeapon, AimedWeapon, HeldGrenade, PrimedGrenade, ExplosiveWeapon };
+    ActorThreat GetActorThreat();
+    bool CanInterruptActorHealing();
+    TTime AimShieldDelay() const;
+
     void ActivateShield();
     void DeactivateShield();
 
@@ -158,6 +170,11 @@ public:
 
 private:
     bool m_force_gravi_attack;
+    float m_force_shield_dist = 3.f;
+    float m_force_anti_aim_dist = 7.f;
+    int m_aim_shield_delay = 500;
+    int m_aim_shield_random = 1000;
+    CActor* VisibleActorEnemy();
 
     void xr_stdcall StaminaHit();
 

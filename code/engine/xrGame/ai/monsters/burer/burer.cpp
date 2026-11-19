@@ -20,7 +20,18 @@
 #include "../../../Inventory.h"
 #include "../../../ActorCondition.h"
 #include "../../../xr_level_controller.h"
-#include "../../../weapon.h"
+#include "../../../WeaponMagazined.h"
+#include "../../../WeaponBinoculars.h"
+#include "../../../WeaponKnife.h"
+#include "../../../WeaponMagazinedWGrenade.h"
+#include "../../../WeaponRPG7.h"
+#include "../../../WeaponRG6.h"
+#include "../../../Grenade.h"
+#include "../../../HUDManager.h"
+#include "../../../ItemUseController.h"
+#include "../../../GunslingerMonsterSettings.h"
+#include "../../../game_cl_single.h"
+#include <cmath>
 
 #include "../../../../xrCore/_vector3d_ext.h"
 #include "../control_direction_base.h"
@@ -115,11 +126,24 @@ void CBurer::Load(LPCSTR section) {
 
     m_shield_cooldown = READ_IF_EXISTS(pSettings, r_u32, section, "shield_cooldown", 4000);
     m_shield_time = READ_IF_EXISTS(pSettings, r_u32, section, "shield_time", 3000);
+    constexpr LPCSTR gunslinger = "gunslinger_base";
+    m_force_shield_dist = READ_IF_EXISTS(pSettings, r_float, gunslinger, "burer_forceshield_dist", 3.f);
+    m_force_anti_aim_dist =
+        READ_IF_EXISTS(pSettings, r_float, gunslinger, "burer_forceantiaim_dist", 7.f);
+    m_aim_shield_delay =
+        (std::max)(0, READ_IF_EXISTS(pSettings, r_s32, gunslinger, "burer_aim_shield_delay_const", 500));
+    m_aim_shield_random =
+        (std::max)(0, READ_IF_EXISTS(pSettings, r_s32, gunslinger, "burer_aim_shield_delay_random", 1000));
+    m_shielded_risky_factor = clampr(READ_IF_EXISTS(pSettings, r_float, gunslinger,
+        "burer_shielded_risky_factor", 0.02f), 0.f, 1.f);
     m_shield_keep_particle =
         READ_IF_EXISTS(pSettings, r_string, section, "shield_keep_particle", 0);
     m_shield_keep_particle_period =
         READ_IF_EXISTS(pSettings, r_u32, section, "shield_keep_particle_period", 1000);
 
+    m_tele_weapon_shooting = GunslingerMonsterFeatureEnabled("burer_telekinetic_shooting") &&
+        READ_IF_EXISTS(pSettings, r_bool, section, "Tele_Shooting_From_Weapon_Enable", true);
+    m_tele_max_weapons = READ_IF_EXISTS(pSettings, r_u32, section, "Tele_Max_Pickuped_Weapons", 1);
     m_tele_max_handled_objects = pSettings->r_u32(section, "Tele_Max_Handled_Objects");
     m_tele_max_time = READ_IF_EXISTS(pSettings, r_u32, section, "Tele_Max_Time", 10000);
     m_tele_time_to_hold = pSettings->r_u32(section, "Tele_Time_To_Hold");
@@ -243,34 +267,207 @@ void CBurer::shedule_Update(u32 dt) {
 
 void CBurer::CheckSpecParams(u32 spec_params) {}
 
+CActor* CBurer::VisibleActorEnemy() {
+    auto* actor = Actor();
+    if (!IsGameTypeSingle() || !actor || !actor->g_Alive() || EnemyMan.get_enemy() != actor ||
+        Level().CurrentControlEntity() != actor || !EnemyMan.see_enemy_now(actor))
+        return nullptr;
+    return actor;
+}
+
+bool CBurer::CanInterruptActorHealing() {
+    if (!OnServer() || g_SingleGameDifficulty < egdStalker ||
+        !GunslingerMonsterFeatureEnabled("burer_tactics"))
+        return false;
+    const auto* actor = VisibleActorEnemy();
+    const auto* controller = actor ? actor->GetItemUseController() : nullptr;
+    return controller && controller->IsHealing();
+}
+
+CBurer::ActorThreat CBurer::GetActorThreat() {
+    if (!GunslingerMonsterFeatureEnabled("burer_tactics"))
+        return ActorThreat::None;
+
+    const auto* actor = VisibleActorEnemy();
+    if (!actor || Level().CurrentViewEntity() != actor)
+        return ActorThreat::None;
+
+    PIItem item = actor->inventory().ActiveItem();
+    if (const auto* grenade = smart_cast<const CGrenade*>(item))
+        return grenade->IsPreparingThrow() ? ActorThreat::PrimedGrenade : ActorThreat::HeldGrenade;
+
+    auto* weapon = item ? item->cast_weapon() : nullptr;
+    if (!weapon || smart_cast<CWeaponBinoculars*>(weapon) || !weapon->CanOwnerFire())
+        return ActorThreat::None;
+
+    const float distance = Position().distance_to(actor->Position());
+    if (smart_cast<CWeaponKnife*>(weapon)) {
+        if (distance >= m_force_anti_aim_dist)
+            return ActorThreat::None;
+    } else if (!weapon->GetAmmoElapsed() || weapon->IsMisfire() ||
+               weapon->GetState() == CWeapon::eReload || weapon->GetNextState() == CWeapon::eReload) {
+        return ActorThreat::None;
+    }
+
+    Fvector toward_burer;
+    Center(toward_burer);
+    toward_burer.sub(Device.vCameraPosition);
+    const float camera_distance = toward_burer.magnitude();
+    const float alignment = Device.vCameraDirection.dotproduct(toward_burer);
+    const auto* launcher = smart_cast<const CWeaponMagazinedWGrenade*>(weapon);
+    if (alignment > 0.f && (smart_cast<const CWeaponRPG7*>(weapon) ||
+        smart_cast<const CWeaponRG6*>(weapon) || (launcher && launcher->UpgradeGrenadeMode())))
+        return ActorThreat::ExplosiveWeapon;
+    if (distance < m_force_shield_dist && alignment > 0.f)
+        return ActorThreat::CloseWeapon;
+
+    if (g_hud && camera_distance > EPS_S) {
+        const auto& ray = HUD().GetCurrentRayQuery();
+        const bool sniper = READ_IF_EXISTS(pSettings, r_bool, weapon->cNameSect(),
+            "is_burer_see_sniper_weapon", false);
+        const float aim_cone = sniper ? 0.88f : 0.94f;
+        if (ray.O == this || (alignment > camera_distance * aim_cone &&
+                              ray.range > camera_distance * 0.5f))
+            return ActorThreat::AimedWeapon;
+    }
+    return ActorThreat::None;
+}
+
+TTime CBurer::AimShieldDelay() const {
+    if (!GunslingerMonsterFeatureEnabled("burer_tactics"))
+        return 0;
+
+    return TTime(m_aim_shield_delay) +
+        (m_aim_shield_random > 0 ? TTime(Random.randI(m_aim_shield_random)) : 0);
+}
+
 void xr_stdcall CBurer::StaminaHit() {
-    if (GodMode()) {
+    auto* actor = Actor();
+    if (!actor || !actor->g_Alive() || GodMode())
+        return;
+
+    if (CanInterruptActorHealing()) {
+        actor->GetItemUseController()->Cancel();
         return;
     }
 
-    CWeapon* const active_weapon = smart_cast<CWeapon*>(Actor()->inventory().ActiveItem());
-    if (!active_weapon) {
+    auto* weapon = smart_cast<CWeapon*>(actor->inventory().ActiveItem());
+    if (!weapon)
         return;
+
+    float stamina_hit = weapon->Weight() * m_weight_to_stamina_hit;
+    bool strong_hit = false;
+    constexpr LPCSTR section = "gunslinger_base";
+    const bool enhanced_wave = IsGameTypeSingle() && OnServer() &&
+        actor == Level().CurrentControlEntity() &&
+        GunslingerMonsterFeatureEnabled("burer_enhanced_stamina_wave");
+    if (enhanced_wave) {
+        const float value = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_value", 0.f);
+        if (std::isfinite(value) && value > 0.f && EnemyMan.see_enemy_now(actor)) {
+            const Fvector to_burer = Fvector().sub(Position(), actor->Position());
+            const float distance = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_dist", 10.f);
+            const bool in_range = distance > 0.f && to_burer.square_magnitude() < distance * distance;
+            const bool aimed = weapon->IsZoomed() && Device.vCameraDirection.dotproduct(to_burer) > 0.f;
+            const bool sniper = READ_IF_EXISTS(pSettings, r_bool, weapon->cNameSect(),
+                "is_burer_see_sniper_weapon", false);
+            strong_hit = in_range || aimed || sniper;
+            if (strong_hit)
+                stamina_hit = (std::max)(stamina_hit, value);
+        }
     }
 
-    float const weight = active_weapon->Weight();
-    float const stamina_hit = weight * m_weight_to_stamina_hit;
+    const bool drop = actor->conditions().GetPower() < stamina_hit * m_weapon_drop_stamina_k;
+    actor->conditions().PowerHit(stamina_hit, false);
 
-    bool const do_weapon_drop =
-        Actor()->conditions().GetPower() < stamina_hit * m_weapon_drop_stamina_k;
+    if (strong_hit && smart_cast<CWeaponMagazined*>(weapon)) {
+        const float minimum = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_conditiondecmin", 0.f);
+        const float maximum = READ_IF_EXISTS(pSettings, r_float, section, "burer_superstaminahit_conditiondecmax", minimum);
+        if (std::isfinite(minimum) && std::isfinite(maximum) && minimum >= 0.f && maximum >= minimum)
+            weapon->ChangeCondition(-Random.randF(minimum, maximum));
+    }
 
-    Actor()->conditions().PowerHit(stamina_hit, false);
+    if (!drop || weapon->IsQuestItem() || weapon->GetDropManual() ||
+        actor->inventory().SlotIsPersistent(actor->inventory().GetActiveSlot()))
+        return;
 
-    if (do_weapon_drop) {
-        Fvector dir = Actor()->Direction();
-        if (dir.y < 0.f) {
-            dir.y = -dir.y;
+    Fvector dir = actor->Direction();
+    if (dir.y < 0.f)
+        dir.y = -dir.y;
+    weapon->SetActivationSpeedOverride(normalize(dir) * m_weapon_drop_velocity);
+
+    if (enhanced_wave) {
+        actor->RequestMonsterDisarm("burer_kicks");
+    } else if (!actor->inventory().Action((u16)kDROP, CMD_STOP)) {
+        actor->g_PerformDrop();
+    }
+}
+
+bool CBurer::CanUseTelekineticWeapon(CPhysicsShellHolder* object) const {
+    if (!m_tele_weapon_shooting || !m_tele_max_weapons || !IsGameTypeSingle() || !OnServer())
+        return false;
+
+    const auto* weapon = smart_cast<CWeaponMagazined*>(object);
+    return weapon && weapon->CanFireTelekinetically();
+}
+
+void CBurer::UpdateTelekineticWeapons() {
+    if (!m_tele_weapon_shooting || !m_tele_max_weapons || !g_Alive() ||
+        !IsGameTypeSingle() || !OnServer())
+        return;
+
+    const auto* enemy = EnemyMan.get_enemy();
+    if (!enemy || enemy->getDestroy() || !enemy->g_Alive() || !EnemyMan.see_enemy_now())
+        return;
+
+    Fvector target;
+    enemy->Center(target);
+    u32 aimed_weapons = 0;
+    for (auto* held : CTelekinesis::objects) {
+        if (held->get_state() != TS_Keep)
+            continue;
+
+        auto* weapon = smart_cast<CWeaponMagazined*>(held->get_object());
+        if (!weapon || !weapon->CanFireTelekinetically())
+            continue;
+        auto* shell = weapon->PPhysicsShell();
+        if (!shell || !shell->isActive() || shell->get_ApplyByGravity())
+            continue;
+        if (aimed_weapons++ >= m_tele_max_weapons)
+            break;
+
+        const Fvector muzzle = weapon->TelekineticMuzzle();
+        Fvector to_enemy = Fvector().sub(target, muzzle);
+        const float range = to_enemy.magnitude();
+        if (range < EPS_L || range > m_tele_max_distance)
+            continue;
+        to_enemy.mul(1.f / range);
+
+        Fvector forward = weapon->get_LastFD();
+        forward.normalize_safe();
+        Fvector rotation = Fvector().crossproduct(forward, to_enemy);
+        const float sine = rotation.magnitude();
+        const float cosine = forward.dotproduct(to_enemy);
+        if (sine > EPS_L) {
+            rotation.mul(5.f * atan2f(sine, cosine) / sine);
+        } else if (cosine < 0.f) {
+            const Fvector axis = fabsf(forward.y) < 0.9f
+                ? Fvector().set(0.f, 1.f, 0.f) : Fvector().set(1.f, 0.f, 0.f);
+            rotation.crossproduct(forward, axis).normalize_safe();
+            rotation.mul(5.f * PI);
         }
-        active_weapon->SetActivationSpeedOverride(normalize(dir) * m_weapon_drop_velocity);
+        shell->set_AngularVel(rotation);
 
-        if (!Actor()->inventory().Action((u16)kDROP, CMD_STOP)) {
-            Actor()->g_PerformDrop();
-        }
+        if (cosine < 0.99f || Device.dwTimeGlobal - held->time_keep_started < 200)
+            continue;
+
+        Fvector to_burer = Fvector().sub(Position(), muzzle);
+        to_burer.normalize_safe();
+        if (forward.dotproduct(to_burer) > 0.26f)
+            continue;
+
+        collide::rq_result hit;
+        if (!Level().ObjectSpace.RayPick(muzzle, forward, range, collide::rqtStatic, hit, weapon))
+            weapon->FireTelekineticShot(*this, muzzle, forward);
     }
 }
 

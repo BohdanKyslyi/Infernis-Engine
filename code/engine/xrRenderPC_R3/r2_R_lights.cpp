@@ -15,8 +15,7 @@ void CRender::render_lights(light_Package& LP) {
         xr_vector<light*>& source = LP.v_shadowed;
         for (u32 it = 0; it < source.size(); it++) {
             light* L = source[it];
-            L->vis_update();
-            if (!L->vis.visible) {
+            if (!L->visible_in_current_view()) {
                 source.erase(source.begin() + it);
                 it--;
             } else {
@@ -138,8 +137,7 @@ void CRender::render_lights(light_Package& LP) {
         if (!LP.v_point.empty()) {
             light* L = LP.v_point.back();
             LP.v_point.pop_back();
-            L->vis_update();
-            if (L->vis.visible) {
+            if (L->visible_in_current_view()) {
                 Target->accum_point(L);
                 render_indirect(L);
             }
@@ -151,8 +149,7 @@ void CRender::render_lights(light_Package& LP) {
         if (!LP.v_spot.empty()) {
             light* L = LP.v_spot.back();
             LP.v_spot.pop_back();
-            L->vis_update();
-            if (L->vis.visible) {
+            if (L->visible_in_current_view()) {
                 LR.compute_xf_spot(L);
                 Target->accum_spot(L);
                 render_indirect(L);
@@ -183,8 +180,7 @@ void CRender::render_lights(light_Package& LP) {
     if (!LP.v_point.empty()) {
         xr_vector<light*>& Lvec = LP.v_point;
         for (u32 pid = 0; pid < Lvec.size(); pid++) {
-            Lvec[pid]->vis_update();
-            if (Lvec[pid]->vis.visible) {
+            if (Lvec[pid]->visible_in_current_view()) {
                 render_indirect(Lvec[pid]);
                 Target->accum_point(Lvec[pid]);
             }
@@ -197,8 +193,7 @@ void CRender::render_lights(light_Package& LP) {
     if (!LP.v_spot.empty()) {
         xr_vector<light*>& Lvec = LP.v_spot;
         for (u32 pid = 0; pid < Lvec.size(); pid++) {
-            Lvec[pid]->vis_update();
-            if (Lvec[pid]->vis.visible) {
+            if (Lvec[pid]->visible_in_current_view()) {
                 LR.compute_xf_spot(Lvec[pid]);
                 render_indirect(Lvec[pid]);
                 Target->accum_spot(Lvec[pid]);

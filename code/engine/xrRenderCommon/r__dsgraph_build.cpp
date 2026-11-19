@@ -87,7 +87,13 @@ void R_dsgraph_structure::r_dsgraph_insert_dynamic(dxRender_Visual* pVisual, Fve
     if (RI.val_bHUD) {
         if (sh->flags.bStrictB2F) {
             // Forward HUD geometry must use the same projection as the rest of the weapon.
-            mapSorted_Node* N = mapHUDSorted.insertInAnyWay(distSQ);
+#if RENDER != R_R1
+            auto& sorted = pVisual->hudDisplayLayer != dxRender_Visual::HudDisplayLayer::None &&
+                           !Device.scopeLensPass ? mapHUDDisplay : mapHUDSorted;
+#else
+            auto& sorted = mapHUDSorted;
+#endif
+            mapSorted_Node* N = sorted.insertInAnyWay(distSQ);
             N->val.ssa = SSA;
             N->val.pObject = RI.val_pObject;
             N->val.pVisual = pVisual;

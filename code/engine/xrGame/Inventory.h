@@ -56,6 +56,7 @@ public:
     bool InRuck(const CInventoryItem* pIItem) const;
 
     bool CanPutInSlot(PIItem pIItem, u16 slot_id) const;
+    bool CanUsePistolSlot(PIItem item) const;
     bool CanPutInBelt(PIItem pIItem);
     bool CanPutInRuck(PIItem pIItem) const;
 

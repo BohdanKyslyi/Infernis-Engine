@@ -42,6 +42,7 @@ public:
     R_dsgraph::mapMatrixPasses_T mapMatrixPasses[2];
     R_dsgraph::mapSorted_T mapSorted;
     R_dsgraph::mapSorted_T mapHUDSorted;
+    R_dsgraph::mapSorted_T mapHUDDisplay;
     R_dsgraph::mapHUD_T mapHUD;
     R_dsgraph::mapLOD_T mapLOD;
     R_dsgraph::mapSorted_T mapDistort;
@@ -171,6 +172,7 @@ public:
         }
         mapSorted.destroy();
         mapHUDSorted.destroy();
+        mapHUDDisplay.destroy();
         mapHUD.destroy();
         mapLOD.destroy();
         mapDistort.destroy();
@@ -196,6 +198,7 @@ public:
     void r_dsgraph_render_hud_ui();
     void r_dsgraph_render_lods(bool _setup_zb, bool _clear);
     void r_dsgraph_render_sorted(bool renderHUD = true);
+    void r_dsgraph_render_hud_display();
     // Screen Space Shaders pass clear=false on the first call so the emissive lists survive for
     // the bloom pass, which then runs with (true, true). The defaults keep stock behaviour.
     void r_dsgraph_render_emissive(bool clear = true, bool renderHUD = false);

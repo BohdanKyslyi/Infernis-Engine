@@ -8,8 +8,9 @@
 #include "ActorEffector.h"
 #include "actor.h"
 #include "ui/UIWindow.h"
+#include "ui_base.h"
 #include "player_hud.h"
-#include "weapon.h"
+#include "WeaponMagazined.h"
 #include "ItemUseController.h"
 
 namespace {
@@ -30,32 +31,26 @@ ITEM_INFO::~ITEM_INFO() {
         CParticlesObject::Destroy(pParticle);
 }
 
-bool CCustomDetector::CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate) {
+bool CCustomDetector::CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate, bool check_state) {
     if (itm == NULL)
         return true;
 
-    CInventoryItem& iitm = itm->item();
-    u32 slot = iitm.BaseSlot();
-    bool bres = (slot == INV_SLOT_2 || slot == KNIFE_SLOT || slot == BOLT_SLOT);
-    if (!bres && slot_to_activate) {
+    bool bres = itm->item().SupportsDetector();
+    if (!bres && slot_to_activate && m_pInventory) {
         *slot_to_activate = NO_ACTIVE_SLOT;
-        if (m_pInventory->ItemFromSlot(BOLT_SLOT))
-            *slot_to_activate = BOLT_SLOT;
-
-        if (m_pInventory->ItemFromSlot(KNIFE_SLOT))
-            *slot_to_activate = KNIFE_SLOT;
-
-        if (m_pInventory->ItemFromSlot(INV_SLOT_3) &&
-            m_pInventory->ItemFromSlot(INV_SLOT_3)->BaseSlot() != INV_SLOT_3)
-            *slot_to_activate = INV_SLOT_3;
-
-        if (m_pInventory->ItemFromSlot(INV_SLOT_2) &&
-            m_pInventory->ItemFromSlot(INV_SLOT_2)->BaseSlot() != INV_SLOT_3)
-            *slot_to_activate = INV_SLOT_2;
-
-        if (*slot_to_activate != NO_ACTIVE_SLOT)
-            bres = true;
+        const u16 slots[] = {INV_SLOT_2, INV_SLOT_3, EXTRA_PISTOL_SLOT, KNIFE_SLOT, BOLT_SLOT};
+        for (const u16 slot : slots) {
+            const auto* candidate = m_pInventory->ItemFromSlot(slot);
+            if (candidate && candidate->SupportsDetector()) {
+                *slot_to_activate = slot;
+                bres = true;
+                break;
+            }
+        }
     }
+
+    if (!check_state)
+        return bres;
 
     if (itm->GetState() != CHUDState::eShowing)
         bres = bres && !itm->IsPending();
@@ -65,7 +60,7 @@ bool CCustomDetector::CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate
         if (W)
             bres = bres && (W->GetState() != CHUDState::eBore) &&
                    (W->GetState() != CWeapon::eReload) && (W->GetState() != CWeapon::eSwitch) &&
-                   !W->IsZoomed();
+                   (AllowsZoomWithDetector() || !W->IsZoomed());
     }
     return bres;
 }
@@ -87,45 +82,74 @@ void CCustomDetector::HideDetector(bool bFastMode) {
 }
 
 void CCustomDetector::ShowDetector(bool bFastMode) {
-    if (GetState() == eHidden && DetectorHudIsLocked(H_Parent())) {
+    if (!g_player_hud || !m_pInventory || m_preparing_weapon_id != u16(-1) ||
+        GetState() != eHidden || GetNextState() != eHidden)
+        return;
+
+    m_bFastAnimMode = bFastMode;
+    if (DetectorHudIsLocked(H_Parent()) || g_player_hud->attached_item(1)) {
         m_bNeedActivation = true;
         return;
     }
-    if (GetState() == eHidden)
-        ToggleDetector(bFastMode);
+
+    PIItem item = m_pInventory->ActiveItem();
+    auto* hud_item = item ? item->cast_hud_item() : nullptr;
+    u16 slot_to_activate = NO_ACTIVE_SLOT;
+    const bool compatible = CheckCompatibilityInt(hud_item, &slot_to_activate);
+    if (!compatible || (hud_item && (hud_item->GetState() == eHidden ||
+        hud_item->GetState() == eShowing || hud_item->GetState() == eHiding ||
+        hud_item->GetState() != hud_item->GetNextState()))) {
+        m_bNeedActivation = CheckCompatibilityInt(hud_item, &slot_to_activate, false);
+        return;
+    }
+
+    if (slot_to_activate != NO_ACTIVE_SLOT) {
+        m_pInventory->Activate(slot_to_activate);
+        m_bNeedActivation = true;
+        return;
+    }
+
+    m_bNeedActivation = false;
+    auto* weapon = smart_cast<CWeaponMagazined*>(item);
+    if (weapon && weapon->RequestDetectorTransition(CWeaponMagazined::DetectorTransition::Prepare))
+        m_preparing_weapon_id = weapon->ID();
+    else
+        StartShowing();
 }
 
 void CCustomDetector::ToggleDetector(bool bFastMode) {
-    // The detector owns HUD slot 1 and bypasses inventory weapon activation.
-    // Keep the request pending until the controller releases both hands,
-    // including the backpack hide animation and any queued item animation.
-    if (GetState() == eHidden && DetectorHudIsLocked(H_Parent())) {
-        m_bNeedActivation = !m_bNeedActivation;
-        return;
-    }
-    m_bNeedActivation = false;
-    m_bFastAnimMode = bFastMode;
-
-    if (GetState() == eHidden) {
-        PIItem iitem = m_pInventory->ActiveItem();
-        CHudItem* itm = (iitem) ? iitem->cast_hud_item() : NULL;
-        u16 slot_to_activate = NO_ACTIVE_SLOT;
-
-        if (CheckCompatibilityInt(itm, &slot_to_activate)) {
-            if (slot_to_activate != NO_ACTIVE_SLOT) {
-                m_pInventory->Activate(slot_to_activate);
-                m_bNeedActivation = true;
-            } else {
-                SwitchState(eShowing);
-                TurnDetectorInternal(true);
-            }
+    m_reload_restore_weapon_id = u16(-1);
+    if (GetState() == eHidden && GetNextState() == eHidden) {
+        if (m_preparing_weapon_id != u16(-1) || m_bNeedActivation) {
+            m_preparing_weapon_id = u16(-1);
+            m_bNeedActivation = false;
+        } else {
+            ShowDetector(bFastMode);
         }
-    } else if (GetState() == eIdle)
+    } else if (GetState() == eIdle && GetNextState() == eIdle) {
+        m_bFastAnimMode = bFastMode;
         SwitchState(eHiding);
+    }
+}
+
+bool CCustomDetector::CanResumeShowing() {
+    auto* actor = smart_cast<CActor*>(H_Parent());
+    return actor && actor->g_Alive() && m_pInventory && OnServer() &&
+        m_pInventory->ItemFromSlot(DETECTOR_SLOT) == this &&
+        GetState() == eHidden && GetNextState() == eHidden;
+}
+
+void CCustomDetector::StartShowing(u16 prepared_weapon_id) {
+    m_draw_weapon_id = prepared_weapon_id;
+    SwitchState(eShowing);
+    TurnDetectorInternal(true);
 }
 
 void CCustomDetector::OnStateSwitch(u32 S) {
     inherited::OnStateSwitch(S);
+    m_weapon_reload_motion = false;
+    const u16 draw_weapon_id = m_draw_weapon_id;
+    m_draw_weapon_id = u16(-1);
 
     switch (S) {
     case eShowing: {
@@ -134,12 +158,21 @@ void CCustomDetector::OnStateSwitch(u32 S) {
         PlayHUDMotion(m_bFastAnimMode ? "anm_show_fast" : "anm_show", FALSE /*TRUE*/, this,
                       GetState());
         SetPending(TRUE);
+        if (draw_weapon_id != u16(-1) && m_pInventory) {
+            auto* weapon = smart_cast<CWeaponMagazined*>(m_pInventory->ActiveItem());
+            if (weapon && weapon->ID() == draw_weapon_id)
+                weapon->RequestDetectorTransition(CWeaponMagazined::DetectorTransition::Draw);
+        }
     } break;
     case eHiding: {
         m_sounds.PlaySound("sndHide", Fvector().set(0, 0, 0), this, true, false);
         PlayHUDMotion(m_bFastAnimMode ? "anm_hide_fast" : "anm_hide", FALSE /*TRUE*/, this,
                       GetState());
         SetPending(TRUE);
+        if (m_pInventory) {
+            if (auto* weapon = smart_cast<CWeaponMagazined*>(m_pInventory->ActiveItem()))
+                weapon->RequestDetectorTransition(CWeaponMagazined::DetectorTransition::Finish);
+        }
     } break;
     case eIdle: {
         PlayAnimIdle();
@@ -181,8 +214,19 @@ CCustomDetector::~CCustomDetector() {
 }
 
 BOOL CCustomDetector::net_Spawn(CSE_Abstract* DC) {
-    TurnDetectorInternal(false);
-    return (inherited::net_Spawn(DC));
+    const BOOL spawned = inherited::net_Spawn(DC);
+    if (spawned) {
+        SetState(eHidden);
+        SetNextState(eHidden);
+        SetPending(FALSE);
+        m_bNeedActivation = false;
+        m_weapon_reload_motion = false;
+        m_preparing_weapon_id = u16(-1);
+        m_draw_weapon_id = u16(-1);
+        m_reload_restore_weapon_id = u16(-1);
+        TurnDetectorInternal(false);
+    }
+    return spawned;
 }
 
 void CCustomDetector::Load(LPCSTR section) {
@@ -214,8 +258,32 @@ bool CCustomDetector::IsWorking() {
 }
 
 void CCustomDetector::UpfateWork() {
-    UpdateAf();
-    m_ui->update();
+    if (m_ui) {
+        UpdateAf();
+        m_ui->update();
+    }
+}
+
+bool CCustomDetector::CanPlayWeaponReload(LPCSTR motion) {
+    auto* hud = HudItemData();
+    if (!hud || GetState() != eIdle || GetNextState() != eIdle ||
+        DetectorHudIsLocked(H_Parent()))
+        return false;
+
+    string128 alias;
+    xr_sprintf(alias, "%s%s", motion, UI().is_widescreen() ? "_16x9" : "");
+    const auto* animation = hud->m_hand_motions.find_motion(alias);
+    return animation && !animation->m_animations.empty();
+}
+
+void CCustomDetector::PlayWeaponReload(LPCSTR motion) {
+    m_weapon_reload_motion = true;
+    PlayHUDMotion_noCB(motion, TRUE);
+}
+
+void CCustomDetector::PlayAnimIdle() {
+    if (!m_weapon_reload_motion)
+        inherited::PlayAnimIdle();
 }
 
 void CCustomDetector::UpdateVisibility() {
@@ -223,28 +291,59 @@ void CCustomDetector::UpdateVisibility() {
     if (DetectorHudIsLocked(H_Parent()))
         return;
 
+    if (m_preparing_weapon_id != u16(-1)) {
+        auto* weapon = m_pInventory
+            ? smart_cast<CWeaponMagazined*>(m_pInventory->ActiveItem()) : nullptr;
+        if (!CanResumeShowing() || !weapon || weapon->ID() != m_preparing_weapon_id ||
+            !weapon->GetHUDmode()) {
+            m_preparing_weapon_id = u16(-1);
+        } else if (weapon->GetState() != CWeapon::eDetectorTransition &&
+                   weapon->GetNextState() != CWeapon::eDetectorTransition) {
+            m_preparing_weapon_id = u16(-1);
+            if (Actor()->MovingState() & mcClimb)
+                m_bNeedActivation = true;
+            else if (weapon->GetState() == eIdle && weapon->GetNextState() == eIdle &&
+                     !g_player_hud->attached_item(1) && CheckCompatibilityInt(weapon, nullptr))
+                StartShowing(weapon->ID());
+        }
+        return;
+    }
+
     // check visibility
     attachable_hud_item* i0 = g_player_hud->attached_item(0);
+    if (m_weapon_reload_motion) {
+        const auto* weapon = i0 ? smart_cast<CWeapon*>(i0->m_parent_hud_item) : nullptr;
+        if (weapon && weapon->GetState() == weapon->GetNextState() &&
+            (weapon->GetState() == CWeapon::eReload || weapon->GetState() == CWeapon::eUnloadMagazine) &&
+            !(Actor()->MovingState() & mcClimb))
+            return;
+
+        m_weapon_reload_motion = false;
+        if (GetState() == eIdle && GetNextState() == eIdle && HudItemData())
+            PlayAnimIdle();
+    }
     if (i0 && HudItemData()) {
-        bool bClimb = ((Actor()->MovingState() & mcClimb) != 0);
-        if (bClimb) {
-            HideDetector(true);
-            m_bNeedActivation = true;
-        } else {
-            CWeapon* wpn = smart_cast<CWeapon*>(i0->m_parent_hud_item);
-            if (wpn) {
-                u32 state = wpn->GetState();
-                if (wpn->IsZoomed() || state == CWeapon::eReload || state == CWeapon::eSwitch) {
-                    HideDetector(true);
-                    m_bNeedActivation = true;
-                }
+        auto* weapon = smart_cast<CWeapon*>(i0->m_parent_hud_item);
+        const bool climbing = (Actor()->MovingState() & mcClimb) != 0;
+        const bool reloading = weapon && weapon->GetState() == CWeapon::eReload;
+        if (!i0->m_parent_hud_item->item().SupportsDetector() || climbing || reloading ||
+            (weapon && (weapon->GetState() == CWeapon::eSwitch ||
+            (!AllowsZoomWithDetector() && weapon->IsZoomed())))) {
+            if (GetState() == eIdle && GetNextState() == eIdle) {
+                const auto* magazined = smart_cast<const CWeaponMagazined*>(weapon);
+                const bool immediate = reloading && magazined && magazined->ImmediatelyRestoreDetector() &&
+                    AllowsImmediateReloadRestore();
+                HideDetector(true);
+                m_reload_restore_weapon_id = immediate ? weapon->ID() : u16(-1);
             }
+            m_bNeedActivation = true;
         }
     } else if (m_bNeedActivation) {
         CActor* actor = smart_cast<CActor*>(H_Parent());
         if (!actor || !actor->g_Alive() || !m_pInventory ||
             m_pInventory->ItemFromSlot(DETECTOR_SLOT) != this) {
             m_bNeedActivation = false;
+            m_reload_restore_weapon_id = u16(-1);
             return;
         }
         attachable_hud_item* i0 = g_player_hud->attached_item(0);
@@ -253,8 +352,19 @@ void CCustomDetector::UpdateVisibility() {
             CHudItem* huditem = (i0) ? i0->m_parent_hud_item : NULL;
             bool bChecked = !huditem || CheckCompatibilityInt(huditem, 0);
 
-            if (bChecked)
-                ShowDetector(true);
+            if (bChecked) {
+                const auto* weapon = smart_cast<const CWeapon*>(huditem);
+                if (weapon && weapon->ID() == m_reload_restore_weapon_id && CanResumeShowing() &&
+                    weapon->GetState() == eIdle && weapon->GetNextState() == eIdle &&
+                    !g_player_hud->attached_item(1)) {
+                    m_reload_restore_weapon_id = u16(-1);
+                    m_bNeedActivation = false;
+                    m_bFastAnimMode = true;
+                    StartShowing();
+                } else {
+                    ShowDetector(true);
+                }
+            }
         }
     }
 }
@@ -275,6 +385,10 @@ void CCustomDetector::OnH_A_Chield() { inherited::OnH_A_Chield(); }
 
 void CCustomDetector::OnH_B_Independent(bool just_before_destroy) {
     m_bNeedActivation = false;
+    m_weapon_reload_motion = false;
+    m_preparing_weapon_id = u16(-1);
+    m_draw_weapon_id = u16(-1);
+    m_reload_restore_weapon_id = u16(-1);
     inherited::OnH_B_Independent(just_before_destroy);
 
     m_artefacts.clear();
@@ -282,6 +396,9 @@ void CCustomDetector::OnH_B_Independent(bool just_before_destroy) {
 
 void CCustomDetector::OnMoveToRuck(const SInvItemPlace& prev) {
     m_bNeedActivation = false;
+    m_preparing_weapon_id = u16(-1);
+    m_draw_weapon_id = u16(-1);
+    m_reload_restore_weapon_id = u16(-1);
     inherited::OnMoveToRuck(prev);
     if (prev.type == eItemPlaceSlot) {
         SwitchState(eHidden);

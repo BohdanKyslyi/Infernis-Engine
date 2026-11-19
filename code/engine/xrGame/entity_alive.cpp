@@ -440,7 +440,7 @@ void CEntityAlive::UpdateFireParticles() {
         float burn_size = pWound->TypeSize(ALife::eHitTypeBurn);
 
         if (pWound->GetDestroy() ||
-            (burn_size > 0 && (burn_size < m_fStopBurnWoundSize || !g_Alive()))) {
+            burn_size <= 0.f || burn_size < m_fStopBurnWoundSize || !g_Alive()) {
             CParticlesPlayer::AutoStopParticles(
                 pWound->GetParticleName(), pWound->GetParticleBoneNum(),
                 u32(float(m_dwMinBurnTime) * ::Random.randF(0.5f, 1.5f)));

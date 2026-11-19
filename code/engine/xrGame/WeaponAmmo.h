@@ -38,6 +38,7 @@ public:
     u8 m_LocalAmmoType;
 
     u16 bullet_material_idx;
+    ALife::EHitType m_hit_type = ALife::eHitTypeFireWound;
     Flags8 m_flags;
 
     shared_str m_InvShortName;

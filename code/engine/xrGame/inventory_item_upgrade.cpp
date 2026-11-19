@@ -33,6 +33,20 @@ bool CInventoryItem::has_upgrade_group(const shared_str& upgrade_group_id) {
     return false;
 }
 
+bool CInventoryItem::IsUpgradeBanned(const shared_str& upgrade_id) const {
+    const LPCSTR list = READ_IF_EXISTS(pSettings, r_string, m_section_id, "banned_upgrades", nullptr);
+    if (!list)
+        return false;
+
+    string128 prefix;
+    for (int i = 0, count = _GetItemCount(list); i < count; ++i) {
+        _GetItem(list, i, prefix);
+        if (prefix[0] && strncmp(upgrade_id.c_str(), prefix, xr_strlen(prefix)) == 0)
+            return true;
+    }
+    return false;
+}
+
 bool CInventoryItem::has_upgrade(const shared_str& upgrade_id) {
     if (m_section_id == upgrade_id) {
         return true;
@@ -141,6 +155,12 @@ bool CInventoryItem::verify_upgrade(LPCSTR section) { return install_upgrade_imp
 bool CInventoryItem::install_upgrade_impl(LPCSTR section, bool test) {
     bool result = process_if_exists(section, "cost", &CInifile::r_u32, m_cost, test);
     result |= process_if_exists(section, "inv_weight", &CInifile::r_float, m_weight, test);
+
+    result |= process_if_exists_set(section, "supports_detector", &CInifile::r_bool,
+                                    m_supports_detector, test);
+
+    result |= process_if_exists(section, "pistol_slot_allowed", &CInifile::r_float,
+                                m_pistol_slot_allowance, test);
 
     bool result2 = false;
     if (BaseSlot() != NO_ACTIVE_SLOT) {

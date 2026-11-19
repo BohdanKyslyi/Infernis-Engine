@@ -32,16 +32,18 @@ public:
 
     virtual bool Action(u16 cmd, u32 flags);
     virtual bool Useful() const;
+    bool IsPreparingThrow() const;
     virtual void State(u32 state);
 
     virtual void OnH_B_Chield() { inherited::OnH_B_Chield(); }
 
     virtual void Hit(SHit* pHDS);
+    void OnPhysicsContact();
 
     virtual bool NeedToDestroyObject() const;
     virtual ALife::_TIME_ID TimePassedAfterIndependant() const;
 
-    void PutNextToSlot();
+    void PutNextToSlot(bool activate_replacement = true);
 
     virtual void DeactivateItem();
     virtual bool GetBriefInfo(II_BriefInfo& info);
@@ -49,6 +51,8 @@ public:
     virtual void
     SendHiddenItem(); // same as OnHiddenItem but for client... (sends message to a server)...
 protected:
+    shared_str m_checkout_bones;
+    void UpdateCheckoutBones();
     ALife::_TIME_ID m_dwGrenadeRemoveTime;
     ALife::_TIME_ID m_dwGrenadeIndependencyTime;
 
@@ -58,6 +62,15 @@ protected:
 private:
     float m_grenade_detonation_threshold_hit;
     bool m_thrown;
+    bool m_configured_hit_detonation = false;
+    bool m_detonate_on_hit = false;
+    bool m_detonate_before_activation = true;
+    xr_vector<ALife::EHitType> m_detonation_hit_types;
+    bool m_detonate_on_impact = false;
+    bool m_disarm_on_slow_impact = false;
+    u32 m_impact_safe_time = 0;
+    u32 m_impact_arm_delay = 0;
+    float m_min_impact_speed = 0.f;
 
 protected:
     virtual void UpdateXForm() { CMissile::UpdateXForm(); };

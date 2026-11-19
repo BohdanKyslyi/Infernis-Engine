@@ -433,6 +433,9 @@ void CUIHudStatesWnd::UpdateZones() {
         return;
     }
 
+    const auto* detector = actor->inventory().ItemFromSlot(DETECTOR_SLOT);
+    const bool detects_zones = !detector || READ_IF_EXISTS(pSettings, r_bool,
+        detector->object().cNameSect().c_str(), "detects_zones", true);
     CZoneList::ItemsMapIt itb = Level().hud_zones_list->m_ItemInfos.begin();
     CZoneList::ItemsMapIt ite = Level().hud_zones_list->m_ItemInfos.end();
     for (; itb != ite; ++itb) {
@@ -488,7 +491,9 @@ void CUIHudStatesWnd::UpdateZones() {
         // string256	buff_z;
         // xr_sprintf( buff_z, "zone %2.2f\n", zone_info.cur_period );
         // xr_strcat( buff, buff_z );
-        if (zone_info.snd_time > zone_info.cur_period) {
+        if (!detects_zones) {
+            zone_info.snd_time = 0.f;
+        } else if (zone_info.snd_time > zone_info.cur_period) {
             zone_info.snd_time = 0.0f;
             HUD_SOUND_ITEM::PlaySound(zone_type->detect_snds, Fvector().set(0, 0, 0), NULL, true,
                                       false);

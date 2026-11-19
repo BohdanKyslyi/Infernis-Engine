@@ -32,6 +32,7 @@ class CActorCameraManager;
 class ENGINE_API CCameraBase;
 class ENGINE_API CBoneInstance;
 class ENGINE_API CBlend;
+class CWeapon;
 class CWeaponList;
 class CEffectorBobbing;
 class CHolderCustom;
@@ -184,6 +185,7 @@ public:
     [[nodiscard]] virtual float GetMass() override;
     [[nodiscard]] virtual float Radius() const override;
     virtual void g_PerformDrop();
+    bool RequestMonsterDisarm(LPCSTR animation_group);
 
     [[nodiscard]] virtual bool use_default_throw_force() override;
     [[nodiscard]] virtual float missile_throw_force() override;
@@ -271,6 +273,9 @@ public:
 
 protected:
     CItemUseController* m_item_use = nullptr;
+    shared_str m_monster_disarm_animation;
+    u16 m_monster_disarm_item = u16(-1);
+    u32 m_monster_disarm_started = 0;
     CHolderCustom* m_holder = nullptr;
     u16 m_holderID = u16(-1);
     bool use_Holder(CHolderCustom* holder);
@@ -333,6 +338,12 @@ public:
 protected:
     virtual void cam_Set(EActorCameras style);
     void cam_Update(float dt, float fFOV);
+    const CWeapon* cam_GunslingerWeapon();
+    float cam_StanceHeight(const CWeapon* weapon, float height, float dt);
+    bool cam_JumpInertiaEnabled(const CWeapon* weapon);
+    bool cam_OnLanding(bool hard);
+    float cam_JumpOffset(const CWeapon* weapon, float dt);
+    void cam_ResetJumpInertia();
     void cam_Lookout(const Fmatrix& xform, float camera_height);
     void camUpdateLadder(float dt);
     void cam_SetLadder();
@@ -344,6 +355,11 @@ protected:
     CCameraBase* cameras[eacMaxCam] = {nullptr};
     EActorCameras cam_active = eacFirstEye;
     float fPrevCamPos = 0.0f;
+    float m_gunslinger_camera_height = 0.f;
+    float m_jump_camera_offset = 0.f;
+    float m_jump_camera_landing_time = 0.f;
+    float m_jump_camera_recovery_time = 0.f;
+    bool m_jump_camera_hard_landing = false;
     float current_ik_cam_shift = 0.0f;
     Fvector vPrevCamDir = {0.f, 0.f, 1.f};
     float fCurAVelocity = 0.0f;

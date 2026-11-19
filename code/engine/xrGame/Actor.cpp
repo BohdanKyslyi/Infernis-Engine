@@ -68,7 +68,12 @@
 #include "player_hud.h"
 #include "ui/UIHudEditor.h"
 #include "ItemUseController.h"
+#include "GunslingerMonsterSettings.h"
 #include "ai/monsters/basemonster/base_monster.h"
+#include "ai/monsters/boar/boar.h"
+#include "ai/monsters/pseudogigant/pseudo_gigant.h"
+#include "WeaponMagazined.h"
+#include <cmath>
 #include "ssfx_script_bridge.h"
 
 #include "xrRender/UIRender.h"
@@ -239,6 +244,9 @@ void CActor::reinit() {
 
     set_input_external_handler(nullptr);
     m_time_lock_accel = 0;
+    m_monster_disarm_animation = nullptr;
+    m_monster_disarm_item = u16(-1);
+    m_monster_disarm_started = 0;
 }
 
 void CActor::reload(LPCSTR section) {
@@ -392,6 +400,66 @@ void CActor::Load(LPCSTR section) {
 
 void CActor::PHHit(SHit& H) { m_pPhysics_support->in_Hit(H, false); }
 
+namespace {
+void ApplyMonsterImpact(CActor& actor, const SHit& hit, float power) {
+    if (!actor.g_Alive() || !OnServer() || Level().CurrentControlEntity() != &actor ||
+        !std::isfinite(power) || power <= 0.f)
+        return;
+
+    const bool giant = smart_cast<CPseudoGigant*>(hit.who) != nullptr;
+    if (!giant && !smart_cast<CAI_Boar*>(hit.who))
+        return;
+    if (!GunslingerMonsterFeatureEnabled(giant ? "pseudogiant_impact" : "boar_impact"))
+        return;
+
+    // The stomp sends a vertical Strike hit. The regular attack sends Wound.
+    const bool stomp = giant && hit.hit_type == ALife::eHitTypeStrike &&
+        hit.dir.similar(Fvector().set(0.f, 1.f, 0.f));
+    const LPCSTR prefix = stomp ? "pseudogiant_threaten" : (giant ? "pseudogiant_hit" : "boar_hit");
+    const LPCSTR stamina_key = stomp ? "pseudogiant_threaten_stamina_hit_k" :
+        (giant ? "pseudogiant_stamina_hit_k" : "boar_stamina_hit_k");
+    constexpr LPCSTR section = "gunslinger_base";
+    const auto setting = [prefix, section](LPCSTR suffix, float fallback) {
+        string128 key;
+        xr_sprintf(key, "%s_%s", prefix, suffix);
+        return READ_IF_EXISTS(pSettings, r_float, section, key, fallback);
+    };
+
+    const float drain = power * READ_IF_EXISTS(pSettings, r_float, section, stamina_key, 1.f);
+    if (!std::isfinite(drain) || drain < 0.f)
+        return;
+
+    const float stamina = actor.conditions().GetPower();
+    if (drain > 0.f)
+        actor.conditions().PowerHit(drain, false);
+    const Fvector to_monster = Fvector().sub(hit.who->Position(), actor.Position());
+    const float forced_distance = setting("unconditional_weapon_drop_dist", stomp ? 5.f : 0.f);
+    const bool force_drop = forced_distance > 0.f &&
+        to_monster.square_magnitude() < forced_distance * forced_distance;
+    if (!force_drop && drain <= stamina)
+        return;
+
+    const bool front = Device.vCameraDirection.dotproduct(to_monster) >= 0.f;
+    const LPCSTR animation_group = stomp ? "pseudogiant_threaten_kicks" :
+        (giant ? (front ? "pseudogiant_front_kicks" : "pseudogiant_back_kicks") :
+                 (front ? "boar_front_kicks" : "boar_back_kicks"));
+    if (PIItem item = actor.inventory().ActiveItem()) {
+        if ((!force_drop && Random.randF() >= drain - stamina) ||
+            !actor.RequestMonsterDisarm(animation_group))
+            return;
+
+        if (auto* weapon = smart_cast<CWeaponMagazined*>(item)) {
+            const float minimum = setting("conditiondecmin", giant ? 0.15f : 0.f);
+            const float maximum = setting("conditiondecmax", giant ? 0.3f : minimum);
+            if (std::isfinite(minimum) && std::isfinite(maximum) && minimum >= 0.f && maximum >= minimum)
+                weapon->ChangeCondition(-Random.randF(minimum, maximum));
+        }
+    } else if (auto* controller = actor.GetItemUseController()) {
+        controller->StartMonsterHitReaction(animation_group);
+    }
+}
+}
+
 void CActor::Hit(SHit* pHDS) {
     bool b_initiated = pHDS->aim_bullet; 
 
@@ -490,7 +558,8 @@ void CActor::Hit(SHit* pHDS) {
     }
 
     if (IsGameTypeSingle()) {
-        float hit_power = HitArtefactsOnBelt(HDS.damage(), HDS.hit_type);
+        const float original_power = HDS.damage();
+        float hit_power = HitArtefactsOnBelt(original_power, HDS.hit_type);
 
         if (GodMode()) {
             HDS.power = 0.0f;
@@ -500,6 +569,7 @@ void CActor::Hit(SHit* pHDS) {
             HDS.power = hit_power;
             HDS.add_wound = true;
             inherited::Hit(&HDS);
+            ApplyMonsterImpact(*this, HDS, original_power);
         }
     } else {
         m_bWasBackStabbed = false;
@@ -709,9 +779,13 @@ void CActor::g_Physics(Fvector& _accel, float jump, float dt) {
     }
 
     if (Local() && g_Alive()) {
-        if (character_physics_support()->movement()->gcontact_Was)
-            Cameras().AddCamEffector(
-                xr_new<CEffectorFall>(character_physics_support()->movement()->gcontact_Power));
+        auto* movement = character_physics_support()->movement();
+        if (movement->gcontact_Was) {
+            const bool landing = (mstate_real & (mcJump | mcFall)) ||
+                movement->OldEnvironment() == CPHMovementControl::peInAir;
+            if (!landing || !cam_OnLanding(!fis_zero(movement->gcontact_HealthLost)))
+                Cameras().AddCamEffector(xr_new<CEffectorFall>(movement->gcontact_Power));
+        }
 
         if (!fis_zero(character_physics_support()->movement()->gcontact_HealthLost)) {
             VERIFY(character_physics_support());
@@ -756,13 +830,63 @@ float CActor::currentFOV() {
         // Only the optic magnifies the world; the first-person camera stays at its normal FOV.
         if (pWeapon->Is3DScopeEnabled())
             return g_fov;
-        return pWeapon->GetZoomFactor() * (0.75f);
+        return pWeapon->ZoomCameraFov(g_fov);
     } else {
         return g_fov;
     }
 }
 
 void CActor::UpdateCL() {
+    if (OnServer() && g_Alive() && !GodMode() && Level().CurrentControlEntity() == this &&
+        conditions().IsBurning()) {
+        // GUNSLINGER's burn and equipment-wear rates are per millisecond.
+        const float elapsed_ms = Device.fTimeDelta * 1000.f;
+        const auto wear_burning_equipment = [elapsed_ms](CInventoryItem* item) {
+            if (!item)
+                return;
+
+            const float immunity = item->GetHitImmunity(ALife::eHitTypeBurn);
+            if (std::isfinite(immunity) && immunity > 0.f)
+                item->ChangeCondition(-elapsed_ms * immunity * 0.0003f);
+        };
+        wear_burning_equipment(GetOutfit());
+        wear_burning_equipment(inventory().ItemFromSlot(HELMET_SLOT));
+
+        if (!m_item_use || !m_item_use->IsSelfExtinguishing()) {
+            constexpr LPCSTR section = "gunslinger_base";
+            float rate = READ_IF_EXISTS(pSettings, r_float, section, "actor_burn_restore_speed", 0.000001f);
+            const LPCSTR materials = READ_IF_EXISTS(pSettings, r_string, section, "burn_restore_materials", nullptr);
+            const u16 index = material().last_material_idx();
+            if (materials && materials[0] && index != GAMEMTL_NONE_IDX) {
+                const shared_str& current = GMLib.GetMaterialByIdx(index)->m_Name;
+                for (u32 i = 0, count = _GetItemCount(materials); i < count; ++i) {
+                    string256 name;
+                    _GetItem(materials, i, name);
+                    if (current == name) {
+                        rate += READ_IF_EXISTS(pSettings, r_float, section, "burn_restore_material_speed", 0.f);
+                        break;
+                    }
+                }
+            }
+            conditions().ReduceBurning(rate * elapsed_ms);
+        }
+    }
+
+    // Wait for the ownership change and for the active HUD action to finish.
+    if (m_monster_disarm_animation.size()) {
+        if (!g_Alive() || Level().CurrentControlEntity() != this ||
+            Device.dwTimeGlobal - m_monster_disarm_started > 2000) {
+            m_monster_disarm_animation = nullptr;
+            m_monster_disarm_item = u16(-1);
+        } else if (m_monster_disarm_item == u16(-1) && m_item_use &&
+            !m_item_use->IsBusy() && !m_item_use->HasWeaponHudAction()) {
+            const shared_str group = m_monster_disarm_animation;
+            m_monster_disarm_animation = nullptr;
+            if (HUDview())
+                m_item_use->StartMonsterHitReaction(group.c_str());
+        }
+    }
+
     if (m_item_use)
         m_item_use->Update(Device.fTimeDelta);
 
@@ -1186,6 +1310,23 @@ void CActor::g_PerformDrop() {
     }
 }
 
+bool CActor::RequestMonsterDisarm(LPCSTR animation_group) {
+    PIItem item = inventory().ActiveItem();
+    if (!item || item->GetDropManual())
+        return false;
+
+    g_PerformDrop();
+    if (!item->GetDropManual())
+        return false;
+
+    if (HUDview() && m_item_use) {
+        m_monster_disarm_animation = animation_group;
+        m_monster_disarm_item = item->object().ID();
+        m_monster_disarm_started = Device.dwTimeGlobal;
+    }
+    return true;
+}
+
 bool CActor::use_default_throw_force() {
     return g_Alive();
 }
@@ -1381,6 +1522,12 @@ void CActor::OnItemTake(CInventoryItem* inventory_item) {
 
 void CActor::OnItemDrop(CInventoryItem* inventory_item, bool just_before_destroy) {
     CInventoryOwner::OnItemDrop(inventory_item, just_before_destroy);
+
+    if (m_monster_disarm_animation.size() && inventory_item->object().ID() == m_monster_disarm_item) {
+        m_monster_disarm_item = u16(-1);
+        if (just_before_destroy)
+            m_monster_disarm_animation = nullptr;
+    }
 
     if (CCustomOutfit* outfit = smart_cast<CCustomOutfit*>(inventory_item)) {
         if (inventory_item->m_ItemCurrPlace.type == eItemPlaceSlot) {

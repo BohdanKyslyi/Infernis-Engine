@@ -36,6 +36,7 @@ private:
     //@bool						m_is_activated;
 
     hit_callback m_callback;
+    bool m_interrupting_healing = false;
 
 public:
     anti_aim_ability(CBaseMonster* object);
@@ -52,10 +53,11 @@ public:
 
 private:
     bool can_detect();
+    bool can_interrupt_healing() const;
     void do_deactivate();
     void activate();
     void deactivate();
-    bool check_update_condition() const;
+    bool check_update_condition();
     float calculate_angle() const;
     void start_camera_effector();
 };

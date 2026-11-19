@@ -15,6 +15,9 @@
 #include "xrEngine/ssfx_console_vars.h"
 #include "xrEngine/infernis_pbr_console_vars.h"
 #include "xrEngine/shader_bus.h"
+#ifndef _EDITOR
+#include "xrEngine/IGame_Level.h"
+#endif
 
 #include "dxRenderDeviceRender.h"
 
@@ -572,6 +575,35 @@ class ssfx_issvp : public R_constant_setup {
 };
 static ssfx_issvp binder_ssfx_issvp;
 
+#ifndef _EDITOR
+static class cl_scope_lens_electronics : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[] = {0.f, 1.f / 3.f, 1.f}; // reticle blend, NV gain, noise scale
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->ScopeLensElectronics(params);
+        RCache.set_c(C, params[0], params[1], params[2], Device.fTimeGlobal);
+    }
+} binder_scope_lens_electronics;
+
+static class cl_scope_lens_gauss : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[] = {0.f, 0.f}; // aberration, electronic interference
+        if (Device.scopeLensActive && !Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->ScopeLensGauss(params);
+        RCache.set_c(C, params[0], params[1], 0.f, 0.f);
+    }
+} binder_scope_lens_gauss;
+
+static class cl_weapon_computer_display : public R_constant_setup {
+    virtual void setup(R_constant* C) {
+        float params[] = {1.f, 0.f, 1.f}; // charge, interference, condition
+        if (!Device.scopeLensPass && g_pGameLevel)
+            g_pGameLevel->WeaponComputerDisplay(params);
+        RCache.set_c(C, params[0], params[1], params[2], 0.f);
+    }
+} binder_weapon_computer_display;
+#endif
+
 class ssfx_pom : public R_constant_setup {
     virtual void setup(R_constant* C) { RCache.set_c(C, ps_ssfx_pom); }
 };
@@ -752,6 +784,11 @@ void CBlender_Compile::SetMapping() {
     r_Constant("L_ambient", &binder_amb_color);
 #endif
     r_Constant("screen_res", &binder_screen_res);
+#ifndef _EDITOR
+    r_Constant("scope_lens_electronics", &binder_scope_lens_electronics);
+    r_Constant("scope_lens_gauss", &binder_scope_lens_gauss);
+    r_Constant("weapon_computer_display", &binder_weapon_computer_display);
+#endif
 
     // Screen Space Shaders
     r_Constant("m_inv_V", &binder_inv_v);

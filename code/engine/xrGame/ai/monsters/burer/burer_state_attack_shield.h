@@ -20,6 +20,9 @@ public:
 
 private:
     TTime m_last_shield_started;
+    TTime m_aim_last_tick;
+    TTime m_aim_hold_time;
+    bool m_was_threatened;
     TTime m_next_particle_allowed;
     float m_shield_start_anim_length_sec;
     bool m_started;

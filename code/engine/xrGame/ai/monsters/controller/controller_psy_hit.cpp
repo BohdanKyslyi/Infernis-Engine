@@ -13,6 +13,9 @@
 #include "../../../level_debug.h"
 #include "../../../ActorCondition.h"
 #include "../../../HudManager.h"
+#include "../../../inventory.h"
+#include "../../../WeaponMagazined.h"
+#include "../../../GunslingerMonsterSettings.h"
 
 void CControllerPsyHit::load(LPCSTR section) {
     m_min_tube_dist = pSettings->r_float(section, "tube_condition_min_distance");
@@ -55,6 +58,10 @@ bool CControllerPsyHit::check_start_conditions() {
         return false;
 
     if (!see_enemy())
+        return false;
+
+    if (const auto* weapon = smart_cast<const CWeaponMagazined*>(Actor()->inventory().ActiveItem());
+        weapon && weapon->IsControllerAttackActive())
         return false;
 
     if (!tube_ready())
@@ -203,6 +210,15 @@ bool CControllerPsyHit::check_conditions_final() {
 
 void CControllerPsyHit::death_glide_start() {
     if (!check_conditions_final()) {
+        m_man->deactivate(this);
+        return;
+    }
+
+    auto* weapon = smart_cast<CWeaponMagazined*>(Actor()->inventory().ActiveItem());
+    auto* attacker = smart_cast<CController*>(m_object);
+    if (weapon && attacker && GunslingerMonsterFeatureEnabled("controller_weapon_attack") &&
+        weapon->RequestControllerAttack(*attacker)) {
+        m_time_last_tube = Device.dwTimeGlobal;
         m_man->deactivate(this);
         return;
     }

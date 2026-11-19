@@ -111,6 +111,10 @@ protected:
     CUIArtefactDetectorBase* m_ui;
     bool m_bFastAnimMode;
     bool m_bNeedActivation;
+    bool m_weapon_reload_motion = false;
+    u16 m_preparing_weapon_id = u16(-1);
+    u16 m_draw_weapon_id = u16(-1);
+    u16 m_reload_restore_weapon_id = u16(-1);
 
 public:
     CCustomDetector();
@@ -126,6 +130,9 @@ public:
     virtual void UpdateCL();
 
     bool IsWorking();
+    bool CanPlayWeaponReload(LPCSTR motion);
+    void PlayWeaponReload(LPCSTR motion);
+    void PlayAnimIdle() override;
 
     virtual void OnMoveToSlot(const SInvItemPlace& prev);
     virtual void OnMoveToRuck(const SInvItemPlace& prev);
@@ -145,7 +152,11 @@ public:
     virtual u32 ef_detector_type() const { return 1; };
 
 protected:
-    bool CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate);
+    bool CheckCompatibilityInt(CHudItem* itm, u16* slot_to_activate, bool check_state = true);
+    bool CanResumeShowing();
+    void StartShowing(u16 prepared_weapon_id = u16(-1));
+    virtual bool AllowsZoomWithDetector() const { return false; }
+    virtual bool AllowsImmediateReloadRestore() const { return true; }
     virtual void TurnDetectorInternal(bool b);
     void UpdateNightVisionMode(bool b_off);
     void UpdateVisibility();

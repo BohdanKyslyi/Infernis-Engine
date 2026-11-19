@@ -140,8 +140,10 @@ void CLight_DB::add_light(light* L) {
 
 #if (RENDER == R_R2) || (RENDER == R_R3) || (RENDER == R_R4)
 void CLight_DB::add_light(light* L) {
-    if (Device.dwFrame == L->frame_render) return;
-    L->frame_render = Device.dwFrame;
+    // Track the source light, including shadowed points exported as six faces.
+    u32& frame_render = Device.scopeLensPass ? L->frame_scope_render : L->frame_render;
+    if (Device.dwFrame == frame_render) return;
+    frame_render = Device.dwFrame;
     
     if (RImplementation.o.noshadows)
         L->flags.bShadow = FALSE;

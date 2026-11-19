@@ -5,11 +5,14 @@
 #include "../xrEngine/LightAnimLibrary.h"
 #include "player_hud.h"
 
-CSimpleDetector::CSimpleDetector(void) { m_artefacts.m_af_rank = 1; }
+CSimpleDetector::CSimpleDetector() : inherited(false) { m_artefacts.m_af_rank = 1; }
 
 CSimpleDetector::~CSimpleDetector(void) {}
 
 void CSimpleDetector::CreateUI() {
+    if (HasHandheldLight())
+        return;
+
     R_ASSERT(NULL == m_ui);
     m_ui = xr_new<CUIArtefactDetectorSimple>();
     ui().construct(this);

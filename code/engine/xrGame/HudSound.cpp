@@ -173,9 +173,27 @@ void HUD_SOUND_COLLECTION::StopAllSounds() {
 void HUD_SOUND_COLLECTION::LoadSound(LPCSTR section, LPCSTR line, LPCSTR alias, bool exclusive,
                                      int type) {
     R_ASSERT(NULL == FindSoundItem(alias, false));
+    // Growing the vector can invalidate the cached last-played item.
+    m_last_played_sound = nullptr;
     m_sound_items.resize(m_sound_items.size() + 1);
     HUD_SOUND_ITEM& snd_item = m_sound_items.back();
     HUD_SOUND_ITEM::LoadSound(section, line, snd_item, type);
     snd_item.m_alias = alias;
     snd_item.m_b_exclusive = exclusive;
+}
+
+void HUD_SOUND_COLLECTION::ReloadSound(LPCSTR section, LPCSTR line, LPCSTR alias, bool exclusive,
+                                       int type) {
+    HUD_SOUND_ITEM* item = FindSoundItem(alias, false);
+    if (!item) {
+        LoadSound(section, line, alias, exclusive, type);
+        return;
+    }
+
+    if (m_last_played_sound == item)
+        m_last_played_sound = nullptr;
+    HUD_SOUND_ITEM::StopSound(*item);
+    HUD_SOUND_ITEM::DestroySound(*item);
+    HUD_SOUND_ITEM::LoadSound(section, line, *item, type);
+    item->m_b_exclusive = exclusive;
 }

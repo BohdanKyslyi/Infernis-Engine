@@ -88,11 +88,20 @@ void CStateBurerAttack<Object>::execute() {
     bool const shield_ready = this->get_state(eStateBurerAttack_Shield)->check_start_conditions();
     bool const tele_ready = this->get_state(eStateBurerAttack_Tele)->check_start_conditions();
 
+    const auto threat = this->object->GetActorThreat();
+    const bool holding_grenade = threat == Object::ActorThreat::HeldGrenade ||
+        threat == Object::ActorThreat::PrimedGrenade;
     bool selected_state = true;
 
-    if (gravi_ready) {
+    if (anti_aim_ready && (this->object->CanInterruptActorHealing() ||
+                          threat == Object::ActorThreat::AimedWeapon)) {
+        this->select_state(eStateBurerAttack_AntiAim);
+    } else if (shield_ready && !holding_grenade && threat != Object::ActorThreat::None) {
+        m_lost_delta_health = false;
+        this->select_state(eStateBurerAttack_Shield);
+    } else if (gravi_ready && threat != Object::ActorThreat::PrimedGrenade) {
         this->select_state(eStateBurerAttack_Gravi);
-    } else if (m_lost_delta_health && shield_ready) {
+    } else if (m_lost_delta_health && shield_ready && !holding_grenade) {
         m_lost_delta_health = false;
         this->select_state(eStateBurerAttack_Shield);
     } else if (anti_aim_ready) {

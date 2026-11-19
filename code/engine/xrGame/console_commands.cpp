@@ -1990,6 +1990,9 @@ void CCC_RegisterCommands() {
     CMD3(CCC_Mask, "hud_crosshair", &psHUD_Flags, HUD_CROSSHAIR);
     CMD3(CCC_Mask, "hud_crosshair_dist", &psHUD_Flags, HUD_CROSSHAIR_DIST);
 
+    extern Flags32 g_gunslinger_real_shooting;
+    CMD3(CCC_Mask, "g_real_shooting", &g_gunslinger_real_shooting, 1);
+
 #ifdef DEBUG_CAPS
     CMD4(CCC_Float, "hud_fov", &psHUD_FOV, 0.1f, 1.0f);
 #endif // DEBUG_CAPS

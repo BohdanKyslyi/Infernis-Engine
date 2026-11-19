@@ -25,7 +25,6 @@ public:
 
     virtual bool Attach(PIItem pIItem, bool b_send_event);
     virtual bool Detach(const char* item_section_name, bool b_spawn_item);
-    virtual bool CanAttach(PIItem pIItem);
     virtual bool CanDetach(const char* item_section_name);
     virtual void InitAddons();
     bool Is3DScopeEnabled() const override;
@@ -33,7 +32,8 @@ public:
     virtual float CurrentZoomFactor();
     virtual u8 GetCurrentHudOffsetIdx();
     virtual void FireEnd();
-    void LaunchGrenade();
+    bool LaunchGrenade(bool controller_attack = false);
+    bool CanFireControllerGrenade(const CController& attacker) const;
 
     virtual void OnStateSwitch(u32 S);
 
@@ -42,13 +42,19 @@ public:
     virtual void OnShot();
     virtual void OnEvent(NET_Packet& P, u16 type);
     virtual void ReloadMagazine();
+    void UnloadMagazine(bool spawn_ammo = true) override;
+    bool UpgradeGrenadeMode() const override { return m_bGrenadeMode; }
+    size_t GetHudMagazineSize() const override {
+        return (m_bGrenadeMode ? m_magazine2 : m_magazine).size();
+    }
+    BOOL IsMisfire() const override { return !m_bGrenadeMode && inherited::IsMisfire(); }
     bool HasChamberRound() const override { return !m_bGrenadeMode && inherited::HasChamberRound(); }
 
     virtual bool Action(u16 cmd, u32 flags);
 
     virtual void UpdateSounds();
 
-    //переключение в режим подствольника
+    //ГЇГҐГ°ГҐГЄГ«ГѕГ·ГҐГ­ГЁГҐ Гў Г°ГҐГ¦ГЁГ¬ ГЇГ®Г¤Г±ГІГўГ®Г«ГјГ­ГЁГЄГ 
     virtual bool SwitchMode();
     void PerformSwitchGL();
     void OnAnimationEnd(u32 state);
@@ -57,7 +63,7 @@ public:
 
     virtual bool IsNecessaryItem(const shared_str& item_sect);
 
-    //виртуальные функции для проигрывания анимации HUD
+    //ГўГЁГ°ГІГіГ Г«ГјГ­Г»ГҐ ГґГіГ­ГЄГ¶ГЁГЁ Г¤Г«Гї ГЇГ°Г®ГЁГЈГ°Г»ГўГ Г­ГЁГї Г Г­ГЁГ¬Г Г¶ГЁГЁ HUD
     virtual void PlayAnimShow();
     virtual void PlayAnimHide();
     virtual void PlayAnimReload();
@@ -66,7 +72,19 @@ public:
     virtual void PlayAnimModeSwitch();
     virtual void PlayAnimBore();
 
+protected:
+    bool UsesScopeZoom() const override;
+    shared_str InspectMotion() const override;
+    shared_str SelectDryFireMotion(LPCSTR normal, LPCSTR aimed) const override;
+    shared_str HudStateVariant(LPCSTR base, LPCSTR fallback) const override;
+
 private:
+    LPCSTR RifleHudState() const;
+    shared_str FindLauncherMotion(LPCSTR base, LPCSTR variant) const;
+    shared_str LauncherReloadMotion() const;
+    void FinishGrenadeShot();
+    bool m_has_switch_sound = false;
+    shared_str m_current_switch_sound;
     virtual void net_Spawn_install_upgrades(Upgrades_type saved_upgrades);
     virtual bool install_upgrade_impl(LPCSTR section, bool test);
     virtual bool install_upgrade_ammo_class(LPCSTR section, bool test);
@@ -74,8 +92,8 @@ private:
     int GetAmmoCount2(u8 ammo2_type) const;
 
 public:
-    //дополнительные параметры патронов
-    //для подствольника
+    //Г¤Г®ГЇГ®Г«Г­ГЁГІГҐГ«ГјГ­Г»ГҐ ГЇГ Г°Г Г¬ГҐГІГ°Г» ГЇГ ГІГ°Г®Г­Г®Гў
+    //Г¤Г«Гї ГЇГ®Г¤Г±ГІГўГ®Г«ГјГ­ГЁГЄГ 
     //-	CWeaponAmmo*			m_pAmmo2;
     xr_vector<shared_str> m_ammoTypes2;
     u8 m_ammoType2;

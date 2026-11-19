@@ -27,7 +27,11 @@ public:
     virtual void execute();
     virtual void finalize();
     virtual void critical_finalize();
-    virtual void remove_links(CObject* object) { inherited::remove_links(object); }
+    virtual void remove_links(CObject* object) {
+        if (selected_object == object)
+            selected_object = nullptr;
+        inherited::remove_links(object);
+    }
 
     virtual bool check_start_conditions();
     virtual bool check_completion();

@@ -109,7 +109,8 @@ static class cl_scope_lens_state : public R_constant_setup {
             Msg("* ScopeLensShader: mode=%d detector=%d", int(mode), int(detector));
             last_logged_mode = int(mode);
         }
-        RCache.set_c(C, active, mode, detector, 0.f);
+        const float blend = active && g_pGameLevel ? g_pGameLevel->ScopeLensBlend() : 0.f;
+        RCache.set_c(C, active, mode, detector, blend);
     }
 } binder_scope_lens_state;
 

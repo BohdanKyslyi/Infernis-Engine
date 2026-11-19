@@ -12,10 +12,15 @@
 #include "effectorshot.h"
 
 #include "level_bullet_manager.h"
+#include "HUDTarget.h"
+#include "level.h"
+#include <cmath>
 #include "../xrEngine/IGame_Persistent.h"
 #include "../xrEngine/ssfx_console_vars.h" // ps_ssfx_int_grass_params_2
 
 #define FLAME_TIME 0.05f
+
+Flags32 g_gunslinger_real_shooting = { 0 };
 
 float _nrand(float sigma) {
 #define ONE_OVER_SIGMA_EXP (1.0f / 0.7975f)
@@ -48,10 +53,90 @@ void random_dir(Fvector& tgt_dir, const Fvector& src_dir, float dispersion) {
 
 float CWeapon::GetWeaponDeterioration() { return conditionDecreasePerShot; };
 
+bool CWeapon::TryGetGunslingerShotParams(CEntity& shooter, Fvector& position, Fvector& direction) {
+    if (!IsGameTypeSingle() || &shooter != Level().CurrentControlEntity() ||
+        !smart_cast<CActor*>(&shooter))
+        return false;
+
+    const LPCSTR hud_section = HudSection().c_str();
+    const LPCSTR weapon_section = cNameSect().c_str();
+    const bool real_shooting = g_gunslinger_real_shooting.test(1);
+    if (!real_shooting && !pSettings->line_exist(hud_section, "hud_recalc_koef") &&
+        !pSettings->line_exist(weapon_section, "bullet_point_offset_hud") &&
+        !pSettings->line_exist(weapon_section, "bullet_point_offset_world"))
+        return false;
+
+    const bool hud_mode = GetHUDmode();
+    if (hud_mode && IsZoomed()) {
+        position = Device.vCameraPosition;
+        direction = Device.vCameraDirection;
+        return true;
+    }
+
+    Fvector view_position = get_LastFP();
+    Fvector view_direction = get_LastFD();
+    shooter.g_fireParams(this, view_position, view_direction);
+
+    Fvector muzzle_direction = get_LastFD();
+    muzzle_direction.normalize_safe();
+    if (!xr::valid(muzzle_direction) || muzzle_direction.square_magnitude() < EPS_S)
+        return false;
+
+    const float offset = hud_mode
+        ? READ_IF_EXISTS(pSettings, r_float, weapon_section, "bullet_point_offset_hud", -1.f)
+        : READ_IF_EXISTS(pSettings, r_float, weapon_section, "bullet_point_offset_world", -0.3f);
+    position.mad(get_LastFP(), muzzle_direction, std::isfinite(offset) ? offset : 0.f);
+
+    // Keep the launch point on the shooter's side of nearby solid geometry.
+    Fvector to_origin;
+    to_origin.sub(position, view_position);
+    const float origin_distance = to_origin.magnitude();
+    if (origin_distance > EPS_S) {
+        to_origin.div(origin_distance);
+        collide::rq_result obstacle;
+        if (Level().ObjectSpace.RayPick(view_position, to_origin, origin_distance,
+                                       collide::rqtStatic, obstacle, &shooter))
+            position.mad(view_position, to_origin, obstacle.range > 0.01f ? obstacle.range - 0.01f : 0.f);
+    }
+
+    const bool hip_laser = hud_mode && GetZoomRotationFactor() <= EPS_S && HasActiveHudLaser();
+    if (hip_laser || real_shooting || g_SingleGameDifficulty >= egdVeteran) {
+        direction = muzzle_direction;
+        if (hud_mode) {
+            const float hud_recalc = READ_IF_EXISTS(pSettings, r_float, hud_section, "hud_recalc_koef", 1.f);
+            const float fov = READ_IF_EXISTS(pSettings, r_float, "gunslinger_base", "fov", 65.f);
+            const float hud_fov = READ_IF_EXISTS(pSettings, r_float, "gunslinger_base", "hud_fov", 40.f);
+            if (std::isfinite(hud_recalc) && std::isfinite(fov) && std::isfinite(hud_fov) &&
+                hud_recalc > 0.f && fov > 0.f && hud_fov > EPS_S) {
+                Fvector corrected;
+                corrected.sub(muzzle_direction, view_direction);
+                corrected.mad(view_direction, corrected, hud_recalc * fov / hud_fov).normalize_safe();
+                if (corrected.square_magnitude() >= EPS_S)
+                    direction = corrected;
+            }
+        }
+        return true;
+    }
+
+    constexpr float aim_range = 1000.f;
+    const float distance = CHUDTarget::TraceAimDistance(view_position, view_direction, aim_range, &shooter);
+    Fvector aim_point;
+    aim_point.mad(view_position, view_direction, distance);
+    direction.sub(aim_point, position).normalize_safe();
+    if (direction.square_magnitude() < EPS_S)
+        direction = view_direction;
+    return true;
+}
+
 void CWeapon::FireTrace(const Fvector& P, const Fvector& D) {
+    FireTraceFrom(*H_Parent(), P, D);
+}
+
+void CWeapon::FireTraceFrom(CObject& shooter, const Fvector& P, const Fvector& D) {
     VERIFY(m_magazine.size());
 
     CCartridge& l_cartridge = m_magazine.back();
+    UpdateHudAmmoBones(&l_cartridge);
     //	Msg("ammo - %s", l_cartridge.m_ammoSect.c_str());
     VERIFY(u16(-1) != l_cartridge.bullet_material_idx);
     //-------------------------------------------------------------
@@ -90,16 +175,17 @@ void CWeapon::FireTrace(const Fvector& P, const Fvector& D) {
         }
     }
 
-    bool SendHit = SendHitAllowed(H_Parent());
+    bool SendHit = SendHitAllowed(&shooter);
     //выстерлить пулю (с учетом возможной стрельбы дробью)
     for (int i = 0; i < l_cartridge.param_s.buckShot; ++i) {
-        FireBullet(P, D, fire_disp, l_cartridge, H_Parent()->ID(), ID(), SendHit);
+        FireBullet(P, D, fire_disp, l_cartridge, shooter.ID(), ID(), SendHit);
     }
 
-    StartShotParticles();
-
-    if (m_bLightShotEnabled)
-        Light_Start();
+    if (!IsSilencerAttached()) {
+        StartShotParticles();
+        if (m_bLightShotEnabled)
+            Light_Start();
+    }
 
     // Interactive Grass FX
     Fvector ShotPos = Fvector().mad(P, D, 1.5f);

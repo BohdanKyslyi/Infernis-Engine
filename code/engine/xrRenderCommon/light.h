@@ -56,6 +56,7 @@ public:
     float attenuation1{0.f}; 
     float attenuation2{0.f}; 
 
+    u32 frame_scope_render{0};
     light* omnipart[6]{nullptr}; 
     xr_vector<light_indirect> indirect;
     u32 indirect_photons{0};
@@ -158,6 +159,7 @@ public:
     void xform_calc();
     void vis_prepare();
     void vis_update();
+    bool visible_in_current_view();
     void export_(light_Package& dest);
     void set_attenuation_params(float a0, float a1, float a2, float fo);
 #endif // (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)

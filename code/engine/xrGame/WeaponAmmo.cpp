@@ -10,6 +10,7 @@
 #include "../xrEngine/gamemtllib.h"
 #include "level.h"
 #include "string_table.h"
+#include <cstdlib>
 
 #define BULLET_MANAGER_SECTION "bullet_manager"
 
@@ -23,6 +24,13 @@ CCartridge::CCartridge() {
 void CCartridge::Load(LPCSTR section, u8 LocalAmmoType) {
     m_ammoSect = section;
     m_LocalAmmoType = LocalAmmoType;
+    m_hit_type = ALife::eHitTypeFireWound;
+    if (const LPCSTR hit_type = READ_IF_EXISTS(pSettings, r_string, section, "hit_type", nullptr)) {
+        char* end = nullptr;
+        const long value = std::strtol(hit_type, &end, 10);
+        if (end != hit_type && !*end && value >= 0 && value < ALife::eHitTypeMax)
+            m_hit_type = static_cast<ALife::EHitType>(value);
+    }
     param_s.kDist = pSettings->r_float(section, "k_dist");
     param_s.kDisp = pSettings->r_float(section, "k_disp");
     param_s.kHit = pSettings->r_float(section, "k_hit");
@@ -59,7 +67,10 @@ void CCartridge::Load(LPCSTR section, u8 LocalAmmoType) {
 
     m_flags.set(cfExplosive, pSettings->r_bool(section, "explosive"));
 
-    bullet_material_idx = GMLib.GetMaterialIdx(WEAPON_MATERIAL_NAME);
+    const LPCSTR material = READ_IF_EXISTS(pSettings, r_string, section, "material", nullptr);
+    const auto material_it = material && material[0] ? GMLib.GetMaterialIt(material) : GMLib.LastMaterial();
+    bullet_material_idx = material_it != GMLib.LastMaterial()
+        ? u16(material_it - GMLib.FirstMaterial()) : GMLib.GetMaterialIdx(WEAPON_MATERIAL_NAME);
     VERIFY(u16(-1) != bullet_material_idx);
     VERIFY(param_s.fWallmarkSize > 0);
 

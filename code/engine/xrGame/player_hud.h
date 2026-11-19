@@ -26,7 +26,7 @@ struct player_hud_motion {
 struct player_hud_motion_container {
     xr_vector<player_hud_motion> m_anims;
     player_hud_motion* find_motion(const shared_str& name);
-    void load(IKinematicsAnimated* model, const shared_str& sect);
+    void load(IKinematicsAnimated* model, const shared_str& sect, bool show_only = false);
 };
 
 struct hud_item_measures {
@@ -51,17 +51,27 @@ struct hud_item_measures {
 
     Fvector m_hands_attach[2]; // pos,rot
 
-    void load(const shared_str& sect_name, IKinematics* K);
+    void load(const shared_str& sect_name, IKinematics* K, const shared_str& pose_section = {});
+};
+
+struct HudInertionParams {
+    Fvector pitch_offsets{-0.017f, -0.012f, -0.02f};
+    float origin_offset = 0.05f;
+    float speed = 5.f;
+
+    void Load(LPCSTR section, LPCSTR prefix, LPCSTR suffix = "", bool allow_negative = false);
 };
 
 struct attachable_hud_item {
     player_hud* m_parent;
     CHudItem* m_parent_hud_item;
     bool m_controller_owned;
+    bool m_controller_show_only = false;
     // Keep the opposite hand on its current motion when a controller-owned
     // HUD item is animated alongside another attached item.
     bool m_preserve_other_hand;
     shared_str m_sect_name;
+    shared_str m_controller_pose_section;
     IKinematics* m_model;
     u16 m_attach_place_idx;
     // Optional per-section override of the global hud_fov from user.ltx.
@@ -69,6 +79,11 @@ struct attachable_hud_item {
     float m_hud_fov;
     // Absolute HUD projection FOV in degrees. Takes priority over m_hud_fov.
     float m_hud_fov_degrees;
+    float m_hud_fov_factor = 1.f;
+    bool m_hud_inertion = true;
+    HudInertionParams m_hip_inertion;
+    HudInertionParams m_aim_inertion;
+    HudInertionParams m_grenade_inertion;
     // Optional per-section override of [hud_extensions] viewport_near.
     // Zero means that the global engine_external.ltx value must be used.
     float m_viewport_near;
@@ -120,7 +135,8 @@ public:
     player_hud();
     ~player_hud();
 
-    attachable_hud_item* attach_controller_item(const shared_str& hud_section);
+    attachable_hud_item* attach_controller_item(const shared_str& hud_section,
+        const shared_str& pose_section = {}, bool show_only = false);
     void detach_controller_item();
 
     void load(const shared_str& model_name);
@@ -137,7 +153,7 @@ public:
     bool render_item_ui_query();
     u32 anim_play(u16 part, const MotionID& M, BOOL bMixIn, const CMotionDef*& md, float speed,
                   bool preserve_other_hand = false);
-    bool can_attach_controller_item(const shared_str& hud_section);
+    bool can_attach_controller_item(const shared_str& hud_section, bool show_only = false);
     bool has_hud_motion(const shared_str& hud_section, const shared_str& motion_name);
     bool has_controller_motion(const shared_str& motion_name);
     u32 play_controller_motion(const shared_str& motion_name, BOOL bMixIn = TRUE,
@@ -147,7 +163,7 @@ public:
                                    const Fvector& orientation);
     const shared_str& section_name() const { return m_sect_name; }
 
-    attachable_hud_item* create_hud_item(const shared_str& sect);
+    attachable_hud_item* create_hud_item(const shared_str& sect, bool show_only = false);
 
     void attach_item(CHudItem* item);
     bool allow_activation(CHudItem* item);

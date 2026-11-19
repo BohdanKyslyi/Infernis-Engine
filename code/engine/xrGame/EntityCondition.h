@@ -122,6 +122,8 @@ public:
     IC float GetMaxPower() const { return m_fPowerMax; };
 
     void ChangeBleeding(const float percent);
+    bool IsBurning() const;
+    void ReduceBurning(float amount);
 
     void ChangeCircumspection(const float value);
     void ChangeEntityMorale(const float value);
@@ -152,6 +154,7 @@ public:
     typedef xr_map<EBoostParams, SBooster> BOOSTER_MAP;
 
 protected:
+    bool UsesPersistentBurning() const;
     void UpdateHealth();
     void UpdatePower();
     virtual void UpdateRadiation();

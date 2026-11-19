@@ -12,6 +12,8 @@ class CUITrackBar;
 class CWeapon;
 struct attachable_hud_item;
 
+enum class EHudEditorAim { Primary, Alternative, Grenade };
+
 class CUIHudEditor : public CUIDialogWnd, public CUIWndCallback {
     typedef CUIDialogWnd inherited;
 
@@ -36,6 +38,10 @@ public:
     void CloseEditorSession();
     bool IsSessionActive() const { return m_session_active; }
     bool IsPreviewing() const { return m_previewing; }
+    bool MatchesWeapon(const CWeapon* weapon) const;
+    const SProfile& SelectedProfile() const;
+    EHudEditorAim AimMode() const { return m_aim_mode; }
+    bool HideCrosshair() const;
 
 private:
     struct SControl {
@@ -48,7 +54,6 @@ private:
 
     bool SelectActiveWeapon(bool force);
     void CaptureProfiles();
-    void ApplySelectedProfile();
     void SyncControls();
     void SyncControl(SControl& control);
     void RestoreSnapshot();
@@ -66,7 +71,6 @@ private:
     void OnValueCommitted(CUIWindow*, void*);
     void OnValueStep(CUIWindow*, void*);
     void OnForceAimChanged(CUIWindow*, void*);
-    void OnHideCrosshairChanged(CUIWindow*, void*);
     void OnLearningModeChanged(CUIWindow*, void*);
     void OnPreview(CUIWindow*, void*);
     void OnFire(CUIWindow*, void*);
@@ -95,10 +99,14 @@ private:
     attachable_hud_item* m_hud_item;
     CWeapon* m_weapon;
     shared_str m_section;
+    shared_str m_scope_wrapper;
+    shared_str m_pose_section;
+    EHudEditorAim m_aim_mode = EHudEditorAim::Primary;
     SProfile m_profiles[2];
     SProfile m_snapshot_profiles[2];
     bool m_snapshot_hide_crosshair;
     bool m_was_zoomed;
+    bool m_forced_aim_applied = false;
     bool m_synchronizing;
     bool m_session_active;
     bool m_previewing;
@@ -113,3 +121,6 @@ void PreviewHudEditor();
 void DestroyHudEditor();
 bool HudEditorShown();
 bool HudEditorCrosshairOverride(const CWeapon* weapon, bool& visible);
+void HudEditorHandsOverride(const CWeapon* weapon, Fvector& position, Fvector& orientation);
+void HudEditorAimOverride(const CWeapon* weapon, EHudEditorAim mode, Fvector& position,
+                          Fvector& rotation);
