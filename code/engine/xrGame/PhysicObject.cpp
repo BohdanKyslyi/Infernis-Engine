@@ -198,61 +198,47 @@ void CPhysicObject::SpawnInitPhysics(CSE_Abstract* D) {
     RunStartupAnim(D);
 }
 
+
 void CPhysicObject::RunStartupAnim(CSE_Abstract* D) {
     if (Visual() && smart_cast<IKinematics*>(Visual())) {
-        //		CSE_PHSkeleton	*po	= smart_cast<CSE_PHSkeleton*>(D);
-		
-        IKinematicsAnimated* PKinematicsAnimated = NULL;
-        R_ASSERT(Visual() && smart_cast<IKinematics*>(Visual()));
-        PKinematicsAnimated = smart_cast<IKinematicsAnimated*>(Visual());
+        IKinematicsAnimated* PKinematicsAnimated = smart_cast<IKinematicsAnimated*>(Visual());
+
         if (PKinematicsAnimated) {
             CSE_Visual* visual = smart_cast<CSE_Visual*>(D);
             R_ASSERT(visual);
-            R_ASSERT2(*visual->startup_animation, "no startup animation");
 
+            const LPCSTR anim_name = visual->startup_animation.c_str();
 
-            const LPCSTR original_anim = visual->startup_animation.c_str();
+            R_ASSERT2(*anim_name, "no startup animation");
 
-            shared_str selected_anim = visual->startup_animation;
-            MotionID motion = PKinematicsAnimated->LL_MotionID(selected_anim.c_str());
-
-            // Infernis Engine: SDK $editor animation compatibility.
-            if (!motion.valid() && xr_strcmp(original_anim, "$editor") == 0) {
-                selected_anim = "idle";
-                motion = PKinematicsAnimated->LL_MotionID(selected_anim.c_str());
-
-                if (motion.valid()) {
-                    Msg("~ [PHYS STARTUP ANIM] $editor missing, using idle");
-                    Msg("~ Object: %s", cName().c_str());
-                    Msg("~ Visual: %s", cNameVisual().c_str());
-                } else {
-                    Msg("~ [PHYS STARTUP ANIM] $editor and idle missing");
-                    Msg("~ Object: %s", cName().c_str());
-                    Msg("~ Section: %s", cNameSect().c_str());
-                    Msg("~ Visual: %s", cNameVisual().c_str());
-                    Msg("~ Using default skeleton pose");
-                }
-            }
+            MotionID motion = PKinematicsAnimated->LL_MotionID(anim_name);
 
             if (motion.valid()) {
-                m_anim_blend =
-                    m_anim_script_callback.play_cycle(PKinematicsAnimated, selected_anim);
-            } else if (xr_strcmp(original_anim, "$editor") == 0) {
-                // Neither $editor nor idle exists.
-                // Keep the object in its default pose.
+                // Animation exists: use original behaviour.
+                m_anim_blend = m_anim_script_callback.play_cycle(PKinematicsAnimated,
+                                                                 visual->startup_animation);
+            } else if (xr_strcmp(anim_name, "$editor") == 0) {
+                // Missing SDK $editor animation.
+                // Keep the original skeleton pose.
                 m_anim_blend = nullptr;
+
+                Msg("~ [PHYS STARTUP ANIM] Skipping missing $editor");
+                Msg("~ Object: %s", cName().c_str());
+                Msg("~ Visual: %s", cNameVisual().c_str());
             } else {
-                // Preserve strict validation for other animations.
-                VERIFY2(motion.valid(), (make_string(" animation %s not found ", original_anim) +
+                // Missing real animation: preserve diagnostics.
+                VERIFY2(motion.valid(), (make_string(" animation %s not found ", anim_name) +
                                          dbg_object_base_dump_string(this))
                                             .c_str());
             }
-
-            smart_cast<IKinematics*>(Visual())->CalculateBones_Invalidate();
-            smart_cast<IKinematics*>(Visual())->CalculateBones(TRUE);
         }
+
+        IKinematics* K = smart_cast<IKinematics*>(Visual());
+        K->CalculateBones_Invalidate();
+        K->CalculateBones(TRUE);
     }
 }
+
 IC bool check_blend(CBlend* b, LPCSTR name, LPCSTR sect, LPCSTR visual) {
 #ifdef DEBUG
     if (!b)
