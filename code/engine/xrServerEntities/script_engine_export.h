@@ -45,6 +45,7 @@
 #include "script_effector.h"
 #include "particlesobject.h"
 #include "level.h"
+#include "infernis_spawner_catalog.h"
 #include "memory_space.h"
 #include "script_render_device.h"
 #include "script_game_object.h"

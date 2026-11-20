@@ -1655,6 +1655,9 @@ set(AI_ASCRIPT ../xrServerEntities/script_export_macroses.h
                ../xrServerEntities/script_space_forward.h
                ssfx_script_bridge.h
                ssfx_script_bridge.cpp
+               infernis_spawner_catalog.h
+               infernis_spawner_catalog_rules.h
+               infernis_spawner_catalog.cpp
                raypick.h
                raypick.cpp)
 
@@ -3902,6 +3905,7 @@ set_source_files_properties(ai/trader/trader_animation.cpp PROPERTIES COMPILE_FL
 set_source_files_properties(alife_simulator.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(alife_simulator_base.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(ssfx_script_bridge.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
+set_source_files_properties(infernis_spawner_catalog.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(client_spawn_manager.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(console_commands.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(CustomMonster.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")

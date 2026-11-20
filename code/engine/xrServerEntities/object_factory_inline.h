@@ -48,6 +48,13 @@ operator()(const CObjectItemAbstract* item) const {
 
 IC const CObjectFactory::OBJECT_ITEM_STORAGE& CObjectFactory::clsids() const { return (m_clsids); }
 
+IC bool CObjectFactory::has_class(const CLASS_ID& clsid) const {
+    actualize();
+    const_iterator item =
+        std::lower_bound(clsids().begin(), clsids().end(), clsid, CObjectItemPredicate());
+    return item != clsids().end() && (*item)->clsid() == clsid;
+}
+
 #ifndef NO_XR_GAME
 IC const CObjectItemAbstract& CObjectFactory::item(const CLASS_ID& clsid) const {
     actualize();
