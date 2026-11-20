@@ -6,6 +6,12 @@
 -- Author:      Serhiy Vynnychenko (narrator@gsc-game.kiev.ua)
 -- Version:     0.9
 
+-- Spawner-only entry checks do not require the actor's Lua binder.
+local function spawner_actor_ready()
+    local api = rawget(_G, "infernis_spawner")
+    return type(api) == "table" and type(api.actor_state) == "function" and api.actor_state().ready
+end
+
 class "main_menu" (CUIScriptWnd)
 
 function main_menu:__init() super()
@@ -49,6 +55,7 @@ function main_menu:InitCallBacks()
 	self:AddCallback("btn_veteran",		ui_events.BUTTON_CLICKED,				self.OnButton_new_veteran_game,		self)
 	self:AddCallback("btn_master",		ui_events.BUTTON_CLICKED,				self.OnButton_new_master_game,		self)
 	self:AddCallback("btn_spawn",		ui_events.BUTTON_CLICKED,				self.OnButton_load_spawn,			self)
+	self:AddCallback("btn_god",			ui_events.BUTTON_CLICKED,				self.OnButton_god_clicked,			self)
 	-- options
 	self:AddCallback("btn_options",     ui_events.BUTTON_CLICKED,				self.OnButton_options_clicked,		self)
 	-- load
@@ -200,6 +207,16 @@ function main_menu:OnButton_load_spawn()
 	self:Show(false)
 end
 
+function main_menu:OnButton_god_clicked()
+	self.god_dlg = ui_god_dialog.god_dialog()
+	self.god_dlg.owner = self
+
+	self.god_dlg:FillList()
+	self.god_dlg:ShowDialog(true)
+	self:HideDialog()
+	self:Show(false)
+end
+
 function main_menu:OnButton_save_clicked()
 	if self.save_dlg == nil then
 		self.save_dlg = ui_save_dialog.save_dialog()
@@ -278,6 +295,20 @@ function main_menu:OnKeyboard(dik, keyboard_action)  --virtual function
 --		else
 		if dik == DIK_keys.DIK_Q then
 			self:OnMessageQuitWin()
+		elseif dik == DIK_keys.DIK_F1 then
+			if spawner_actor_ready() then
+				self:OnButton_god_clicked()
+			end
+		elseif dik == DIK_keys.DIK_W then
+			if spawner_actor_ready() then
+				self.OnButton_return_game()
+				ui_god_editor.waypoint_editor_start()
+			end
+		elseif dik == DIK_keys.DIK_P then
+			if spawner_actor_ready() then
+				self.OnButton_return_game()
+				ui_god_editor.position_printer_start()
+			end
 		end
 
 	end

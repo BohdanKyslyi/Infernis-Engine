@@ -1,0 +1,66 @@
+-- Optional CoP integration. Removing this file disables only CoP actions.
+-- No binder overrides or callbacks are installed.
+local function module_if_present(name)
+    if not getFS():exist("$game_scripts$", name .. ".script") then return nil end
+    local ok, value = pcall(function() return _G[name] end)
+    if ok and type(value) == "table" then return value end
+end
+
+local function squad_context()
+    local board_module = module_if_present("sim_board")
+    if not board_module or type(board_module.get_sim_board) ~= "function" or not board_module.squad_ltx then return nil end
+    local ok, board = pcall(board_module.get_sim_board)
+    if not ok or not board or not board.smarts_by_names then return nil end
+    return board_module, board
+end
+
+function capabilities()
+    if not infernis_spawner.actor_state().ready then return {surge=false, squads=false} end
+    local surge = module_if_present("surge_manager")
+    local sm, board = squad_context()
+    local effects = module_if_present("xr_effects")
+    return {
+        surge = surge and type(surge.start_surge) == "function" and type(surge.stop_surge) == "function" or false,
+        squads = sm ~= nil and board ~= nil and effects ~= nil and type(effects.create_squad) == "function"
+    }
+end
+
+function get_squads()
+    if not infernis_spawner.actor_state().ready then return {} end
+    local sm = squad_context()
+    local entries = {}
+    if not sm then return entries end
+    -- Pass the exact loaded INI to C++; the stock ini_file Lua API cannot
+    -- enumerate sections, and creating a second INI would lose active overrides.
+    entries = infernis_spawner.get_squad_catalog(sm.squad_ltx)
+    table.sort(entries, function(a,b) return a.name < b.name end)
+    return entries
+end
+
+function surge(start)
+    if not infernis_spawner.actor_state().ready then return {ok=false, error=game.translate_string("st_infernis_spawner_no_actor")} end
+    if not capabilities().surge then return {ok=false, error=game.translate_string("st_infernis_spawner_surge_missing")} end
+    local manager = module_if_present("surge_manager")
+    local ok, message = pcall(start and manager.start_surge or manager.stop_surge)
+    return {ok=ok, error=ok and "" or tostring(message)}
+end
+
+function create_squad(section)
+    if not infernis_spawner.actor_state().ready then return {ok=false, error=game.translate_string("st_infernis_spawner_no_actor")} end
+    if not capabilities().squads then return {ok=false, error=game.translate_string("st_infernis_spawner_squads_missing")} end
+    local sm, board = squad_context()
+    local allowed = false
+    for _, entry in ipairs(get_squads()) do if entry.section == section then allowed = true break end end
+    if not allowed then return {ok=false, error=game.translate_string("st_infernis_spawner_squad_missing")} end
+    local effects = module_if_present("xr_effects")
+    local nearby = infernis_spawner.get_nearby_smarts(20)
+    table.sort(nearby, function(a,b) return (a.distance or 0) < (b.distance or 0) end)
+    for _, smart in ipairs(nearby) do
+        if board.smarts_by_names[smart.object_name] then
+            -- Exactly one call: do not create a squad at every overlapping smart.
+            local ok, message = pcall(effects.create_squad, nil, nil, {section, smart.object_name})
+            return {ok=ok, error=ok and "" or tostring(message)}
+        end
+    end
+    return {ok=false, error=game.translate_string("st_infernis_spawner_smart_missing")}
+end

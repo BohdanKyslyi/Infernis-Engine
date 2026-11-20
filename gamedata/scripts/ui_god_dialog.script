@@ -1,0 +1,840 @@
+--[[-----------------
+Головний скрипт Infernis Core Spawner, створений на основі моду «Повелитель Зони» за авторством Shoker та stalker-MiX
+--]]-----------------
+
+local mode 
+
+class "god_item" (CUIListBoxItem)
+
+function god_item:__init(height) super(height)
+	printf("%f",height)
+	self.file_name		= "filename"
+
+		self:SetTextColor(GetARGB(255, 170, 170, 170))
+
+		self.fn = self:GetTextItem()
+		self.fn:SetFont(GetFontLetterica18Russian())
+		self.fn:SetEllipsis(true)
+end
+
+function god_item:__finalize()
+end
+
+class "god_dialog" (CUIScriptWnd)
+
+function god_dialog:__init() super()
+	 self:InitControls()
+	 self:InitCallBacks()
+end
+
+function god_dialog:__finalize()
+end
+
+local function inventory_catalog_api()
+    local api = rawget(_G, "infernis_spawner")
+    if type(api) ~= "table" or type(api.get_catalog) ~= "function" or type(api.refresh) ~= "function" then
+        error(game.translate_string("st_infernis_spawner_api_inventory"))
+    end
+    return api
+end
+
+local function runtime_api()
+    local api = inventory_catalog_api()
+    if type(api.get_option) ~= "function" or type(api.set_option) ~= "function"
+        or type(api.set_weather) ~= "function" or type(api.teleport_to_object) ~= "function" then
+        error(game.translate_string("st_infernis_spawner_api_runtime"))
+    end
+    return api
+end
+
+local function tools_api()
+    local api = inventory_catalog_api()
+    if type(api.actor_state) ~= "function" or type(api.get_bookmarks) ~= "function" then
+        error(game.translate_string("st_infernis_spawner_api_tools"))
+    end
+    return api
+end
+local function cop_adapter()
+    if not getFS():exist("$game_scripts$", "infernis_core_spawner.script") then return nil end
+    local ok, adapter = pcall(function() return infernis_core_spawner end)
+    if ok and type(adapter) == "table" and type(adapter.capabilities) == "function" then return adapter end
+end
+local bookmark_entries = {}
+local function adapter_result(name, ...)
+    local adapter = cop_adapter()
+    if not adapter or type(adapter[name]) ~= "function" then return {ok=false,error=game.translate_string("st_infernis_spawner_adapter_missing")} end
+    return adapter[name](...)
+end
+
+function god_dialog:ShowNativeResult(result)
+    if result.ok then return true end
+    self.message_box:InitMessageBox("message_box_error")
+    self.message_box:SetText(result.error)
+    self.message_box:ShowDialog(true)
+    return false
+end
+
+function god_dialog:SaveOptions()
+    if not tools_api().actor_state().ready then return end
+    local api = runtime_api()
+    local controls = {
+        weather_state = self.chek_weather, immortal_show = self.chek_immortal,
+        power_show = self.chek_power, bleeding_show = self.chek_bleeding,
+        repair_show = self.chek_repair, ammunitions_show = self.chek_ammunitions,
+        position_show = self.chek_position, info_show = self.chek_info,
+        space_restrictor_show = self.chek_space_restrictor, distance_show = self.chek_distance
+    }
+    for name, control in pairs(controls) do
+        if not self:ShowNativeResult(api.set_option(name, control:GetCheck())) then return false end
+    end
+    return true
+end
+
+function god_dialog:FillInventoryList(category)
+    self.list_box:RemoveAll()
+    mode = "item"
+    for _, entry in ipairs(inventory_catalog_api().get_catalog(category)) do
+        self:AddItemToList(game.translate_string(entry.name), entry.section)
+    end
+end
+
+local native_entries = {}
+
+local function world_api()
+    local api = runtime_api()
+    if type(api.get_world_catalog) ~= "function" or type(api.get_weather_catalog) ~= "function"
+        or type(api.get_locations) ~= "function" or type(api.get_nearby_smarts) ~= "function"
+        or type(api.spawn_world) ~= "function" or type(api.teleport) ~= "function" then
+        error(game.translate_string("st_infernis_spawner_api_world"))
+    end
+    return api
+end
+
+function god_dialog:FillNativeList(category)
+    self.list_box:RemoveAll()
+    native_entries = {}
+    local entries
+    if category == "weather" then
+        mode = "weather"
+        entries = world_api().get_weather_catalog()
+    elseif category == "level" then
+        mode = "level"
+        entries = world_api().get_locations(false, 0)
+    else
+        mode = "world"
+        entries = world_api().get_world_catalog(category)
+    end
+    for _, entry in ipairs(entries) do
+        local key = entry.section
+        if category == "weather" then key = (entry.fx and "fx:" or "cycle:") .. entry.section end
+        native_entries[key] = entry
+        self:AddItemToList(entry.name, key)
+    end
+end
+
+function god_dialog:FillList()
+    -- Rebuild from loaded settings on every opening, including same-size config reloads.
+    inventory_catalog_api().refresh()
+    self:FillInventoryList("items")
+end
+
+
+cost_easy = nil
+cost_dffclt = nil
+
+local time_factor_desc_by_num = {
+				[0] = "st_infernis_spawner_time_real",
+				[1] = "st_infernis_spawner_time_game",
+				[2] = "st_infernis_spawner_time_fast",
+				[3] = "st_infernis_spawner_time_faster",
+				[4] = "st_infernis_spawner_time_very_fast",
+				[5] = "st_infernis_spawner_time_instant"
+				}
+
+local RU_coeff = 1000
+local time_factor, actor_money
+
+
+function god_dialog:InitControls()
+	self:SetWndRect			(Frect():set(0,0,1024,768))
+
+	local xml				= CScriptXmlInit()
+	local ctrl
+	xml:ParseFile			("ui_mm_god_dlg.xml")
+
+	xml:InitStatic			("background",self)
+
+	ctrl					= CUIWindow()
+	xml:InitWindow			("file_item:main",0,ctrl)
+
+	self.file_item_main_sz	= vector2():set(ctrl:GetWidth(),ctrl:GetHeight())
+
+	xml:InitWindow			("file_item:fn",0,ctrl)
+	self.file_item_fn_sz	= vector2():set(ctrl:GetWidth(),ctrl:GetHeight())
+
+	xml:InitWindow			("file_item:fd",0,ctrl)
+	self.file_item_fd_sz	= vector2():set(ctrl:GetWidth(),ctrl:GetHeight())
+
+	self.form				= xml:InitStatic("form",self)
+
+	xml:InitStatic			("form:caption",self.form)
+
+	self.picture			= xml:InitStatic("form:picture",self.form)
+
+--	xml:InitStatic			("form:file_info",self.form)
+
+	self.file_caption 		= xml:InitTextWnd("form:file_caption",self.form)
+	self.file_data			= xml:InitTextWnd("form:file_data",self.form)
+
+	xml:InitFrame			("form:list_frame",self.form)
+
+	self.list_box			= xml:InitListBox("form:list",self.form)
+
+	self.list_box:ShowSelectedItem	(true)
+	self:Register			(self.list_box, "list_window")
+
+	ctrl					= xml:Init3tButton("form:btn_load",	self.form)
+	self:Register			(ctrl, "button_load")
+
+	ctrl = xml:Init3tButton	("form:btn_delete",	self.form)
+	self:Register			(ctrl, "button_del")
+      self.wt_but = ctrl    
+
+ 	ctrl = xml:Init3tButton	("form:btn_cancel",	self.form)
+	self:Register			(ctrl, "button_back")
+
+	self.message_box		= CUIMessageBoxEx()
+	self:Register			(self.message_box,"message_box")
+
+	self.cap_rubel	 		= xml:InitStatic("form:cap_rubel",		self.form)
+	self.cap_spawn	 		= xml:InitStatic("form:cap_spawn",		self.form)
+	self.cap_loc	 		= xml:InitStatic("form:cap_loc",		self.form)
+
+	self.spin_rubel			= xml:InitSpinNum("form:spin_rubel",		self.form)
+	self.spin_rubel:Show		(true)
+
+	self.cap_rubel_coeff		= xml:InitStatic("form:cap_rubel_coeff",	self.form)
+	self.cap_rubel_coeff:TextControl():SetText	(game.translate_string("x") .. " " .. tostring(RU_coeff) .. " " .. game.translate_string("st_currency_name"))
+
+	self.cap_rubel_currently	= xml:InitStatic("form:cap_rubel_currently",	self.form)
+	actor_money = tools_api().actor_state().money or 0
+	self:RefreshMoneyDisplay()
+
+	btn				= xml:Init3tButton("form:btn_moneyplus",	self.form)
+	self:Register			(btn, "button_moneyplus")
+	btn				= xml:Init3tButton("form:btn_moneyminus",	self.form)
+	self:Register			(btn, "button_moneyminus")
+
+
+	self.cap_timefactor 		= xml:InitStatic("form:cap_timefactor",		self.form)
+
+	self.cap_timefactor_currently	= xml:InitStatic("form:cap_timefactor_currently", self.form)
+	time_factor = tools_api().actor_state().time_factor or 10
+
+	self.cap_timefactor_desc	= xml:InitStatic("form:cap_timefactor_desc",	self.form)
+	self:RefreshTimeFactorDisplay()
+
+	btn				= xml:Init3tButton("form:btn_timeplus",		self.form)
+	self:Register			(btn, "button_timeplus")
+	btn				= xml:Init3tButton("form:btn_timeminus",	self.form)
+	self:Register			(btn, "button_timeminus")
+
+	self.spin_spawn			= xml:InitSpinNum("form:spin_spawn",		self.form)
+	self.spin_spawn:Show		(true)
+
+	btn				= xml:Init3tButton("form:btn_surge_start",		self.form)
+	self:Register			(btn, "button_surge_start")
+    do local a=cop_adapter(); btn:Enable(a ~= nil and a.capabilities().surge and tools_api().actor_state().ready or false) end
+	btn				= xml:Init3tButton("form:btn_surge_stop",		self.form)
+	self:Register			(btn, "button_surge_stop")
+    do local a=cop_adapter(); btn:Enable(a ~= nil and a.capabilities().surge and tools_api().actor_state().ready or false) end
+
+	btn				= xml:Init3tButton("form:btn_disable_hud",		self.form)
+	self:Register			(btn, "button_disable_hud")
+	btn				= xml:Init3tButton("form:btn_enable_hud",		self.form)
+	self:Register			(btn, "button_enable_hud")
+
+	btn				= xml:Init3tButton("form:btn_waypoint_editor",		self.form)
+	self:Register			(btn, "button_waypoint_editor")
+	btn				= xml:Init3tButton("form:btn_position_printer",		self.form)
+	self:Register			(btn, "button_position_printer")
+
+	btn                      = xml:InitCheck("form:check_wt",		self) 
+	self:Register		(btn, "check_wt")
+      self.chek_weather = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_weather:SetCheck(runtime_api().get_option("weather_state",false))
+      end
+
+-------------------------------------------------------------------------------
+	btn                      = xml:InitCheck("form:check_imm",		self) 
+	self:Register		(btn, "check_imm")
+      self.chek_immortal = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_immortal:SetCheck(runtime_api().get_option("immortal_show",false))
+      end
+
+	btn                      = xml:InitCheck("form:check_pow",		self) 
+	self:Register		(btn, "check_pow")
+      self.chek_power = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_power:SetCheck(runtime_api().get_option("power_show",false))
+      end
+
+	btn                      = xml:InitCheck("form:check_ble",		self) 
+	self:Register		(btn, "check_ble")
+      self.chek_bleeding = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_bleeding:SetCheck(runtime_api().get_option("bleeding_show",false))
+      end
+
+	btn                      = xml:InitCheck("form:check_rep",		self) 
+	self:Register		(btn, "check_rep")
+      self.chek_repair = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_repair:SetCheck(runtime_api().get_option("repair_show",false))
+      end
+
+	btn                      = xml:InitCheck("form:check_ammo",		self) 
+	self:Register		(btn, "check_ammo")
+      self.chek_ammunitions = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_ammunitions:SetCheck(runtime_api().get_option("ammunitions_show",false))
+      end
+
+-------------------------------------------------------------------------------
+
+	btn                      = xml:InitCheck("form:check_pos",		self) 
+	self:Register		(btn, "check_pos")
+      self.chek_position = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_position:SetCheck(runtime_api().get_option("position_show",false))
+      end
+
+	btn                      = xml:InitCheck("form:check_inf",		self) 
+	self:Register		(btn, "check_inf")
+      self.chek_info = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_info:SetCheck(runtime_api().get_option("info_show",false))
+      end
+
+	btn                      = xml:InitCheck("form:check_sr",		self) 
+	self:Register		(btn, "check_sr")
+      self.chek_space_restrictor = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_space_restrictor:SetCheck(runtime_api().get_option("space_restrictor_show",false))
+      end
+
+	btn                      = xml:InitCheck("form:check_dist",		self) 
+	self:Register		(btn, "check_dist")
+      self.chek_distance = btn	
+
+      if tools_api().actor_state().ready then
+         self.chek_distance:SetCheck(runtime_api().get_option("distance_show",false))
+      end
+
+	self.combo_renderer			= xml:InitComboBox("form:list_renderer",		self)
+	self:Register				(self.combo_renderer, "combo_renderer")
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_1"),         1)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_2"),        2)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_3"),      3)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_4"),        4)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_5"),      5)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_6"),         6)
+	  self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_7"),         7)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_8"),           8)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_9"),      9)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_10"),        10)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_11"),    11)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_12"),     12)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_13"),       13)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_14"),  14)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_15"),  15)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_16"),       16)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_17"),       17)
+      self.combo_renderer:AddItem         (game.translate_string("st_infernis_spawner_category_18"), 18)
+
+
+-- Меню телепортации --
+	self.dialog			= xml:InitStatic("dialog",			self)
+	xml:InitStatic				("dialog:capt", self.dialog)
+	xml:InitStatic				("dialog:msg2", self.dialog)
+	xml:InitStatic				("dialog:msg3", self.dialog)
+      self.dialog:Show(false)
+
+	-- кнопки
+	self:Register(xml:Init3tButton("dialog:btn_1", self.dialog),"btn_1")
+	self:Register(xml:Init3tButton("dialog:btn_2", self.dialog),"btn_2")
+	self:Register(xml:Init3tButton("dialog:btn_3", self.dialog),"btn_3")
+	self:Register(xml:Init3tButton("dialog:btn_4", self.dialog),"btn_4")
+	self:Register(xml:Init3tButton("dialog:btn_5", self.dialog),"btn_5")
+
+      btn = xml:InitEditBox("dialog:edit_box", 	self.dialog)
+      self.edit_box = btn
+	self:Register(btn, "edit_box")
+
+      btn = xml:InitEditBox("dialog:edit_box2", 	self.dialog)
+      self.edit_box2 = btn
+	self:Register(btn, "edit_box2")
+
+      btn = xml:InitEditBox("dialog:edit_box3", 	self.dialog)
+      self.edit_box3 = btn
+	self:Register(btn, "edit_box3")
+
+      btn = xml:InitEditBox("dialog:edit_box4", 	self.dialog)
+      self.edit_box4 = btn
+	self:Register(btn, "edit_box4")
+
+end
+
+function god_dialog:InitCallBacks()
+	self:AddCallback("button_load",		ui_events.BUTTON_CLICKED,             self.OnButton_load_clicked,	self)
+	self:AddCallback("button_back",		ui_events.BUTTON_CLICKED,             self.OnButton_back_clicked,	self)
+	self:AddCallback("button_del",		ui_events.BUTTON_CLICKED,             self.OnButton_del_clicked,	self)
+
+
+
+	self:AddCallback("list_window", ui_events.LIST_ITEM_CLICKED, 			  self.OnListItemClicked,		self)
+	self:AddCallback("list_window", ui_events.WINDOW_LBUTTON_DB_CLICK,		  self.OnListItemDbClicked,		self)
+
+	self:AddCallback("button_moneyplus",	ui_events.BUTTON_CLICKED,		self.OnButton_moneyplus_clicked,	self)
+	self:AddCallback("button_moneyminus",	ui_events.BUTTON_CLICKED,		self.OnButton_moneyminus_clicked,	self)
+
+	self:AddCallback("button_timeplus",	      ui_events.BUTTON_CLICKED,		self.OnButton_timeplus_clicked,		self)
+      self:AddCallback("button_timeminus",	ui_events.BUTTON_CLICKED,		self.OnButton_timeminus_clicked,	self)
+
+
+	self:AddCallback("combo_renderer",  	ui_events.LIST_ITEM_SELECT,		self.ModeChanges,	                  self)
+
+	self:AddCallback("btn_1", ui_events.BUTTON_CLICKED,		self.OnButton_btn1_clicked,	self)
+	self:AddCallback("btn_2", ui_events.BUTTON_CLICKED,		self.OnButton_btn2_clicked,	self)
+	self:AddCallback("btn_3", ui_events.BUTTON_CLICKED,		self.OnButton_btn3_clicked,	self)
+	self:AddCallback("btn_4", ui_events.BUTTON_CLICKED,		self.OnButton_btn4_clicked,	self)
+	self:AddCallback("btn_5", ui_events.BUTTON_CLICKED,		self.OnButton_btn5_clicked,	self)
+
+	self:AddCallback("button_surge_start", ui_events.BUTTON_CLICKED,		self.OnButton_surge_start_clicked,	self)
+	self:AddCallback("button_surge_stop", ui_events.BUTTON_CLICKED,		self.OnButton_surge_stop_clicked,	self)
+
+	self:AddCallback("button_disable_hud", ui_events.BUTTON_CLICKED,		self.OnButton_disable_hud_clicked,	self)
+	self:AddCallback("button_enable_hud", ui_events.BUTTON_CLICKED,		self.OnButton_enable_hud_clicked,	self)
+
+	self:AddCallback("button_waypoint_editor", ui_events.BUTTON_CLICKED,		self.OnButton_waypoint_editor_clicked,	self)
+	self:AddCallback("button_position_printer", ui_events.BUTTON_CLICKED,		self.OnButton_position_printer_clicked,	self)
+
+end
+
+
+-- Вызов выброса
+function god_dialog:OnButton_surge_start_clicked()
+    self:ShowNativeResult(adapter_result("surge", true))
+end
+
+function god_dialog:OnButton_surge_stop_clicked()
+    self:ShowNativeResult(adapter_result("surge", false))
+end
+
+function god_dialog:OnButton_disable_hud_clicked()
+    self:ShowNativeResult(tools_api().set_hud(false))
+end
+
+function god_dialog:OnButton_enable_hud_clicked()
+    self:ShowNativeResult(tools_api().set_hud(true))
+end
+
+function god_dialog:OnButton_waypoint_editor_clicked()
+	if tools_api().actor_state().ready then
+		self:OnButton_back2_clicked()
+		ui_god_editor.waypoint_editor_start()
+	end
+end
+
+-- Редактора позиции ГГ с возможностью ввода комментария
+function god_dialog:OnButton_position_printer_clicked()
+	if tools_api().actor_state().ready then
+		self:OnButton_back2_clicked()
+		ui_god_editor.position_printer_start()
+	end
+end
+
+-- Смена типа
+function god_dialog:ModeChanges()
+local n = str_explode(".", self.combo_renderer:GetText())[1]
+self.list_box:RemoveAll(); self.file_data:SetText(""); self.file_caption:SetText("")
+self.dialog:Show(false); self.cap_loc:TextControl():SetText("")
+if n=="1" then self:FillNativeList("weather")
+elseif n=="2" then self:FillNativeList("level")
+elseif n=="3" then self:FillNativeList("npc")
+elseif n=="4" then self:FillNativeList("monsters")
+elseif n=="5" then self:FillInventoryList("ammo")
+elseif n=="6" then self:FillInventoryList("weapons")
+elseif n=="7" then self:FillInventoryList("addons")
+elseif n=="8" then self:FillInventoryList("items")
+elseif n=="9" then self:FillInventoryList("artefacts")
+elseif n=="10" then self:FillInventoryList("outfits")
+elseif n=="11" then self:FillInventoryList("quest")
+elseif n=="12" then self:FillNativeList("anomalies")
+elseif n=="13" then self:FillNativeList("physics")
+else
+    local entries = {}
+    if n=="14" then mode="com"; entries=tools_api().get_communities()
+    elseif n=="15" then mode="vid"; entries=tools_api().get_video_catalog()
+    elseif n=="16" then mode="snd"; entries=tools_api().get_music_catalog()
+    elseif n=="17" then
+        mode="squad"
+        local adapter=cop_adapter()
+        if adapter and adapter.capabilities().squads then entries=adapter.get_squads() end
+    elseif n=="18" then
+        mode="bookmark"; self.dialog:Show(true); bookmark_entries={}
+        local ok, result=pcall(tools_api().get_bookmarks)
+        if not ok then self:ShowNativeResult({ok=false,error=tostring(result)}); return end
+        for _, entry in ipairs(result) do
+            bookmark_entries[entry.section]=entry
+            self:AddItemToList("["..entry.level.."] "..entry.name, entry.section)
+        end
+        return
+    end
+    for _, entry in ipairs(entries) do self:AddItemToList(game.translate_string(entry.name), entry.section) end
+end
+end
+
+function god_dialog:RefreshMoneyDisplay()
+	local am = comma_value(actor_money)
+	local st_rubles = "st_rubles"
+	local ru = game.translate_string(st_rubles)
+	if ru == st_rubles then ru = "RU" end
+	local thsep = game.translate_string("ui_ch_thousand_separator_in_quotes")
+	if string.len(thsep) == 3 then
+		thsep = string.sub(thsep, 2, 2)
+		am = string.gsub(am, ",", thsep)
+	end
+	self.cap_rubel_currently:TextControl():SetText(am .. " " .. ru)
+end
+
+
+function god_dialog:OnButton_moneyplus_clicked()
+    local amount=tonumber(self.spin_rubel:GetText())
+    if not amount then return end
+    if amount==0 then amount=0.01 end
+    local target=math.max(0,(tools_api().actor_state().money or 0) + amount*RU_coeff)
+    if self:ShowNativeResult(tools_api().set_money(target)) then
+        actor_money=tools_api().actor_state().money or 0; self:RefreshMoneyDisplay()
+    end
+end
+
+function god_dialog:OnButton_moneyminus_clicked()
+    local amount=tonumber(self.spin_rubel:GetText())
+    if not amount then return end
+    if amount==0 then amount=0.01 end
+    local target=math.max(0,(tools_api().actor_state().money or 0) - amount*RU_coeff)
+    if self:ShowNativeResult(tools_api().set_money(target)) then
+        actor_money=tools_api().actor_state().money or 0; self:RefreshMoneyDisplay()
+    end
+end
+
+function god_dialog:RefreshTimeFactorDisplay()
+	local tf = comma_value(time_factor)
+	local thsep = game.translate_string("ui_ch_thousand_separator_in_quotes")
+	if string.len(thsep) == 3 then
+		thsep = string.sub(thsep, 2, 2)
+		tf = string.gsub(tf, ",", thsep)
+	end
+	self.cap_timefactor_currently:TextControl():SetText(tf .. game.translate_string("x"))
+	local tfd = game.translate_string(time_factor_desc_by_num[tf_exp(time_factor)])
+	self.cap_timefactor_desc:TextControl():SetText(tfd)
+end
+
+
+function god_dialog:OnButton_timeminus_clicked()
+    local factor=tonumber("1"..string.rep("0", math.max(0,tf_exp(time_factor)-1)))
+    if self:ShowNativeResult(tools_api().set_time_factor(factor)) then time_factor=factor; self:RefreshTimeFactorDisplay() end
+end
+
+function god_dialog:OnButton_timeplus_clicked()
+    local factor=math.min(1000000,tonumber("1"..string.rep("0",tf_exp(time_factor)+1)))
+    if self:ShowNativeResult(tools_api().set_time_factor(factor)) then time_factor=factor; self:RefreshTimeFactorDisplay() end
+end
+
+function god_dialog:OnListItemClicked()
+	if self.list_box:GetSize()==0 then return end
+
+	local item			= self.list_box:GetSelectedItem()
+
+	if item == nil then
+		self.file_caption:SetText	("")
+		self.file_data:SetText		("")
+
+		local r = self.picture:GetTextureRect()
+		self.picture:InitTexture						("ui\\ui_noise")
+		self.picture:SetTextureRect(Frect():set(r.x1,r.y1,r.x2,r.y2))
+
+		return
+	end
+	local item_text				= item.fn:GetText()
+	self.file_caption:SetText	(item_text)
+	self.file_caption:SetEllipsis(true)
+
+	self.file_data:SetText		(item.fage:GetText())
+
+      if mode == "level" then
+       self.cap_loc:TextControl():SetText(item_text)
+      end
+end
+
+function god_dialog:OnListItemDbClicked()
+	self:OnButton_load_clicked()
+end
+
+
+
+function god_dialog:OnButton_load_clicked()
+    local sec=self.file_data:GetText()
+    local dis=tonumber(self.spin_spawn:GetText()) or -1
+    if not sec or sec=="" or self:SaveOptions()==false then return end
+    local api=tools_api()
+    if mode=="item" then self:ShowNativeResult(api.spawn(sec,dis==0 and "inventory" or "ahead",1,dis))
+    elseif mode=="world" then self:ShowNativeResult(api.spawn_world(sec,dis,1,3,"ahead"))
+    elseif mode=="weather" then
+        local entry=native_entries[sec]
+        if entry then self:ShowNativeResult(api.set_weather(entry.section,entry.fx)) end
+    elseif mode=="level" then
+        if self:ShowNativeResult(api.teleport(sec)) then self:OnButton_back2_clicked() end
+    elseif mode=="com" then self:ShowNativeResult(api.set_community(sec))
+    elseif mode=="snd" then self:ShowNativeResult(api.play_music(sec))
+    elseif mode=="vid" then
+        self:OnButton_back2_clicked()
+        self:ShowNativeResult(api.play_video(sec))
+    elseif mode=="squad" then self:ShowNativeResult(adapter_result("create_squad",sec))
+    elseif mode=="bookmark" then
+        self:OnButton_btn1_clicked()
+        if self:ShowNativeResult(api.teleport_bookmark(tonumber(sec) or -1)) then self:OnButton_back2_clicked() end
+    end
+end
+
+function god_dialog:OnButton_back_clicked()
+
+	  self:SaveOptions()
+	self.owner:ShowDialog(true)
+	self:HideDialog()
+	self.owner:Show						(true)     						
+end
+
+function god_dialog:OnButton_back2_clicked()
+
+	  self:SaveOptions()
+	self.owner:ShowDialog(true)
+	self:HideDialog()
+	self.owner:Show						(true)
+
+      if tools_api().actor_state().ready then
+      local console = get_console()
+      get_console():execute("main_menu off")
+
+      end
+      						
+end
+
+function god_dialog:OnButton_del_clicked()
+    self:ShowNativeResult(tools_api().stop_music())
+end
+
+function god_dialog:OnKeyboard(dik, keyboard_action)  --virtual function
+	CUIScriptWnd.OnKeyboard(self,dik,keyboard_action)
+	local bind = dik_to_bind(dik)
+	if bind == key_bindings.kQUIT then
+		self:OnButton_back_clicked()
+	else
+
+		 DIK_RETURN = 28
+
+		if dik == DIK_RETURN and keyboard_action == ui_events.WINDOW_KEY_PRESSED then
+			self:OnButton_load_clicked()
+		end
+	end
+	return true
+end
+
+function god_dialog:AddItemToList(file_name, date_time)
+
+	local _itm			= god_item(self.file_item_main_sz.y)
+
+	_itm:SetWndSize		(self.file_item_main_sz)
+
+	_itm.fn:SetWndPos	(vector2():set(0,0))
+	_itm.fn:SetWndSize	(self.file_item_fn_sz)
+	_itm.fn:SetText		(file_name)
+
+	_itm.fage			= _itm:AddTextField(date_time, self.file_item_fd_sz.x)
+	_itm.fage:SetFont	(GetFontLetterica16Russian())
+	_itm.fage:SetWndPos	(vector2():set(self.file_item_fn_sz.x+4, 0))
+	_itm.fage:SetWndSize(self.file_item_fd_sz)
+
+	self.list_box:AddExistingItem(_itm)
+end
+
+
+
+
+function log(fmt,...)
+--[[
+  if fmt==nil then fmt="nil" end
+
+  local msg = string.format(fmt, ...)
+  local msg_no_ws = string.gsub(msg, "%s", "_")
+  print_log(msg_no_ws)
+]]
+end
+
+-- Сохраняет инфу в текстовый фаил
+function tf_exp(num)
+	local tf, exp = tostring(math.floor(num)), 2
+	--for z in string.gmatch(tf, "0") do exp = exp + 1 end 
+	exp = string.len(tf) - 1 if exp > 6 then exp = 6 end
+	return exp
+end
+
+-- from sam_lie
+-- Compatible with Lua 5.0 and 5.1.
+-- Disclaimer : use at own risk especially for hedge fund reports :-)
+
+---============================================================
+-- add comma to separate thousands
+-- 
+function comma_value(amount)
+  local formatted = amount
+  while true do  
+    formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", '%1,%2')
+    if (k==0) then
+      break
+    end
+  end
+  return formatted
+end
+
+---============================================================
+-- rounds a number to the nearest decimal places
+--
+function round(val, decimal)
+  if (decimal) then
+    return math.floor( (val * 10^decimal) + 0.5) / (10^decimal)
+  else
+    return math.floor(val+0.5)
+  end
+end
+
+
+function format_num(amount, decimal, prefix)
+  local str_amount,  formatted, famount, remain
+
+  decimal = decimal or 2  -- default 2 decimal places
+  neg_prefix = "-"
+
+  famount = math.abs(round(amount, decimal))
+  --famount = math.floor(famount)
+
+  local s = tostring(famount)
+  local i = string.find(s, ".", 1, true)
+  if (i == nil) then s = s .. "." .. string.rep("0", decimal) i = -decimal - 1 end
+  formatted = string.sub(s, 1, i + decimal)
+
+        -- if value is negative then format accordingly
+  if (amount<0) then
+      formatted = neg_prefix .. formatted 
+  end
+
+        -- attach prefix string e.g '$' 
+  formatted = (prefix or "") .. formatted 
+
+  return formatted
+end
+
+-- normalize case of words in 'str' to Title Case
+-- code by Walter Cruz and Mark Edgar
+function titlecase(str)
+    local buf = {}
+    for word in string.gfind(str, "%S+") do
+        local first, rest = string.sub(word, 1, 1), string.sub(word, 2)
+        table.insert(buf, string.upper(first) .. string.lower(rest))
+    end
+    return table.concat(buf, " ")
+end
+
+function str_explode(div,str,pos1,pos2,clear)
+	local t={}
+	local cpt, pos
+
+	if pos1 == nil then pos1 = 1 end
+	if pos2 == nil then pos2 = pos1 end
+
+	local cpt1 = string.find (str, div, pos1, true)
+	local cpt2 = string.find (str, div, pos2, true)
+
+	if cpt1 and cpt2 then
+
+		if cpt2-cpt1 > 5 then
+			cpt = cpt1
+			pos = pos1
+		else
+			cpt = cpt2
+			pos = pos2
+		end
+
+		repeat
+			if clear then
+				table.insert( t, trim(string.sub(str, 1, cpt-1)) )
+			else
+				table.insert( t, string.sub(str, 1, cpt-1) )
+			end
+			str = string.sub( str, cpt+string.len(div) )
+			cpt = string.find (str, div, pos, true)
+		until cpt==nil
+	end
+	if clear then
+		table.insert(t, trim(str))
+	else
+		table.insert(t, str)
+	end
+	return t
+end
+
+
+-- Телепортация на 5м.
+function god_dialog:OnButton_btn5_clicked()
+    self:ShowNativeResult(tools_api().move_ahead(5))
+end
+
+function god_dialog:OnButton_btn4_clicked()
+    local state=tools_api().actor_state()
+    local x=tonumber(self.edit_box:GetText()) or state.x
+    local y=tonumber(self.edit_box2:GetText()) or state.y
+    local z=tonumber(self.edit_box3:GetText()) or state.z
+    if not x or not y or not z then return end
+    self:ShowNativeResult(tools_api().teleport_position(x,y,z))
+end
+
+function god_dialog:OnButton_btn3_clicked()
+    local state=tools_api().actor_state()
+    if not state.ready then return end
+    self.edit_box:SetText(tostring(state.x)); self.edit_box2:SetText(tostring(state.y)); self.edit_box3:SetText(tostring(state.z))
+end
+
+function god_dialog:OnButton_btn1_clicked()
+    local entry=bookmark_entries[self.file_data:GetText()]
+    if not entry then return end
+    self.edit_box:SetText(tostring(entry.x)); self.edit_box2:SetText(tostring(entry.y)); self.edit_box3:SetText(tostring(entry.z))
+end
+
+function god_dialog:OnButton_btn2_clicked()
+    local x=tonumber(self.edit_box:GetText()); local y=tonumber(self.edit_box2:GetText()); local z=tonumber(self.edit_box3:GetText())
+    if not x or not y or not z then self:ShowNativeResult({ok=false,error=game.translate_string("st_infernis_spawner_numeric")}); return end
+    if self:ShowNativeResult(tools_api().add_bookmark(self.edit_box4:GetText(),x,y,z)) then self:ModeChanges() end
+end
+

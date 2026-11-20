@@ -1,0 +1,277 @@
+<w>
+	<background x="0" y="0" width="1024" height="768">
+		<texture>ui_inGame2_mp_background</texture>
+		<auto_static x="0" y="256" width="304" height="512">
+			<texture width="304" height="512">ui\video_bochka</texture>
+		</auto_static>
+		<auto_static x="10" y="698" width="130" height="30" stretch="1">
+			<texture>ui_inGame2_GameSpy_logo</texture>
+		</auto_static>
+		<auto_static x="685" y="25" width="327" height="246" stretch="1">
+			<texture>ui_inGame2_god_cheat_mode</texture>
+		</auto_static>
+	</background>
+
+	<file_item>
+		<main width="490" height="18"/>
+		<fn width="255" height="18"/>
+		<fd width="110" height="18"/>
+	</file_item>
+
+	<form x="396" y="288" width="493" height="363" stretch="1">
+		<texture>ui_inGame2_main_window_small</texture>
+		<caption x="34" y="15" width="240" height="30">
+			<text font="letterica18" align="l" color="ui_gray">st_infernis_spawner_title</text>
+		</caption>
+		<picture x="31" y="75" width="64" height="64">
+			<texture width="64" height="64">ui\ui_noise</texture>
+		</picture>
+		<auto_static x="30" y="74" width="66" height="66" stretch="1">
+			<texture>ui_inGame2_picture_window</texture>
+		</auto_static>
+		<file_caption x="60" y="395" width="440" height="20">
+			<text font="letterica18"/>
+		</file_caption>
+		<file_data x="170" y="-350" width="240" height="50" complex_mode="1">
+			<text font="letterica18"/>
+		</file_data>
+		<list_frame x="31" y="215" width="438" height="90">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</list_frame>
+		<list x="33" y="215" width="435" height="89" item_height="18" can_select="1">
+			<font font="letterica16"/>
+		</list>
+		<btn_load x="24" y="332" width="135" height="26">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text font="letterica18">st_infernis_spawner_execute</text>
+		</btn_load>
+		<btn_delete x="180" y="332" width="135" height="26">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text font="letterica18">st_infernis_spawner_stop_music</text>
+		</btn_delete>
+		<btn_cancel x="336" y="332" width="135" height="26">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text font="letterica18">ui_mm_cancel</text>
+		</btn_cancel>
+
+		<!-- ÄÅÍÜÃÈ -->
+		<cap_rubel x="100" y="55" width="200" height="23">
+			<text vert_align="c" font="letterica16" r="115" g="114" b="112">st_infernis_spawner_money</text>
+		</cap_rubel>
+		<cap_rubel_currently x="160" y="55" width="200" height="23">
+			<text vert_align="c" font="letterica16" color="ui_4"/>
+		</cap_rubel_currently>
+		<cap_rubel_coeff x="210" y="77" width="90" height="23">
+			<text vert_align="c" font="letterica16" r="115" g="114" b="112"/>
+		</cap_rubel_coeff>
+		<spin_rubel x="162" y="77" width="45" height="23">
+			<options_item entry="spin_rubel"/>
+		</spin_rubel>
+
+		<btn_moneyminus x="100" y="77" width="30" height="20">
+			<text align="c" font="letterica16" r="227" g="199" b="178">-</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+		</btn_moneyminus>
+		<btn_moneyplus x="130" y="77" width="30" height="20">
+			<text align="c" font="letterica16" r="227" g="199" b="178">+</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+		</btn_moneyplus>
+
+		<!-- ÏÎÃÎÄÀ -->
+		<check_wt x="415" y="320" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_weather_lock</text>
+		</check_wt>
+
+		<btn_surge_start x="334" y="77" width="120" height="15">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text align="c" font="letterica16">st_infernis_spawner_surge_start</text>
+		</btn_surge_start>
+		<btn_surge_stop x="334" y="97" width="120" height="15">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text align="c" font="letterica16">st_infernis_spawner_surge_stop</text>
+		</btn_surge_stop>
+
+		<btn_disable_hud x="265" y="20" width="90" height="15">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text align="c" font="letterica16">st_infernis_spawner_hud_hide</text>
+		</btn_disable_hud>
+		<btn_enable_hud x="372" y="20" width="90" height="15">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text align="c" font="letterica16">st_infernis_spawner_hud_show</text>
+		</btn_enable_hud>
+
+		<btn_waypoint_editor x="30" y="145" width="100" height="15">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text align="c" font="letterica16">st_infernis_spawner_waypoint_editor</text>
+		</btn_waypoint_editor>
+		<btn_position_printer x="30" y="165" width="100" height="15">
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text align="c" font="letterica16">st_infernis_spawner_position_editor</text>
+		</btn_position_printer>
+
+		<!-- ÂÐÅÌß -->
+		<cap_timefactor x="100" y="95" width="200" height="23">
+			<text vert_align="c" font="letterica16" r="115" g="114" b="112">st_infernis_spawner_time_factor</text>
+		</cap_timefactor>
+		<cap_timefactor_currently x="165" y="120" width="200" height="23">
+			<text vert_align="c" font="letterica16" color="ui_4"/>
+		</cap_timefactor_currently>
+		<cap_timefactor_desc x="222" y="95" width="90" height="23">
+			<text vert_align="c" font="letterica16" color="ui_4"/>
+		</cap_timefactor_desc>
+
+		<btn_timeminus x="100" y="120" width="30" height="20">
+			<text align="c" font="letterica16" r="227" g="199" b="178">-</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+		</btn_timeminus>
+		<btn_timeplus x="130" y="120" width="30" height="20">
+			<text align="c" font="letterica16" r="227" g="199" b="178">+</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+		</btn_timeplus>
+
+		<!-- ÑÏÈÑÎÊ ÎÏÖÈÉ -->
+		<list_renderer x="730" y="335" width="135" height="21" list_length="14">
+		<!-- options_item entry="renderer" group="mm_opt_video" depend="restart"/ -->
+			<text_color>
+				<e r="216" g="186" b="140"/>
+				<d color="ui_gray"/>
+			</text_color>
+			<list_font_s r="240" g="217" b="182"/>
+			<list_font r="216" g="186" b="140" font="letterica16"/>
+		</list_renderer>
+
+		<spin_spawn x="425" y="120" width="45" height="23">
+			<options_item entry="spin_spawn"/>
+		</spin_spawn>
+		<cap_spawn x="225" y="120" width="200" height="23">
+			<text font="letterica16" r="115" g="114" b="112" vert_align="c">st_infernis_spawner_spawn_distance</text>
+		</cap_spawn>
+
+		<cap_loc x="-20" y="-25" width="100" height="23">	<!-- Îðàíæåâûé -->
+			<text align="l" font="letterica18" color="ui_7"/>
+		</cap_loc>
+
+		<check_imm x="720" y="75" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_immortal</text>
+		</check_imm>
+		<check_pow x="720" y="100" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_energy</text>
+		</check_pow>
+		<check_ble x="720" y="125" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_bleeding</text>
+		</check_ble>
+		<check_rep x="720" y="150" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_repair</text>
+		</check_rep>
+		<check_ammo x="720" y="175" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_ammo</text>
+		</check_ammo>
+
+		<check_pos x="685" y="425" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_actor_position</text>
+		</check_pos>
+		<check_inf x="685" y="450" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_info</text>
+		</check_inf>
+		<check_sr x="685" y="475" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_zones</text>
+		</check_sr>
+
+		<check_dist x="525" y="425" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+			<text x="-5" font="letterica16" vert_align="c">st_infernis_spawner_distance</text>
+		</check_dist>
+	</form>
+
+
+ <!-- Ôîðìà òåëåïîðòàöèè -->
+<dialog x="50" y="50" width="610" height="270">
+			<texture>ui_frame_error</texture>
+
+		<capt x="90" y="7" width="200" height="29">
+			<text font="graffiti19" color="ui_6">st_infernis_spawner_teleport_menu</text>
+		</capt>
+
+		<msg3 x="400" y="130" width="200" height="30">
+			<text font="letterica18" color="ui_6">st_infernis_spawner_bookmark_name</text>
+		</msg3>
+
+		<msg2 x="215" y="50" width="200" height="30">
+			<text font="letterica18" color="ui_6">st_infernis_spawner_coordinates</text>
+		</msg2>
+		
+		<msg x="180" y="55" width="200" height="30">
+			<text font="letterica18" color="ui_6"></text>
+		</msg>
+
+		<edit_box x="200" y="85" width="70" height="23">
+			<texture>ui_linetext_e</texture>
+			<text font="letterica18" r="240" g="217" b="182"/>
+		</edit_box>
+
+		<edit_box2 x="290" y="85" width="70" height="23">
+			<texture>ui_linetext_e</texture>
+			<text font="letterica18" r="240" g="217" b="182"/>
+		</edit_box2>
+
+		<edit_box3 x="380" y="85" width="70" height="23">
+			<texture>ui_linetext_e</texture>
+			<text font="letterica18" r="240" g="217" b="182"/>
+		</edit_box3>
+
+
+		<edit_box4 x="200" y="130" width="190" height="23">
+			<texture>ui_linetext_e</texture>
+			<text font="letterica18" r="240" g="217" b="182"/>
+		</edit_box4>
+
+		<btn_1 x="25" y="70" width="117" height="29">
+			<texture_e>ui_button_ordinary_e</texture_e>
+			<texture_t>ui_button_ordinary_t</texture_t>
+			<texture_h>ui_button_ordinary_h</texture_h>
+			<text font="letterica18">st_infernis_spawner_take_bookmark</text>
+		</btn_1>
+
+		<btn_2 x="25" y="125" width="117" height="29">
+			<texture_e>ui_button_ordinary_e</texture_e>
+			<texture_t>ui_button_ordinary_t</texture_t>
+			<texture_h>ui_button_ordinary_h</texture_h>
+			<text font="letterica18">st_infernis_spawner_save</text>
+		</btn_2>
+
+		<btn_3 x="25" y="98" width="117" height="29">
+			<texture_e>ui_button_ordinary_e</texture_e>
+			<texture_t>ui_button_ordinary_t</texture_t>
+			<texture_h>ui_button_ordinary_h</texture_h>
+			<text font="letterica18">st_infernis_spawner_position</text>
+		</btn_3>
+
+            <btn_4 x="180" y="165" width="157" height="48">
+		  <texture>ui_button_main02</texture>
+		  <text font="graffiti22">st_infernis_spawner_move</text>
+		  <text_color>
+			  <e r="227" g="199" b="178"/> <t r="180" g="153" b="155"/> <d r="106" g="95" b="91"/> <h r="0" g="0" b="0"/>
+		  </text_color>
+	      </btn_4>
+
+		<btn_5 x="360" y="160" width="137" height="29">
+			<texture_e>ui_button_ordinary_e</texture_e>
+			<texture_t>ui_button_ordinary_t</texture_t>
+			<texture_h>ui_button_ordinary_h</texture_h>
+			<text font="letterica18">st_infernis_spawner_ahead</text>
+		</btn_5>
+
+
+</dialog>
+
+</w>
+
