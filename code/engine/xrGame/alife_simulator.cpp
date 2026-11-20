@@ -7,6 +7,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "pch_script.h"
+#include "infernis_spawner_runtime.h"
 #include "alife_simulator.h"
 #include "xrServer_Objects_ALife.h"
 #include "ai_space.h"
@@ -73,6 +74,7 @@ CALifeSimulator::CALifeSimulator(xrServer* server, shared_str* command_line)
     // Screen Space Shaders - starts the addon's scripts where Anomaly does: right after the game's
     // own start callback, before the save is loaded.
     ssfx_script_bridge::on_game_start();
+    infernis_spawner::runtime::on_game_start();
 
     load(p.m_game_or_spawn, !xr_strcmp(p.m_new_or_load, "load") ? false : true,
          !xr_strcmp(p.m_new_or_load, "new"));

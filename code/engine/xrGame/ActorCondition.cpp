@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "infernis_spawner_runtime.h"
 #include "actorcondition.h"
 #include "actor.h"
 #include "actorEffector.h"
@@ -27,7 +28,8 @@
 
 BOOL GodMode() {
     if (GameID() == eGameIDSingle)
-        return psActorFlags.test(AF_GODMODE | AF_GODMODE_RT);
+        return psActorFlags.test(AF_GODMODE | AF_GODMODE_RT) ||
+            infernis_spawner::runtime::enabled(infernis_spawner::runtime::immortal);
     return FALSE;
 }
 

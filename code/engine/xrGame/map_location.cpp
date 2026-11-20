@@ -299,11 +299,11 @@ void CMapLocation::UpdateSpot(CUICustomMap* map, CMapSpot* sp) {
     if (map->MapName() == GetLevelName()) {
         bool b_alife = !!ai().get_alife();
 
-        if (b_alife && m_flags.test(eHideInOffline) && !m_owner_se_object->m_bOnline) {
+        if (b_alife && m_owner_se_object && m_flags.test(eHideInOffline) && !m_owner_se_object->m_bOnline) {
             return;
         }
 
-        if (b_alife && m_owner_se_object->m_flags.test(CSE_ALifeObject::flVisibleForMap) == FALSE) {
+        if (b_alife && m_owner_se_object && m_owner_se_object->m_flags.test(CSE_ALifeObject::flVisibleForMap) == FALSE) {
             return;
         }
 
@@ -362,7 +362,7 @@ void CMapLocation::UpdateSpot(CUICustomMap* map, CMapSpot* sp) {
 
         if (b_pointer)
             UpdateSpotPointer(map, GetSpotPointer(sp));
-    } else if (Level().name() == map->MapName() && GetSpotPointer(sp)) {
+    } else if (m_owner_se_object && Level().name() == map->MapName() && GetSpotPointer(sp)) {
         GameGraph::_GRAPH_ID dest_graph_id;
 
         dest_graph_id = m_owner_se_object->m_tGraphID;

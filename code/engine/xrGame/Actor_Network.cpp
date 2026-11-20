@@ -1,4 +1,5 @@
 #include "pch_script.h"
+#include "infernis_spawner_runtime.h"
 #include "actor.h"
 #include "ActorCondition.h"
 #include "hudmanager.h"
@@ -696,10 +697,13 @@ BOOL CActor::net_Spawn(CSE_Abstract* DC) {
     // Screen Space Shaders - the addon scripts' on_game_load.
     if (g_actor == this)
         ssfx_script_bridge::on_actor_spawn();
+    if (g_actor == this)
+        infernis_spawner::runtime::on_actor_spawn(*this);
     return TRUE;
 }
 
 void CActor::net_Destroy() {
+    infernis_spawner::runtime::on_actor_destroy(*this);
     ClearVisualAccessories();
     m_visual_accessories_frozen = false;
     // Controller cleanup must happen while the actor camera manager, HUD and

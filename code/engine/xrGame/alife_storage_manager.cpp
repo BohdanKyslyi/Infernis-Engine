@@ -7,6 +7,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "stdafx.h"
+#include "infernis_spawner_runtime.h"
 #include "alife_storage_manager.h"
 #include "alife_simulator_header.h"
 #include "alife_time_manager.h"
@@ -61,6 +62,7 @@ void CALifeStorageManager::save(LPCSTR save_name_no_check, bool update_name) {
         spawns().save(stream);
         objects().save(stream);
         registry().save(stream);
+        infernis_spawner::runtime::save(stream);
 
         source_count = stream.tell();
         void* source_data = stream.pointer();
@@ -111,6 +113,7 @@ void CALifeStorageManager::load(void* buffer, const u32& buffer_size, LPCSTR fil
     }
 
     registry().load(source);
+    infernis_spawner::runtime::load(source);
 
     can_register_objects(true);
 

@@ -1,4 +1,5 @@
 #include "pch_script.h"
+#include "infernis_spawner_runtime.h"
 #include "UIGameCustom.h"
 #include "level.h"
 #include "ui/UIXmlInit.h"
@@ -50,6 +51,7 @@ CUIGameCustom::CUIGameCustom()
 bool g_b_ClearGameCaptions = false;
 
 CUIGameCustom::~CUIGameCustom() {
+    infernis_spawner::runtime::release_ui();
     DestroyHudEditor();
     DestroyWeatherEditor();
     DestroyLuaWorkbench();
@@ -116,6 +118,7 @@ void CUIGameCustom::Render() {
 
     m_pMessagesWnd->Draw();
 
+    infernis_spawner::runtime::render();
     DoRenderDialogs();
 }
 

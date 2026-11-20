@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "infernis_spawner_runtime.h"
 #include "../xrEngine/gamemtllib.h"
 #ifndef GMLibrary
 #define GMLibrary() GMLib 
@@ -1058,6 +1059,8 @@ void CActor::set_state_box(u32 mstate) {
 }
 
 void CActor::shedule_Update(u32 DT) {
+    if (g_actor == this)
+        infernis_spawner::runtime::on_actor_update(*this);
     // Screen Space Shaders - the addon scripts' actor_on_first_update / actor_on_update. Ahead of
     // the early return below, so it runs on every update like Anomaly's actor binder update does.
     if (g_actor == this)
@@ -1829,7 +1832,8 @@ void CActor::On_SetEntity() {
 }
 
 bool CActor::unlimited_ammo() { 
-    return psActorFlags.test(AF_UNLIMITEDAMMO) != 0; 
+    return psActorFlags.test(AF_UNLIMITEDAMMO) != 0 ||
+        (g_actor == this && infernis_spawner::runtime::enabled(infernis_spawner::runtime::unlimited_ammo));
 }
 
 void CActor::SetReverseGravity(bool state) {

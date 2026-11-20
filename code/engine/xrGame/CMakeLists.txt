@@ -1661,6 +1661,9 @@ set(AI_ASCRIPT ../xrServerEntities/script_export_macroses.h
                infernis_spawner_service.h
                infernis_spawner_service_rules.h
                infernis_spawner_service.cpp
+               infernis_spawner_runtime.h
+               infernis_spawner_runtime_state.h
+               infernis_spawner_runtime.cpp
                raypick.h
                raypick.cpp)
 
@@ -3909,7 +3912,7 @@ set_source_files_properties(alife_simulator.cpp PROPERTIES COMPILE_FLAGS "/Yupch
 set_source_files_properties(alife_simulator_base.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(ssfx_script_bridge.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(infernis_spawner_catalog.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
-set_source_files_properties(infernis_spawner_service.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
+set_source_files_properties(infernis_spawner_service.cpp infernis_spawner_runtime.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(client_spawn_manager.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(console_commands.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
 set_source_files_properties(CustomMonster.cpp PROPERTIES COMPILE_FLAGS "/Yupch_script.h /Fp\"${SCRIPT_PCH_FILE}\"")
