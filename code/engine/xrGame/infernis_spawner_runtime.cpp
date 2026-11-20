@@ -154,8 +154,12 @@ int set_weather(lua_State* L) {
     if (xr_strlen(name) > 127) return result(L, "Weather name is too long");
     auto& env = g_pGamePersistent->Environment();
     if (env.IsWeatherEditorSessionActive()) return result(L, "Close the weather editor before selecting weather");
-    // Look up the real environment maps instead of guessing from an fx_ prefix.
-    const bool fx = env.WeatherCycles.find(name) == env.WeatherCycles.end();
+    // An explicit flag keeps identically named weather cycles and FX selectable.
+    bool fx = env.WeatherCycles.find(name) == env.WeatherCycles.end();
+    if (lua_gettop(L) >= 2) {
+        if (!lua_isboolean(L, 2)) return result(L, "Weather type must be boolean");
+        fx = lua_toboolean(L, 2) != 0;
+    }
     if (!select_weather(name, fx)) return result(L, "Weather cycle/effect is not loaded");
     state.weather = name; state.set(weather_fx, fx);
     return result(L);

@@ -52,6 +52,7 @@
 #include "ui/UIHudEditor.h"
 #include "infernis_spawner_service.h"
 #include "infernis_spawner_service_rules.h"
+#include "infernis_spawner_world.h"
 
 #include "ai_debug_variables.h"
 #include "../xrphysics/console_vars.h"
@@ -551,6 +552,20 @@ public:
             request.target = infernis_spawner::SpawnTarget::crosshair;
             request.quantity = count;
             const auto result = infernis_spawner::spawn(request);
+            if (!result.ok())
+                Msg("! [g_spawn] [%s]: %s (%u created)", section,
+                    result.error.c_str(), result.created);
+            else
+                Msg("~ Spawned %u of [%s] at crosshair.", result.created, section);
+            return;
+        }
+
+        if (infernis_spawner::world_type(section) != infernis_spawner::WorldKind::none) {
+            infernis_spawner::SpawnRequest request;
+            request.section = section;
+            request.target = infernis_spawner::SpawnTarget::crosshair;
+            request.quantity = count;
+            const auto result = infernis_spawner::spawn_world(request, 3.0);
             if (!result.ok())
                 Msg("! [g_spawn] [%s]: %s (%u created)", section,
                     result.error.c_str(), result.created);

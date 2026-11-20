@@ -47,6 +47,7 @@ public:
     static void InitInternal();
 
     static const ITEM_DATA* GetById(const shared_str& str_id, bool no_assert = false);
+    static const ITEM_DATA* FindById(const shared_str& str_id);
     static const ITEM_DATA* GetByIndex(int index, bool no_assert = false);
 
     static const int IdToIndex(const shared_str& str_id, int default_index = T_INDEX(-1),
@@ -101,6 +102,18 @@ const typename ITEM_DATA* CSXML_IdToIndex::GetById(const shared_str& str_id, boo
     }
 
     return &(*it);
+}
+
+
+TEMPLATE_SPECIALIZATION
+const typename ITEM_DATA* CSXML_IdToIndex::FindById(const shared_str& str_id) {
+    T_INIT::InitXmlIdToIndex();
+    if (!m_pItemDataVector)
+        return NULL;
+    for (auto it = m_pItemDataVector->begin(); it != m_pItemDataVector->end(); ++it)
+        if (it->id == str_id)
+            return &(*it);
+    return NULL;
 }
 
 TEMPLATE_SPECIALIZATION
