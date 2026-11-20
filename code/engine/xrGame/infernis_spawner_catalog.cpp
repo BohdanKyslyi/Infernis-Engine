@@ -1,6 +1,7 @@
 #include "pch_script.h"
 #include "infernis_spawner_catalog.h"
 #include "infernis_spawner_catalog_rules.h"
+#include "infernis_spawner_service.h"
 #include "object_factory.h"
 #include "string_table.h"
 
@@ -157,4 +158,5 @@ void CInfernisSpawnerCatalog::script_register(lua_State* L) {
     };
     luaL_register(L, "infernis_spawner", functions);
     lua_pop(L, 1);
+    infernis_spawner::register_spawn_api(L);
 }

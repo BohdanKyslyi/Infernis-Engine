@@ -50,6 +50,8 @@
 #include "ui/UIWeatherEditor.h"
 #include "ui/UILuaWorkbench.h"
 #include "ui/UIHudEditor.h"
+#include "infernis_spawner_service.h"
+#include "infernis_spawner_service_rules.h"
 
 #include "ai_debug_variables.h"
 #include "../xrphysics/console_vars.h"
@@ -492,27 +494,21 @@ public:
         if (!g_pGameLevel || !Actor())
             return;
 
-        char section[256];
-        int count = 1;
-        if (sscanf(args, "%255s %d", section, &count) < 1) {
-            Msg("! Usage: g_spawn_to_inventory <section> [count]");
+        const auto parsed = infernis_spawner::parse_console_request(args);
+        if (parsed.error[0]) {
+            Msg("! Usage: g_spawn_to_inventory <section> [count]: %s", parsed.error);
             return;
         }
-        if (!pSettings->section_exist(section)) {
-            Msg("! Section [%s] doesn't exist!", section);
-            return;
-        }
-
-        if (count > 250) {
-            Msg("! [g_spawn_to_inventory]: Cancelled. Max count is 250.");
-            count = 250;
-        }
-
-        for (int i = 0; i < count; ++i) {
-            Level().spawn_item(section, Actor()->Position(),
-                               Actor()->ai_location().level_vertex_id(), Actor()->ID());
-        }
-        Msg("~ Spawned %d of [%s] to inventory.", count, section);
+        LPCSTR section = parsed.section.c_str();
+        infernis_spawner::SpawnRequest request;
+        request.section = section;
+        request.quantity = parsed.quantity;
+        const auto result = infernis_spawner::spawn(request);
+        if (!result.ok())
+            Msg("! [g_spawn_to_inventory] [%s]: %s (%u created)", section,
+                result.error.c_str(), result.created);
+        else
+            Msg("~ Spawned %u of [%s] to inventory.", result.created, section);
     }
 };
 
@@ -529,20 +525,38 @@ public:
         if (!g_pGameLevel || !Actor())
             return;
 
-        char section[256];
-        int count = 1;
-        if (sscanf(args, "%255s %d", section, &count) < 1) {
-            Msg("! Usage: g_spawn <section> [count]");
+        const auto parsed = infernis_spawner::parse_console_request(args);
+        if (parsed.error[0]) {
+            Msg("! Usage: g_spawn <section> [count]: %s", parsed.error);
             return;
         }
+        LPCSTR section = parsed.section.c_str();
         if (!pSettings->section_exist(section)) {
             Msg("! Section [%s] doesn't exist!", section);
             return;
         }
 
-        if (count > 250) {
-            Msg("! [g_spawn]: Cancelled. Max count is 250.");
-            count = 250;
+        const auto batch = infernis_spawner::plan_batch(parsed.quantity, false);
+        if (batch.error[0]) {
+            Msg("! [g_spawn]: %s", batch.error);
+            return;
+        }
+        const int count = static_cast<int>(batch.objects);
+
+        // Inventory objects share the same native path as the spawner UI. The existing
+        // generic NPC/zone/physics branch remains below until those types are migrated.
+        if (infernis_spawner::inventory_type(section)) {
+            infernis_spawner::SpawnRequest request;
+            request.section = section;
+            request.target = infernis_spawner::SpawnTarget::crosshair;
+            request.quantity = count;
+            const auto result = infernis_spawner::spawn(request);
+            if (!result.ok())
+                Msg("! [g_spawn] [%s]: %s (%u created)", section,
+                    result.error.c_str(), result.created);
+            else
+                Msg("~ Spawned %u of [%s] at crosshair.", result.created, section);
+            return;
         }
 
         const Fvector& ray_start = Device.vCameraPosition;
@@ -558,7 +572,8 @@ public:
             spawn_position.mad(ray_start, ray_direction, 3.0f);
         }
 
-        u32 level_vertex_id = ai().level_graph().vertex_id(spawn_position);
+        u32 level_vertex_id = ai().level_graph().valid_vertex_position(spawn_position)
+                                  ? ai().level_graph().vertex_id(spawn_position) : u32(-1);
         if (!ai().level_graph().valid_vertex_id(level_vertex_id))
             level_vertex_id = Actor()->ai_location().level_vertex_id();
 
