@@ -1,5 +1,6 @@
 #include "pch_script.h"
 #include "infernis_spawner_runtime.h"
+#include "infernis_spawner_tools.h"
 #include "Actor.h"
 #include "ActorCondition.h"
 #include "Inventory.h"
@@ -210,6 +211,7 @@ bool enabled(Option flag) { return current_actor && ready() && state.has(flag); 
 void release_ui() { xr_delete(font); font_width = font_height = 0; }
 
 void on_game_start() {
+    tools::reset(false);
     release_ui();
     // The previous map registry may already be gone: never dereference its marker.
     anchor_marker = nullptr; current_actor = nullptr; state = State{};
@@ -239,6 +241,7 @@ void on_actor_spawn(CActor& actor) {
 
 void on_actor_destroy(CActor& actor) {
     if (&actor != current_actor) return;
+    tools::reset(true);
     remove_marker(); release_ui(); current_actor = nullptr;
     last_info.clear(); zones.clear(); report_until = 0;
 }

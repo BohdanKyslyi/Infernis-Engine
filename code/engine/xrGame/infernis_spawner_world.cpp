@@ -17,8 +17,11 @@
 #include "space_restrictor.h"
 #include "restriction_space.h"
 #include "string_table.h"
+#include "character_info.h"
+#include "specific_character.h"
 #include "../xrEngine/Environment.h"
 #include <cerrno>
+#include <limits>
 
 namespace infernis_spawner {
 namespace {
@@ -68,7 +71,21 @@ bool valid_world_section(LPCSTR section, WorldKind expected) {
     if (class_id.empty() || class_id.size() > 8 || world_class(class_id) != expected) return false;
     if (!object_factory().has_class(TEXT2CLSID(class_id.c_str()))) return false;
     if (bool_value(section, "spawner_hidden")) return false;
-    if (expected == WorldKind::monster) {
+    if (expected == WorldKind::npc) {
+        const xr_string profile = value(section, "character_profile");
+        const ITEM_DATA* item = CCharacterInfo::FindById(profile.c_str());
+        if (!item) return false;
+        XML_NODE node = item->_xml->NavigateToNode(item->_xml->GetRoot(), "character", item->pos_in_file);
+        if (!node) return false;
+        LPCSTR specific = item->_xml->Read(node, "specific_character", 0, "");
+        if (specific && specific[0]) {
+            const ITEM_DATA* character = CSpecificCharacter::FindById(specific);
+            if (!character) return false;
+            XML_NODE actual = character->_xml->NavigateToNode(character->_xml->GetRoot(), "specific_character", character->pos_in_file);
+            if (!actual || !character->_xml->Read(actual, "visual", 0, "")[0]) return false;
+        } else if (!item->_xml->Read(node, "class", 0, "")[0]) return false;
+    }
+    if (expected == WorldKind::monster || expected == WorldKind::physics) {
         const xr_string visual = value(section, "visual");
         if (visual.empty() || !_stricmp(visual.c_str(), "default")) return false;
     }
@@ -79,7 +96,8 @@ bool valid_world_section(LPCSTR section, WorldKind expected) {
         if (power.empty()) return false;
         char* end = nullptr; errno = 0;
         const double parsed = strtod(power.c_str(), &end);
-        if (errno || end == power.c_str() || *end || !std::isfinite(parsed) || parsed < 0) return false;
+        if (errno || end == power.c_str() || *end || !std::isfinite(parsed) || parsed < 0 ||
+            parsed > std::numeric_limits<float>::max()) return false;
     }
     return true;
 }
@@ -101,6 +119,7 @@ bool initialize_world(CSE_Abstract* entity, void* context) {
     const auto kind = data.kind;
     if (kind == WorldKind::npc && !smart_cast<CSE_ALifeHumanStalker*>(entity)) return false;
     if (kind == WorldKind::monster && !smart_cast<CSE_ALifeMonsterAbstract*>(entity)) return false;
+    if (kind == WorldKind::physics && !smart_cast<CSE_ALifeObjectPhysic*>(entity)) return false;
     if (kind == WorldKind::anomaly) {
         auto* zone = smart_cast<CSE_ALifeCustomZone*>(entity);
         if (!zone) return false;
@@ -130,9 +149,9 @@ bool current_context(game_sv_Single*& game, CActor*& actor) {
 
 bool smart_destination(const CSE_ALifeDynamicObject* object) {
     if (!object) return false;
-    if (!bool_value(object->s_name.c_str(), "spawner_location")) return false;
     const xr_string id = value(object->s_name.c_str(), "class");
-    return id == "SMRTTRRN" || smart_cast<const CSE_ALifeSmartZone*>(object) != nullptr;
+    return id == "SMRTTRRN" || (bool_value(object->s_name.c_str(), "spawner_location") &&
+           smart_cast<const CSE_ALifeSmartZone*>(object) != nullptr);
 }
 
 int get_world_catalog(lua_State* L) {
@@ -205,14 +224,16 @@ int get_locations(lua_State* L) {
         string_field(L, "kind", "smart");
         string_field(L, "object_name", object->name_replace());
         lua_pushinteger(L, object->ID); lua_setfield(L, -2, "object_id");
+        lua_pushnumber(L, Actor()->Position().distance_to(object->o_Position)); lua_setfield(L, -2, "distance");
         lua_rawseti(L, -2, index++);
     }
     if (!nearby) {
         xr_set<u32> levels;
         const u32 count = ai().game_graph().header().vertex_count();
-        for (GameGraph::_GRAPH_ID id = 0; id < count; ++id) {
+        for (u32 id = 0; id < count; ++id) {
             const auto* vertex = ai().game_graph().vertex(id);
-            if (!levels.insert(vertex->level_id()).second || !finite_position(vertex->level_point())) continue;
+            if (!finite_position(vertex->level_point()) || vertex->level_vertex_id() == u32(-1) ||
+                !levels.insert(vertex->level_id()).second) continue;
             string64 token; xr_sprintf(token, "vertex:%u", id);
             LPCSTR level_name = ai().game_graph().header().level(vertex->level_id()).name().c_str();
             lua_createtable(L, 0, 3);
@@ -276,7 +297,9 @@ SpawnResult spawn_world(const SpawnRequest& request, double radius) {
         return failure("Spawn position is outside the level AI graph");
     const u32 lv = ai().level_graph().vertex_id(position);
     if (!ai().level_graph().valid_vertex_id(lv)) return failure("Spawn position has no valid AI vertex");
-    if (kind != WorldKind::anomaly && fabsf(ai().level_graph().vertex_plane_y(*ai().level_graph().vertex(lv), position.x, position.z) - position.y) > 1.f)
+    if ((kind == WorldKind::npc || kind == WorldKind::monster) &&
+        !creature_position_valid(ai().level_graph().inside(lv, position),
+        ai().level_graph().vertex_plane_y(ai().level_graph().vertex(lv), position.x, position.z) - position.y))
         return failure("Creature spawn position is too far from the AI plane");
     const auto& cross = ai().cross_table();
     if (lv >= cross.header().level_vertex_count()) return failure("Spawn vertex is outside the level cross table");

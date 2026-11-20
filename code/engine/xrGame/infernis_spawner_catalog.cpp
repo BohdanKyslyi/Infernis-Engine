@@ -4,6 +4,7 @@
 #include "infernis_spawner_catalog_rules.h"
 #include "infernis_spawner_service.h"
 #include "infernis_spawner_world.h"
+#include "infernis_spawner_tools.h"
 #include "object_factory.h"
 #include "string_table.h"
 
@@ -162,5 +163,6 @@ void CInfernisSpawnerCatalog::script_register(lua_State* L) {
     lua_pop(L, 1);
     infernis_spawner::register_spawn_api(L);
     infernis_spawner::register_world_api(L);
+    infernis_spawner::tools::register_api(L);
     infernis_spawner::runtime::register_api(L);
 }

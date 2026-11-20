@@ -6,7 +6,7 @@
 #include <string_view>
 
 namespace infernis_spawner {
-enum class WorldKind { none, npc, monster, anomaly };
+enum class WorldKind { none, npc, monster, anomaly, physics };
 
 struct DestinationToken {
     bool valid = false;
@@ -32,6 +32,7 @@ inline DestinationToken parse_destination(std::string_view text) {
 }
 
 inline WorldKind world_class(std::string_view id) {
+    if (id == "O_PHYSIC" || id == "P_DSTRBL") return WorldKind::physics;
     if (id == "AI_STL" || id == "AI_STL_S") return WorldKind::npc;
     constexpr std::string_view monsters[] = {
         "AI_BLOOD", "AI_BOAR", "AI_DOG_R", "AI_FLESH", "AI_DOG_B", "AI_BURER",
@@ -55,6 +56,7 @@ inline WorldKind world_category(std::string_view category) {
     if (category == "npc") return WorldKind::npc;
     if (category == "monsters") return WorldKind::monster;
     if (category == "anomalies") return WorldKind::anomaly;
+    if (category == "physics") return WorldKind::physics;
     return WorldKind::none;
 }
 
@@ -63,6 +65,7 @@ inline const char* world_kind_name(WorldKind kind) {
     case WorldKind::npc: return "npc";
     case WorldKind::monster: return "monster";
     case WorldKind::anomaly: return "anomaly";
+    case WorldKind::physics: return "physics";
     default: return "none";
     }
 }
