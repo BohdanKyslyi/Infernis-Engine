@@ -1,0 +1,104 @@
+; ---------------------------------------------------------------------------------------------
+; Constant light of the acid anomalies, as in Anomaly.
+;
+; NOT a Screen Space Shaders file. The values are Anomaly's own ( configs\zones\zone_mine_acidic.ltx
+; of the Anomaly base game ): there the acid anomalies carry a steady green light, in Call of Pripyat
+; the same sections have it switched off. Every other anomaly that exists in Call of Pripyat has the
+; same idle light in both games, so nothing else is listed.
+;
+; Why every section is listed one by one: Anomaly changes the base section and its children inherit.
+; The Infernis config loader ( xrCore\Xr_ini.cpp, CInifile::Load ) copies the parent's keys into a
+; child while it parses the child and reads mod_system_*.ltx afterwards, so a change of the parent
+; never reaches the children. Each block holds exactly the keys in which Anomaly's section differs
+; from Call of Pripyat's.
+;
+; The light animation light_green_02 is not changed: it is the same name in both games and the
+; same animation in both libraries ( lanims.xr ).
+;
+; Generated and checked by _ssfx_work\zone_idle_light.py ( --stage / --check ).
+; ---------------------------------------------------------------------------------------------
+
+; zone_mine_acidic : zone_base
+[!zone_mine_acidic]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_mine_chemical : zone_base
+[!zone_mine_chemical]
+idle_light              = on
+
+; zone_buzz : zone_mine_acidic
+[!zone_buzz]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_mine_acidic_average : zone_mine_acidic
+[!zone_mine_acidic_average]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_mine_acidic_big : zone_mine_acidic
+[!zone_mine_acidic_big]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_mine_acidic_strong : zone_mine_acidic
+[!zone_mine_acidic_strong]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_mine_acidic_weak : zone_mine_acidic
+[!zone_mine_acidic_weak]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_buzz_average : zone_buzz
+[!zone_buzz_average]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_buzz_strong : zone_buzz
+[!zone_buzz_strong]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_buzz_weak : zone_buzz
+[!zone_buzz_weak]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+idle_light_shadow       = false
+
+; zone_mine_chemical_average : zone_mine_acidic_average, zone_mine_chemical
+[!zone_mine_chemical_average]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+
+; zone_mine_chemical_strong : zone_mine_acidic_strong, zone_mine_chemical
+[!zone_mine_chemical_strong]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75
+
+; zone_mine_chemical_weak : zone_mine_acidic_weak, zone_mine_chemical
+[!zone_mine_chemical_weak]
+idle_light              = on
+idle_light_range        = 4.0
+idle_light_height       = 0.75

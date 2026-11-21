@@ -61,6 +61,8 @@ void CRenderTarget::phase_scene_prepare() {
 
     //	Igor: for volumetric lights
     m_bHasActiveVolumetric = false;
+    // Screen Space Shaders: spot/omni volumetrics have their own buffer and their own flag
+    m_bHasActiveVolumetric_spot = false;
     //	Clear later if try to draw volumetric
 }
 
@@ -72,16 +74,17 @@ void CRenderTarget::phase_scene_begin() {
         pZB = rt_MSAADepth->pZRT;
 
     // Targets, use accumulator for temporary storage
+    // SSFX: the 4th RT ( slot 3 ) is the motion vectors buffer, NULL when the module is not installed
     if (!RImplementation.o.dx10_gbuffer_opt) {
         if (RImplementation.o.albedo_wo)
-            u_setrt(rt_Position, rt_Normal, rt_Accumulator, pZB);
+            u_setrt(rt_Position, rt_Normal, rt_Accumulator, rt_ssfx_motion_vectors, pZB);
         else
-            u_setrt(rt_Position, rt_Normal, rt_Color, pZB);
+            u_setrt(rt_Position, rt_Normal, rt_Color, rt_ssfx_motion_vectors, pZB);
     } else {
         if (RImplementation.o.albedo_wo)
-            u_setrt(rt_Position, rt_Accumulator, pZB);
+            u_setrt(rt_Position, rt_Accumulator, 0, rt_ssfx_motion_vectors, pZB);
         else
-            u_setrt(rt_Position, rt_Color, pZB);
+            u_setrt(rt_Position, rt_Color, 0, rt_ssfx_motion_vectors, pZB);
         // else								u_setrt		(rt_Position,	rt_Color,
         // rt_Normal,		pZB);
     }
@@ -108,6 +111,8 @@ void CRenderTarget::disable_aniso() {
 // end
 void CRenderTarget::phase_scene_end() {
     disable_aniso();
+
+    RCache.set_RT(NULL, 3); // Always reset the 4th RT ( Motion Vectors )
 
     if (!RImplementation.o.albedo_wo)
         return;

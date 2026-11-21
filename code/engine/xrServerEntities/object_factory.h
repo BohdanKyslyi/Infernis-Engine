@@ -77,6 +77,7 @@ public:
     CObjectFactory();
     virtual ~CObjectFactory();
     void init();
+    IC bool has_class(const CLASS_ID& clsid) const;
 #ifndef NO_XR_GAME
     IC CLIENT_BASE_CLASS* client_object(const CLASS_ID& clsid) const;
     IC SERVER_BASE_CLASS* server_object(const CLASS_ID& clsid, LPCSTR section) const;

@@ -1,0 +1,89 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+#include "screenspace_fog.h"
+
+struct vf
+{
+	float2 tc0	: TEXCOORD0;
+	float3 c0	: COLOR0;		// c0=all lighting
+	float  fog	: FOG;
+	float4 hpos	: SV_Position;
+};
+
+
+vf main (v_static_color v)
+{
+	vf 		o;
+
+	float3 	N 	= unpack_normal		(v.Nh);
+	o.hpos 		= mul				(m_VP, v.P);			// xform, input in world coords
+	o.tc0		= unpack_tc_base	(v.tc,v.T.w,v.B.w);		// copy tc
+
+	float3 	L_rgb 	= v.color.zyx;						// precalculated RGB lighting
+	float3 	L_hemi 	= v_hemi(N)*v.Nh.w;					// hemisphere
+	float3 	L_sun 	= v_sun(N)*v.color.w;					// sun
+	float3 	L_final	= L_rgb + L_hemi + L_sun + L_ambient;
+
+	o.c0		= L_final;
+	o.fog 		= saturate(calc_fogging 		(v.P));			// fog, input in world coords
+	o.fog		= SSFX_FOGGING(1.0 - o.fog, v.P.y); // Add SSFX Fog
+
+	return o;
+}
+#else
+#include "common.h"
+
+struct vf
+{
+	float2 tc0	: TEXCOORD0;
+	float3 c0	: COLOR0;		// c0=all lighting
+	float  fog	: FOG;
+	float4 hpos	: SV_Position;
+};
+
+/*
+struct	v_vert
+{
+	float4 	P		: POSITION;		// (float,float,float,1)
+	float4	N		: NORMAL;		// (nx,ny,nz,hemi occlusion)
+	float4 	T		: TANGENT;
+	float4 	B		: BINORMAL;
+	float4	color	: COLOR0;		// (r,g,b,dir-occlusion)
+	float2 	uv		: TEXCOORD0;	// (u0,v0)
+};
+struct         v_static                {
+        float4      P                	: POSITION;                        // (float,float,float,1)
+        float4      Nh                	: NORMAL;                // (nx,ny,nz,hemi occlusion)
+        float4      T                 	: TANGENT;                // tangent
+        float4      B                 	: BINORMAL;                // binormal
+        float2      tc                	: TEXCOORD0;        // (u,v)
+        float2      lmh                	: TEXCOORD1;        // (lmu,lmv)
+#if defined(USE_R2_STATIC_SUN) && !defined(USE_LM_HEMI)
+                float4                color                : COLOR0;                        // (r,g,b,dir-occlusion)
+#endif
+};
+*/
+
+vf main (v_static_color v)
+{
+	vf 		o;
+
+	float3 	N 	= unpack_normal		(v.Nh);
+	o.hpos 		= mul				(m_VP, v.P);			// xform, input in world coords
+	o.tc0		= unpack_tc_base	(v.tc,v.T.w,v.B.w);		// copy tc
+//	o.tc0		= unpack_tc_base	(v.tc);				// copy tc
+
+	float3 	L_rgb 	= v.color.zyx;						// precalculated RGB lighting
+	float3 	L_hemi 	= v_hemi(N)*v.Nh.w;					// hemisphere
+	float3 	L_sun 	= v_sun(N)*v.color.w;					// sun
+	float3 	L_final	= L_rgb + L_hemi + L_sun + L_ambient;
+
+	o.c0		= L_final;
+	o.fog 		= saturate(calc_fogging 		(v.P));			// fog, input in world coords
+
+	return o;
+}
+#endif

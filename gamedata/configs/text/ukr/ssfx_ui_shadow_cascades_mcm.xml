@@ -1,0 +1,86 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 15
+- @ Description: Shadow Cascades - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Button -->
+	<string id="ui_mcm_ssfx_module_shw_cascades">
+		<text>Каскад тіней</text>
+	</string>
+
+	<!-- Shadow Cascades Settings -->
+	<string id="ui_mcm_ssfx_module_shw_cascades_title">
+		<text>Налаштування каскаду тіней</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_size_1_mcm">
+		<text>Розмір ближніх каскадів</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_size_1_mcm_desc">
+		<text>Менший розмір - краща якість тіней від сонця.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_shw_cascades_size_2_mcm">
+		<text>Розмір середніх каскадів</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_shw_cascades_size_2_mcm_desc">
+		<text>Менший розмір - краща якість тіней від сонця.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_shw_cascades_size_3_mcm">
+		<text>Розмір далеких каскадів</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_size_3_mcm_desc">
+		<text>Налаштування фінального рендерингу тіней. Чим вище значення - тим більше навантаження на систему</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_grass_shw_quality_mcm">
+		<text>Якість тіней від трави</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_grass_shw_quality_mcm_desc">
+		<text>[ Низьке ] Тіні від трави лише на ближній дистанції. Стандартний рендеринг Anomaly. [ Середнє ] Тіні на ближній та середній дистанціях. [ Високе ] Тіні на всіх каскадах та при об'ємних сонячних променях. [ Ультра ] Тіні від трави при будь-якому типі освітлення.</text>
+	</string>
+	
+	<string id="ui_mcm_lst_shw_cascades_low">
+		<text>Низьке ( стандарт ANOMALY )</text>
+	</string>
+	
+	<string id="ui_mcm_lst_shw_cascades_medium">
+		<text>Середнє</text>
+	</string>
+
+	<string id="ui_mcm_lst_shw_cascades_high">
+		<text>Високе</text>
+	</string>
+	
+	<string id="ui_mcm_lst_shw_cascades_ultra">
+		<text>Ультра ( Велике навантаження на систему )</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_grass_shw_distance_mcm">
+		<text>Дистанція відмальовування тіней від трави ( тіні від Сонця )</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_grass_shw_distance_mcm_desc">
+		<text>Цей параметр змінює дистанцію відмальовування тіней від трави від сонячного світла. Має відсоткове відношення з дистанцією відмальовування трави. Менше значення - менше навантаження на систему.</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_grass_shw_nondir_maxdistance_mcm">
+		<text>Дистанція відмальовування тіней від трави</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_shw_cascades_grass_shw_nondir_maxdistance_mcm_desc">
+		<text>[ Тільки для «Ультра» ] Цей параметр впливає на відмальовування тіней при непрямому освітленні. Менше значення - менше навантаження на систему. При низьких значеннях тіні можуть не відмальовуватись.</text>
+	</string>
+
+</string_table>

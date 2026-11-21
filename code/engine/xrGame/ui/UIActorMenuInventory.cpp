@@ -325,8 +325,22 @@ void CUIActorMenu::OnInventoryAction(PIItem pItem, u16 action_type) {
     UpdateConditionProgressBars();
 }
 void CUIActorMenu::AttachAddon(PIItem item_to_upgrade) {
-    PlaySnd(eAttachAddon);
     R_ASSERT(item_to_upgrade);
+    if (GetMenuMode() == mmInventory) {
+        if (auto* weapon = smart_cast<CWeaponMagazined*>(item_to_upgrade)) {
+            using Result = CWeaponMagazined::SilencerActionResult;
+            const auto result = weapon->RequestSilencerAction(CurrentIItem());
+            if (result == Result::Started) {
+                PlaySnd(eAttachAddon);
+                m_close_for_silencer_action = true;
+                SetCurrentItem(nullptr);
+            }
+            if (result != Result::UseDefault)
+                return;
+        }
+    }
+
+    PlaySnd(eAttachAddon);
     if (OnClient()) {
         NET_Packet P;
         CGameObject::u_EventGen(P, GE_ADDON_ATTACH, item_to_upgrade->object().ID());
@@ -340,6 +354,20 @@ void CUIActorMenu::AttachAddon(PIItem item_to_upgrade) {
 }
 
 void CUIActorMenu::DetachAddon(LPCSTR addon_name, PIItem itm) {
+    PIItem item = itm ? itm : CurrentIItem();
+    if (GetMenuMode() == mmInventory) {
+        if (auto* weapon = smart_cast<CWeaponMagazined*>(item)) {
+            using Result = CWeaponMagazined::SilencerActionResult;
+            const auto result = weapon->RequestSilencerAction(nullptr, addon_name);
+            if (result == Result::Started) {
+                PlaySnd(eDetachAddon);
+                m_close_for_silencer_action = true;
+            }
+            if (result != Result::UseDefault)
+                return;
+        }
+    }
+
     PlaySnd(eDetachAddon);
     if (OnClient()) {
         NET_Packet P;
@@ -352,10 +380,7 @@ void CUIActorMenu::DetachAddon(LPCSTR addon_name, PIItem itm) {
         CGameObject::u_EventSend(P);
         return;
     }
-    if (itm == NULL)
-        CurrentIItem()->Detach(addon_name, true);
-    else
-        itm->Detach(addon_name, true);
+    item->Detach(addon_name, true);
 }
 
 void CUIActorMenu::InitCellForSlot(u16 slot_idx) {
@@ -532,6 +557,9 @@ bool CUIActorMenu::ToSlot(CUICellItem* itm, bool force_place, u16 slot_id) {
         if (iitem->BaseSlot() == INV_SLOT_2 && slot_id != EXTRA_PISTOL_SLOT &&
             m_pActorInvOwner->inventory().CanPutInSlot(iitem, EXTRA_PISTOL_SLOT))
             return ToSlot(itm, force_place, EXTRA_PISTOL_SLOT);
+
+        if (slot_id == INV_SLOT_2 && !m_pActorInvOwner->inventory().CanUsePistolSlot(iitem))
+            return false;
 
         PIItem _iitem = m_pActorInvOwner->inventory().ItemFromSlot(slot_id);
         CUIDragDropListEx* slot_list = GetSlotList(slot_id);
@@ -1135,14 +1163,19 @@ void CUIActorMenu::ProcessPropertiesBoxClicked(CUIWindow* w, void* d) {
         if (!weap_mag) {
             break;
         }
-        weap_mag->UnloadMagazine();
+        bool animated = weap_mag->RequestMagazineUnload(m_currMenuMode == mmInventory);
         for (u32 i = 0; i < cell_item->ChildsCount(); ++i) {
             CUICellItem* child_itm = cell_item->Child(i);
             CWeaponMagazined* child_weap_mag =
                 smart_cast<CWeaponMagazined*>((CWeapon*)child_itm->m_pData);
             if (child_weap_mag) {
-                child_weap_mag->UnloadMagazine();
+                animated |= child_weap_mag->RequestMagazineUnload(m_currMenuMode == mmInventory);
             }
+        }
+        if (animated) {
+            SetCurrentItem(NULL);
+            HideDialog();
+            return;
         }
         break;
     }

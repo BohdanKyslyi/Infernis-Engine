@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "infernis_spawner_runtime.h"
 #include "actor.h"
 #include "UIGameSP.h"
 #include "PDA.h"
@@ -49,6 +50,7 @@ bool CActor::OnReceiveInfo(shared_str info_id) const {
     info_portion.Load(info_id);
 
     callback(GameObject::eInventoryInfo)(lua_game_object(), *info_id);
+    infernis_spawner::runtime::on_info(*this, *info_id);
 
     if (!CurrentGameUI())
         return false;

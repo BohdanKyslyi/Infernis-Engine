@@ -40,6 +40,7 @@
 #include "CarScript.cpp"
 #include "client_spawn_manager_script.cpp"
 #include "console_registrator_script.cpp"
+#include "shader_bus_script.cpp"
 #include "cover_point_script.cpp"
 #include "ef_storage_script.cpp"
 #include "ExplosiveScript.cpp"

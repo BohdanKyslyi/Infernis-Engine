@@ -3,6 +3,7 @@
 #include "xrRenderCommon/ColorMapManager.h"
 
 class light;
+class light_Package; // Screen Space Shaders: phase_ssfx_sss_ext takes it by reference
 
 //#define DU_SPHERE_NUMVERTEX 92
 //#define DU_SPHERE_NUMFACES	180
@@ -48,9 +49,30 @@ public:
     IBlender* b_ssao;
     IBlender* b_ssao_msaa[8];
 
+    // OGSE screen-space sun shafts
+    IBlender* b_sunshafts;
+
     // compute shader for hdao
     IBlender* b_hdao_cs;
     IBlender* b_hdao_msaa_cs;
+
+    // Screen Space Shaders
+    IBlender* b_ssfx_ssr;
+    IBlender* b_ssfx_volumetric_blur;
+    IBlender* b_ssfx_ao;
+    IBlender* b_ssfx_sss;
+    IBlender* b_ssfx_sss_ext;
+    IBlender* b_ssfx_rain;
+    IBlender* b_ssfx_water_blur;
+    IBlender* b_ssfx_motion_blur;
+    IBlender* b_ssfx_fog_scattering;
+    IBlender* b_ssfx_taa;
+    IBlender* b_ssfx_bloom;
+    IBlender* b_ssfx_bloom_lens;
+    IBlender* b_ssfx_bloom_downsample;
+    IBlender* b_ssfx_bloom_upsample;
+    IBlender* b_blur; // Monolith's blur chain: feeds the SSFX bloom and depth of field
+    IBlender* b_dof;  // depth of field, runs the SSFX depth_of_field.ps
 
 #ifdef DEBUG
     struct dbg_line_t {
@@ -108,6 +130,61 @@ public:
                                  //	TODO: DX10: CHeck if we need old-style SMAP
                                  //	IDirect3DSurface9*			rt_smap_ZB;		//
 
+    // Screen Space Shaders
+    ref_rt rt_Generic_temp; // scene copy handed to the SSR pass
+    ref_rt rt_ssfx;
+    ref_rt rt_ssfx_temp;
+    ref_rt rt_ssfx_temp2;
+    ref_rt rt_ssfx_temp3;
+    ref_rt rt_ssfx_accum;
+    ref_rt rt_ssfx_ao;
+    ref_rt rt_ssfx_il;
+    ref_rt rt_ssfx_prevPos;
+    ref_rt rt_ssfx_water_waves;
+    ref_rt rt_ssfx_bloom1;
+    ref_rt rt_ssfx_bloom_emissive;
+    ref_rt rt_ssfx_bloom_lens;
+    ref_rt rt_ssfx_bloom_tmp2;
+    ref_rt rt_ssfx_bloom_tmp4;
+    ref_rt rt_ssfx_bloom_tmp8;
+    ref_rt rt_ssfx_bloom_tmp16;
+    ref_rt rt_ssfx_bloom_tmp32;
+    ref_rt rt_ssfx_bloom_tmp64;
+    ref_rt rt_ssfx_bloom_tmp32_2;
+    ref_rt rt_ssfx_bloom_tmp16_2;
+    ref_rt rt_ssfx_bloom_tmp8_2;
+    ref_rt rt_ssfx_bloom_tmp4_2;
+    ref_rt rt_ssfx_motion_vectors; // xy velocity, z HUD mask, w TAA/flora mask
+
+    ref_rt rt_ssfx_ssr;            // SSR accumulator, read back as the previous frame
+    ref_rt rt_ssfx_water;          // water accumulator
+    ref_rt rt_ssfx_sss;            // sun shadow occlusion
+    ref_rt rt_ssfx_sss_ext;        // omni/spot shadow occlusion, slots 0..3
+    ref_rt rt_ssfx_sss_ext2;       // omni/spot shadow occlusion, slots 4..7
+    ref_rt rt_ssfx_sss_tmp;        // SSS scratch
+    ref_rt rt_ssfx_rain;           // rain refraction buffer
+    ref_rt rt_ssfx_volumetric;     // volumetric light, spot/omni
+    ref_rt rt_ssfx_volumetric_tmp; // volumetric blur scratch
+    ref_rt rt_ssfx_taa;            // TAA motion vectors
+    ref_rt rt_ssfx_prev_frame;     // TAA history
+
+    // Blur chain. phase_blur fills all six every frame; the SSFX bloom and depth of field read
+    // blur_2, and the SSFX fog scattering renders its own blur into blur_4 and blur_2 before that.
+    ref_rt rt_blur_h_2, rt_blur_2;
+    ref_rt rt_blur_h_4, rt_blur_4;
+    ref_rt rt_blur_h_8, rt_blur_8;
+
+    ref_rt rt_dof; // depth of field scratch
+
+    ref_shader s_ssfx_water;
+    ref_shader s_ssfx_water_blur;
+    ref_shader s_ssfx_water_ssr;
+    ref_shader s_ssfx_ao;
+
+    //	Reprojection matrices for the temporal AO/IL accumulators
+    Fmatrix Matrix_previous, Matrix_current;
+    Fvector3 Position_previous;
+
     //	Igor: for async screenshots
     ID3DTexture2D* t_ss_async; // 32bit		(r,g,b,a) is situated in the system memory
 
@@ -132,6 +209,11 @@ private:
     ref_shader s_ssao_msaa[8];
     ref_shader s_hdao_cs;
     ref_shader s_hdao_cs_msaa;
+
+    // OGSE screen-space sun shafts. Created next to rt_Generic_2, under advancedpp.
+    ref_rt rt_sunshafts_0; // ss0
+    ref_rt rt_sunshafts_1; // ss1
+    ref_shader s_sunshafts;
 
     // Accum
     ref_shader s_accum_mask;
@@ -158,6 +240,22 @@ private:
     ref_shader s_accum_spot_msaa[8];
     ref_shader s_accum_reflected_msaa[8];
     ref_shader s_accum_volume_msaa[8];
+
+    // Screen Space Shaders
+    ref_shader s_ssfx_ssr;
+    ref_shader s_ssfx_volumetric_blur;
+    ref_shader s_ssfx_sss;
+    ref_shader s_ssfx_sss_ext;
+    ref_shader s_ssfx_rain;
+    ref_shader s_ssfx_motion_blur;
+    ref_shader s_ssfx_fog_scattering;
+    ref_shader s_ssfx_taa;
+    ref_shader s_ssfx_bloom;
+    ref_shader s_ssfx_bloom_lens;
+    ref_shader s_ssfx_bloom_downsample;
+    ref_shader s_ssfx_bloom_upsample;
+    ref_shader s_blur;
+    ref_shader s_dof;
 
     ref_geom g_accum_point;
     ref_geom g_accum_spot;
@@ -235,6 +333,8 @@ private:
 
     //	Igor: used for volumetric lights
     bool m_bHasActiveVolumetric;
+    // Screen Space Shaders: spot/omni volumetrics go to their own buffer and are cleared separately
+    bool m_bHasActiveVolumetric_spot;
 
 public:
     CRenderTarget();
@@ -252,6 +352,8 @@ public:
     void u_stencil_optimize(eStencilOptimizeMode eSOM = SO_Light);
     void u_compute_texgen_screen(Fmatrix& dest);
     void u_compute_texgen_jitter(Fmatrix& dest);
+    void u_setrt(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, const ref_rt& _4,
+                 ID3DDepthStencilView* zb);
     void u_setrt(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, ID3DDepthStencilView* zb);
     void u_setrt(const ref_rt& _1, const ref_rt& _2, ID3DDepthStencilView* zb);
     void u_setrt(u32 W, u32 H, ID3DRenderTargetView* _1, ID3DRenderTargetView* _2,
@@ -269,6 +371,7 @@ public:
     void phase_occq();
     void phase_ssao();
     void phase_hdao();
+    void phase_sunshafts();
     void phase_downsamp();
     void phase_wallmarks();
     void phase_smap_direct(light* L, u32 sub_phase);
@@ -280,6 +383,24 @@ public:
     void phase_vol_accumulator();
     void PhaseRainDrops();
     void shadow_direct(light* L, u32 dls_phase);
+
+    // Screen Space Shaders
+    void set_viewport_size(ID3DDeviceContext* dev, float w, float h);
+    void phase_ssfx_ssr();
+    void phase_ssfx_volumetric_blur();
+    void phase_ssfx_water_blur();
+    void phase_ssfx_water_waves();
+    void phase_ssfx_sss();
+    void phase_ssfx_sss_ext(light_Package& LP);
+    void phase_ssfx_fog_scattering();
+    void phase_ssfx_motion_blur();
+    void phase_ssfx_taa();
+    void phase_ssfx_ao();
+    void phase_ssfx_il();
+    void phase_ssfx_rain();
+    void phase_ssfx_bloom();
+    void phase_blur();
+    void phase_dof();
 
     //	Generates min/max sm
     void create_minmax_SM();

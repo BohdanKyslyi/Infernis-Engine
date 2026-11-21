@@ -1,0 +1,8 @@
+// Screen Space Shaders - DELIBERATE DEVIATION. The SSFX folder ships this as a full second copy of
+// the bumped G-buffer shader, carrying its own pack_gbuffer call. That copy knows nothing about
+// this engine's PBR packing, so installing it whole would drop PBR from every weapon in the
+// player's hands. The donor's HUD code lives in deffer_base_bump.ps instead, behind SSFX_MV_HUD,
+// which this wrapper switches on - read the block at the top of that file. Nothing is lost: every
+// line inside those guards is the donor's.
+#define SSFX_MV_HUD 1
+#include "deffer_base_bump.ps"

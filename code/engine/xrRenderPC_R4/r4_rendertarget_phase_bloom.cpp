@@ -146,6 +146,14 @@ void CRenderTarget::phase_bloom() {
     if (!Device.scopeLensPass)
         phase_luminance();
 
+    // Screen Space Shaders, Monolith r4_rendertarget_phase_bloom.cpp: with the SSFX bloom the
+    // combine samples s_ssfx_bloom (combine_2_*.ps, SSFX_BLOOM), the blur below is not used.
+    // NOT AS IN MONOLITH: the z-buffer is re-enabled first, as the end of this function does.
+    if (RImplementation.o.ssfx_bloom) {
+        RCache.set_Z(TRUE);
+        return;
+    }
+
     if (ps_r2_ls_flags.test(R2FLAG_FASTBLOOM)) {
         // FAST FILTER
         float _w = BLOOM_size_X;

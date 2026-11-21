@@ -5,6 +5,8 @@
 #include "UIDragDropListEx.h"
 #include "UIProgressBar.h"
 
+#include <cstring>
+
 #define INV_GRID_WIDTHF 50.0f
 #define INV_GRID_HEIGHTF 50.0f
 
@@ -215,15 +217,7 @@ CUIWeaponCellItem::CUIWeaponCellItem(CWeapon* itm) : inherited(itm) {
     m_addons[eScope] = NULL;
     m_addons[eLauncher] = NULL;
 
-    if (itm->SilencerAttachable())
-        m_addon_offset[eSilencer].set(object()->GetSilencerX(), object()->GetSilencerY());
-
-    if (itm->ScopeAttachable())
-        m_addon_offset[eScope].set(object()->GetScopeX(), object()->GetScopeY());
-
-    if (itm->GrenadeLauncherAttachable())
-        m_addon_offset[eLauncher].set(object()->GetGrenadeLauncherX(),
-                                      object()->GetGrenadeLauncherY());
+    RefreshOffset();
 }
 
 #include "../xrServerEntities/object_broker.h"
@@ -269,6 +263,177 @@ void CUIWeaponCellItem::RefreshOffset() {
     if (object()->GrenadeLauncherAttachable())
         m_addon_offset[eLauncher].set(object()->GetGrenadeLauncherX(),
                                       object()->GetGrenadeLauncherY());
+
+    const Fvector2 correction = UpgradeIconCorrection();
+    if (object()->SilencerAttachable())
+        m_addon_offset[eSilencer].add(correction);
+    if (object()->ScopeAttachable())
+        m_addon_offset[eScope].add(correction);
+    if (object()->GrenadeLauncherAttachable())
+        m_addon_offset[eLauncher].add(correction);
+}
+
+Fvector2 CUIWeaponCellItem::UpgradeIconCorrection() {
+    Fvector2 correction;
+    correction.set(0.f, 0.f);
+    for (const shared_str& effect : object()->UpgradeIconSections()) {
+        correction.x += READ_IF_EXISTS(pSettings, r_float, effect, "inv_addons_correction_x", 0.f);
+        correction.y += READ_IF_EXISTS(pSettings, r_float, effect, "inv_addons_correction_y", 0.f);
+    }
+    return correction;
+}
+
+void CUIWeaponCellItem::RefreshWeaponIcon() {
+    const Irect grid = object()->GetInvGridRect();
+    m_grid_size.set(grid.rb);
+    Frect rect;
+    rect.set(grid.x1 * INV_GRID_WIDTHF, grid.y1 * INV_GRID_HEIGHTF,
+             (grid.x1 + grid.x2) * INV_GRID_WIDTHF, (grid.y1 + grid.y2) * INV_GRID_HEIGHTF);
+    SetTextureRect(rect);
+    m_icon_weapon = nullptr;
+}
+
+namespace {
+struct WeaponIconLayer {
+    LPCSTR section;
+    Fvector2 offset;
+    bool front;
+    u32 banned_addons;
+};
+
+bool ValidIconSection(LPCSTR section) {
+    return section && section[0] && pSettings->section_exist(section) &&
+        READ_IF_EXISTS(pSettings, r_u32, section, "inv_grid_width", 0) > 0 &&
+        READ_IF_EXISTS(pSettings, r_u32, section, "inv_grid_height", 0) > 0 &&
+        pSettings->line_exist(section, "inv_grid_x") &&
+        pSettings->line_exist(section, "inv_grid_y");
+}
+
+void AddHiddenIcons(xr_vector<shared_str>& hidden, LPCSTR names) {
+    if (!names || !names[0])
+        return;
+
+    string128 name;
+    for (int i = 0, count = _GetItemCount(names); i < count; ++i) {
+        _GetItem(names, i, name);
+        hidden.emplace_back(name);
+    }
+}
+
+xr_vector<LPCSTR> ElementIconIndices(LPCSTR section) {
+    constexpr char prefix[] = "element_icon_";
+    xr_vector<LPCSTR> indices;
+    for (const auto& line : pSettings->r_section(section).Data) {
+        const LPCSTR key = line.first.c_str();
+        if (!key || std::strncmp(key, prefix, sizeof(prefix) - 1) != 0)
+            continue;
+
+        const LPCSTR index = key + sizeof(prefix) - 1;
+        if (index[0] && !(index[0] == '0' && index[1]) &&
+            index[std::strspn(index, "0123456789")] == 0)
+            indices.push_back(index);
+    }
+    // Numeric order without converting the suffix to a fixed-width integer.
+    std::sort(indices.begin(), indices.end(), [](LPCSTR a, LPCSTR b) {
+        const auto a_size = std::strlen(a);
+        const auto b_size = std::strlen(b);
+        return a_size == b_size ? std::strcmp(a, b) < 0 : a_size < b_size;
+    });
+    return indices;
+}
+} // namespace
+
+void CUIWeaponCellItem::CreateLayeredIcons(CUIStatic* parent, bool rotate, u32 color) {
+    const shared_str weapon = object()->cNameSect();
+    const LPCSTR weapon_section = weapon.c_str();
+    const Fvector2 correction = UpgradeIconCorrection();
+    xr_vector<shared_str> hidden;
+    xr_vector<WeaponIconLayer> elements;
+    xr_vector<WeaponIconLayer> upgrades;
+
+    for (LPCSTR index : ElementIconIndices(weapon_section)) {
+        const auto key = [index](LPCSTR prefix) {
+            xr_string name(prefix);
+            name += index;
+            return name;
+        };
+        const LPCSTR section = pSettings->r_string(weapon_section, key("element_icon_").c_str());
+        if (!ValidIconSection(section))
+            continue;
+
+        Fvector2 offset = correction;
+        offset.x += READ_IF_EXISTS(pSettings, r_float, weapon_section,
+            key("element_icon_offset_x_").c_str(), 0.f);
+        offset.y += READ_IF_EXISTS(pSettings, r_float, weapon_section,
+            key("element_icon_offset_y_").c_str(), 0.f);
+        elements.push_back({section, offset,
+            0 != READ_IF_EXISTS(pSettings, r_bool, weapon_section, key("element_icon_always_front_").c_str(), false),
+            READ_IF_EXISTS(pSettings, r_u32, weapon_section, key("element_icon_banned_addons_mask_").c_str(), 0)});
+        AddHiddenIcons(hidden, READ_IF_EXISTS(pSettings, r_string, weapon_section,
+            key("element_icon_hide_").c_str(), nullptr));
+    }
+
+    for (const shared_str& effect : object()->UpgradeIconSections()) {
+        AddHiddenIcons(hidden, READ_IF_EXISTS(pSettings, r_string, effect, "upgrade_addon_icons_hide", nullptr));
+        const LPCSTR section = READ_IF_EXISTS(pSettings, r_string, effect, "upgrade_addon_icon", nullptr);
+        if (!ValidIconSection(section))
+            continue;
+
+        Fvector2 offset = correction;
+        offset.x += READ_IF_EXISTS(pSettings, r_float, effect, "upgrade_addon_icon_offset_x", 0.f);
+        offset.y += READ_IF_EXISTS(pSettings, r_float, effect, "upgrade_addon_icon_offset_y", 0.f);
+        upgrades.push_back({section, offset,
+            0 != READ_IF_EXISTS(pSettings, r_bool, effect, "upgrade_addon_always_front", false),
+            READ_IF_EXISTS(pSettings, r_u32, effect, "upgrade_addon_icon_banned_addons_mask", 0)});
+    }
+
+    // Element icons can cover only part of the weapon, such as the magazine.
+    parent->TextureOn();
+
+    const u8 addons = object()->GetAddonsState();
+    const auto draw_layers = [&](const xr_vector<WeaponIconLayer>& layers, bool front, bool base) {
+        CUIStatic* first = nullptr;
+        for (const auto& layer : layers) {
+            if (layer.front != front || (addons & layer.banned_addons) ||
+                std::find(hidden.begin(), hidden.end(), shared_str(layer.section)) != hidden.end())
+                continue;
+
+            auto* icon = xr_new<CUIStatic>();
+            icon->SetAutoDelete(true);
+            const LPCSTR shader_section = base && !pSettings->line_exist(layer.section, "icons_texture")
+                ? weapon_section : layer.section;
+            InitAddon(icon, layer.section, layer.offset, rotate, shader_section);
+            icon->SetTextureColor(color);
+            parent->AttachChild(icon);
+            if (!first)
+                first = icon;
+            if (parent == this)
+                m_layered_icons.push_back(icon);
+        }
+        return first;
+    };
+
+    auto& children = parent->GetChildWndList();
+    if (auto* first = draw_layers(elements, false, true)) {
+        // Base elements belong behind already attached scope, silencer and launcher icons.
+        std::rotate(children.begin(), std::find(children.begin(), children.end(), first), children.end());
+    }
+    draw_layers(upgrades, false, false);
+    draw_layers(elements, true, true);
+    draw_layers(upgrades, true, false);
+
+    if (parent == this && (!elements.empty() || !upgrades.empty())) {
+        // Keep cell text, condition and upgrade markers above the assembled icon.
+        for (CUIWindow* overlay : {static_cast<CUIWindow*>(m_text),
+                                  static_cast<CUIWindow*>(m_pConditionState),
+                                  static_cast<CUIWindow*>(m_upgrade)}) {
+            const auto it = std::find(children.begin(), children.end(), overlay);
+            if (it != children.end()) {
+                auto next = it;
+                std::rotate(it, ++next, children.end());
+            }
+        }
+    }
 }
 
 void CUIWeaponCellItem::Draw() {
@@ -282,7 +447,12 @@ void CUIWeaponCellItem::Update() {
     bool b = Heading();
     inherited::Update();
 
-    bool bForceReInitAddons = (b != Heading());
+    const size_t upgrade_count = object()->UpgradeIconSections().size();
+    const u8 addons = object()->GetAddonsState();
+    const Fvector2 size = GetWndSize();
+    const bool bForceReInitAddons = b != Heading() || m_icon_weapon != object() ||
+        m_icon_upgrade_count != upgrade_count || m_icon_addons != addons ||
+        m_icon_size.x != size.x || m_icon_size.y != size.y;
 
     if (object()->SilencerAttachable()) {
         if (object()->IsSilencerAttached()) {
@@ -325,10 +495,23 @@ void CUIWeaponCellItem::Update() {
                 DestroyIcon(eLauncher);
         }
     }
+
+    if (bForceReInitAddons) {
+        for (CUIStatic* icon : m_layered_icons)
+            DetachChild(icon);
+        m_layered_icons.clear();
+        CreateLayeredIcons(this, Heading(), GetTextureColor());
+        m_icon_weapon = object();
+        m_icon_upgrade_count = upgrade_count;
+        m_icon_addons = addons;
+        m_icon_size = size;
+    }
 }
 
 void CUIWeaponCellItem::SetTextureColor(u32 color) {
     inherited::SetTextureColor(color);
+    for (CUIStatic* icon : m_layered_icons)
+        icon->SetTextureColor(color);
     if (m_addons[eSilencer]) {
         m_addons[eSilencer]->SetTextureColor(color);
     }
@@ -355,7 +538,7 @@ void CUIWeaponCellItem::OnAfterChild(CUIDragDropListEx* parent_list) {
 }
 
 void CUIWeaponCellItem::InitAddon(CUIStatic* s, LPCSTR section, Fvector2 addon_offset,
-                                  bool b_rotate) {
+                                  bool b_rotate, LPCSTR shader_section) {
 
     Frect tex_rect;
     Fvector2 base_scale;
@@ -391,8 +574,9 @@ void CUIWeaponCellItem::InitAddon(CUIStatic* s, LPCSTR section, Fvector2 addon_o
     }
 
     s->SetWndPos(addon_offset);
-    SetItemIconShader(s, section);
+    SetItemIconShader(s, shader_section ? shader_section : section);
     s->SetTextureRect(tex_rect);
+    s->TextureOn();
     s->SetStretchTexture(true);
 
     s->EnableHeading(b_rotate);
@@ -407,6 +591,8 @@ void CUIWeaponCellItem::InitAddon(CUIStatic* s, LPCSTR section, Fvector2 addon_o
 
 CUIDragItem* CUIWeaponCellItem::CreateDragItem() {
     CUIDragItem* i = inherited::CreateDragItem();
+    if (!i)
+        return nullptr;
     CUIStatic* s = NULL;
 
     if (GetIcon(eSilencer)) {
@@ -435,6 +621,7 @@ CUIDragItem* CUIWeaponCellItem::CreateDragItem() {
         s->SetTextureColor(i->wnd()->GetTextureColor());
         i->wnd()->AttachChild(s);
     }
+    CreateLayeredIcons(i->wnd(), false, i->wnd()->GetTextureColor());
     return i;
 }
 

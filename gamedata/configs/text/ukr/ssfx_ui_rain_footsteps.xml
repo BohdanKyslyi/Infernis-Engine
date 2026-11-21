@@ -1,0 +1,75 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 17
+- @ Description: SSS Rain Footsteps - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Rain Footsteps Title -->
+	<string id="ui_mcm_ssfx_module_rain_footsteps_title">
+		<text>Кроки по калюжах - Налаштування</text>
+	</string>
+
+	<!-- Rain Footsteps Settings -->
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_main_vol_mcm">
+		<text>Загальна гучність</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_main_vol_mcm_desc">
+		<text>Загальна гучність кроків</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_vol_rnd_mcm">
+		<text>Варіація гучності</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_vol_rnd_mcm_desc">
+		<text>Додає варіативність гучності кроків</text>
+	</string>
+
+	
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_multi_no_rain_mcm">
+		<text>Множник гучності без дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_multi_no_rain_mcm_desc">
+		<text>Множник гучності, коли дощу немає, але все ще мокро</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_multi_walk_mcm">
+		<text>Множник гучності при ходьбі</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_multi_walk_mcm_desc">
+		<text>Множник гучності під час ходьби</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_multi_run_mcm">
+		<text>Множник гучності при бігу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_multi_run_mcm_desc">
+		<text>Множник гучності під час бігу</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_jump_vol_mcm">
+		<text>Гучність стрибка</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_jump_vol_mcm_desc">
+		<text>Сила звукового ефекту при стрибку</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_land_vol_mcm">
+		<text>Гучність приземлення</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_footsteps_land_vol_mcm_desc">
+		<text>Сила звукового ефекту приземлення</text>
+	</string>
+	
+</string_table>

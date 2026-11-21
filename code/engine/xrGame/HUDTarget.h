@@ -15,6 +15,9 @@ struct SPickParam {
 class CHUDTarget {
 private:
     ui_shader hShader;
+    ui_shader m_laser_shader;
+    bool m_laser_shader_loaded = false;
+    void RenderLaserImpact();
     float fuzzyShowInfo;
     SPickParam PP;
 
@@ -28,6 +31,8 @@ public:
     CHUDTarget();
     ~CHUDTarget();
     void CursorOnFrame();
+    static float TraceAimDistance(const Fvector& position, const Fvector& direction,
+                                  float range, CObject* ignore);
     void Render();
     void Load();
     collide::rq_result& GetRQ() { return PP.RQ; };

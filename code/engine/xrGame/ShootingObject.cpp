@@ -450,7 +450,7 @@ void CShootingObject::FireBullet(const Fvector& pos, const Fvector& shot_dir, fl
     Level().BulletManager().AddBullet(
         pos, dir, m_fStartBulletSpeed * cur_silencer_koef.bullet_speed,
         l_fHitPower * cur_silencer_koef.hit_power, fHitImpulse * cur_silencer_koef.hit_impulse,
-        parent_id, weapon_id, ALife::eHitTypeFireWound, fireDistance, cartridge,
+        parent_id, weapon_id, cartridge.m_hit_type, fireDistance, cartridge,
         m_air_resistance_factor, send_hit, aim_bullet);
 }
 void CShootingObject::FireStart() { bWorking = true; }

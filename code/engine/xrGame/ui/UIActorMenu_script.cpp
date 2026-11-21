@@ -11,7 +11,9 @@
 #include "../actor.h"
 #include "../inventory_item.h"
 #include "UICellItem.h"
+#include "UIMessageBoxEx.h"
 #include "../ai_space.h"
+#include "../script_game_object.h"
 #include "../../xrServerEntities/script_engine.h"
 
 using namespace luabind;
@@ -78,7 +80,66 @@ bool CUIActorMenu::CanUpgradeItem(PIItem item) {
             "Failed to get functor <inventory_upgrades.can_upgrade_item>, item = %s, mechanic = %s",
             item_name, partner));
 
+    luabind::functor<void> set_mechanic;
+    if (ai().script_engine().functor("inventory_upgrades.need_victim", set_mechanic)) {
+        if (auto* mechanic = smart_cast<CGameObject*>(m_pPartnerInvOwner))
+            set_mechanic(mechanic->lua_game_object());
+    }
+
     return funct(item_name, partner);
+}
+
+bool CUIActorMenu::CanDisassembleItem(PIItem item) {
+    if (!item || !m_pActorInvOwner || !m_pPartnerInvOwner || item->object().getDestroy() ||
+        item->parent_id() != m_pActorInvOwner->object_id())
+        return false;
+
+    luabind::functor<bool> can;
+    if (!ai().script_engine().functor("inventory_upgrades.gunsl_can_disassemble_item", can))
+        return false;
+    return can(item->m_section_id.c_str(), item->GetCondition(),
+               m_pPartnerInvOwner->CharacterInfo().Profile().c_str());
+}
+
+void CUIActorMenu::TryDisassembleItem(CUIWindow*, void*) {
+    PIItem item = get_upgrade_item();
+    if (!CanDisassembleItem(item))
+        return;
+
+    luabind::functor<LPCSTR> question;
+    if (!ai().script_engine().functor("inventory_upgrades.gunsl_question_disassemble_item", question))
+        return;
+
+    const shared_str partner = m_pPartnerInvOwner->CharacterInfo().Profile();
+    m_disassemble_item = item->object_id();
+    m_disassemble_mechanic = m_pPartnerInvOwner->object_id();
+    CallMessageBoxYesNo(question(item->m_section_id.c_str(), item->GetCondition(), true, partner.c_str()));
+    m_message_box_yes_no->func_on_ok =
+        CUIWndCallback::void_function(this, &CUIActorMenu::DisassembleItem);
+}
+
+void CUIActorMenu::DisassembleItem(CUIWindow*, void*) {
+    const u16 item_id = m_disassemble_item;
+    const u16 mechanic_id = m_disassemble_mechanic;
+    m_disassemble_item = m_disassemble_mechanic = u16(-1);
+
+    PIItem item = get_upgrade_item();
+    if (m_currMenuMode != mmUpgrade || !item || item->object_id() != item_id ||
+        !m_pPartnerInvOwner || m_pPartnerInvOwner->object_id() != mechanic_id ||
+        !CanDisassembleItem(item))
+        return;
+
+    luabind::functor<void> effect;
+    if (!ai().script_engine().functor("inventory_upgrades.gunsl_effect_disassemble", effect))
+        return;
+
+    const shared_str partner = m_pPartnerInvOwner->CharacterInfo().Profile();
+    effect(item->m_section_id.c_str(), item->GetCondition(), partner.c_str());
+    SetCurrentItem(nullptr);
+    m_upgrade_selected = nullptr;
+    item->object().DestroyObject();
+    UpdateActor();
+    UpdateItemsPlace();
 }
 
 void CUIActorMenu::CurModeToScript() {

@@ -18,8 +18,7 @@ configure_file(code/engine/xr_config.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/
 
 if (MSVC)
     if(MSVC_VERSION GREATER_EQUAL 1912) # MSVS 2017.5 and higher (including VS 2026)
-        execute_process(COMMAND "vswhere" "-latest" "-property" "installationPath"
-                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/extras
+        execute_process(COMMAND "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/Installer/vswhere.exe" "-latest" "-property" "installationPath"
                         OUTPUT_VARIABLE VS_TOOLS_PATH
                         OUTPUT_STRIP_TRAILING_WHITESPACE)
         set(VC_ENV_BAT ${VS_TOOLS_PATH}/VC/Auxiliary/Build/vcvarsall.bat)

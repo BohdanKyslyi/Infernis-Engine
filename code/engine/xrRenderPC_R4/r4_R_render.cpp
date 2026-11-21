@@ -328,6 +328,23 @@ void CRender::Render() {
     r_pmask(true, false); // disable priority "1"
     Device.Statistic->RenderCALC.End();
 
+    // SSFX: clear the motion vectors buffer and fill it with the sky motion. The G-buffer and
+    // forward passes write the geometry on top of it.
+    if (RImplementation.o.ssfx_motionvectors) {
+        Target->u_setrt(Device.dwWidth, Device.dwHeight, 0, 0, Target->rt_ssfx_motion_vectors->pRT, 0);
+
+        FLOAT ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        HW.pContext->ClearRenderTargetView(Target->rt_ssfx_motion_vectors->pRT, ColorRGBA);
+
+        RCache.set_Stencil(FALSE);
+        g_pGamePersistent->Environment().RenderSky(true);
+
+        RCache.Index.Flush();
+        RCache.Vertex.Flush();
+
+        RCache.set_xform_world(Fidentity);
+    }
+
     BOOL split_the_scene_to_minimize_wait = FALSE;
     if (ps_r2_ls_flags.test(R2FLAG_EXP_SPLIT_SCENE))
         split_the_scene_to_minimize_wait = TRUE;
@@ -376,24 +393,27 @@ void CRender::Render() {
         for (u32 it = 0; it < count; it++) {
             if (it < LP.v_point.size()) {
                 light* L = LP.v_point[it];
-                L->vis_prepare();
-                if (L->vis.pending)
+                if (!Device.scopeLensPass)
+                    L->vis_prepare();
+                if (!Device.scopeLensPass && L->vis.pending)
                     LP_pending.v_point.push_back(L);
                 else
                     LP_normal.v_point.push_back(L);
             }
             if (it < LP.v_spot.size()) {
                 light* L = LP.v_spot[it];
-                L->vis_prepare();
-                if (L->vis.pending)
+                if (!Device.scopeLensPass)
+                    L->vis_prepare();
+                if (!Device.scopeLensPass && L->vis.pending)
                     LP_pending.v_spot.push_back(L);
                 else
                     LP_normal.v_spot.push_back(L);
             }
             if (it < LP.v_shadowed.size()) {
                 light* L = LP.v_shadowed[it];
-                L->vis_prepare();
-                if (L->vis.pending)
+                if (!Device.scopeLensPass)
+                    L->vis_prepare();
+                if (!Device.scopeLensPass && L->vis.pending)
                     LP_pending.v_shadowed.push_back(L);
                 else
                     LP_normal.v_shadowed.push_back(L);
@@ -478,6 +498,52 @@ void CRender::Render() {
         render_rain();
     }
 
+    // Screen Space Shaders: contact shadows for the sun and for the eight nearest shadow casting
+    // lights. They run before the lighting, so the matrix pair that phase_combine normally
+    // computes has to be available already - the same pair, just computed earlier in the frame.
+    if (RImplementation.o.ssfx_core) {
+        {
+            static Fmatrix mm_saved_viewproj;
+
+            if (!Device.scopeLensPass) {
+                // (new-camera) -> (world) -> (old_viewproj)
+                Fmatrix m_invview;
+                m_invview.invert(Device.mView);
+                Target->Matrix_previous.mul(mm_saved_viewproj, m_invview);
+                Target->Matrix_current.set(Device.mProject);
+                mm_saved_viewproj.set(Device.mFullTransform);
+            }
+        }
+
+        if (RImplementation.o.ssfx_sss && !Device.scopeLensPass) {
+            static bool sss_rendered, sss_extended_rendered;
+
+            // SSS Shadows
+            if (ps_ssfx_sss_quality.z > 0) {
+                Target->phase_ssfx_sss();
+                sss_rendered = true;
+            } else {
+                if (sss_rendered) { // Clear buffer
+                    sss_rendered = false;
+                    FLOAT ColorRGBA[4] = { 1, 1, 1, 1 };
+                    HW.pContext->ClearRenderTargetView(Target->rt_ssfx_sss->pRT, ColorRGBA);
+                }
+            }
+
+            if (ps_ssfx_sss_quality.w > 0) {
+                // Extra lights
+                Target->phase_ssfx_sss_ext(Lights.package);
+                sss_extended_rendered = true;
+            } else {
+                if (sss_extended_rendered) { // Clear buffer
+                    sss_extended_rendered = false;
+                    FLOAT ColorRGBA[4] = { 1, 1, 1, 1 };
+                    HW.pContext->ClearRenderTargetView(Target->rt_ssfx_sss_tmp->pRT, ColorRGBA);
+                }
+            }
+        }
+    }
+
     // Directional light - fucking sun
     if (bSUN) {
         PIX_EVENT(DEFER_SUN);
@@ -509,7 +575,18 @@ void CRender::Render() {
         // (TRUE,D3DCMP_ALWAYS,0x00,0xff,0xff,D3DSTENCILOP_KEEP,D3DSTENCILOP_REPLACE,D3DSTENCILOP_KEEP);
         RCache.set_CullMode(CULL_CCW);
         RCache.set_ColorWriteEnable();
-        RImplementation.r_dsgraph_render_emissive();
+        // Screen Space Shaders build bloom from a separate emissive buffer, so the emissive lists
+        // are kept here and drawn a second time just below.
+        RImplementation.r_dsgraph_render_emissive(RImplementation.o.ssfx_bloom ? false : true);
+    }
+
+    if (RImplementation.o.ssfx_bloom) {
+        // Render emissive geometry into `rt_ssfx_bloom_emissive`
+        FLOAT ColorRGBA[4] = { 0, 0, 0, 0 };
+        HW.pContext->ClearRenderTargetView(Target->rt_ssfx_bloom_emissive->pRT, ColorRGBA);
+        Target->u_setrt(Target->rt_ssfx_bloom_emissive, 0, 0,
+                        !RImplementation.o.dx10_msaa ? HW.pBaseZB : Target->rt_MSAADepth->pZRT);
+        RImplementation.r_dsgraph_render_emissive(true, true);
     }
 
     // Lighting, non dependant on OCCQ
@@ -526,11 +603,24 @@ void CRender::Render() {
         render_lights(LP_pending);
     }
 
+    // Screen Space Shaders: blur and resolve the spot/omni volumetric buffer once all the lights
+    // have been accumulated, before the combine reads it.
+    if (RImplementation.o.ssfx_volumetric)
+        Target->phase_ssfx_volumetric_blur();
+
     // Postprocess
     {
         PIX_EVENT(DEFER_LIGHT_COMBINE);
         Target->phase_combine();
     }
+
+    // Screen Space Shaders. Monolith r4_R_render.cpp:652-653. Puts the grass fade distance back
+    // after the shadow passes moved it, and drops the visibility lists those passes kept alive.
+    // Skipped for the 3D scope's lens pass, which is untouchable: that pass and the main view
+    // share one frame's visibility result, so it may not be dropped between them.
+    if (Details && !Device.scopeLensPass)
+        Details->details_clear();
+
     if (Device.scopeLensPass)
         m_bScopeLensRendered = true;
 
@@ -540,15 +630,6 @@ void CRender::Render() {
 bool CRender::CaptureScopeLens() {
     if (!Device.scopeLensPass || !Target)
         return false;
-
-    // A second Calculate() in the same frame must be able to discover these lights again.
-    // Render marks each light with Device.dwFrame to avoid duplicates within one view.
-    for (light* L : Lights.package.v_point)
-        L->frame_render = 0;
-    for (light* L : Lights.package.v_spot)
-        L->frame_render = 0;
-    for (light* L : Lights.package.v_shadowed)
-        L->frame_render = 0;
 
     if (!m_bScopeLensRendered)
         return false;
@@ -575,7 +656,10 @@ void CRender::render_forward() {
         // Postprocessing uses the HUD depth/normal buffers and can reintroduce
         // the optic housing over an opaque lens. Draw sorted HUD after it.
         r_dsgraph_render_sorted(!Device.scopeLensActive || Device.scopeLensPass);
-        g_pGamePersistent->Environment().RenderLast(); // rain/thunder-bolts
+        // Monolith r4_R_render.cpp:675 comments the next call out: with SSS on the rain is drawn
+        // by phase_combine, before this pass. With SSS off it stays here, where the game has it.
+        if (!RImplementation.o.ssfx_core)
+            g_pGamePersistent->Environment().RenderLast(); // rain/thunder-bolts
     }
 
     RImplementation.o.distortion = FALSE; // disable distorion

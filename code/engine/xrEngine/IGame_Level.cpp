@@ -13,6 +13,7 @@
 #include "xr_object.h"
 #include "feel_sound.h"
 #include <algorithm>
+#include "shader_bus.h"
 
 ENGINE_API IGame_Level* g_pGameLevel = NULL;
 extern BOOL g_bLoaded;
@@ -129,6 +130,8 @@ BOOL IGame_Level::Load(u32 dwNum) {
     Device.seqRender.Add(this);
     Device.seqFrame.Add(this);
 
+    ShaderBus::dump();
+
     return TRUE;
 }
 
@@ -148,7 +151,7 @@ void IGame_Level::OnRender() {
     // Keep the render targets at screen size until the separate-resolution path is ready.
     const float lens_fov = ScopeLensFov();
     Device.scopeLensActive = false;
-    if (lens_fov >= 5.f && lens_fov <= 90.f) {
+    if (lens_fov >= 2.f && lens_fov <= 90.f) {
         const float main_fov = Device.fFOV;
         const Fmatrix main_project = Device.mProject;
         const Fmatrix main_full = Device.mFullTransform;

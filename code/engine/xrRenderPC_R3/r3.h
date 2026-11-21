@@ -107,6 +107,10 @@ public:
     } stats;
 
 public:
+    // Screen Space Shaders. Monolith r3.h:126. True while the sun is actually lighting the scene,
+    // which the grass uses to decide whether its visibility list is still needed for a shadow pass.
+    bool is_sun();
+
     // Sector detection and visibility
     CSector* pLastSector;
     Fvector vLastCameraPos;
@@ -308,6 +312,9 @@ public:
 
     // Models
     virtual IRenderVisual* model_CreateParticles(LPCSTR name);
+    bool model_HasParticles(LPCSTR name) override {
+        return PSLibrary.FindPED(name) || PSLibrary.FindPGD(name);
+    }
     virtual IRender_DetailModel* model_CreateDM(IReader* F);
     virtual IRenderVisual* model_Create(LPCSTR name, IReader* data = 0);
     virtual IRenderVisual* model_CreateChild(LPCSTR name, IReader* data);

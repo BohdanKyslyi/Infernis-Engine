@@ -35,7 +35,18 @@ void CConsole::prev_cmd_history_idx() {
 void CConsole::reset_cmd_history_idx() { m_cmd_history_idx = -1; }
 
 void CConsole::next_selected_tip() {
+    // The drop-down wraps instead of clamping. Clamping at the last entry is what made the arrow
+    // key look dead: a filtered list is often one or two entries long, so the selection reached
+    // the bottom on the first press and then never moved again.
+    if (m_tips.empty()) {
+        return;
+    }
     ++m_select_tip;
+    if (m_select_tip >= (int)m_tips.size()) {
+        m_select_tip = 0;
+        m_start_tip = 0;
+        return;
+    }
     check_next_selected_tip();
 }
 
@@ -55,7 +66,16 @@ void CConsole::check_next_selected_tip() {
 }
 
 void CConsole::prev_selected_tip() {
+    // Same wrap the other way, so Up on the first entry lands on the last one.
+    if (m_tips.empty()) {
+        return;
+    }
     --m_select_tip;
+    if (m_select_tip < 0) {
+        m_select_tip = (int)m_tips.size() - 1;
+        check_next_selected_tip();
+        return;
+    }
     check_prev_selected_tip();
 }
 

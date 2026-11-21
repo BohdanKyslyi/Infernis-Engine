@@ -10,6 +10,7 @@
 #include "thunderbolt.h"
 #include "xrHemisphere.h"
 #include "perlin.h"
+#include "ssfx_console_vars.h"
 
 #include "xr_input.h"
 
@@ -39,6 +40,8 @@ static const float MAX_NOISE_FREQ = 0.03f;
 #define WFX_TRANS_TIME 5.f
 
 const float MAX_DIST_FACTOR = 0.95f;
+
+extern int g_current_renderer; // EngineAPI.cpp
 
 //////////////////////////////////////////////////////////////////////////
 // environment
@@ -74,11 +77,25 @@ CEnvironment::CEnvironment() : CurrentEnv(nullptr), m_ambients_config(nullptr) {
     wind_strength_factor = 0.f;
     wind_gust_factor = 0.f;
 
+    wetness_factor = 0.f;
+
+    wind_anim = { 0.0f, 0.0f, 0.0f, 0.0f };
+
     wind_blast_strength = 0.f;
     wind_blast_direction.set(1.f, 0.f, 0.f);
 
     wind_blast_strength_start_value = 0.f;
     wind_blast_strength_stop_value = 0.f;
+
+    // Screen Space Shaders: no brightness boost until weather.boost_value() sets one
+    // ( Environment.h, env_boost )
+    env_boost.ambient = 0.f;
+    env_boost.hemi = 0.f;
+    env_boost.clouds_color = 0.f;
+    env_boost.fog_color = 0.f;
+    env_boost.rain_color = 0.f;
+    env_boost.sky_color = 0.f;
+    env_boost.sun_color = 0.f;
 
     // fill clouds hemi verts & faces
     const Fvector* verts;
@@ -106,6 +123,18 @@ CEnvironment::CEnvironment() : CurrentEnv(nullptr), m_ambients_config(nullptr) {
         FS.update_path(file_name, "$game_config$", "environment\\effects.ltx"), TRUE, TRUE, FALSE);
     m_suns_config = xr_new<CInifile>(
         FS.update_path(file_name, "$game_config$", "environment\\suns.ltx"), TRUE, TRUE, FALSE);
+    // Screen Space Shaders: Monolith Environment.cpp:150-160 - the sun table of the Anomaly
+    // weathers ( load_sun ). The Weather_ATMOS addon brings it, and that addon is mounted only
+    // while SSS runs ( switched on, DX11: x_ray.cpp, FS.ssfx_addons ), before this constructor. So
+    // the table is in use only then and only if the file is there; otherwise there is none and the
+    // sun is the game's ( OnFrame ).
+    m_sun_pos_config = nullptr;
+    m_ssfx_sun_positions = false;
+    if (ssfx_session_enable && g_current_renderer == 4 &&
+        FS.exist(file_name, "$game_config$", "environment\\sun_positions.ltx")) {
+        m_sun_pos_config = xr_new<CInifile>(file_name, TRUE, TRUE, FALSE);
+        m_ssfx_sun_positions = true;
+    }
     m_thunderbolt_collections_config = xr_new<CInifile>(
         FS.update_path(file_name, "$game_config$", "environment\\thunderbolt_collections.ltx"),
         TRUE, TRUE, FALSE);
@@ -150,6 +179,13 @@ CEnvironment::~CEnvironment() {
     CInifile::Destroy(m_suns_config);
     m_suns_config = 0;
 
+    // Screen Space Shaders: Monolith Environment.cpp:230-232 ( there is none unless SSS runs, the
+    // constructor )
+    if (m_sun_pos_config) {
+        CInifile::Destroy(m_sun_pos_config);
+        m_sun_pos_config = 0;
+    }
+
     VERIFY(m_thunderbolt_collections_config);
     CInifile::Destroy(m_thunderbolt_collections_config);
     m_thunderbolt_collections_config = 0;
@@ -165,6 +201,9 @@ void CEnvironment::Invalidate() {
     bWFX = false;
     Current[0] = 0;
     Current[1] = 0;
+    // Screen Space Shaders: Monolith Environment.cpp:250 ( does nothing unless SSS runs, Rain.cpp )
+    if (eff_Rain)
+        eff_Rain->InvalidateState();
     if (eff_LensFlare)
         eff_LensFlare->Invalidate();
 }
@@ -513,6 +552,20 @@ void CEnvironment::OnFrame() {
     }
 #endif
 
+    // Min wind velocity. [ ps_ssfx_wind_trees.w 0 ~ 1 ]
+    float WindVel = std::max(CurrentEnv->wind_velocity, ps_ssfx_wind_trees.w * 1000);
+
+    // Limit min at 200 to avoid slow-mo at extremly low speed.
+    WindVel = std::max(WindVel, 200.f) * 0.001f;
+
+    float WindDir = -CurrentEnv->wind_direction + PI_DIV_2;
+    Fvector2 WDir = { std::cos(WindDir), std::sin(WindDir) };
+
+    wind_anim.x += WindVel * WDir.x * Device.fTimeDelta;
+    wind_anim.y += WindVel * WDir.y * Device.fTimeDelta;
+    wind_anim.z += clampr(WindVel * 1.33f, 0.0f, 1.0f) * Device.fTimeDelta;
+    wind_anim.w += 1.0f * Device.fTimeDelta;
+
     //	if (pInput->iGetAsyncKeyState(DIK_O))		SetWeatherFX("surge_day");
     float current_weight;
     lerp(current_weight);
@@ -520,7 +573,9 @@ void CEnvironment::OnFrame() {
     // The weather editor must always display the angles being edited. Outside
     // the editor, dynamic renderers use either the engine-calculated sun or
     // the interpolated weather angles according to the global extension flag.
-    if (!m_weather_editor_active && !m_use_weather_sun_direction && !::Render->is_sun_static())
+    // Screen Space Shaders: none of it while the sun follows sun_positions.ltx ( below ).
+    if (!m_ssfx_sun_positions && !m_weather_editor_active && !m_use_weather_sun_direction &&
+        !::Render->is_sun_static())
         calculate_dynamic_sun_dir();
 
 #ifndef MASTER_GOLD
@@ -539,10 +594,23 @@ void CEnvironment::OnFrame() {
     wind_strength_factor =
         clampr(PerlinNoise1D->GetContinious(Device.fTimeGlobal) + 0.5f, 0.f, 1.f);
 
-    const auto& l_id =
-        (current_weight < 0.5f) ? Current[0]->lens_flare_id : Current[1]->lens_flare_id;
+    // Screen Space Shaders: Monolith Environment.cpp:645-657 - while the sun follows the table of
+    // sun_positions.ltx ( m_ssfx_sun_positions ) it is set here from that table by the game time;
+    // with the weather paused it stays where it is, and the sun flare and the lightning are those
+    // of the mixed weather ( CurrentEnv ). The weather editor pauses the weather to show the time
+    // being edited ( UpdateWeatherEditorSession ): there the sun follows the editor's time, and the
+    // flare and the lightning are chosen as with SSS off, so that the editor shows them.
+    const bool ssfx_paused = m_ssfx_sun_positions && m_paused && !m_weather_editor_active;
+    if (m_ssfx_sun_positions && !ssfx_paused)
+        calculate_config_sun_dir();
+
+    const auto& l_id = ssfx_paused ? CurrentEnv->lens_flare_id
+                       : (current_weight < 0.5f) ? Current[0]->lens_flare_id
+                                                 : Current[1]->lens_flare_id;
     eff_LensFlare->OnFrame(l_id);
-    const auto& t_id = (current_weight < 0.5f) ? Current[0]->tb_id : Current[1]->tb_id;
+    const auto& t_id = ssfx_paused ? CurrentEnv->tb_id
+                       : (current_weight < 0.5f) ? Current[0]->tb_id
+                                                 : Current[1]->tb_id;
     eff_Thunderbolt->OnFrame(t_id, CurrentEnv->bolt_period, CurrentEnv->bolt_duration);
     eff_Rain->OnFrame();
 
@@ -617,6 +685,43 @@ void CEnvironment::calculate_dynamic_sun_dir() {
     R_ASSERT(xr::valid(CurrentEnv->sun_dir));
 
     CurrentEnv->sun_color.mul(fSunBlend);
+}
+
+// Screen Space Shaders: Monolith Environment.cpp:667-701 - the sun of the Anomaly weathers from the
+// table of sun_positions.ltx ( load_sun ): the points of the hour of the game time and of the next
+// one, mixed by the time past the hour. Monolith's _lerp ( xrCore vector.h:124-127 ) is written
+// out, Infernis has none. One addition: the game time can be exactly 24:00:00 ( the last
+// milliseconds of the day, CLevel::GetEnvironmentGameDayTimeSec rounds them up to 86400 ), where
+// Monolith reads past its 24 points: here that is 00:00:00, the same moment.
+void CEnvironment::calculate_config_sun_dir() {
+    float current_time = fGameTime / (DAY_LENGTH / 24);
+    int weather_time = iFloor(current_time);
+    float s_weight = current_time - weather_time;
+    if (weather_time > 23)
+        weather_time = 0;
+
+    float real_sun_alt, real_sun_long;
+    float s_alt = sun_hp[weather_time].x;
+    float s_long = sun_hp[weather_time].y;
+
+    if (s_weight > 0) {
+        int next_hour = weather_time == 23 ? 0 : weather_time + 1;
+        float s_alt2 = sun_hp[next_hour].x;
+        float s_long2 = sun_hp[next_hour].y;
+
+        real_sun_alt = float((s_alt * (1.0 - s_weight)) + (s_alt2 * s_weight));
+        real_sun_long = float((s_long * (1.0 - s_weight)) + (s_long2 * s_weight));
+    } else {
+        real_sun_alt = s_alt;
+        real_sun_long = s_long;
+    }
+
+    R_ASSERT(xr::valid(real_sun_alt));
+    R_ASSERT(xr::valid(real_sun_long));
+
+    CurrentEnv->sun_dir.setHP(deg2rad(real_sun_alt), deg2rad(real_sun_long));
+
+    R_ASSERT(xr::valid(CurrentEnv->sun_dir));
 }
 
 void CEnvironment::create_mixer() {

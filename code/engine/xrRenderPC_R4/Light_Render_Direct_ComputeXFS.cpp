@@ -56,19 +56,49 @@ void CLight_Compute_XFORM_and_VIS::compute_xf_spot(light* L) {
     float widefactor = L->cone / deg2rad(90.f); //
 
     // factors
+    //
+    // Screen Space Shaders. This whole block is the donor's - Monolith
+    // Light_Render_Direct_ComputeXFS.cpp:61-75. It drops duel_dot from the product, because the
+    // angle between the light and the camera swings fast and resizing the shadow map with it makes
+    // the shadow edge crawl; and it takes the size limits from ssfx_shadows instead of the fixed
+    // SMAP_adapt_min / SMAP_adapt_max, raising the floor from 32 to 256 texels so a small or
+    // distant lamp no longer casts a shadow made of visible blocks.
+    //
+    // With SSS switched off ( ssfx_session_enable ) the game's own lines run instead - Infernis
+    // Light_Render_Direct_ComputeXFS.cpp:61-71: duel_dot back in the product, the fixed limits.
     float factor0 = powf(ssa, 1.f / 2.f);        // ssa is quadratic
     float factor1 = powf(intensity, 1.f / 16.f); // less perceptually important?
-    float factor2 = powf(duel_dot, 1.f / 4.f);   // difficult to fast-change this -> visible
+    // float factor2 = powf(duel_dot, 1.f / 4.f);   // difficult to fast-change this -> visible
     float factor3 = powf(sizefactor, 1.f / 4.f); // this shouldn't make much difference
     float factor4 = powf(widefactor, 1.f / 2.f); // make it linear ???
-    float factor = ps_r2_ls_squality * factor0 * factor1 * factor2 * factor3 * factor4;
 
-    // final size calc
-    u32 _size = iFloor(factor * SMAP_adapt_optimal);
-    if (_size < SMAP_adapt_min)
-        _size = SMAP_adapt_min;
-    if (_size > SMAP_adapt_max)
-        _size = SMAP_adapt_max;
+    u32 _size;
+    if (ssfx_session_enable) {
+        float factor = ps_r2_ls_squality * factor0 * factor1 * factor3 * factor4;
+
+        // final size calc
+        u32 max_size = RImplementation.o.smapsize <= u32(ps_ssfx_shadows.y)
+                           ? RImplementation.o.smapsize
+                           : u32(ps_ssfx_shadows.y);
+        _size = iFloor(factor * SMAP_adapt_optimal);
+        if (_size < u32(ps_ssfx_shadows.x))
+            _size = u32(ps_ssfx_shadows.x);
+        if (_size > max_size)
+            _size = max_size;
+    } else {
+        float factor2 = powf(duel_dot, 1.f / 4.f); // difficult to fast-change this -> visible
+        // r2_ls_squality reaches 3 here for the SSS slider ( xrRender_console.cpp ); the game
+        // takes 0.5 .. 1, so its own limits apply.
+        float factor =
+            clampr(ps_r2_ls_squality, .5f, 1.f) * factor0 * factor1 * factor2 * factor3 * factor4;
+
+        // final size calc
+        _size = iFloor(factor * SMAP_adapt_optimal);
+        if (_size < SMAP_adapt_min)
+            _size = SMAP_adapt_min;
+        if (_size > SMAP_adapt_max)
+            _size = SMAP_adapt_max;
+    }
     int _epsilon = iCeil(float(_size) * 0.01f);
     int _diff = xr::abs(int(_size) - int(_cached_size));
     L->X.S.size = (_diff >= _epsilon) ? _size : _cached_size;
@@ -85,7 +115,13 @@ void CLight_Compute_XFORM_and_VIS::compute_xf_spot(light* L) {
 
     // _min(L->cone + deg2rad(4.5f), PI*0.98f) - Here, it is needed to enlarge the shadow map
     // frustum to include also displaced pixels and the pixels neighbor to the examining one.
-    L->X.S.project.build_projection(std::min(L->cone + deg2rad(5.f), PI * 0.98f), 1.f,
+    // Screen Space Shaders, Monolith Light_Render_Direct_ComputeXFS.cpp:91-101: the six faces of a
+    // shadowed point light get 0.3 rad ("[ SSS ] 0.3f fix almost all frustum problems"). Other
+    // lights keep this engine's 5 degrees; Monolith's own values for them are not taken.
+    float tan_shift = deg2rad(5.f);
+    if (RImplementation.o.ssfx_core && L->flags.type == IRender_Light::OMNIPART)
+        tan_shift = 0.3f;
+    L->X.S.project.build_projection(std::min(L->cone + tan_shift, PI * 0.98f), 1.f,
                                     SMAP_near_plane, L->range + EPS_S);
     L->X.S.combine.mul(L->X.S.project, L->X.S.view);
 }

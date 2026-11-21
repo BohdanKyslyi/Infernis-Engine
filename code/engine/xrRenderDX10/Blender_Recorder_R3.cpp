@@ -135,6 +135,13 @@ u32 CBlender_Compile::r_dx10Sampler(LPCSTR ResourceName) {
         i_dx10Filter(stage, D3DTEXF_LINEAR, D3DTEXF_LINEAR, D3DTEXF_LINEAR);
     }
 
+    // Screen Space Shaders - same state as smp_linear. It exists so a pass that already binds
+    // smp_linear to one texture can bind the wind flow map to a second sampler slot.
+    if (0 == xr_strcmp(ResourceName, "smp_linear2")) {
+        i_dx10Address(stage, D3DTADDRESS_WRAP);
+        i_dx10Filter(stage, D3DTEXF_LINEAR, D3DTEXF_LINEAR, D3DTEXF_LINEAR);
+    }
+
     //	Use D3DTADDRESS_WRAP,	D3DTEXF_ANISOTROPIC, 	D3DTEXF_LINEAR,	D3DTEXF_ANISOTROPIC
     if (0 == xr_strcmp(ResourceName, "smp_base")) {
         i_dx10Address(stage, D3DTADDRESS_WRAP);
@@ -161,6 +168,16 @@ u32 CBlender_Compile::r_dx10Sampler(LPCSTR ResourceName) {
         i_dx10Filter(stage, D3DTEXF_POINT, D3DTEXF_NONE, D3DTEXF_POINT);
     }
 
+#if RENDER == R_R4
+    // Screen Space Shaders, Monolith Blender_Recorder_R3.cpp: ssfx_taa.ps and ssfx_taa_sharp.ps
+    // read exact texels through this sampler. Without this case it got no state at all, and the
+    // default (linear filtering) smoothed what the TAA reads.
+    if (0 == xr_strcmp(ResourceName, "smp_point")) {
+        i_dx10Address(stage, D3DTADDRESS_WRAP);
+        i_dx10Filter(stage, D3DTEXF_POINT, D3DTEXF_POINT, D3DTEXF_POINT);
+    }
+
+#endif
     return stage;
 }
 

@@ -90,6 +90,10 @@ void CUIInventoryUpgradeWnd::Init() {
     xml_init.InitWindow(uiXml, "scheme", 0, m_scheme_wnd);
 
     m_btn_repair = UIHelper::Create3tButton(uiXml, "repair_button", this);
+    if (uiXml.NavigateToNode("disassemble_button", 0)) {
+        m_btn_disassemble = UIHelper::Create3tButton(uiXml, "disassemble_button", this);
+        m_btn_disassemble->Show(false);
+    }
 
     LoadCellsBacks(uiXml);
     LoadSchemes(uiXml);

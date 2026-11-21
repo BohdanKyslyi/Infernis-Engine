@@ -61,7 +61,9 @@ occRasterizer::~occRasterizer() {}
 void occRasterizer::clear() {
     std::size_t size = occ_dim * occ_dim;
     float f = 1.f;
-    std::memset(bufFrame, 0, size * 4); // fill32
+    // bufFrame holds occTri* (8 bytes on x64): clear the whole array, not size*4 bytes,
+    // otherwise the second half keeps stale pointers into a freed (previous level) HOM.
+    std::memset(bufFrame, 0, sizeof(bufFrame));
     // std::memset(bufDepth,*LPDWORD(&f),size); // fill32
 
     u32 fillValue = *LPDWORD(&f);

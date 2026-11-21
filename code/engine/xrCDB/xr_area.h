@@ -41,6 +41,10 @@ private:
                   collide::ray_cache* cache, CObject* ignore_object);
     BOOL _RayPick(const Fvector& start, const Fvector& dir, float range, collide::rq_target tgt,
                   collide::rq_result& R, CObject* ignore_object);
+    // Screen Space Shaders: Monolith xr_area.h:47-48 - the same with a list of objects to skip
+    // ( the script class ray_pick, xrGame raypick.cpp )
+    BOOL _RayPick(const Fvector& start, const Fvector& dir, float range, collide::rq_target tgt,
+                  collide::rq_result& R, xr_vector<CObject*>& ignore_objects);
     BOOL _RayQuery(collide::rq_results& dest, const collide::ray_defs& rq, collide::rq_callback* cb,
                    LPVOID user_data, collide::test_callback* tb, CObject* ignore_object);
     BOOL _RayQuery2(collide::rq_results& dest, const collide::ray_defs& rq,
@@ -66,6 +70,9 @@ public:
     // Game raypick (nearest) - returns object and addititional params
     BOOL RayPick(const Fvector& start, const Fvector& dir, float range, collide::rq_target tgt,
                  collide::rq_result& R, CObject* ignore_object);
+    // Screen Space Shaders: Monolith xr_area.h:70-71 - the same with a list of objects to skip
+    BOOL RayPick(const Fvector& start, const Fvector& dir, float range, collide::rq_target tgt,
+                 collide::rq_result& R, xr_vector<CObject*>& ignore_objects);
 
     // General collision query
     BOOL RayQuery(collide::rq_results& dest, const collide::ray_defs& rq, collide::rq_callback* cb,

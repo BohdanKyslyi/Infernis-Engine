@@ -420,6 +420,11 @@ void CUIActorMenu::InitCallbacks() {
                 CUIWndCallback::void_function(this, &CUIActorMenu::ProcessPropertiesBoxClicked));
     AddCallback(m_pUpgradeWnd->m_btn_repair, BUTTON_CLICKED,
                 CUIWndCallback::void_function(this, &CUIActorMenu::TryRepairItem));
+    if (m_pUpgradeWnd->m_btn_disassemble) {
+        Register(m_pUpgradeWnd->m_btn_disassemble);
+        AddCallback(m_pUpgradeWnd->m_btn_disassemble, BUTTON_CLICKED,
+                    CUIWndCallback::void_function(this, &CUIActorMenu::TryDisassembleItem));
+    }
 }
 
 void CUIActorMenu::UpdateButtonsLayout() {

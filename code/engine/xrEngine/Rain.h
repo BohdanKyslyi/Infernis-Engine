@@ -98,7 +98,10 @@ private:
     void p_free(Particle* P);
 
     void InvalidateDrops();
-    void Born(u32 id, float radius);
+    // Screen Space Shaders scale the fall speed of a drop - ssfx_rain_1.z, the "Drop speed"
+    // slider. Ported from Monolith Rain.cpp:108/139, where it is the third argument of Born and
+    // multiplies the random base speed. The default of 1 leaves the vanilla rain exactly as it was.
+    void Born(u32 id, float radius, float speed = 1.0f);
     void Hit(Fvector& pos, u16 material_idx); 
     BOOL RayPick(const Fvector& s, const Fvector& d, float& range, collide::rq_target tgt, u16& material_idx); 
     void RenewItem(u32 id, float height, BOOL bHit, u16 material_idx); 
@@ -117,6 +120,11 @@ public:
     void Render();
     void OnFrame();
     float GetViewRainExposure() const { return m_fViewRainExposure; }
+    // Screen Space Shaders: Monolith Rain.h:109-114. Every sound stops when a level unloads
+    // ( CGamePersistent::Disconnect ) and the donor's rain sound starts only when the rain does, so
+    // a level load and a forced weather change set the rain back to idle ( Rain.cpp ). It does
+    // nothing unless SSS runs.
+    void InvalidateState();
 };
 
 #endif // RainH

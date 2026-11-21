@@ -1,0 +1,305 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+#include "mblur.h"
+
+// Screen Space Shaders: the two post blocks this file carries in the SSFX reference - the
+// filmic tone curve and the vanilla image corrections. Both read constants the engine already
+// binds for this pass ( tnmp_* in r4_rendertarget_phase_combine.cpp, pp_img_corrections and
+// pp_img_cg from Blender_Recorder_StandartBinding ), and no shader read them before, which is
+// why r__color_grading, r__exposure, r__gamma, r__saturation and r2_tnmp_* did nothing.
+//
+// Depth of field is not applied in this file any more. As in the reference it is a pass of its
+// own ( depth_of_field.ps, run by phase_dof before this one ), so the frame is read plainly below
+// and dof.h is not included. The bloom composite follows the reference only when the SSFX bloom
+// module is installed; without it this engine's own combine_bloom stays.
+#include "img_corrections.h"
+#include "tonemapping.h"
+
+// Screen Space Shaders: the module switches this pass needs - sky debanding, the colour lookup
+// table and the SSFX bloom target. With a module absent the file behaves exactly as before:
+// this engine's own bloom composite and its own tonemapping stay in place.
+#include "check_screenspace.h"
+
+#ifdef SSFX_DEBAND
+	#include "screenspace_debanding.h"
+#endif
+
+#ifdef SSFX_LUT_INUSE
+	#include "screenspace_lut.h"
+#endif
+
+#ifdef SSFX_BLOOM
+	Texture2D s_ssfx_bloom;
+#endif
+/*
+struct 	v2p
+{
+  float4 tc0: 		TEXCOORD0;	// Center
+  float4 tc1: 		TEXCOORD1;	// LT 		 
+  float4 tc2: 		TEXCOORD2;	// RB
+  float4 tc3: 		TEXCOORD3;	// RT 
+  float4 tc4: 		TEXCOORD4;	// LB
+  float4 tc5:		TEXCOORD5;	// Left	/ Right	
+  float4 tc6:		TEXCOORD6;	// Top  / Bottom 
+};
+*/
+
+//////////////////////////////////////////////////////////////////////////////////////////
+#ifndef USE_MSAA
+Texture2D 			s_distort;
+#define	EPSDEPTH	0.001
+#else
+Texture2DMS<float4, MSAA_SAMPLES> s_distort;
+#define	EPSDEPTH	0.001
+#endif
+uniform float4 		e_barrier;	// x=norm(.8f), y=depth(.1f), z=clr
+uniform float4 		e_weights;	// x=norm, y=depth, z=clr
+uniform float4 		e_kernel;	// x=norm, y=depth, z=clr
+//////////////////////////////////////////////////////////////////////////////////////////
+// Pixel
+
+struct c2_out
+{
+	float4	Color : SV_Target;
+#ifdef USE_MSAA
+	float	Depth : SV_Depth;
+#endif
+};
+
+c2_out main( v2p_aa_AA I )
+{
+	c2_out	res;
+	res.Color = float4(0,0,0,0);
+
+/*	
+#ifdef USE_MSAA
+	[unroll] for( int iSample = 0; iSample < MSAA_SAMPLES; ++iSample )
+	{
+#else // USE_MSAA	
+	int iSample = 0;
+#endif
+*/
+	int iSample = 0;
+
+#ifdef GBUFFER_OPTIMIZATION
+	gbuffer_data gbd	= gbuffer_load_data(I.Tex0, I.HPos, iSample );
+#else
+	gbuffer_data gbd	= gbuffer_load_data(I.Tex0, iSample );
+#endif
+	
+	// Screen Space Shaders: the debanding block further down needs the depth as well, so it is
+	// read here instead of inside the distortion branch, exactly as the donor reads it.
+  	float 	depth 	= gbd.P.z;
+
+#ifdef 	USE_DISTORT
+//  	float 	depth 	= tex2D 	(s_position, 	I.tc0).z;
+//	float4 	distort	= tex2D		(s_distort, 	I.tc0);
+#ifndef USE_MSAA
+	float4 	distort	= s_distort.Sample(smp_nofilter, I.Tex0);
+#else // USE_MSAA
+	float4 	distort	= s_distort.Load( int3( I.Tex0 * pos_decompression_params2.xy, 0 ), iSample );
+#endif // USE_MSAA
+	float2	offset	= (distort.xy-(127.0h/255.0h))*def_distort;  // fix newtral offset
+	float2	center	= I.Tex0 + offset;
+
+#ifdef GBUFFER_OPTIMIZATION
+	gbuffer_data gbdx	= gbuffer_load_data_offset(I.Tex0, center, I.HPos, iSample );
+#else
+	gbuffer_data gbdx	= gbuffer_load_data_offset(I.Tex0, center, iSample);
+#endif
+
+//	float 	depth_x	= tex2D 	(s_position, center).z	;
+	float 	depth_x	= gbdx.P.z;
+	if ((depth_x+EPSDEPTH)<depth)	center	= I.Tex0;	// discard new sample
+#else // USE_DISTORT
+	float2	center 	= I.Tex0;
+#endif
+   	//float3 	img 	= tex2D		(s_image, center);
+
+	// Screen Space Shaders: the frame is read plainly, as in the reference. Depth of field
+	// has already been applied to it by depth_of_field.ps.
+	float3 img = s_image.Load(int3(center.xy * screen_res.xy, 0),0);
+//	float4 	bloom	= tex2D		(s_bloom, center);
+#ifdef SSFX_BLOOM
+	// Screen Space Shaders: its own bloom target, filled by the SSFX bloom phases.
+	float4 	bloom	= s_ssfx_bloom.Sample( smp_rtlinear, center);
+#else
+	float4 	bloom	= s_bloom.Sample( smp_rtlinear, center);
+#endif
+	
+//			img 	= mblur		(center,tex2D(s_position,I.tc0),img.rgb);
+//			img 	= mblur( center, s_position.Sample( smp_nofilter, tc0), img.rgb);
+			img 	= mblur( center, ( gbd ).P, img.rgb);
+
+#ifdef SSFX_DEBAND
+	// Debanding  - SCREEN SPACE SHADERS - UPDATE 12.5
+	// Sky only: the gradient banding this removes is a sky problem, and depth <= SKY_EPS is how
+	// the donor picks sky pixels.
+	img = lerp(img, ssfx_debanding(img, I.Tex0.xy), depth <= SKY_EPS);
+#endif
+
+#ifdef 	USE_DISTORT
+ 	float3	blurred	= bloom*def_hdr	;
+			img		= lerp	(img,blurred,distort.z);
+#endif
+
+/*
+#ifdef USE_MSAA
+ 	res += combine_bloom( img, bloom ) / MSAA_SAMPLES;
+	}
+#else
+ 	res += combine_bloom( img, bloom );
+#endif
+*/
+#ifdef SSFX_BLOOM
+	// Screen Space Shaders: its own bloom is composited the donor's way. This engine's
+	// combine_bloom is kept for the case where the SSFX bloom module is not installed, so the
+	// PBR bloom look stays exactly as it is today whenever SSFX bloom is absent.
+ 	res.Color = float4( blend_soft( img, bloom.xyz * bloom.w ), 1.0 );
+#else
+ 	res.Color += combine_bloom( img, bloom );
+#endif
+
+	// Screen Space Shaders: post on the finished frame. Infernis's lighting and its own
+	// tonemapping already ran in combine_1.ps, so both blocks sit strictly after them and take
+	// nothing away. Neutral at the engine defaults - tnmp_onoff is 0.0, and exposure, gamma and
+	// saturation are 1.0 with colour grading at 0,0,0 - so the picture is untouched until a
+	// setting moves.
+	// The donor skips this tonemap under the pseudo-PBR module ( combine_2_naa.ps:114 ).
+#ifndef SSFX_ENHANCED_SHADERS
+	if (tnmp_onoff == 1.0)
+		res.Color.rgb = Uncharted2ToneMapping(res.Color.rgb);
+#endif
+
+	res.Color.rgb = img_corrections(res.Color.rgb);
+
+#ifdef SSFX_LUT_INUSE
+	// Screen Space Shaders: colour lookup table, last in the chain as the donor places it.
+	res.Color.rgb = ssfx_lut_pp(res.Color.rgb);
+#endif
+#ifdef USE_MSAA
+	float4 ptp = mul(m_P, float4(gbd.P, 1));
+	res.Depth = ptp.w==0?1:ptp.z/ptp.w;
+#endif
+	
+	return res;
+}
+#else
+#include "common.h"
+#include "mblur.h"
+#include "dof.h"
+/*
+struct 	v2p
+{
+  float4 tc0: 		TEXCOORD0;	// Center
+  float4 tc1: 		TEXCOORD1;	// LT 		 
+  float4 tc2: 		TEXCOORD2;	// RB
+  float4 tc3: 		TEXCOORD3;	// RT 
+  float4 tc4: 		TEXCOORD4;	// LB
+  float4 tc5:		TEXCOORD5;	// Left	/ Right	
+  float4 tc6:		TEXCOORD6;	// Top  / Bottom 
+};
+*/
+
+//////////////////////////////////////////////////////////////////////////////////////////
+#ifndef USE_MSAA
+Texture2D 			s_distort;
+#define	EPSDEPTH	0.001
+#else
+Texture2DMS<float4, MSAA_SAMPLES> s_distort;
+#define	EPSDEPTH	0.001
+#endif
+uniform float4 		e_barrier;	// x=norm(.8f), y=depth(.1f), z=clr
+uniform float4 		e_weights;	// x=norm, y=depth, z=clr
+uniform float4 		e_kernel;	// x=norm, y=depth, z=clr
+//////////////////////////////////////////////////////////////////////////////////////////
+// Pixel
+
+struct c2_out
+{
+	float4	Color : SV_Target;
+#ifdef USE_MSAA
+	float	Depth : SV_Depth;
+#endif
+};
+
+c2_out main( v2p_aa_AA I )
+{
+	c2_out	res;
+	res.Color = float4(0,0,0,0);
+
+/*	
+#ifdef USE_MSAA
+	[unroll] for( int iSample = 0; iSample < MSAA_SAMPLES; ++iSample )
+	{
+#else // USE_MSAA	
+	int iSample = 0;
+#endif
+*/
+	int iSample = 0;
+
+#ifdef GBUFFER_OPTIMIZATION
+	gbuffer_data gbd	= gbuffer_load_data(I.Tex0, I.HPos, iSample );
+#else
+	gbuffer_data gbd	= gbuffer_load_data(I.Tex0, iSample );
+#endif
+	
+#ifdef 	USE_DISTORT
+//  	float 	depth 	= tex2D 	(s_position, 	I.tc0).z;
+//	float4 	distort	= tex2D		(s_distort, 	I.tc0);
+  	float 	depth 	= gbd.P.z;
+#ifndef USE_MSAA
+	float4 	distort	= s_distort.Sample(smp_nofilter, I.Tex0);
+#else // USE_MSAA
+	float4 	distort	= s_distort.Load( int3( I.Tex0 * pos_decompression_params2.xy, 0 ), iSample );
+#endif // USE_MSAA
+	float2	offset	= (distort.xy-(127.0h/255.0h))*def_distort;  // fix newtral offset
+	float2	center	= I.Tex0 + offset;
+
+#ifdef GBUFFER_OPTIMIZATION
+	gbuffer_data gbdx	= gbuffer_load_data_offset(I.Tex0, center, I.HPos, iSample );
+#else
+	gbuffer_data gbdx	= gbuffer_load_data_offset(I.Tex0, center, iSample);
+#endif
+
+//	float 	depth_x	= tex2D 	(s_position, center).z	;
+	float 	depth_x	= gbdx.P.z;
+	if ((depth_x+EPSDEPTH)<depth)	center	= I.Tex0;	// discard new sample
+#else // USE_DISTORT
+	float2	center 	= I.Tex0;
+#endif
+   	//float3 	img 	= tex2D		(s_image, center);
+
+	float3	img	= dof(center);
+//	float4 	bloom	= tex2D		(s_bloom, center);
+	float4 	bloom	= s_bloom.Sample( smp_rtlinear, center);
+	
+//			img 	= mblur		(center,tex2D(s_position,I.tc0),img.rgb);
+//			img 	= mblur( center, s_position.Sample( smp_nofilter, tc0), img.rgb);
+			img 	= mblur( center, ( gbd ).P, img.rgb);
+
+#ifdef 	USE_DISTORT
+ 	float3	blurred	= bloom*def_hdr	;
+			img		= lerp	(img,blurred,distort.z);
+#endif
+
+/*
+#ifdef USE_MSAA
+ 	res += combine_bloom( img, bloom ) / MSAA_SAMPLES;
+	}
+#else
+ 	res += combine_bloom( img, bloom );
+#endif
+*/
+ 	res.Color += combine_bloom( img, bloom );
+#ifdef USE_MSAA
+	float4 ptp = mul(m_P, float4(gbd.P, 1));
+	res.Depth = ptp.w==0?1:ptp.z/ptp.w;
+#endif
+	
+	return res;
+}
+#endif

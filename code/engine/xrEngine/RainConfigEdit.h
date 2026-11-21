@@ -68,7 +68,7 @@ inline bool write_verified_file(const char* path, const std::string& data, const
 }
 
 // Patch only the requested value; retain comments, encoding and unknown keys.
-inline std::string set_dynamic_wind_value(const std::string& source,
+inline std::string set_section_value(const std::string& source, const std::string& section,
     const std::string& key, const std::string& value) {
     const std::string newline = source.find("\r\n") != std::string::npos ? "\r\n" : "\n";
     std::string result;
@@ -91,7 +91,7 @@ inline std::string set_dynamic_wind_value(const std::string& source,
             if (in_section && !found_key) append_key();
             const std::size_t close = line.find(']', first);
             in_section = close != std::string::npos &&
-                line.substr(first + 1, close - first - 1) == "dynamic_wind";
+                line.substr(first + 1, close - first - 1) == section;
             if (in_section) { found_section = true; found_key = false; }
         } else if (in_section && first != std::string::npos &&
                    line[first] != ';' && line.compare(first, 2, "//") != 0) {
@@ -118,10 +118,15 @@ inline std::string set_dynamic_wind_value(const std::string& source,
     if (in_section && !found_key) append_key();
     if (!found_section) {
         if (!result.empty() && result.back() != '\n') result += newline;
-        result += "[dynamic_wind]" + newline;
+        result += "[" + section + "]" + newline;
         append_key();
     }
     return result;
+}
+
+inline std::string set_dynamic_wind_value(const std::string& source,
+    const std::string& key, const std::string& value) {
+    return set_section_value(source, "dynamic_wind", key, value);
 }
 
 inline std::string set_tilt_multiplier(const std::string& source, const std::string& value) {

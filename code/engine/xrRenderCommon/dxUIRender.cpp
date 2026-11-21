@@ -2,6 +2,13 @@
 #include "dxUIRender.h"
 
 #include "dxUIShader.h"
+#include "blenders/Blender.h"
+#include "Blender_Screen_SET.h"
+#include "ResourceManager.h"
+#include "dxRenderDeviceRender.h"
+#if defined(USE_DX10) || defined(USE_DX11)
+#include "../xrRenderDX10/StateManager/dx10ShaderResourceStateCache.h"
+#endif
 
 dxUIRender UIRenderImpl;
 
@@ -11,6 +18,7 @@ void dxUIRender::CreateUIGeom() {
 }
 
 void dxUIRender::DestroyUIGeom() {
+    ReleaseWeatherPreview();
     hGeom_TL = NULL;
     hGeom_LIT = NULL;
 }
@@ -265,3 +273,121 @@ void dxUIRender::FlushPrimitive() {
 void dxUIRender::CacheSetXformWorld(const Fmatrix& M) { RCache.set_xform_world(M); }
 
 void dxUIRender::CacheSetCullMode(CullMode m) { RCache.set_CullMode(CULL_NONE + m); }
+
+
+// Reuse the completed scene once per editor draw; do not render the level twice.
+// CRT participates in the resource manager's device-reset lifecycle.
+bool dxUIRender::DrawWeatherPreview(const Frect& destination) {
+    if (destination.width() <= 0.f || destination.height() <= 0.f)
+        return false;
+    u32 width = 0, height = 0;
+    D3DFORMAT format = D3DFMT_UNKNOWN;
+#if defined(USE_DX10) || defined(USE_DX11)
+    ID3DRenderTargetView* view = RCache.get_RT();
+    if (!view) return false;
+    ID3DResource* resource = nullptr;
+    view->GetResource(&resource);
+    ID3DTexture2D* source = nullptr;
+    const HRESULT query = resource->QueryInterface(__uuidof(ID3DTexture2D), (void**)&source);
+    _RELEASE(resource);
+    if (FAILED(query) || !source) return false;
+    D3D_TEXTURE2D_DESC desc;
+    source->GetDesc(&desc);
+    width = desc.Width; height = desc.Height;
+    switch (desc.Format) {
+    case DXGI_FORMAT_R8G8B8A8_UNORM: format = D3DFMT_A8R8G8B8; break;
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: format = D3DFMT_A16B16G16R16F; break;
+    default: _RELEASE(source); return false;
+    }
+#else
+    IDirect3DSurface9* source = nullptr;
+    if (FAILED(HW.pDevice->GetRenderTarget(0, &source)) || !source) return false;
+    D3DSURFACE_DESC desc;
+    if (FAILED(source->GetDesc(&desc))) { _RELEASE(source); return false; }
+    width = desc.Width; height = desc.Height; format = desc.Format;
+#endif
+    if (m_weatherScene && (m_weatherScene->dwWidth != width ||
+        m_weatherScene->dwHeight != height || m_weatherScene->fmt != format))
+        ReleaseWeatherPreview();
+    if (!m_weatherScene)
+        m_weatherScene.create("$user$weather_editor_scene", width, height, format);
+    if (!m_weatherScene || !m_weatherScene->valid()) {
+        _RELEASE(source);
+        return false;
+    }
+
+    // The copy destination may still be a sampler from the previous UI pass.
+    if (!m_weatherEmptyTextures) {
+        STextureList empty;
+        m_weatherEmptyTextures = DEV->_CreateTextureList(empty);
+    }
+    RCache.set_Textures(m_weatherEmptyTextures);
+#if defined(USE_DX10) || defined(USE_DX11)
+    SRVSManager.Apply();
+    if (desc.SampleDesc.Count > 1)
+        HW.pContext->ResolveSubresource(m_weatherScene->pSurface, 0, source, 0, desc.Format);
+    else
+        HW.pContext->CopyResource(m_weatherScene->pSurface, source);
+    _RELEASE(source);
+#else
+    const HRESULT copy = HW.pDevice->StretchRect(source, nullptr,
+        m_weatherScene->pRT, nullptr, D3DTEXF_NONE);
+    _RELEASE(source);
+    if (FAILED(copy)) return false;
+#endif
+    if (!m_weatherShader) {
+        // Opaque copy: scene alpha is not a UI opacity channel.
+        CBlender_Screen_SET blender;
+        m_weatherShader.create(&blender, "$user$weather_editor_copy", "$user$weather_editor_scene");
+    }
+    RCache.set_Shader(m_weatherShader);
+    RCache.set_CullMode(CULL_NONE);
+
+    Frect image = destination;
+    const float scale = std::min(image.width() / float(width), image.height() / float(height));
+    const float w = width * scale, h = height * scale;
+    image.x1 += (image.width() - w) * .5f;
+    image.y1 += (image.height() - h) * .5f;
+    image.x2 = image.x1 + w; image.y2 = image.y1 + h;
+    // Clear the fullscreen scene visually, then display the entire camera frame
+    // inside the editor. Black bars preserve aspect ratio at any resolution.
+    StartPrimitive(12, ptTriList, pttTL);
+    const auto quad = [this](const Frect& r, u32 color) {
+#if defined(USE_DX10) || defined(USE_DX11)
+        const float offset = 0.f;
+#else
+        const float offset = -.5f;
+#endif
+        const float l = r.x1 + offset, t = r.y1 + offset;
+        const float rr = r.x2 + offset, b = r.y2 + offset;
+        PushPoint(l,t,0.f,color,0.f,0.f); PushPoint(rr,t,0.f,color,1.f,0.f);
+        PushPoint(rr,b,0.f,color,1.f,1.f); PushPoint(l,t,0.f,color,0.f,0.f);
+        PushPoint(rr,b,0.f,color,1.f,1.f); PushPoint(l,b,0.f,color,0.f,1.f);
+    };
+    Frect screen; screen.set(0.f,0.f,float(width),float(height));
+    quad(screen, color_rgba(0,0,0,255));
+    quad(image, color_rgba(255,255,255,255));
+    FlushPrimitive();
+    // Unbind our sample so next frame's copy never writes a bound texture.
+    RCache.set_Textures(m_weatherEmptyTextures);
+#if defined(USE_DX10) || defined(USE_DX11)
+    SRVSManager.Apply();
+#endif
+    return true;
+}
+
+void dxUIRender::ReleaseWeatherPreview() {
+    m_weatherShader.destroy();
+    m_weatherScene.destroy();
+}
+
+
+// Optional versioned entry point. Never extend/reorder IUIRender's shared vtable.
+// nullptr releases the temporary preview resources.
+extern "C" __declspec(dllexport) BOOL __cdecl xrWeatherEditorPreviewV1(const Frect* destination) {
+    if (!destination) {
+        UIRenderImpl.ReleaseWeatherPreview();
+        return TRUE;
+    }
+    return UIRenderImpl.DrawWeatherPreview(*destination) ? TRUE : FALSE;
+}

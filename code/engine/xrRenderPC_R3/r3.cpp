@@ -35,6 +35,15 @@ public:
     virtual void set_color(float r, float g, float b) {}
 };
 
+// Screen Space Shaders. Monolith r3.cpp, the same body as the R4 renderer's.
+bool CRender::is_sun() {
+    if (o.sunstatic)
+        return FALSE;
+    Fcolor sun_color = ((light*)Lights.sun_adapted._get())->color;
+    return (ps_r2_ls_flags.test(R2FLAG_SUN) &&
+            (u_diffuse2s(sun_color.r, sun_color.g, sun_color.b) > EPS));
+}
+
 float r_dtex_range = 50.f;
 //////////////////////////////////////////////////////////////////////////
 ShaderElement* CRender::rimp_select_sh_dynamic(dxRender_Visual* pVisual, float cdist_sq) {
@@ -100,7 +109,8 @@ static class cl_scope_lens_state : public R_constant_setup {
             Msg("* ScopeLensShader: mode=%d detector=%d", int(mode), int(detector));
             last_logged_mode = int(mode);
         }
-        RCache.set_c(C, active, mode, detector, 0.f);
+        const float blend = active && g_pGameLevel ? g_pGameLevel->ScopeLensBlend() : 0.f;
+        RCache.set_c(C, active, mode, detector, blend);
     }
 } binder_scope_lens_state;
 

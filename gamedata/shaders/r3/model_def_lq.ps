@@ -1,0 +1,53 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+
+struct 	v2p
+{
+ 	float2 	tc0: 		TEXCOORD0;	// base
+  	float3	c0:			COLOR0;		// sun
+	float  fog:			FOG;
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Pixel
+float4 main( v2p I ) : SV_Target
+{
+//	float4	t_base 	= tex2D	(s_base,I.tc0);
+	float4	t_base 	= s_base.Sample( smp_base, I.tc0 );
+
+	float3	light	= I.c0;
+	float3	final 	= light * t_base * 2;
+
+	// Fogging
+	final = lerp(fog_color, final, I.fog);
+
+	// out
+	return  float4	(final.rgb,  I.fog *  I.fog * t_base.a);
+}
+#else
+#include "common.h"
+
+struct 	v2p
+{
+ 	float2 	tc0: 		TEXCOORD0;	// base
+// 	float2 	tc1: 		TEXCOORD1;	// lmap
+  	float3	c0:			COLOR0;		// sun
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Pixel
+float4 main( v2p I ) : SV_Target
+{
+//	float4	t_base 	= tex2D	(s_base,I.tc0);
+	float4	t_base 	= s_base.Sample( smp_base, I.tc0 );
+
+	float3	light	= I.c0;
+	float3	final 	= light*t_base*2;
+
+	// out
+	return  float4	(final.r,final.g,final.b,t_base.a);
+}
+#endif

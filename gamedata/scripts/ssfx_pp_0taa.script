@@ -1,0 +1,47 @@
+-- @ Version: SCREEN SPACE SHADERS - UPDATE 23
+-- @ Description: Motion Blur script
+-- @ Author: https://www.moddb.com/members/ascii1457
+-- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+
+-- Settings
+local ssfx_taa_enabled = 0
+local ssfx_taa_jitter = 0
+local ssfx_taa_sharpness = 0
+
+-- Internal vars
+module_installed = true
+
+local function apply_taa_settings()
+	-- The native SSFX settings menu owns these values ( ssfx_menu 1 ). Pushing the
+	-- defaults out of ssfx_*_settings.script here would land on top of whatever the
+	-- player set in the menu, on every single game start.
+	if ssfx_001_mcm.menu_owns_settings() then return end
+
+	-- Apply commands
+	get_console():execute("ssfx_taa (" .. (ssfx_taa_enabled and 1 or 0) .. "," .. ssfx_taa_jitter .. ", " .. ssfx_taa_sharpness .. "," .. 0 .. ")")
+
+end
+
+local function update_settings()
+	
+	-- Get settings
+	module_id = "ssfx_pp/ssfx_taa"
+
+	ssfx_taa_enabled = ssfx_001_mcm.ssfx_get_setting(module_id, "enabled", ssfx_pp_0taa_settings)
+	ssfx_taa_jitter = ssfx_001_mcm.ssfx_get_setting(module_id, "jitter", ssfx_pp_0taa_settings)
+	ssfx_taa_sharpness = ssfx_001_mcm.ssfx_get_setting(module_id, "sharpness", ssfx_pp_0taa_settings)
+	
+
+	-- Apply settings
+	apply_taa_settings()
+
+end
+
+function on_game_start()
+
+	-- General Functions
+	RegisterScriptCallback("on_option_change", update_settings)
+
+	-- Read and apply settigns
+	update_settings()
+end

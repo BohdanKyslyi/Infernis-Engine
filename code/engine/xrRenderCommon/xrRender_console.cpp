@@ -8,7 +8,10 @@ u32 ps_Preset = 2;
 xr_token qpreset_token[] = { { "Minimum", 0 }, { "Low", 1 },     { "Default", 2 },
                              { "High", 3 },    { "Extreme", 4 }, { 0, 0 } };
 
-u32 ps_r_ssao_mode = 2;
+// NOT STOCK: starts switched off ( stock value 2, hdao ). The standard settings of this build
+// keep the stock ambient occlusion off, because the Screen Space Shaders set brings its own. A
+// profile whose user.ltx already holds r2_ssao_mode is not affected.
+u32 ps_r_ssao_mode = 0;
 xr_token qssao_mode_token[] = {
     { "disabled", 0 }, { "default", 1 }, { "hdao", 2 }, { "hbao", 3 }, { 0, 0 }
 };
@@ -18,7 +21,23 @@ xr_token qsun_shafts_token[] = {
     { "st_opt_off", 0 }, { "st_opt_low", 1 }, { "st_opt_medium", 2 }, { "st_opt_high", 3 }, { 0, 0 }
 };
 
-u32 ps_r_ssao = 3;
+// Monolith xrRender_console.cpp:36-43, table and default both. screen_space is the donor's own
+// default and the OGSE phase that draws it is installed now
+// ( r4_rendertarget_phase_sunshafts.cpp ), so there is nothing left to hold it back.
+//   r2_sunshafts_mode off           - no sun shafts at all
+//   r2_sunshafts_mode volumetric    - the shafts this engine drew before, accum_direct_volumetric
+//   r2_sunshafts_mode screen_space  - the OGSE screen-space ones ( default, as in Monolith )
+//   r2_sunshafts_mode combined      - both
+u32 ps_sunshafts_mode = R2SS_SCREEN_SPACE;
+xr_token sunshafts_mode_token[] = {
+    { "off", 0 }, { "volumetric", 1 }, { "screen_space", 2 }, { "combined", 3 }, { 0, 0 }
+};
+
+float ps_r2_ss_sunshafts_length = 1.f;
+float ps_r2_ss_sunshafts_radius = 1.f;
+
+// NOT STOCK: starts switched off ( stock value 3, high ), for the same reason as ps_r_ssao_mode.
+u32 ps_r_ssao = 0;
 xr_token qssao_token[] = { { "st_opt_off", 0 },
                            { "st_opt_low", 1 },
                            { "st_opt_medium", 2 },
@@ -57,9 +76,9 @@ xr_token qminmax_sm_token[] = {
     { "off", 0 }, { "on", 1 }, { "auto", 2 }, { "autodetect", 3 }, { 0, 0 }
 };
 
-//	“Off”
-//	“DX10.0 style [Standard]”
-//	“DX10.1 style [Higher quality]”
+//	ï¿½Offï¿½
+//	ï¿½DX10.0 style [Standard]ï¿½
+//	ï¿½DX10.1 style [Higher quality]ï¿½
 
 // Common
 extern int psSkeletonUpdate;
@@ -71,7 +90,22 @@ int ps_r__LightSleepFrames = 10;
 float ps_r__Detail_l_ambient = 0.9f;
 float ps_r__Detail_l_aniso = 0.25f;
 float ps_r__Detail_density = 0.3f;
+// Screen Space Shaders. Grass height, Monolith xrRender_console.cpp:500 ( ps_current_detail_height ).
+// Call of Pripyat has no such variable at all. The donor keeps two of them and only
+// ps_current_detail_height is ever read by the decompressor, so that is the one ported here.
+float ps_r__Detail_height = 1.0f;
+// Screen Space Shaders. Grass draw distance in metres, read in DetailManager.cpp::UpdateVisibleM.
+// The grass cache is sized at compile time ( dm_size in DetailManager.h, 152 m ), so this only
+// shortens the radius the cache already holds and is clamped to dm_fade there. Starts at the full
+// radius, because stock Call of Pripyat's 48 m is what made grass look like it ended in front of
+// the actor.
+float ps_r__Detail_radius = 152.0f;
 float ps_r__Detail_rainbow_hemi = 0.75f;
+
+// Screen Space Shaders. The second word of render flags, declared in xrEngine/defines.h and
+// defined here exactly as the donor does it - Monolith xrRender_console.cpp:481. Every bit starts
+// clear, so nothing changes until a command or the settings menu sets one.
+Flags32 psDeviceFlags2 = { 0 };
 
 float ps_r__Tree_w_rot = 10.0f;
 float ps_r__Tree_w_speed = 1.00f;
@@ -126,8 +160,11 @@ Flags32 ps_r2_ls_flags = { R2FLAG_SUN
                            R2FLAG_SUN_FOCUS | R2FLAG_SUN_TSM | R2FLAG_TONEMAP |
                            R2FLAG_VOLUMETRIC_LIGHTS }; // r2-only
 
+// NOT STOCK: tessellation starts switched off ( stock has R2FLAGEXT_ENABLE_TESSELLATION in this
+// list ), the same standard settings as the ambient occlusion above. A profile whose user.ltx
+// already holds r4_enable_tessellation is not affected.
 Flags32 ps_r2_ls_flags_ext = {
-    /*R2FLAGEXT_SSAO_OPT_DATA |*/ R2FLAGEXT_SSAO_HALF_DATA | R2FLAGEXT_ENABLE_TESSELLATION
+    /*R2FLAGEXT_SSAO_OPT_DATA |*/ R2FLAGEXT_SSAO_HALF_DATA /*| R2FLAGEXT_ENABLE_TESSELLATION*/
 };
 
 float ps_r2_df_parallax_h = 0.02f;
@@ -198,9 +235,21 @@ Flags32 ps_r2_rain_drops_flags = { R2FLAG_RAIN_DROPS | R2FLAG_RAIN_DROPS_CONTROL
 //- Mad Max
 float ps_r2_gloss_factor = 4.0f;
 //- Mad Max
+
+// Minimum-gloss floor for the legacy gloss method ( ssfx_gloss_method 0 ).
+// Ported from Monolith xrRender_console.cpp:514.
+float ps_r2_gloss_min = 0.0f;
+
+// Screen Space Shaders
+// The ps_ssfx_* variables are NOT defined here. Parts of them are read by xrEngine itself
+// (Environment wind animation and wetness), and this file is compiled separately into every
+// renderer DLL. They live in xrEngine/xr_ioc_cmd.cpp as ENGINE_API instead, so there is a single
+// shared instance.
+
 #ifndef _EDITOR
 #include "xrEngine/xr_ioconsole.h"
 #include "xrEngine/xr_ioc_cmd.h"
+#include "xrEngine/ssfx_console_vars.h"
 
 #if defined(USE_DX10) || defined(USE_DX11)
 #include "../xrRenderDX10/StateManager/dx10SamplerStateCache.h"
@@ -595,6 +644,55 @@ public:
 #endif //	DEBUG
 #endif //	(RENDER == R_R3) || (RENDER == R_R4)
 
+class CCC_ssfx_cascades : public CCC_Vector3 {
+public:
+    void apply() {
+#if defined(USE_DX10) || defined(USE_DX11)
+        RImplementation.init_cacades();
+#endif
+    }
+
+    CCC_ssfx_cascades(LPCSTR N, Fvector3* V, const Fvector3 _min, const Fvector3 _max)
+        : CCC_Vector3(N, V, _min, _max){};
+
+    virtual void Execute(LPCSTR args) {
+        CCC_Vector3::Execute(args);
+        apply();
+    }
+
+    virtual void Status(TStatus& S) {
+        CCC_Vector3::Status(S);
+        apply();
+    }
+};
+
+// One sun cascade size for the SSFX settings page. ssfx_shadow_cascades carries the three of them
+// at once; the page has a slider for each, and the cascades have to be rebuilt after any of them
+// moves, exactly as after the whole command.
+class CCC_ssfx_ui_cascade : public CCC_Float {
+public:
+    CCC_ssfx_ui_cascade(LPCSTR N, float* V, float _min, float _max)
+        : CCC_Float(N, V, _min, _max){};
+
+    virtual void Execute(LPCSTR args) {
+        CCC_Float::Execute(args);
+#if defined(USE_DX10) || defined(USE_DX11)
+        RImplementation.init_cacades();
+#endif
+    }
+};
+
+// The rain cover map's resolution as the author lists it: his entry N stands for 2^( N + 6 ).
+static xr_token tok_wet_cover_res[] = {
+    { "ui_mcm_lst_ssfx_cover_64", 64 },
+    { "ui_mcm_lst_ssfx_cover_128", 128 },
+    { "ui_mcm_lst_ssfx_cover_256", 256 },
+    { "ui_mcm_lst_ssfx_cover_512", 512 },
+    { "ui_mcm_lst_ssfx_cover_1024", 1024 },
+    { "ui_mcm_lst_ssfx_cover_2048", 2048 },
+    { 0, 0 },
+};
+
 //-----------------------------------------------------------------------
 void xrRender_initconsole() {
     CMD3(CCC_Preset, "_preset", &ps_Preset, qpreset_token);
@@ -634,8 +732,34 @@ void xrRender_initconsole() {
 
     //.	CMD4(CCC_Float,		"r__detail_density",	&ps_r__Detail_density,		.05f,	0.99f
     //);
+    // Grass density. Monolith xrRender_console.cpp:1267 registers this over 0.04 .. 1.0; Infernis
+    // clamped it to 0.2 .. 0.6, so two thirds of the donor's travel was unreachable and the slider
+    // could neither thin the grass out nor fill a field. The bounds below are the donor's own.
+    // The default stays 0.3 rather than the donor's 0.6: the grass radius here is 152 m instead of
+    // the donor's 48 m, so doubling the density would triple the blade count over ten times the
+    // area on a profile that never touched the slider. Anyone who wants 0.6 can reach it now.
+#if RENDER == R_R4
+    CMD4(CCC_Float, "r__detail_density", &ps_r__Detail_density, 0.04f, 1.0f);
+#else
+    // The other renderers: the game's own range, Infernis xrRender_console.cpp:637.
     CMD4(CCC_Float, "r__detail_density", &ps_r__Detail_density, .2f, 0.6f);
-	
+#endif
+
+    // Screen Space Shaders. Grass height, Monolith xrRender_console.cpp:1269. Same bounds and
+    // default as the donor. Like r__detail_density above it writes the variable the decompressor
+    // reads, so a new value lands on every slot unpacked after the command, without a map reload.
+    CMD4(CCC_Float, "r__detail_height", &ps_r__Detail_height, 0.5f, 2.0f);
+
+    // Screen Space Shaders. Grass draw distance. Monolith exposes this as r__detail_radius and
+    // rebuilds the whole grass cache for it; here the cache is a fixed 152 m and this shortens it,
+    // which is the same thing to the player and needs no map reload. Upper bound is the cache.
+    CMD4(CCC_Float, "r__detail_radius", &ps_r__Detail_radius, 8.0f, 152.0f);
+
+    // Screen Space Shaders. Monolith xrRender_console.cpp:1712-1713. The first switches grass
+    // casting shadows on, the second stops a blade shrinking as it fades out in the distance.
+    CMD3(CCC_Mask, "r__enable_grass_shadow", &psDeviceFlags2, rsGrassShadow);
+    CMD3(CCC_Mask, "r__no_scale_on_fade", &psDeviceFlags2, rsNoScale);
+
 	CMD4(CCC_Float, "r__d_tree_w_amp", &ps_r__Tree_w_amp, .001f, 1.f);
     CMD4(CCC_Float, "r__d_tree_w_rot", &ps_r__Tree_w_rot, .01f, 100.f);
     CMD4(CCC_Float, "r__d_tree_w_speed", &ps_r__Tree_w_speed, 1.0f, 10.f);
@@ -694,7 +818,16 @@ void xrRender_initconsole() {
     CMD4(CCC_Float, "r2_ls_dsm_kernel", &ps_r2_ls_dsm_kernel, .1f, 3.f);
     CMD4(CCC_Float, "r2_ls_psm_kernel", &ps_r2_ls_psm_kernel, .1f, 3.f);
     CMD4(CCC_Float, "r2_ls_ssm_kernel", &ps_r2_ls_ssm_kernel, .1f, 3.f);
+    // Screen Space Shaders: the upper limit is the donor's 3, not stock CoP's 1. The author's
+    // "shadow LOD quality" slider runs 0.5 .. 3 and with the old limit everything above 1 was
+    // refused by the console. The value is only a multiplier in Light_Render_Direct_ComputeXFS
+    // and the resulting size is clamped to ssfx_shadows there, same as in the donor.
+#if RENDER == R_R4
+    CMD4(CCC_Float, "r2_ls_squality", &ps_r2_ls_squality, .5f, 3.f);
+#else
+    // The other renderers: the game's own range, Infernis xrRender_console.cpp:697.
     CMD4(CCC_Float, "r2_ls_squality", &ps_r2_ls_squality, .5f, 1.f);
+#endif
 
     CMD3(CCC_Mask, "r2_zfill", &ps_r2_ls_flags, R2FLAG_ZFILL);
     CMD4(CCC_Float, "r2_zfill_depth", &ps_r2_zfill, .001f, .5f);
@@ -702,6 +835,8 @@ void xrRender_initconsole() {
 
     //- Mad Max
     CMD4(CCC_Float, "r2_gloss_factor", &ps_r2_gloss_factor, .0f, 10.f);
+    // Ported from Monolith xrRender_console.cpp:1343, same range.
+    CMD4(CCC_Float, "r2_gloss_min", &ps_r2_gloss_min, .001f, 1.0f);
 //- Mad Max
 
 #ifdef DEBUG
@@ -795,6 +930,9 @@ void xrRender_initconsole() {
     //	CMD3(CCC_Mask,		"r2_sun_shafts",				&ps_r2_ls_flags,
     //R2FLAG_SUN_SHAFTS);
     CMD3(CCC_Token, "r2_sun_shafts", &ps_r_sun_shafts, qsun_shafts_token);
+    CMD3(CCC_Token, "r2_sunshafts_mode", &ps_sunshafts_mode, sunshafts_mode_token);
+    CMD4(CCC_Float, "r2_ss_sunshafts_length", &ps_r2_ss_sunshafts_length, .2f, 1.5f);
+    CMD4(CCC_Float, "r2_ss_sunshafts_radius", &ps_r2_ss_sunshafts_radius, .5f, 2.f);
     CMD3(CCC_SSAO_Mode, "r2_ssao_mode", &ps_r_ssao_mode, qssao_mode_token);
     CMD3(CCC_Token, "r2_ssao", &ps_r_ssao, qssao_token);
     CMD3(CCC_Mask, "r2_ssao_blur", &ps_r2_ls_flags_ext, R2FLAGEXT_SSAO_BLUR); // Need restart
@@ -850,6 +988,37 @@ void xrRender_initconsole() {
 
     //	CMD3(CCC_Mask,		"r2_sun_ignore_portals",		&ps_r2_ls_flags,
     //R2FLAG_SUN_IGNORE_PORTALS);
+
+    // Screen Space Shaders commands are registered by xrEngine, next to their definitions. This one
+    // lives here because it has to re-init the sun cascades.
+    CMD4(CCC_ssfx_cascades, "ssfx_shadow_cascades", &ps_ssfx_shadow_cascades,
+         Fvector3().set(1.0f, 1.0f, 1.0f), Fvector3().set(300, 300, 300));
+
+    // Screen Space Shaders: the settings-page controls whose variables live in this module. What
+    // these commands are, and the rest of them, is in xrEngine\xr_ioc_cmd.cpp.
+
+    // --- shadows - ssfx_shadows_mcm.script
+#if RENDER == R_R4
+    CMD4(CCC_Float, "ssfx_ui_shw_lod_quality", &ps_r2_ls_squality, 0.5f, 3.0f); // lod_quality
+#else
+    // The other renderers: it writes r2_ls_squality, so the game's range of that, as above.
+    CMD4(CCC_Float, "ssfx_ui_shw_lod_quality", &ps_r2_ls_squality, 0.5f, 1.0f); // lod_quality
+#endif
+
+    // --- shw_cascades - ssfx_shadow_cascades_mcm.script
+    // size_1 ( range limited: ssfx_shadow_cascades.script:47-51 )
+    CMD4(CCC_ssfx_ui_cascade, "ssfx_ui_cas_size_1", &ps_ssfx_shadow_cascades.x, 10.0f, 30.0f);
+    // size_2 ( range limited: ssfx_shadow_cascades.script:53-57 )
+    CMD4(CCC_ssfx_ui_cascade, "ssfx_ui_cas_size_2", &ps_ssfx_shadow_cascades.y, 40.0f, 110.0f);
+    // size_3 ( range limited: ssfx_shadow_cascades.script:59-63 )
+    CMD4(CCC_ssfx_ui_cascade, "ssfx_ui_cas_size_3", &ps_ssfx_shadow_cascades.z, 120.0f, 300.0f);
+
+    // --- ssfx_wet_surf - ssfx_wetness_mcm.script
+    // cover_res ( list ids run through 'pow(2, X + 6)' )
+    CMD3(CCC_ssfx_ui_list_i, "ssfx_ui_wet_cover_res", &ps_r3_dyn_wet_surf_sm_res,
+         tok_wet_cover_res);
+    // cover_distance
+    CMD4(CCC_Float, "ssfx_ui_wet_cover_distance", &ps_r3_dyn_wet_surf_far, 30.0f, 100.0f);
 }
 
 void xrRender_apply_tf() {

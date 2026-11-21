@@ -32,7 +32,11 @@ set(CORE_TARGET r4_rendertarget.h
                 r4_rendertarget_phase_scene.cpp
                 r4_rendertarget_phase_smap_D.cpp
                 r4_rendertarget_phase_smap_S.cpp
-                r4_rendertarget_phase_ssao.cpp)
+                r4_rendertarget_phase_ssao.cpp
+                r4_rendertarget_phase_ssfx.cpp
+                r4_rendertarget_phase_sunshafts.cpp
+                blender_ss_sunshafts.h
+                blender_ss_sunshafts.cpp)
 
 set(DETAILS ../xrRenderCommon/DetailManager.h
             ../xrRenderCommon/DetailModel.h
@@ -414,6 +418,7 @@ set(SHADING_TEMPLATES blender_bloom_build.h
                       blender_luminance.h
                       ../xrRenderCommon/Blender_Particle.h
                       blender_ssao.h
+                      blender_ssfx.h
                       dx11HDAOCSBlender.h
                       dx11MinMaxSMBlender.h
                       ../xrRenderCommon/uber_deffer.h
@@ -435,6 +440,7 @@ set(SHADING_TEMPLATES blender_bloom_build.h
                       blender_luminance.cpp
                       ../xrRenderCommon/Blender_Particle.cpp
                       blender_ssao.cpp
+                      blender_ssfx.cpp
                       dx11HDAOCSBlender.cpp
                       dx11MinMaxSMBlender.cpp
                       ../xrRenderCommon/uber_deffer.cpp)

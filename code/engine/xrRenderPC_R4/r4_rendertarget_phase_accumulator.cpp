@@ -63,7 +63,18 @@ void CRenderTarget::phase_accumulator() {
 }
 
 void CRenderTarget::phase_vol_accumulator() {
-    if (!m_bHasActiveVolumetric) {
+    // Screen Space Shaders, Monolith r4_rendertarget_phase_accumulator.cpp: "SSS does not require
+    // the stencil. ( This also fix the MSAA bug )" - the sun fog is drawn without a depth buffer.
+    if (RImplementation.o.ssfx_volumetric) {
+        if (!m_bHasActiveVolumetric) {
+            m_bHasActiveVolumetric = true;
+
+            FLOAT ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            HW.pContext->ClearRenderTargetView(rt_Generic_2->pRT, ColorRGBA);
+        }
+
+        u_setrt(rt_Generic_2, NULL, NULL, NULL);
+    } else if (!m_bHasActiveVolumetric) {
         m_bHasActiveVolumetric = true;
         if (!RImplementation.o.dx10_msaa)
             u_setrt(rt_Generic_2, NULL, NULL, HW.pBaseZB);

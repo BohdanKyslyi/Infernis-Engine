@@ -6,6 +6,31 @@ IC bool pred_area(light* _1, light* _2) {
     return a0 > a1; // reverse -> descending
 }
 
+// Screen Space Shaders. Monolith r2_R_lights.cpp:10-26, unchanged. Decides whether this lamp is
+// worth drawing grass into: only at the highest grass-shadow setting, only within
+// ssfx_grass_shadows.z metres of the camera, and only when the lamp is actually on screen.
+bool check_grass_shadow(light* L, CFrustum VB) {
+    // With SSS switched off ( ssfx_session_enable ) never: Infernis draws no grass into the
+    // shadow map of a lamp.
+    if (!ssfx_session_enable)
+        return false;
+
+    // Grass shadows are allowed?
+    if (ps_ssfx_grass_shadows.x < 3 || !psDeviceFlags2.test(rsGrassShadow))
+        return false;
+
+    // Inside the range?
+    if (L->vis.distance > ps_ssfx_grass_shadows.z)
+        return false;
+
+    // Is in view? L->vis.visible?
+    u32 mask = 0xff;
+    if (!VB.testSphere(L->position, L->range * 0.6f, mask))
+        return false;
+
+    return true;
+}
+
 void CRender::render_lights(light_Package& LP) {
     //////////////////////////////////////////////////////////////////////////
     // Refactor order based on ability to pack shadow-maps
@@ -15,8 +40,7 @@ void CRender::render_lights(light_Package& LP) {
         xr_vector<light*>& source = LP.v_shadowed;
         for (u32 it = 0; it < source.size(); it++) {
             light* L = source[it];
-            L->vis_update();
-            if (!L->vis.visible) {
+            if (!L->visible_in_current_view()) {
                 source.erase(source.begin() + it);
                 it--;
             } else {
@@ -110,6 +134,16 @@ void CRender::render_lights(light_Package& LP) {
                 RCache.set_xform_view(L->X.S.view);
                 RCache.set_xform_project(L->X.S.project);
                 r_dsgraph_render_graph(0);
+                // Screen Space Shaders. Monolith r2_R_lights.cpp:169-177. Grass goes into this
+                // lamp's shadow map, faded around the lamp itself rather than around the camera -
+                // that is what fade_distance = -1 means to the detail manager.
+                if (Details) {
+                    if (check_grass_shadow(L, ViewBase)) {
+                        Details->fade_distance = -1; // Use light position to calc "fade"
+                        Details->light_position.set(L->position);
+                        Details->Render();
+                    }
+                }
                 L->X.S.transluent = FALSE;
                 if (bSpecial) {
                     L->X.S.transluent = TRUE;
@@ -138,8 +172,7 @@ void CRender::render_lights(light_Package& LP) {
         if (!LP.v_point.empty()) {
             light* L = LP.v_point.back();
             LP.v_point.pop_back();
-            L->vis_update();
-            if (L->vis.visible) {
+            if (L->visible_in_current_view()) {
                 Target->accum_point(L);
                 render_indirect(L);
             }
@@ -151,8 +184,7 @@ void CRender::render_lights(light_Package& LP) {
         if (!LP.v_spot.empty()) {
             light* L = LP.v_spot.back();
             LP.v_spot.pop_back();
-            L->vis_update();
-            if (L->vis.visible) {
+            if (L->visible_in_current_view()) {
                 LR.compute_xf_spot(L);
                 Target->accum_spot(L);
                 render_indirect(L);
@@ -164,15 +196,37 @@ void CRender::render_lights(light_Package& LP) {
         //		if (was_spot_shadowed)		->	accum spot shadowed
         if (!L_spot_s.empty()) {
             PIX_EVENT(ACCUM_SPOT);
-            for (u32 it = 0; it < L_spot_s.size(); it++) {
-                Target->accum_spot(L_spot_s[it]);
-                render_indirect(L_spot_s[it]);
-            }
+            if (RImplementation.o.ssfx_volumetric) {
+                // Screen Space Shaders, Monolith r2_R_lights.cpp: each light's fog is drawn right
+                // after its lighting into the 1/8 resolution rt_ssfx_volumetric. u_setrt() does not
+                // set the viewport, so it is set to that size here and restored afterwards; with
+                // the full screen viewport only the top left corner of the fog reached the buffer.
+                PIX_EVENT(ACCUM_VOLUMETRIC);
+                for (u32 it = 0; it < L_spot_s.size(); it++) {
+                    Target->accum_spot(L_spot_s[it]);
+                    render_indirect(L_spot_s[it]);
 
-            PIX_EVENT(ACCUM_VOLUMETRIC);
-            if (RImplementation.o.advancedpp && ps_r2_ls_flags.is(R2FLAG_VOLUMETRIC_LIGHTS))
-                for (u32 it = 0; it < L_spot_s.size(); it++)
-                    Target->accum_volumetric(L_spot_s[it]);
+                    if (RImplementation.o.advancedpp &&
+                        ps_r2_ls_flags.is(R2FLAG_VOLUMETRIC_LIGHTS)) {
+                        const float w = float(Device.dwWidth);
+                        const float h = float(Device.dwHeight);
+
+                        Target->set_viewport_size(HW.pContext, w / 8, h / 8);
+                        Target->accum_volumetric(L_spot_s[it]);
+                        Target->set_viewport_size(HW.pContext, w, h);
+                    }
+                }
+            } else {
+                for (u32 it = 0; it < L_spot_s.size(); it++) {
+                    Target->accum_spot(L_spot_s[it]);
+                    render_indirect(L_spot_s[it]);
+                }
+
+                PIX_EVENT(ACCUM_VOLUMETRIC);
+                if (RImplementation.o.advancedpp && ps_r2_ls_flags.is(R2FLAG_VOLUMETRIC_LIGHTS))
+                    for (u32 it = 0; it < L_spot_s.size(); it++)
+                        Target->accum_volumetric(L_spot_s[it]);
+            }
 
             L_spot_s.clear();
         }
@@ -183,8 +237,7 @@ void CRender::render_lights(light_Package& LP) {
     if (!LP.v_point.empty()) {
         xr_vector<light*>& Lvec = LP.v_point;
         for (u32 pid = 0; pid < Lvec.size(); pid++) {
-            Lvec[pid]->vis_update();
-            if (Lvec[pid]->vis.visible) {
+            if (Lvec[pid]->visible_in_current_view()) {
                 render_indirect(Lvec[pid]);
                 Target->accum_point(Lvec[pid]);
             }
@@ -197,8 +250,7 @@ void CRender::render_lights(light_Package& LP) {
     if (!LP.v_spot.empty()) {
         xr_vector<light*>& Lvec = LP.v_spot;
         for (u32 pid = 0; pid < Lvec.size(); pid++) {
-            Lvec[pid]->vis_update();
-            if (Lvec[pid]->vis.visible) {
+            if (Lvec[pid]->visible_in_current_view()) {
                 LR.compute_xf_spot(Lvec[pid]);
                 render_indirect(Lvec[pid]);
                 Target->accum_spot(Lvec[pid]);

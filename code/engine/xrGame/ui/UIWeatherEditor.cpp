@@ -1,11 +1,15 @@
 #include "stdafx.h"
 
 #include "UIWeatherEditor.h"
+#include "WeatherEditorModel.h"
 #include "UI3tButton.h"
 #include "UIBtnHint.h"
 #include "UICheckButton.h"
 #include "UIComboBox.h"
 #include "UIEditBox.h"
+#include "UIListBoxItem.h"
+#include "../xr_level_controller.h"
+#include "xrSound/Sound.h"
 #include "UIHelper.h"
 #include "UIStatic.h"
 #include "UITextureMaster.h"
@@ -15,14 +19,55 @@
 #include "UICursor.h"
 #include "../../xrEngine/Environment.h"
 #include "../../xrEngine/Rain.h"
+#include "../../xrEngine/thunderbolt.h"
+#include "xrRender/particles_systems_library_interface.hpp"
 #include "../../xrEngine/IGame_Persistent.h"
 #include "../../xrEngine/xr_input.h"
 #include "../game_cl_base.h"
 #include "../Level.h"
+#include "../Actor.h"
 #include "../string_table.h"
 #include "xrRender/UIRender.h"
+#include "../../xrEngine/ssfx_console_vars.h" // ssfx_session_enable
+
+extern ENGINE_API int g_current_renderer; // xrEngine/EngineAPI.cpp: 4 = the DX11 renderer runs
 
 namespace {
+// Resolve the optional preview API from the module that owns the active
+// renderer object's vtable. Do not guess a renderer DLL name or load a second one.
+typedef BOOL (__cdecl *WeatherPreviewV1)(const Frect*);
+
+WeatherPreviewV1 weather_preview_api() {
+    if (!UIRender) return nullptr;
+    const void* table = *reinterpret_cast<void* const*>(UIRender);
+    HMODULE module = nullptr;
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCSTR>(table), &module))
+        return nullptr;
+    FARPROC entry = GetProcAddress(module, "xrWeatherEditorPreviewV1");
+    // MSVC x86 may retain the cdecl leading underscore in the export table.
+    if (!entry) entry = GetProcAddress(module, "_xrWeatherEditorPreviewV1");
+    return reinterpret_cast<WeatherPreviewV1>(entry);
+}
+
+bool draw_weather_preview(const Frect& rect) {
+    WeatherPreviewV1 api = weather_preview_api();
+    if (!api) {
+        static bool reported = false;
+        if (!reported) {
+            Msg("! Weather editor: renderer has no preview V1 API; using transparent preview");
+            reported = true;
+        }
+        return false;
+    }
+    return api(&rect) != FALSE;
+}
+
+void release_weather_preview() {
+    if (WeatherPreviewV1 api = weather_preview_api()) api(nullptr);
+}
+
 class CWeatherTrackBar : public CUITrackBar {
 public:
     void SetEditorValue(float value) {
@@ -32,13 +77,366 @@ public:
     }
 };
 
+class CWeatherValueEdit : public CUIEditBox {
+public:
+    bool Editing() const { return m_bInputFocus; }
+    bool TextChanged() const { return m_model_text != GetText(); }
+    bool PendingChange() const {
+        if(!Editing()) return false;
+        float model,input;
+        if(weather_editor_model::parse_number(m_model_text,model) &&
+           weather_editor_model::parse_number(GetText(),input)) return model!=input;
+        return m_model_text!=GetText();
+    }
+    void SetEditorText(LPCSTR text) {
+        if(!Editing()) {m_model_text=text;SetText(text);}
+    }
+private:
+    std::string m_model_text;
+};
+
+// Restrict the new slicing to editor buttons; other game menus stay unchanged.
+class CWeatherButton : public CUI3tButton {
+public:
+    virtual void DrawTexture() {
+        if (!m_bTextureEnable || !m_background) { CUI3tButton::DrawTexture(); return; }
+        CUIStatic* state = m_background->Get(S_Current);
+        if (!state || !state->GetShader() || !state->GetShader()->inited()) return;
+        Frect r; GetAbsoluteRect(r);
+        UI().ClientToScreenScaled(r.lt); UI().ClientToScreenScaled(r.rb);
+        const Frect uv = state->GetTextureRect();
+        if (r.width() <= 0.f || r.height() <= 0.f || uv.width() <= 0.f || uv.height() <= 0.f) return;
+        UIRender->SetShader(*state->GetShader());
+        Fvector2 atlas; UIRender->GetActiveTextureResolution(atlas);
+        // Uniform corner scaling in physical pixels, independent of widescreen UI scaling.
+        const float border = std::min(8.f, std::min(uv.width(), uv.height()) / 3.f);
+        const float scale = std::min(r.height() / uv.height(), r.width() / (border * 2.f));
+        const float edge = border * scale;
+        const float xs[4] = {r.x1, r.x1+edge, r.x2-edge, r.x2};
+        const float ys[4] = {r.y1, r.y1+edge, r.y2-edge, r.y2};
+        const float us[4] = {uv.x1/atlas.x, (uv.x1+border)/atlas.x,
+                            (uv.x2-border)/atlas.x, uv.x2/atlas.x};
+        const float vs[4] = {uv.y1/atlas.y, (uv.y1+border)/atlas.y,
+                            (uv.y2-border)/atlas.y, uv.y2/atlas.y};
+        const u32 color = state->GetTextureColor();
+        UIRender->StartPrimitive(54, IUIRender::ptTriList, UI().m_currentPointType);
+        const auto point = [&](unsigned x, unsigned y) {
+            UIRender->PushPoint(xs[x]-.5f, ys[y]-.5f, 0.f, color, us[x], vs[y]);
+        };
+        for (unsigned y=0;y<3;++y) for (unsigned x=0;x<3;++x) {
+            point(x,y); point(x+1,y); point(x+1,y+1);
+            point(x,y); point(x+1,y+1); point(x,y+1);
+        }
+        UIRender->FlushPrimitive();
+    }
+};
+
+CUI3tButton* create_editor_button(CUIXml& xml, LPCSTR path, CUIWindow* parent) {
+    auto* button = xr_new<CWeatherButton>();
+    button->SetAutoDelete(true);
+    parent->AttachChild(button);
+    CUIXmlInit::Init3tButton(xml, path, 0, button);
+    // DrawTexture owns the background pass. Skip it during child traversal.
+    if (button->m_background)
+        button->m_background->SetCustomDraw(true);
+    if (button->m_back_frameline)
+        button->m_back_frameline->SetCustomDraw(true);
+    return button;
+}
+
+class CWeatherPreviewFrame : public CUIStatic {
+public:
+    virtual void Draw() {
+        Frect r;GetAbsoluteRect(r);
+        UI().ClientToScreenScaled(r.lt);UI().ClientToScreenScaled(r.rb);
+        UIRender->SetShader(*GetShader());
+        UIRender->StartPrimitive(8,IUIRender::ptLineList,UI().m_currentPointType);
+        const auto point=[](float x,float y) {UIRender->PushPoint(x,y,0.f,color_rgba(150,160,145,200),.5f,.5f);};
+        point(r.x1,r.y1);point(r.x2,r.y1);point(r.x2,r.y1);point(r.x2,r.y2);
+        point(r.x2,r.y2);point(r.x1,r.y2);point(r.x1,r.y2);point(r.x1,r.y1);
+        UIRender->FlushPrimitive();
+    }
+};
+
 class CWeatherComboBox : public CUIComboBox {
 public:
-    void ClearEditorList() { ClearList(); }
-    void CloseEditorList() {
+    void ClearEditorList() { CloseEditorList(); ClearList(); }
+    virtual void CloseEditorList() {
         ShowList(false);
         Device.seqRender.Remove(this);
     }
+};
+
+// The editable header and result list share the combo's capture and lifetime.
+constexpr LPCSTR lightning_sound_folders[] = {"ambient\\", "nature\\", "anomaly\\"};
+
+class CWeatherResourceCombo : public CWeatherComboBox {
+public:
+    void Configure(CUIXml& xml, const xr_vector<std::string>& resources, bool sounds = false, bool opens_up = false) {
+        m_resources = &resources;
+        m_none = CStringTable().translate("ui_weather_editor_none");
+        m_sounds = sounds;
+        m_search = xr_new<CWeatherValueEdit>();
+        m_search->SetAutoDelete(true);
+        AttachChild(m_search);
+        CUIXmlInit::InitEditBox(xml, "main:resource_search", 0, m_search);
+        m_search->InitCustomEdit(Fvector2().set(0.f, 0.f),
+                                Fvector2().set(GetWidth() - 18.f, GetHeight()));
+        m_search->Show(false);
+        if (opens_up)
+            m_list_frame.SetWndPos(Fvector2().set(0.f, -m_list_frame.GetHeight()));
+    }
+
+    bool SearchOpen() { return m_list_frame.IsShown(); }
+
+    void RoutePopupMouse(float x, float y, EUIMessages action) {
+        Frect rect;
+        GetAbsoluteRect(rect);
+        OnMouseAction(x - rect.x1, y - rect.y1, action);
+    }
+
+    void SetResource(int id) {
+        if (id < 0 || static_cast<size_t>(id) >= m_resources->size())
+            id = 0;
+        m_itoken_id = id;
+        SetText(m_resources->empty() ? "" : Label(id));
+    }
+
+    void CloseEditorList() override {
+        CWeatherComboBox::CloseEditorList();
+        FinishSearch();
+        if (m_sample._handle())
+            m_sample.destroy();
+    }
+
+    void SendMessage(CUIWindow* source, s16 message, void* data) override {
+        if (source == &m_list_box && message == LIST_ITEM_CLICKED) {
+            auto* selected = m_list_box.GetSelectedItem();
+            const auto id = selected ? reinterpret_cast<intptr_t>(selected->GetData()) : 0;
+            if (id == -1 || id == -2) {
+                // The clicked row is still dispatching its own event.
+                m_page_step = id == -1 ? -1 : 1;
+                return;
+            }
+        }
+        CWeatherComboBox::SendMessage(source, message, data);
+        if (source == &m_list_box && message == LIST_ITEM_CLICKED)
+            FinishSearch();
+    }
+
+protected:
+    void OnBtnClicked() override {
+        if (m_list_frame.IsShown()) {
+            CloseEditorList();
+            return;
+        }
+        m_query.clear();
+        m_page = 0;
+        m_page_step = 0;
+        m_search->SetText("");
+        RebuildResults();
+        ShowList(true);
+        m_text.Show(false);
+        m_search->Show(true);
+        m_search->CaptureFocus(true);
+    }
+
+    bool OnKeyboardAction(int key, EUIMessages action) override {
+        if (m_list_frame.IsShown() && action == WINDOW_KEY_PRESSED) {
+            if (key == DIK_ESCAPE) {
+                CloseEditorList();
+                return true;
+            }
+            if (m_sounds && (key == DIK_PRIOR || key == DIK_NEXT)) {
+                m_page_step = key == DIK_PRIOR ? -1 : 1;
+                return true;
+            }
+            if (key == DIK_RETURN || key == DIK_NUMPADENTER) {
+                RefreshResults();
+                if (m_list_box.GetSize() && (!m_query.empty() || m_list_box.GetSelectedItem())) {
+                    auto* row = m_list_box.GetSelectedItem();
+                    if (row && reinterpret_cast<intptr_t>(row->GetData()) < 0)
+                        return true;
+                    if (!row)
+                        m_list_box.SetSelectedIDX(m_page ? 1 : 0);
+                    OnListItemSelect();
+                    FinishSearch();
+                }
+                return true;
+            }
+        }
+        return CWeatherComboBox::OnKeyboardAction(key, action);
+    }
+
+    bool OnMouseAction(float x, float y, EUIMessages action) override {
+        if (m_list_frame.IsShown() && (action == WINDOW_LBUTTON_DOWN ||
+                                      action == WINDOW_LBUTTON_DB_CLICK)) {
+            if (y >= 0.f && y < m_frameLine.GetHeight() && x >= 0.f && x < m_search->GetWidth()) {
+                m_search->CaptureFocus(true);
+                return true;
+            }
+            if (m_sounds && TryPlay(x, y))
+                return true;
+        }
+        const bool handled = CWeatherComboBox::OnMouseAction(x, y, action);
+        if (!m_list_frame.IsShown())
+            FinishSearch();
+        return handled;
+    }
+
+    void Update() override {
+        CWeatherComboBox::Update();
+        if (m_list_frame.IsShown()) {
+            RefreshResults();
+            if (m_page_step) {
+                m_page = std::max(0, m_page + m_page_step);
+                m_page_step = 0;
+                RebuildResults();
+            }
+        }
+    }
+
+private:
+    LPCSTR Label(int id) const {
+        return (*m_resources)[id].empty() ? m_none.c_str() : (*m_resources)[id].c_str();
+    }
+
+    void FinishSearch() {
+        if (!m_search || !m_search->IsShown())
+            return;
+        if (m_search->Editing()) {
+            m_search->CaptureFocus(false);
+            SetKeyboardCapture(m_search, false);
+        }
+        if (m_sample._handle())
+            m_sample.destroy();
+        m_search->Show(false);
+        m_text.Show(true);
+        m_text.Enable(false);
+    }
+
+    void RefreshResults() {
+        if (m_query == m_search->GetText())
+            return;
+        m_query = m_search->GetText();
+        m_page = 0;
+        m_page_step = 0;
+        RebuildResults();
+    }
+
+    static std::string Fold(std::string value) {
+        for (char& c : value)
+            c = c == '/' ? '\\' : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return value;
+    }
+
+    void RebuildResults() {
+        const int selected = CurrentID();
+        m_none = CStringTable().translate("ui_weather_editor_none");
+        m_list_box.Clear();
+        const std::string query = Fold(m_query);
+        xr_vector<std::string> terms;
+        std::istringstream input(query);
+        for (std::string term; input >> term;)
+            terms.push_back(term);
+        xr_vector<int> ranked[3];
+        for (size_t id = 0; id < m_resources->size(); ++id) {
+            if (!terms.empty() && (*m_resources)[id].empty())
+                continue;
+            const auto name = Fold((*m_resources)[id]);
+            if (m_sounds && !name.empty() &&
+                std::none_of(std::begin(lightning_sound_folders), std::end(lightning_sound_folders),
+                             [&](LPCSTR folder) { return name.find(folder) == 0; }))
+                continue;
+            if (!std::all_of(terms.begin(), terms.end(), [&](const std::string& term) {
+                    return name.find(term) != std::string::npos;
+                }))
+                continue;
+            const auto slash = name.find_last_of('\\');
+            const auto leaf = slash == std::string::npos ? 0 : slash + 1;
+            const int rank = name.compare(leaf, query.size(), query) == 0 ? 0 :
+                             name.compare(0, query.size(), query) == 0 ? 1 : 2;
+            ranked[rank].push_back(static_cast<int>(id));
+        }
+        const size_t total = ranked[0].size() + ranked[1].size() + ranked[2].size();
+        const size_t pages = m_sounds && total ? (total + page_size - 1) / page_size : 1;
+        m_page = std::min(m_page, static_cast<int>(pages - 1));
+        const size_t first = m_sounds ? m_page * page_size : 0;
+        const size_t last = m_sounds ? first + page_size : total;
+
+        string32 page_label;
+        if (m_page > 0) {
+            xr_sprintf(page_label, "< %d/%u", m_page, static_cast<unsigned>(pages));
+            AddItem_(page_label, -1);
+        }
+        size_t index = 0;
+        for (const auto& group : ranked)
+            for (int id : group) {
+                const size_t row_index = index++;
+                if (row_index < first || row_index >= last)
+                    continue;
+                auto* row = AddItem_(Label(id), id);
+                if (terms.empty() && id == selected)
+                    m_list_box.SetSelected(row);
+            }
+        if (last < total) {
+            xr_sprintf(page_label, "> %d/%u", m_page + 2, static_cast<unsigned>(pages));
+            AddItem_(page_label, -2);
+        }
+        m_list_box.ScrollToBegin();
+        if (m_sounds)
+            for (auto* item : m_list_box.Items()) {
+                auto* row = static_cast<CUIListBoxItem*>(item);
+                if (reinterpret_cast<intptr_t>(row->GetData()) <= 0)
+                    continue;
+                row->GetTextItem()->SetWidth(row->GetWidth() - play_width);
+                row->GetTextItem()->SetEllipsis(true);
+                row->AddTextField("[>]", play_width);
+            }
+    }
+
+    bool TryPlay(float x, float y) {
+        Frect origin;
+        GetAbsoluteRect(origin);
+        Fvector2 point;
+        point.set(origin.x1 + x, origin.y1 + y);
+        Frect viewport;
+        m_list_box.GetAbsoluteRect(viewport);
+        if (!viewport.in(point))
+            return false;
+        for (auto* item : m_list_box.Items()) {
+            auto* row = static_cast<CUIListBoxItem*>(item);
+            Frect icon;
+            row->GetAbsoluteRect(icon);
+            icon.x1 += row->GetTextItem()->GetWidth();
+            icon.x2 = icon.x1 + play_width;
+            const int id = static_cast<int>(reinterpret_cast<intptr_t>(row->GetData()));
+            if (id <= 0 || static_cast<size_t>(id) >= m_resources->size() || !icon.in(point))
+                continue;
+            const auto& name = (*m_resources)[id];
+            string_path filename;
+            if (::Sound && FS.exist(filename, "$game_sounds$", name.c_str(), ".ogg")) {
+                if (m_sample._handle())
+                    m_sample.destroy();
+                m_sample.create(name.c_str(), st_Effect, sg_SourceType);
+                if (m_sample._handle())
+                    m_sample.play(nullptr, sm_2D);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    static constexpr size_t page_size = 32;
+    static constexpr float play_width = 24.f;
+    int m_page = 0;
+    int m_page_step = 0;
+    const xr_vector<std::string>* m_resources = nullptr;
+    CWeatherValueEdit* m_search = nullptr;
+    std::string m_query;
+    shared_str m_none;
+    bool m_sounds = false;
+    ref_sound m_sample;
 };
 
 } // namespace
@@ -106,6 +504,52 @@ public:
         m_shader->create("hud\\default", "ui\\ui_weather_editor_white");
     }
 
+    void InitFields(CUIXml& xml) {
+        const LPCSTR labels[] = {"HEX", "R", "G", "B"};
+        for (unsigned i = 0; i < 4; ++i) {
+            const float x = i == 0 ? 6.f : 208.f;
+            const float y = i == 0 ? 6.f : 34.f + (i - 1) * 32.f;
+            auto* label = UIHelper::CreateTextWnd(xml, "main:property_label_template", this);
+            label->SetWndPos(Fvector2().set(x, y));
+            label->SetWidth(32.f);
+            label->SetText(labels[i]);
+            auto* edit = xr_new<CWeatherValueEdit>();
+            edit->SetAutoDelete(true);
+            AttachChild(edit);
+            CUIXmlInit::InitEditBox(xml, "main:number_template", 0, edit);
+            edit->InitCustomEdit(Fvector2().set(x + 34.f, y),
+                                 Fvector2().set(i == 0 ? 90.f : 48.f, 22.f));
+            edit->SetMessageTarget(this);
+            m_fields[i] = edit;
+        }
+        SyncFields();
+    }
+
+    void Show(bool shown) override {
+        if (!shown) {
+            m_drag_mode = 0;
+            for (auto* edit : m_fields)
+                if (edit && edit->Editing()) {
+                    edit->CaptureFocus(false);
+                    SetKeyboardCapture(edit, false);
+                }
+        }
+        inherited::Show(shown);
+    }
+
+    void SendMessage(CUIWindow* source, s16 message, void* data) override {
+        if (message == EDIT_TEXT_COMMIT || message == EDIT_TEXT_CANCEL) {
+            for (unsigned i = 0; i < 4; ++i)
+                if (source == m_fields[i]) {
+                    if (message == EDIT_TEXT_COMMIT && m_fields[i]->TextChanged())
+                        CommitField(i);
+                    SyncFields();
+                    return;
+                }
+        }
+        inherited::SendMessage(source, message, data);
+    }
+
     virtual void Draw() {
         Frect rect;
         GetAbsoluteRect(rect);
@@ -116,14 +560,14 @@ public:
         const float u = .5f;
         const float v = .5f;
 
-        const float margin = ScaledX(6.f);
-        const float gap = ScaledX(6.f);
-        const float hue_width = ScaledX(18.f);
-        Frect sv;
-        sv.set(rect.x1 + margin, rect.y1 + ScaledY(6.f),
-               rect.x2 - margin - gap - hue_width, rect.y2 - ScaledY(6.f));
-        Frect hue;
-        hue.set(sv.x2 + gap, sv.y1, rect.x2 - margin, sv.y2);
+        const auto screen_rect = [&](Frect local) {
+            Frect screen;
+            screen.set(rect.x1 + ScaledX(local.x1), rect.y1 + ScaledY(local.y1),
+                       rect.x1 + ScaledX(local.x2), rect.y1 + ScaledY(local.y2));
+            return screen;
+        };
+        const Frect sv = screen_rect(SvRect());
+        const Frect hue = screen_rect(HueRect());
 
         UIRender->StartPrimitive(6 + 6 + 36, IUIRender::ptTriList, UI().m_currentPointType);
         PushQuad(rect, color_rgba(12, 15, 18, 230), color_rgba(12, 15, 18, 230),
@@ -190,6 +634,7 @@ public:
     void SetColor(float r, float g, float b) {
         RgbToHsv(clampr(r, 0.f, 1.f), clampr(g, 0.f, 1.f), clampr(b, 0.f, 1.f),
                  m_hue, m_saturation, m_value);
+        SyncFields();
     }
 
     void GetColor(float& r, float& g, float& b) const {
@@ -199,6 +644,47 @@ public:
     bool IsDragging() const { return m_drag_mode != 0; }
 
 private:
+    void SyncFields() {
+        if (!m_fields[0])
+            return;
+        float rgb[3];
+        GetColor(rgb[0], rgb[1], rgb[2]);
+        unsigned channels[3];
+        for (unsigned i = 0; i < 3; ++i) {
+            channels[i] = static_cast<unsigned>(iFloor(rgb[i] * 255.f + .5f));
+            string32 number;
+            xr_sprintf(number, "%u", channels[i]);
+            m_fields[i + 1]->SetEditorText(number);
+        }
+        string32 hex;
+        xr_sprintf(hex, "#%02X%02X%02X", channels[0], channels[1], channels[2]);
+        m_fields[0]->SetEditorText(hex);
+    }
+
+    void CommitField(unsigned field) {
+        float rgb[3];
+        GetColor(rgb[0], rgb[1], rgb[2]);
+        if (field) {
+            float value;
+            if (!weather_editor_model::parse_number(m_fields[field]->GetText(), value))
+                return;
+            rgb[field - 1] = clampr(value, 0.f, 255.f) / 255.f;
+        } else {
+            std::string hex = m_fields[0]->GetText();
+            if (!hex.empty() && hex.front() == '#')
+                hex.erase(0, 1);
+            if (hex.size() != 6 || hex.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
+                return;
+            const auto value = std::stoul(hex, nullptr, 16);
+            for (unsigned i = 0; i < 3; ++i)
+                rgb[i] = static_cast<float>((value >> (16 - 8 * i)) & 255) / 255.f;
+        }
+        SetColor(rgb[0], rgb[1], rgb[2]);
+        GetMessageTarget()->SendMessage(this, BUTTON_CLICKED, nullptr);
+    }
+
+    CWeatherValueEdit* m_fields[4]{};
+
     static float ScaledX(float value) {
         Fvector2 result;
         UI().ClientToScreenScaled(result, value, 0.f);
@@ -213,17 +699,14 @@ private:
 
     Frect SvRect() const {
         Frect result;
-        const float margin = 6.f;
-        const float gap = 6.f;
-        const float hue_width = 18.f;
-        result.set(margin, 6.f, GetWidth() - margin - gap - hue_width, GetHeight() - 6.f);
+        result.set(6.f, 34.f, 176.f, GetHeight() - 6.f);
         return result;
     }
 
     Frect HueRect() const {
         const Frect sv = SvRect();
         Frect result;
-        result.set(sv.x2 + 6.f, sv.y1, GetWidth() - 6.f, sv.y2);
+        result.set(sv.x2 + 6.f, sv.y1, 200.f, sv.y2);
         return result;
     }
 
@@ -238,6 +721,7 @@ private:
             if (m_hue >= 1.f)
                 m_hue = 0.f;
         }
+        SyncFields();
         GetMessageTarget()->SendMessage(this, BUTTON_CLICKED, nullptr);
     }
 
@@ -407,7 +891,55 @@ static_assert(sizeof(property_hint_ids) / sizeof(property_hint_ids[0]) ==
                   sizeof(properties) / sizeof(properties[0]),
               "Every weather property must have a learning hint");
 
-constexpr float property_y_offset = 35.f;
+// Screen Space Shaders: the Anomaly weathers ( Weather_ATMOS ) count wind velocity in 0 .. 1000 -
+// Anomaly's own editor, ui_debug_weather.script:69, goes to max = 1000 - and the SSS rain reads it
+// so ( Rain.cpp, wind_velocity * 0.001 ). While SSS runs ( switched on, DX11 ) the wind slider
+// has that range; otherwise the game's 0 .. 100 above.
+const SPropertyInfo& property_info(u32 property_index) {
+    static const SPropertyInfo ssfx_wind_velocity = {0.f, 1000.f, 1.f};
+    if (property_index == 5 && ssfx_session_enable && g_current_renderer == 4)
+        return ssfx_wind_velocity;
+    return properties[property_index];
+}
+
+static LPCSTR const lightning_hint_ids[] = {
+    "ui_lightning_hint_enable_multi_strikes",
+    "ui_lightning_hint_multi_strike_chance",
+    "ui_lightning_hint_max_simultaneous",
+    "ui_lightning_hint_same_location_chance",
+    "ui_lightning_hint_branching_chance",
+    "ui_lightning_hint_height_factor",
+    "ui_lightning_hint_size_multiplier",
+    "ui_lightning_hint_prob_near",
+    "ui_lightning_hint_prob_medium",
+    "ui_lightning_hint_dist_near_min",
+    "ui_lightning_hint_dist_near_max",
+    "ui_lightning_hint_dist_medium_min",
+    "ui_lightning_hint_dist_medium_max",
+    "ui_lightning_hint_dist_far_min",
+    "ui_lightning_hint_dist_far_max",
+    "ui_lightning_hint_thunder_range_min",
+    "ui_lightning_hint_thunder_range_max",
+    "ui_lightning_hint_thunder_fade_dist",
+    "ui_lightning_hint_thunder_pitch_drop",
+    "ui_lightning_hint_thunder_vol_drop",
+    "ui_lightning_hint_strike_snd_range_min",
+    "ui_lightning_hint_strike_snd_range_max",
+    "ui_lightning_hint_strike_damage_power",
+    "ui_lightning_hint_strike_damage_radius",
+};
+static_assert(sizeof(lightning_hint_ids)/sizeof(lightning_hint_ids[0])==lightning_editor::count,"Lightning hints must cover every parameter");
+
+constexpr float property_y_offset = 0.f;
+const LPCSTR weather_category_ids[]={"ui_env_sky_sun","ui_env_clouds","ui_env_fog","ui_env_rain","ui_env_wind","ui_env_ambient"};
+const LPCSTR lightning_category_ids[]={"ui_env_burst","ui_env_distances","ui_env_thunder","ui_env_effects"};
+
+CWeatherValueEdit* create_number(CUIXml& xml,CUIWindow* parent,float x,float y,float width=70.f) {
+    auto* edit=xr_new<CWeatherValueEdit>();edit->SetAutoDelete(true);parent->AttachChild(edit);
+    CUIXmlInit::InitEditBox(xml,"main:number_template",0,edit);
+    edit->InitCustomEdit(Fvector2().set(x,y),Fvector2().set(width,22.f));
+    return edit;
+}
 
 CUIWeatherEditor* weather_editor = nullptr;
 
@@ -440,7 +972,9 @@ CUIWeatherEditor::CUIWeatherEditor()
     m_bWorkInPause = true;
 }
 
-CUIWeatherEditor::~CUIWeatherEditor() {}
+CUIWeatherEditor::~CUIWeatherEditor() {
+    release_weather_preview();
+}
 
 void CUIWeatherEditor::Init() {
     CUIXml xml;
@@ -450,41 +984,47 @@ void CUIWeatherEditor::Init() {
     m_title = UIHelper::CreateTextWnd(xml, "main:title", this);
     m_status = UIHelper::CreateTextWnd(xml, "main:status", this);
 
-    m_weather = xr_new<CWeatherComboBox>();
+    m_weather = xr_new<CWeatherResourceCombo>();
     m_weather->SetAutoDelete(true);
     AttachChild(m_weather);
     CUIXmlInit::InitComboBox(xml, "main:weather", 0, m_weather);
+    static_cast<CWeatherResourceCombo*>(m_weather)->Configure(xml, m_weather_names);
 
     m_frame = xr_new<CWeatherComboBox>();
     m_frame->SetAutoDelete(true);
     AttachChild(m_frame);
     CUIXmlInit::InitComboBox(xml, "main:frame", 0, m_frame);
 
-    m_sky = xr_new<CWeatherComboBox>();
+    m_sky = xr_new<CWeatherResourceCombo>();
     m_sky->SetAutoDelete(true);
     AttachChild(m_sky);
     CUIXmlInit::InitComboBox(xml, "main:sky", 0, m_sky);
+    static_cast<CWeatherResourceCombo*>(m_sky)->Configure(xml, m_sky_textures);
 
-    m_clouds = xr_new<CWeatherComboBox>();
+    m_clouds = xr_new<CWeatherResourceCombo>();
     m_clouds->SetAutoDelete(true);
     AttachChild(m_clouds);
     CUIXmlInit::InitComboBox(xml, "main:clouds", 0, m_clouds);
+    static_cast<CWeatherResourceCombo*>(m_clouds)->Configure(xml, m_cloud_textures);
 
-    m_ambient_definition = xr_new<CWeatherComboBox>();
+    m_ambient_definition = xr_new<CWeatherResourceCombo>();
     m_ambient_definition->SetAutoDelete(true);
     AttachChild(m_ambient_definition);
     CUIXmlInit::InitComboBox(xml, "main:ambient_definition", 0, m_ambient_definition);
+    static_cast<CWeatherResourceCombo*>(m_ambient_definition)->Configure(xml, m_ambient_definitions);
 
-    m_sun_definition = xr_new<CWeatherComboBox>();
+    m_sun_definition = xr_new<CWeatherResourceCombo>();
     m_sun_definition->SetAutoDelete(true);
     AttachChild(m_sun_definition);
     CUIXmlInit::InitComboBox(xml, "main:sun_definition", 0, m_sun_definition);
+    static_cast<CWeatherResourceCombo*>(m_sun_definition)->Configure(xml, m_sun_definitions);
 
-    m_thunderbolt_definition = xr_new<CWeatherComboBox>();
+    m_thunderbolt_definition = xr_new<CWeatherResourceCombo>();
     m_thunderbolt_definition->SetAutoDelete(true);
     AttachChild(m_thunderbolt_definition);
     CUIXmlInit::InitComboBox(xml, "main:thunderbolt_definition", 0,
                             m_thunderbolt_definition);
+    static_cast<CWeatherResourceCombo*>(m_thunderbolt_definition)->Configure(xml, m_thunderbolt_definitions);
 
     m_time_slider = xr_new<CWeatherTrackBar>();
     m_time_slider->SetAutoDelete(true);
@@ -495,26 +1035,36 @@ void CUIWeatherEditor::Init() {
     m_time_value = UIHelper::CreateTextWnd(xml, "main:time_value", this);
 
     CreatePropertyControls(xml);
+    CreateLightningControls(xml);
 
-    m_add_frame = UIHelper::Create3tButton(xml, "main:add_frame", this);
-    m_new_weather_name = UIHelper::CreateEditBox(xml, "main:new_weather_name", this);
-    m_create_weather = UIHelper::Create3tButton(xml, "main:create_weather", this);
+    m_add_frame = create_editor_button(xml, "main:add_frame", this);
+    m_file_panel=xr_new<CUIWindow>();m_file_panel->SetAutoDelete(true);AttachChild(m_file_panel);
+    m_file_panel->SetWndPos(Fvector2().set(188.f,536.f));m_file_panel->SetWndSize(Fvector2().set(788.f,68.f));
+    UIHelper::CreateStatic(xml,"main:file_back",m_file_panel);
+    auto* file_label=UIHelper::CreateTextWnd(xml,"main:file_label",m_file_panel);
+    (void)file_label;
+    m_new_weather_name = UIHelper::CreateEditBox(xml, "main:new_weather_name", m_file_panel);
+    m_create_weather = create_editor_button(xml, "main:create_weather", m_file_panel);
     m_learning_mode = UIHelper::CreateCheck(xml, "main:learning_mode", this);
     m_learning_mode->SetCheck(false);
     m_learning_mode_label =
         UIHelper::CreateTextWnd(xml, "main:learning_mode_label", this);
-    m_preview = UIHelper::Create3tButton(xml, "main:preview", this);
-    m_save = UIHelper::Create3tButton(xml, "main:save", this);
-    m_revert = UIHelper::Create3tButton(xml, "main:revert", this);
-    m_close = UIHelper::Create3tButton(xml, "main:close", this);
+    m_preview = create_editor_button(xml, "main:preview", this);
+    m_save = create_editor_button(xml, "main:save", this);
+    m_revert = create_editor_button(xml, "main:revert", this);
+    m_close = create_editor_button(xml, "main:close", this);
+    m_weather_tab = create_editor_button(xml, "main:weather_tab", this);
+    m_lightning_tab = create_editor_button(xml, "main:lightning_tab", this);
+    CreateNavigation(xml);
 
     // One shared popup keeps the layout compact. Every color header opens it
     // for its own RGB triplet; RGBA alpha remains on the dedicated A slider.
     m_color_picker = xr_new<CWeatherColorPicker>();
     m_color_picker->SetAutoDelete(true);
-    m_color_picker->SetWndSize(Fvector2().set(184.f, 126.f));
+    m_color_picker->SetWndSize(Fvector2().set(296.f, 158.f));
     m_color_picker->SetWndPos(Fvector2().set(0.f, 0.f));
     AttachChild(m_color_picker);
+    m_color_picker->InitFields(xml);
     m_color_picker->Show(false);
 
     Register(m_weather);
@@ -533,11 +1083,39 @@ void CUIWeatherEditor::Init() {
     Register(m_revert);
     Register(m_close);
     Register(m_color_picker);
+    Register(m_weather_tab);
+    Register(m_lightning_tab);
+    Register(m_lightning_apply);
+    Register(m_lightning_test);
+    Register(m_multi_strikes);
+    Register(m_files);
+    for(auto* category:m_categories) Register(category);
+    for(auto& control:m_lightning_controls) {Register(control.slider);Register(control.value);}
+    for(auto& control:m_property_controls) Register(control.value);
     for (SColorControl& control : m_color_controls)
         Register(control.swatch);
     for (SPropertyControl& control : m_property_controls)
         Register(control.slider);
 
+    AddCallback(m_files,BUTTON_CLICKED,CUIWndCallback::void_function(this,&CUIWeatherEditor::OnFiles));
+    for(auto* category:m_categories)
+        AddCallback(category,BUTTON_CLICKED,CUIWndCallback::void_function(this,&CUIWeatherEditor::OnCategory));
+    for(auto& control:m_property_controls)
+        AddCallback(control.value,EDIT_TEXT_COMMIT,CUIWndCallback::void_function(this,&CUIWeatherEditor::OnNumberCommitted));
+    for(auto& control:m_lightning_controls)
+        AddCallback(control.value,EDIT_TEXT_COMMIT,CUIWndCallback::void_function(this,&CUIWeatherEditor::OnNumberCommitted));
+    AddCallback(m_weather_tab,BUTTON_CLICKED,
+                CUIWndCallback::void_function(this,&CUIWeatherEditor::OnSelectTab));
+    AddCallback(m_lightning_tab,BUTTON_CLICKED,
+                CUIWndCallback::void_function(this,&CUIWeatherEditor::OnSelectTab));
+    AddCallback(m_lightning_apply,BUTTON_CLICKED,
+                CUIWndCallback::void_function(this,&CUIWeatherEditor::OnLightningAssets));
+    AddCallback(m_multi_strikes,BUTTON_CLICKED,CUIWndCallback::void_function(this,&CUIWeatherEditor::OnLightningMulti));
+    AddCallback(m_lightning_test,BUTTON_CLICKED,
+                CUIWndCallback::void_function(this,&CUIWeatherEditor::OnTestLightning));
+    for(auto& control:m_lightning_controls)
+        AddCallback(control.slider,BUTTON_CLICKED,
+                    CUIWndCallback::void_function(this,&CUIWeatherEditor::OnLightningChanged));
     AddCallback(m_weather, LIST_ITEM_SELECT,
                 CUIWndCallback::void_function(this, &CUIWeatherEditor::OnWeatherChanged));
     AddCallback(m_frame, LIST_ITEM_SELECT,
@@ -576,6 +1154,7 @@ void CUIWeatherEditor::Init() {
                     CUIWndCallback::void_function(this, &CUIWeatherEditor::OnPropertyChanged));
 
     Msg("* Weather editor: wind limits v2; trees=0..1, rain tilt multiplier=0..3");
+    SetLightningPage(false);
     SetStatus("ui_weather_editor_status_ready");
 }
 
@@ -588,9 +1167,23 @@ void CUIWeatherEditor::Show(bool status) {
             inherited::Show(true);
             SyncTimeControl(m_editor_time);
             SyncPropertyControls();
+            if(m_lightning_mode) SyncLightningControls();
             return;
         }
 
+        m_snapshots.clear();
+        // Closing the dialog does not save changes. Keep disk baselines across reopenings.
+        if(!m_saved_baselines_ready) {
+            for(const auto& cycle:environment.WeatherCycles)
+                m_weather_baselines[cycle.first]=WeatherSignature(cycle.first);
+            if(environment.eff_Thunderbolt) m_lightning_saved=environment.eff_Thunderbolt->GetEditorSettings();
+            m_rain_tilt_saved=environment.eff_Rain?environment.eff_Rain->GetWindTiltMultiplier():1.f;
+            m_rain_speed_saved=environment.eff_Rain?environment.eff_Rain->GetWindSpeedMultiplier():0.f;
+            m_saved_baselines_ready=true;
+        }
+        SetLightningPage(false);
+        if(environment.eff_Thunderbolt)
+            m_lightning_baseline=environment.eff_Thunderbolt->GetEditorSettings();
         const float current_time = environment.GetGameTime();
         m_rain_tilt_baseline = environment.eff_Rain
             ? environment.eff_Rain->GetWindTiltMultiplier() : 1.f;
@@ -612,18 +1205,24 @@ void CUIWeatherEditor::Show(bool status) {
         return;
     }
     if (!status && IsShown()) {
+        m_previewing = false;
+        release_weather_preview();
         ClearLearningHint();
         m_color_picker->Show(false);
         m_active_color_property = -1;
-        if (g_pGamePersistent && !m_previewing) {
+        if (g_pGamePersistent && !m_keep_session) {
             CEnvironment& environment = g_pGamePersistent->Environment();
             environment.EndWeatherEditorSession();
             environment.m_paused = m_previous_pause;
             m_session_active = false;
         }
+        m_keep_session = false;
 
         // An expanded combo registers itself in seqRender and captures the
         // parent. Close every list before hiding/deleting the dialog.
+        static_cast<CWeatherComboBox*>(m_lightning_particle)->CloseEditorList();
+        static_cast<CWeatherComboBox*>(m_lightning_sound)->CloseEditorList();
+        static_cast<CWeatherComboBox*>(m_lightning_collection)->CloseEditorList();
         static_cast<CWeatherComboBox*>(m_weather)->CloseEditorList();
         static_cast<CWeatherComboBox*>(m_frame)->CloseEditorList();
         static_cast<CWeatherComboBox*>(m_sky)->CloseEditorList();
@@ -635,23 +1234,61 @@ void CUIWeatherEditor::Show(bool status) {
     inherited::Show(status);
 }
 
+void CUIWeatherEditor::Draw() {
+    if (m_previewing) return;
+    if (m_preview_frame && m_session_active) {
+        Frect rect; m_preview_frame->GetAbsoluteRect(rect);
+        UI().ClientToScreenScaled(rect.lt); UI().ClientToScreenScaled(rect.rb);
+        // Capture before drawing any editor panels or lists.
+        draw_weather_preview(rect);
+    }
+    inherited::Draw();
+}
+
+bool CUIWeatherEditor::OnMouseAction(float x,float y,EUIMessages action) {
+    if (m_previewing)
+        return true;
+    for (auto* combo : {m_weather, m_sky, m_clouds, m_ambient_definition, m_sun_definition,
+                        m_thunderbolt_definition, m_lightning_collection,
+                        m_lightning_particle, m_lightning_sound}) {
+        auto* resource = static_cast<CWeatherResourceCombo*>(combo);
+        if (resource && resource->IsShown() && resource->SearchOpen()) {
+            resource->RoutePopupMouse(x, y, action);
+            return true;
+        }
+    }
+    return inherited::OnMouseAction(x, y, action);
+}
+
+bool CUIWeatherEditor::OnKeyboardHold(int dik) {
+    return m_previewing ? true : inherited::OnKeyboardHold(dik);
+}
+
 void CUIWeatherEditor::Update() {
+    if (m_previewing) { GetUICursor().Hide(); return; }
     inherited::Update();
     if (m_close_requested) {
         m_close_requested = false;
+        CommitNumericEdits();
+        if(m_lightning_mode && !ApplyLightningAssets()) return;
         CloseEditorSession();
+        return;
+    }
+    UpdateDirtyState();
+    if(m_time_update_pending && m_descriptor && !m_synchronizing) {
+        m_time_update_pending=false;
+        const float requested=m_time_slider->GetFValue();
+        if(std::abs(requested-m_editor_time)>=1.f) ApplyEditorTime(requested);
+    }
+    if(m_lightning_mode && !m_synchronizing) {
+        SyncLightningControls();
+        SyncTimeControl(m_editor_time);
+        UpdateLearningHint();
         return;
     }
     if (!m_descriptor || m_synchronizing) {
         UpdateLearningHint();
         return;
-    }
-
-    if (m_time_update_pending) {
-        m_time_update_pending = false;
-        const float requested_time = m_time_slider->GetFValue();
-        if (std::abs(requested_time - m_editor_time) >= 1.f)
-            ApplyEditorTime(requested_time);
     }
 
     const u32 total_seconds = (u32)iFloor(m_editor_time + .5f);
@@ -667,7 +1304,7 @@ void CUIWeatherEditor::Update() {
 
         string32 value_text;
         xr_sprintf(value_text, "%.3f", GetPropertyValue(control.property_index));
-        control.value->SetText(value_text);
+        static_cast<CWeatherValueEdit*>(control.value)->SetEditorText(value_text);
     }
 
     for (SColorControl& control : m_color_controls) {
@@ -690,8 +1327,25 @@ void CUIWeatherEditor::SendMessage(CUIWindow* pWnd, s16 msg, void* pData) {
 }
 
 bool CUIWeatherEditor::OnKeyboardAction(int dik, EUIMessages keyboard_action) {
+    if (m_previewing) {
+        if (keyboard_action == WINDOW_KEY_PRESSED && (dik == DIK_F7 || dik == DIK_ESCAPE))
+            LeavePreview();
+        return true; // Hidden controls cannot receive hotkeys or edit input.
+    }
     if (keyboard_action == WINDOW_KEY_PRESSED) {
         if (dik == DIK_ESCAPE) {
+            for (auto* combo : {m_weather, m_sky, m_clouds, m_ambient_definition, m_sun_definition,
+                                m_thunderbolt_definition, m_lightning_collection,
+                                m_lightning_particle, m_lightning_sound}) {
+                auto* resource = static_cast<CWeatherResourceCombo*>(combo);
+                if (resource->SearchOpen()) {
+                    resource->CloseEditorList();
+                    return true;
+                }
+            }
+        }
+        if (dik == DIK_ESCAPE) {
+            m_keep_session = false;
             m_close_requested = true;
             return true;
         }
@@ -703,8 +1357,11 @@ bool CUIWeatherEditor::OnKeyboardAction(int dik, EUIMessages keyboard_action) {
             OnSave(nullptr, nullptr);
             return true;
         }
+        // F7 hides the editor and keeps its session: the edited weather and time stay fixed in the
+        // game ( time is paused ). It does not write files ( that is F6 ). Esc ends the session.
+        // The preview stays on its button and on "weather_editor preview".
         if (dik == DIK_F7) {
-            OnPreview(nullptr, nullptr);
+            OnSaveClose(nullptr, nullptr);
             return true;
         }
     }
@@ -716,11 +1373,9 @@ void CUIWeatherEditor::FillWeatherList() {
     clear_combo(m_weather);
     m_weather_names.clear();
     const CEnvironment::EnvsMap& cycles = g_pGamePersistent->Environment().WeatherCycles;
-    for (const auto& cycle : cycles) {
-        const int index = (int)m_weather_names.size();
+    for (const auto& cycle : cycles)
         m_weather_names.push_back(cycle.first);
-        m_weather->AddItem_(cycle.first.c_str(), index);
-    }
+    static_cast<CWeatherResourceCombo*>(m_weather)->SetResource(0);
     m_synchronizing = false;
 }
 
@@ -770,10 +1425,8 @@ void CUIWeatherEditor::FillTextureLists() {
     std::sort(m_cloud_textures.begin(), m_cloud_textures.end());
     clear_combo(m_sky);
     clear_combo(m_clouds);
-    for (u32 i = 0; i < m_sky_textures.size(); ++i)
-        m_sky->AddItem_(m_sky_textures[i].c_str(), (int)i);
-    for (u32 i = 0; i < m_cloud_textures.size(); ++i)
-        m_clouds->AddItem_(m_cloud_textures[i].c_str(), (int)i);
+    static_cast<CWeatherResourceCombo*>(m_sky)->SetResource(0);
+    static_cast<CWeatherResourceCombo*>(m_clouds)->SetResource(0);
 }
 
 void CUIWeatherEditor::FillDefinitionLists() {
@@ -815,21 +1468,11 @@ void CUIWeatherEditor::FillDefinitionLists() {
     clear_combo(m_ambient_definition);
     clear_combo(m_sun_definition);
     clear_combo(m_thunderbolt_definition);
-    for (u32 i = 0; i < m_ambient_definitions.size(); ++i)
-        m_ambient_definition->AddItem_(
-            i ? m_ambient_definitions[i].c_str()
-              : CStringTable().translate("ui_weather_editor_none").c_str(),
-            (int)i);
-    for (u32 i = 0; i < m_sun_definitions.size(); ++i)
-        m_sun_definition->AddItem_(
-            i ? m_sun_definitions[i].c_str()
-              : CStringTable().translate("ui_weather_editor_none").c_str(),
-            (int)i);
-    for (u32 i = 0; i < m_thunderbolt_definitions.size(); ++i)
-        m_thunderbolt_definition->AddItem_(
-            i ? m_thunderbolt_definitions[i].c_str()
-              : CStringTable().translate("ui_weather_editor_none").c_str(),
-            (int)i);
+    clear_combo(m_lightning_collection);
+    static_cast<CWeatherResourceCombo*>(m_ambient_definition)->SetResource(0);
+    static_cast<CWeatherResourceCombo*>(m_sun_definition)->SetResource(0);
+    static_cast<CWeatherResourceCombo*>(m_thunderbolt_definition)->SetResource(0);
+    static_cast<CWeatherResourceCombo*>(m_lightning_collection)->SetResource(0);
 }
 
 void CUIWeatherEditor::AddPropertyHeader(CUIXml& xml, LPCSTR caption, float x, float y,
@@ -837,14 +1480,16 @@ void CUIWeatherEditor::AddPropertyHeader(CUIXml& xml, LPCSTR caption, float x, f
     CUITextWnd* header = UIHelper::CreateTextWnd(xml, "main:property_header_template", this);
     header->SetWndPos(Fvector2().set(x, y + property_y_offset));
     header->SetTextST(caption);
+    TrackWeatherWindow(header,m_build_category);
 
     if (first_color_property >= 0) {
         CWeatherColorSwatch* swatch = xr_new<CWeatherColorSwatch>();
         swatch->SetAutoDelete(true);
-        swatch->SetWndPos(Fvector2().set(x + 260.f, y + property_y_offset + 1.f));
+        swatch->SetWndPos(Fvector2().set(x + 330.f, y + property_y_offset + 1.f));
         swatch->SetWndSize(Fvector2().set(46.f, 14.f));
         swatch->InitTexture("ui\\ui_weather_editor_white");
         AttachChild(swatch);
+        TrackWeatherWindow(swatch,m_build_category);
 
         SColorControl control;
         control.first_property_index = (u32)first_color_property;
@@ -854,107 +1499,418 @@ void CUIWeatherEditor::AddPropertyHeader(CUIXml& xml, LPCSTR caption, float x, f
     }
 }
 
-void CUIWeatherEditor::AddPropertyControl(CUIXml& xml, u32 property_index, LPCSTR caption,
-                                          float x, float y) {
-    VERIFY(property_index < sizeof(properties) / sizeof(properties[0]));
+void CUIWeatherEditor::TrackWeatherWindow(CUIWindow* window,unsigned category) {
+    m_weather_property_windows.push_back(window);
+    m_category_windows.push_back({window,category});
+}
 
-    CUITextWnd* label = UIHelper::CreateTextWnd(xml, "main:property_label_template", this);
-    label->SetWndPos(Fvector2().set(x, y + property_y_offset));
-    label->SetTextST(caption);
-    // Give descriptive wind/rain captions room without moving the value column.
-    const bool wide_caption = property_index == 5 || property_index == 6 || property_index >= 36;
-    if (wide_caption)
-        label->SetWndSize(Fvector2().set(145.f, 17.f));
-
-    CWeatherTrackBar* slider = xr_new<CWeatherTrackBar>();
-    slider->SetAutoDelete(true);
-    AttachChild(slider);
-    CUIXmlInit::InitTrackBar(xml, "main:property_slider_template", 0, slider);
-    if (wide_caption) {
-        slider->SetWidth(97.f); // Resize the enabled/disabled background states too.
-        slider->SetWndSize(Fvector2().set(97.f, 12.f));
-    }
-    slider->SetWndPos(Fvector2().set(x + (wide_caption ? 149.f : 104.f), y + property_y_offset + 2.f));
-    slider->SetOptFBounds(properties[property_index].minimum, properties[property_index].maximum);
-    slider->SetStep(properties[property_index].step);
-
-    CUITextWnd* value = UIHelper::CreateTextWnd(xml, "main:property_value_template", this);
-    value->SetWndPos(Fvector2().set(x + 251.f, y + property_y_offset));
-
-    SPropertyControl control;
-    control.property_index = property_index;
-    control.label = label;
-    control.slider = slider;
-    control.value = value;
-    m_property_controls.push_back(control);
+void CUIWeatherEditor::AddPropertyControl(CUIXml& xml,u32 property_index,LPCSTR caption,float x,float y) {
+    VERIFY(property_index<sizeof(properties)/sizeof(properties[0]));
+    VERIFY(weather_editor_model::weather_categories[property_index]==m_build_category);
+    const bool compact=property_index>=11 && property_index<=33;
+    auto* label=UIHelper::CreateTextWnd(xml,"main:property_label_template",this);
+    label->SetWndPos(Fvector2().set(x,y));label->SetTextST(caption);
+    label->SetWndSize(Fvector2().set(compact?18.f:180.f,22.f));
+    auto* slider=xr_new<CWeatherTrackBar>();slider->SetAutoDelete(true);AttachChild(slider);
+    CUIXmlInit::InitTrackBar(xml,"main:property_slider_template",0,slider);
+    slider->SetWndPos(Fvector2().set(x+184.f,y+5.f));
+    slider->SetOptFBounds(property_info(property_index).minimum,property_info(property_index).maximum);
+    slider->SetStep(property_info(property_index).step);
+    auto* value=create_number(xml,this,x+(compact?20.f:308.f),y,compact?64.f:70.f);
+    m_property_controls.push_back({property_index,label,slider,value});
+    TrackWeatherWindow(label,m_build_category);TrackWeatherWindow(value,m_build_category);
+    // RGB values use compact editable fields; the retained sliders provide the same value model.
+    if(!compact) TrackWeatherWindow(slider,m_build_category);
+    else slider->Show(false);
 }
 
 void CUIWeatherEditor::CreatePropertyControls(CUIXml& xml) {
-    const float left = 8.f;
-    const float center = 336.f;
-    const float right = 664.f;
+    const float x=188.f;
+    const auto selector=[&](CUIComboBox* combo,LPCSTR caption,float y,unsigned category) {
+        auto* label=UIHelper::CreateTextWnd(xml,"main:property_label_template",this);
+        label->SetWndPos(Fvector2().set(x,y));label->SetWndSize(Fvector2().set(140.f,22.f));label->SetTextST(caption);
+        TrackWeatherWindow(label,category);TrackWeatherWindow(combo,category);
+    };
+    const auto color=[&](u32 first,LPCSTR caption,float y,unsigned count=3) {
+        AddPropertyHeader(xml,caption,x,y,first);
+        const LPCSTR channels[]={"ui_weather_editor_channel_r","ui_weather_editor_channel_g","ui_weather_editor_channel_b","ui_weather_editor_channel_a"};
+        for(unsigned c=0;c<count;++c) AddPropertyControl(xml,first+c,channels[c],x+c*94.f,y+22.f);
+    };
+    m_build_category=0;
+    selector(m_sky,"ui_weather_editor_sky",176.f,0);
+    color(11,"ui_weather_editor_sky_color_rgb",208.f);
+    AddPropertyControl(xml,0,"ui_weather_editor_sky_rotation",x,262.f);
+    color(27,"ui_weather_editor_hemisphere_color_rgba",294.f,4);
+    selector(m_sun_definition,"ui_weather_editor_sun",348.f,0);
+    color(31,"ui_weather_editor_sun_color_rgb",380.f);
+    AddPropertyControl(xml,34,"ui_weather_editor_sun_altitude",x,434.f);
+    AddPropertyControl(xml,35,"ui_weather_editor_sun_longitude",x,466.f);
+    AddPropertyControl(xml,9,"ui_weather_editor_sun_shafts",x,498.f);
+    m_build_category=1;
+    selector(m_clouds,"ui_weather_editor_clouds",176.f,1);
+    color(14,"ui_weather_editor_clouds_color_rgba",216.f,4);
+    m_build_category=2;
+    color(18,"ui_weather_editor_fog_color_rgb",176.f);
+    AddPropertyControl(xml,2,"ui_weather_editor_fog_density",x,236.f);
+    AddPropertyControl(xml,3,"ui_weather_editor_fog_distance",x,268.f);
+    AddPropertyControl(xml,1,"ui_weather_editor_far_plane",x,300.f);
+    m_build_category=3;
+    color(21,"ui_weather_editor_rain_color_rgb",176.f);
+    AddPropertyControl(xml,4,"ui_weather_editor_rain_density",x,236.f);
+    AddPropertyControl(xml,37,"ui_weather_editor_rain_tilt_multiplier",x,268.f);
+    AddPropertyControl(xml,38,"ui_weather_editor_rain_speed_multiplier",x,300.f);
+    selector(m_thunderbolt_definition,"ui_weather_editor_thunderbolt_selector",348.f,3);
+    AddPropertyControl(xml,7,"ui_weather_editor_thunderbolt_period",x,392.f);
+    AddPropertyControl(xml,8,"ui_weather_editor_thunderbolt_duration",x,424.f);
+    m_build_category=4;
+    AddPropertyHeader(xml,"ui_weather_editor_wind",x,176.f);
+    AddPropertyControl(xml,5,"ui_weather_editor_wind_velocity",x,214.f);
+    AddPropertyControl(xml,6,"ui_weather_editor_wind_direction",x,246.f);
+    AddPropertyControl(xml,36,"ui_weather_editor_trees_amplitude",x,278.f);
+    m_build_category=5;
+    selector(m_ambient_definition,"ui_weather_editor_ambient",176.f,5);
+    color(24,"ui_weather_editor_ambient_color_rgb",216.f);
+    AddPropertyControl(xml,10,"ui_weather_editor_water_intensity",x,276.f);
+}
 
-    // Atmosphere
-    AddPropertyHeader(xml, "ui_weather_editor_ambient_color_rgb", left, 124.f, 24);
-    AddPropertyControl(xml, 24, "ui_weather_editor_channel_r", left, 144.f);
-    AddPropertyControl(xml, 25, "ui_weather_editor_channel_g", left, 163.f);
-    AddPropertyControl(xml, 26, "ui_weather_editor_channel_b", left, 182.f);
+void CUIWeatherEditor::CreateLightningControls(CUIXml& xml) {
+    m_lightning_header=xr_new<CUIWindow>();m_lightning_header->SetAutoDelete(true);AttachChild(m_lightning_header);
+    m_lightning_header->SetWndPos(Fvector2().set(188.f,174.f));m_lightning_header->SetWndSize(Fvector2().set(380.f,58.f));
+    auto* collection_label=UIHelper::CreateTextWnd(xml,"main:property_header_template",m_lightning_header);
+    collection_label->SetTextST("ui_lightning_test_collection");
+    m_lightning_collection=xr_new<CWeatherResourceCombo>();m_lightning_collection->SetAutoDelete(true);
+    m_lightning_header->AttachChild(m_lightning_collection);
+    CUIXmlInit::InitComboBox(xml,"main:lightning_collection_template",0,m_lightning_collection);
+    static_cast<CWeatherResourceCombo*>(m_lightning_collection)->Configure(xml, m_thunderbolt_definitions);
+    m_lightning_panel=xr_new<CUIWindow>();m_lightning_panel->SetAutoDelete(true);AttachChild(m_lightning_panel);
+    m_lightning_panel->SetWndPos(Fvector2().set(188.f,242.f));m_lightning_panel->SetWndSize(Fvector2().set(380.f,280.f));
+    for(unsigned i=0;i<lightning_editor::count;++i) {
+        const unsigned category=weather_editor_model::lightning_category(i);
+        const unsigned first=category==0?0:category==1?7:category==2?15:22;
+        const float y=(i-first)*32.f;
+        const auto& parameter=lightning_editor::parameters[i];
+        std::string key="ui_lightning_";key+=parameter.key;
+        auto* label=UIHelper::CreateTextWnd(xml,"main:property_label_template",m_lightning_panel);
+        label->SetWndPos(Fvector2().set(0.f,y));label->SetWndSize(Fvector2().set(180.f,22.f));label->SetTextST(key.c_str());
+        auto* slider=xr_new<CWeatherTrackBar>();slider->SetAutoDelete(true);m_lightning_panel->AttachChild(slider);
+        CUIXmlInit::InitTrackBar(xml,"main:property_slider_template",0,slider);
+        slider->SetWndPos(Fvector2().set(184.f,y+5.f));slider->SetOptFBounds(parameter.minimum,parameter.maximum);slider->SetStep(parameter.step);
+        auto* value=create_number(xml,m_lightning_panel,308.f,y);
+        m_lightning_controls.push_back({i,label,slider,value});
+    }
+    m_multi_strikes=UIHelper::CreateCheck(xml,"main:multi_strikes_template",m_lightning_panel);
+    m_assets_panel=xr_new<CUIWindow>();m_assets_panel->SetAutoDelete(true);AttachChild(m_assets_panel);
+    m_assets_panel->SetWndPos(Fvector2().set(188.f,534.f));m_assets_panel->SetWndSize(Fvector2().set(788.f,78.f));
+    UIHelper::CreateStatic(xml,"main:assets_back",m_assets_panel);
+    auto* particle_label=UIHelper::CreateTextWnd(xml,"main:property_header_template",m_assets_panel);
+    particle_label->SetTextST("ui_lightning_particle");particle_label->SetWndSize(Fvector2().set(270.f,18.f));
+    auto* sound_label=UIHelper::CreateTextWnd(xml,"main:property_header_template",m_assets_panel);
+    sound_label->SetWndPos(Fvector2().set(284.f,0.f));sound_label->SetTextST("ui_lightning_sound");sound_label->SetWndSize(Fvector2().set(270.f,18.f));
+    auto* particle = xr_new<CWeatherResourceCombo>();
+    particle->SetAutoDelete(true);
+    m_assets_panel->AttachChild(particle);
+    CUIXmlInit::InitComboBox(xml, "main:lightning_particle_template", 0, particle);
+    particle->Configure(xml, m_lightning_particles, false, true);
+    m_lightning_particle = particle;
+    auto* sound = xr_new<CWeatherResourceCombo>();
+    sound->SetAutoDelete(true);
+    m_assets_panel->AttachChild(sound);
+    CUIXmlInit::InitComboBox(xml, "main:lightning_sound_template", 0, sound);
+    sound->Configure(xml, m_lightning_sounds, true, true);
+    m_lightning_sound = sound;
+    m_lightning_apply=create_editor_button(xml,"main:lightning_apply_template",m_assets_panel);
+    m_lightning_test=create_editor_button(xml,"main:lightning_test_template",this);
+}
 
-    AddPropertyHeader(xml, "ui_weather_editor_fog_color_rgb", left, 207.f, 18);
-    AddPropertyControl(xml, 18, "ui_weather_editor_channel_r", left, 227.f);
-    AddPropertyControl(xml, 19, "ui_weather_editor_channel_g", left, 246.f);
-    AddPropertyControl(xml, 20, "ui_weather_editor_channel_b", left, 265.f);
-    AddPropertyControl(xml, 2, "ui_weather_editor_fog_density", left, 292.f);
-    AddPropertyControl(xml, 3, "ui_weather_editor_fog_distance", left, 311.f);
-    AddPropertyControl(xml, 1, "ui_weather_editor_far_plane", left, 330.f);
-    AddPropertyControl(xml, 10, "ui_weather_editor_water_intensity", left, 349.f);
+void CUIWeatherEditor::FillLightningParticles() {
+    m_synchronizing=true;
+    static_cast<CWeatherComboBox*>(m_lightning_particle)->CloseEditorList();
+    clear_combo(m_lightning_particle);m_lightning_particles.clear();m_lightning_particles.push_back("");
+    const auto& library=g_pGamePersistent->Environment().m_pRender->particles_systems_library();
+    auto i=library.particles_group_begin();const auto end=library.particles_group_end();
+    for(;i!=end;library.particles_group_next(i))
+        append_unique(m_lightning_particles,library.particles_group_id(**i).c_str());
+    auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;
+    if(effect) append_unique(m_lightning_particles,effect->GetEditorSettings().particle);
+    std::sort(m_lightning_particles.begin()+1,m_lightning_particles.end());
 
-    // Sky and clouds
-    AddPropertyHeader(xml, "ui_weather_editor_sky_color_rgb", center, 124.f, 11);
-    AddPropertyControl(xml, 11, "ui_weather_editor_channel_r", center, 144.f);
-    AddPropertyControl(xml, 12, "ui_weather_editor_channel_g", center, 163.f);
-    AddPropertyControl(xml, 13, "ui_weather_editor_channel_b", center, 182.f);
+    m_synchronizing=false;
+}
 
-    AddPropertyHeader(xml, "ui_weather_editor_clouds_color_rgba", center, 207.f, 14);
-    AddPropertyControl(xml, 14, "ui_weather_editor_channel_r", center, 227.f);
-    AddPropertyControl(xml, 15, "ui_weather_editor_channel_g", center, 246.f);
-    AddPropertyControl(xml, 16, "ui_weather_editor_channel_b", center, 265.f);
-    AddPropertyControl(xml, 17, "ui_weather_editor_channel_a", center, 284.f);
+void CUIWeatherEditor::FillLightningSounds() {
+    m_synchronizing=true;
+    static_cast<CWeatherComboBox*>(m_lightning_sound)->CloseEditorList();
+    clear_combo(m_lightning_sound);
+    m_lightning_sounds.clear();
+    m_lightning_sounds.push_back(""); // Empty config value disables the impact sound.
+    for (LPCSTR folder : lightning_sound_folders) {
+        string_path path;
+        FS.update_path(path, "$game_sounds$", folder);
+        FS_FileSet files;
+        FS.file_list(files, path, FS_ListFiles | FS_ClampExt, "*.ogg");
+        for (const FS_File& file : files) {
+            std::string name = std::string(folder) + file.name.c_str();
+            std::replace(name.begin(), name.end(), '/', '\\');
+            m_lightning_sounds.push_back(name);
+        }
+    }
+    // Keep the configured sound resolvable even if it is outside the picker.
+    auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;
+    if(effect) append_unique(m_lightning_sounds,effect->GetEditorSettings().sound);
+    std::sort(m_lightning_sounds.begin()+1,m_lightning_sounds.end());
+    m_lightning_sounds.erase(std::unique(m_lightning_sounds.begin()+1,m_lightning_sounds.end()),m_lightning_sounds.end());
 
-    AddPropertyHeader(xml, "ui_weather_editor_hemisphere_color_rgba", center, 309.f, 27);
-    AddPropertyControl(xml, 27, "ui_weather_editor_channel_r", center, 329.f);
-    AddPropertyControl(xml, 28, "ui_weather_editor_channel_g", center, 348.f);
-    AddPropertyControl(xml, 29, "ui_weather_editor_channel_b", center, 367.f);
-    AddPropertyControl(xml, 30, "ui_weather_editor_channel_a", center, 386.f);
-    AddPropertyControl(xml, 0, "ui_weather_editor_sky_rotation", center, 413.f);
-    AddPropertyControl(xml, 9, "ui_weather_editor_sun_shafts", center, 432.f);
+    m_synchronizing=false;
+}
 
-    // Sun occupies the free space below the atmosphere controls.
-    AddPropertyHeader(xml, "ui_weather_editor_sun_color_rgb", left, 376.f, 31);
-    AddPropertyControl(xml, 31, "ui_weather_editor_channel_r", left, 396.f);
-    AddPropertyControl(xml, 32, "ui_weather_editor_channel_g", left, 415.f);
-    AddPropertyControl(xml, 33, "ui_weather_editor_channel_b", left, 434.f);
-    AddPropertyControl(xml, 34, "ui_weather_editor_sun_altitude", left, 461.f);
-    AddPropertyControl(xml, 35, "ui_weather_editor_sun_longitude", left, 480.f);
+void CUIWeatherEditor::CreateNavigation(CUIXml& xml) {
+    m_category_title=UIHelper::CreateTextWnd(xml,"main:category_title",this);
+    m_context_help=UIHelper::CreateTextWnd(xml,"main:context_help",this);
+    m_dirty_status=UIHelper::CreateTextWnd(xml,"main:dirty_status",this);
+    m_files=create_editor_button(xml,"main:files",this);
+    for(unsigned i=0;i<6;++i) {
+        auto* button=create_editor_button(xml,"main:category_template",this);
+        button->SetWndPos(Fvector2().set(8.f,176.f+i*40.f));
+        button->SetStateTextColor(color_rgba(235,220,150,255),S_Disabled);
+        button->SetStateTextColor(color_rgba(200,205,195,255),S_Enabled);
+        m_categories.push_back(button);
+    }
+    auto* preview=xr_new<CWeatherPreviewFrame>();m_preview_frame=preview;preview->SetAutoDelete(true);
+    preview->SetWndPos(Fvector2().set(600.f,170.f));preview->SetWndSize(Fvector2().set(376.f,280.f));
+    preview->InitTexture("ui\\ui_weather_editor_white");preview->Enable(false);AttachChild(preview);
+    UIHelper::CreateTextWnd(xml,"main:live_label",this);
+}
 
-    // Rain: color, density, wind tilt and fall acceleration.
-    AddPropertyHeader(xml, "ui_weather_editor_rain_color_rgb", right, 124.f, 21);
-    AddPropertyControl(xml, 21, "ui_weather_editor_channel_r", right, 144.f);
-    AddPropertyControl(xml, 22, "ui_weather_editor_channel_g", right, 163.f);
-    AddPropertyControl(xml, 23, "ui_weather_editor_channel_b", right, 182.f);
-    AddPropertyControl(xml, 4, "ui_weather_editor_rain_density", right, 207.f);
-    AddPropertyControl(xml, 37, "ui_weather_editor_rain_tilt_multiplier", right, 226.f);
-    AddPropertyControl(xml, 38, "ui_weather_editor_rain_speed_multiplier", right, 245.f);
+void CUIWeatherEditor::RefreshCategory() {
+    const unsigned selected=m_lightning_mode?m_lightning_category:m_weather_category;
+    const unsigned count=m_lightning_mode?4:6;
+    for(unsigned i=0;i<m_categories.size();++i) {
+        auto* button=m_categories[i];button->Show(i<count);button->Enable(i!=selected);
+        if(i<count) button->TextItemControl()->SetTextST(m_lightning_mode?lightning_category_ids[i]:weather_category_ids[i]);
+    }
+    m_category_title->SetTextST(m_lightning_mode?lightning_category_ids[selected]:weather_category_ids[selected]);
+    for(const auto& item:m_category_windows)
+        item.window->Show(!m_lightning_mode && item.category==selected);
+    for(auto& control:m_lightning_controls) {
+        const bool visible=m_lightning_mode && weather_editor_model::lightning_category(control.index)==selected;
+        control.label->Show(visible);control.slider->Show(visible && control.index!=0);control.value->Show(visible && control.index!=0);
+    }
+    m_multi_strikes->Show(m_lightning_mode && selected==0);
+    m_context_help->SetTextST("ui_env_live_hint");
+}
 
-    // Wind: velocity, direction and tree motion amplitude.
-    AddPropertyHeader(xml, "ui_weather_editor_wind", right, 272.f);
-    AddPropertyControl(xml, 5, "ui_weather_editor_wind_velocity", right, 292.f);
-    AddPropertyControl(xml, 6, "ui_weather_editor_wind_direction", right, 311.f);
-    AddPropertyControl(xml, 36, "ui_weather_editor_trees_amplitude", right, 330.f);
+void CUIWeatherEditor::OnCategory(CUIWindow* window,void*) {
+    CommitNumericEdits();CloseLists();ClearLearningHint();
+    m_color_picker->Show(false);m_active_color_property=-1;
+    for(unsigned i=0;i<m_categories.size();++i) if(m_categories[i]==window) {
+        if(m_lightning_mode) m_lightning_category=i;else m_weather_category=i;
+        RefreshCategory();return;
+    }
+}
 
-    AddPropertyHeader(xml, "ui_weather_editor_thunderbolt", right, 357.f);
-    AddPropertyControl(xml, 7, "ui_weather_editor_thunderbolt_period", right, 377.f);
-    AddPropertyControl(xml, 8, "ui_weather_editor_thunderbolt_duration", right, 396.f);
+void CUIWeatherEditor::OnFiles(CUIWindow*,void*) {
+    if(m_lightning_mode) return;
+    CommitNumericEdits();CloseLists();m_files_visible=!m_files_visible;
+    m_file_panel->Show(m_files_visible);
+}
+
+void CUIWeatherEditor::CommitNumericEdits(bool apply) {
+    if(m_synchronizing) return;
+    const auto commit=[this,apply](CUIEditBox* field) {
+        auto* edit=static_cast<CWeatherValueEdit*>(field);
+        if(edit->Editing()) {
+            edit->CaptureFocus(false);
+            edit->GetParent()->SetKeyboardCapture(edit,false);
+            if(apply) OnNumberCommitted(edit,nullptr);
+        }
+    };
+    if(m_lightning_mode) {for(auto& control:m_lightning_controls) commit(control.value);}
+    else {for(auto& control:m_property_controls) commit(control.value);}
+}
+
+void CUIWeatherEditor::OnNumberCommitted(CUIWindow* window,void*) {
+    if(m_synchronizing) return;
+    if(m_lightning_mode) {
+        auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;if(!effect)return;
+        for(auto& control:m_lightning_controls) if(window==control.value) {
+            float value;
+            if(weather_editor_model::parse_number(control.value->GetText(),value)) {
+                auto settings=effect->GetEditorSettings();lightning_editor::change(settings,control.index,value);
+                if(!effect->ApplyEditorSettings(settings)) SetStatus("ui_lightning_assets_error");
+            } else SetStatus("ui_env_number_error");
+            SyncLightningControls();m_next_dirty_update=0;return;
+        }
+    } else if(m_descriptor) {
+        for(auto& control:m_property_controls) if(window==control.value) {
+            float value;
+            if(weather_editor_model::parse_number(control.value->GetText(),value)) {
+                if(!fsimilar(m_editor_time,m_descriptor->exec_time,.5f)) {
+                    ApplyEditorTime(m_descriptor->exec_time);SyncTimeControl(m_descriptor->exec_time);
+                }
+                // Screen Space Shaders: the bounds of the slider ( property_info, wind 0 .. 1000 with SSS ).
+                const auto& bounds=property_info(control.property_index);
+                SetPropertyValue(control.property_index,std::clamp(value,bounds.minimum,bounds.maximum));
+            } else SetStatus("ui_env_number_error");
+            SyncPropertyControls();m_next_dirty_update=0;return;
+        }
+    }
+}
+
+std::string CUIWeatherEditor::WeatherSignature(const std::string& name) const {
+    const auto& cycles=g_pGamePersistent->Environment().WeatherCycles;
+    const auto cycle=cycles.find(name);if(cycle==cycles.end()) return "";
+    std::ostringstream out;out.imbue(std::locale::classic());out.precision(9);
+    const auto text=[&out](const std::string& value){out<<value.size()<<':'<<value<<';';};
+    for(const auto* d:cycle->second) {
+        const float values[]={d->exec_time,d->sky_rotation,d->far_plane,d->fog_density,d->fog_distance,
+            d->rain_density,d->bolt_period,d->bolt_duration,d->trees_amplitude,d->wind_velocity,d->wind_direction,
+            d->m_fSunShaftsIntensity,d->m_fWaterIntensity,d->clouds_color.x,d->clouds_color.y,d->clouds_color.z,d->clouds_color.w,
+            d->sky_color.x,d->sky_color.y,d->sky_color.z,d->fog_color.x,d->fog_color.y,d->fog_color.z,
+            d->rain_color.x,d->rain_color.y,d->rain_color.z,d->ambient.x,d->ambient.y,d->ambient.z,
+            d->hemi_color.x,d->hemi_color.y,d->hemi_color.z,d->hemi_color.w,d->sun_color.x,d->sun_color.y,d->sun_color.z,
+            d->sun_dir.x,d->sun_dir.y,d->sun_dir.z};
+        text(d->m_identifier);for(float value:values)out<<value<<';';
+        text(d->sky_texture_name);text(d->clouds_texture_name);
+        text(d->env_ambient?d->env_ambient->name().c_str():"");text(d->lens_flare_id);text(d->tb_id);
+    }
+    return out.str();
+}
+
+void CUIWeatherEditor::UpdateDirtyState() {
+    if(!m_session_active || Device.dwTimeGlobal<m_next_dirty_update) return;
+    m_next_dirty_update=Device.dwTimeGlobal+250;
+    const auto& environment=g_pGamePersistent->Environment();
+    // Only serialize the active cycle. Other edited cycles retain their cached state.
+    const std::string& name=environment.CurrentCycleName;
+    const auto baseline=m_weather_baselines.find(name);
+    m_weather_dirty[name]=baseline==m_weather_baselines.end() || baseline->second!=WeatherSignature(name);
+    bool weather=std::any_of(m_weather_dirty.begin(),m_weather_dirty.end(),[](const auto& entry){return entry.second;});
+    if(environment.eff_Rain) weather=weather ||
+        environment.eff_Rain->GetWindTiltMultiplier()!=m_rain_tilt_saved ||
+        environment.eff_Rain->GetWindSpeedMultiplier()!=m_rain_speed_saved;
+    bool lightning=false;
+    if(environment.eff_Thunderbolt) {
+        const auto settings=environment.eff_Thunderbolt->GetEditorSettings();
+        lightning=settings.values!=m_lightning_saved.values || settings.particle!=m_lightning_saved.particle || settings.sound!=m_lightning_saved.sound;
+        if(m_lightning_mode) {
+            const int particle=m_lightning_particle->CurrentID(),sound=m_lightning_sound->CurrentID();
+            if(particle>=0 && static_cast<size_t>(particle)<m_lightning_particles.size())
+                lightning=lightning || m_lightning_particles[particle]!=m_lightning_saved.particle;
+            if(sound>=0 && static_cast<size_t>(sound)<m_lightning_sounds.size())
+                lightning=lightning || m_lightning_sounds[sound]!=m_lightning_saved.sound;
+            for(const auto& control:m_lightning_controls) lightning=lightning || static_cast<CWeatherValueEdit*>(control.value)->PendingChange();
+        }
+    }
+    if(!m_lightning_mode) for(const auto& control:m_property_controls)
+        weather=weather || static_cast<CWeatherValueEdit*>(control.value)->PendingChange();
+    std::string weather_text=CStringTable().translate("ui_weather_tab").c_str();if(weather)weather_text+=" *";
+    std::string lightning_text=CStringTable().translate("ui_lightning_page").c_str();if(lightning)lightning_text+=" *";
+    m_weather_tab->TextItemControl()->SetText(weather_text.c_str());m_lightning_tab->TextItemControl()->SetText(lightning_text.c_str());
+    m_dirty_status->SetTextST((m_lightning_mode?lightning:weather)?"ui_env_unsaved":"ui_env_saved");
+    m_dirty_status->SetTextColor((m_lightning_mode?lightning:weather)?color_rgba(230,215,140,255):color_rgba(160,190,160,255));
+}
+
+void CUIWeatherEditor::CloseLists() {
+    for(CUIComboBox* combo:{m_weather,m_frame,m_sky,m_clouds,m_ambient_definition,m_sun_definition,
+        m_thunderbolt_definition,m_lightning_collection,m_lightning_particle,m_lightning_sound})
+        static_cast<CWeatherComboBox*>(combo)->CloseEditorList();
+}
+
+void CUIWeatherEditor::SetLightningPage(bool enabled) {
+    ClearLearningHint();CloseLists();
+    m_lightning_mode=enabled;
+    if(m_color_picker) m_color_picker->Show(false);
+    m_active_color_property=-1;
+    m_lightning_panel->Show(enabled);m_lightning_header->Show(enabled);m_assets_panel->Show(enabled);
+    m_lightning_test->Show(enabled);m_files->Show(!enabled);
+    m_file_panel->Show(!enabled && m_files_visible);
+    m_weather_tab->Enable(enabled);m_lightning_tab->Enable(!enabled);
+    for(auto* tab:{m_weather_tab,m_lightning_tab}) {
+        tab->SetStateTextColor(color_rgba(235,220,150,255),S_Disabled);
+        tab->SetStateTextColor(color_rgba(190,200,210,255),S_Enabled);
+    }
+    m_title->SetTextST("ui_env_title");
+    m_context_help->SetWndSize(Fvector2().set(376.f,enabled?32.f:66.f));
+    m_save->TextItemControl()->SetTextST(enabled?"ui_env_save_lightning":"ui_env_save_weather");
+    m_revert->TextItemControl()->SetTextST(enabled?"ui_env_revert_lightning":"ui_env_revert_weather");
+    if(enabled) {FillLightningParticles();FillLightningSounds();SyncLightningControls(true);}
+    else if(m_descriptor) {RefreshDefinitionSelection();SyncPropertyControls();}
+    RefreshCategory();m_next_dirty_update=0;
+}
+
+void CUIWeatherEditor::SyncLightningControls(bool assets) {
+    auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;if(!effect) return;
+    const auto settings=effect->GetEditorSettings();m_synchronizing=true;
+    m_multi_strikes->SetCheck(settings.values[0]>.5f);
+    for(auto& control:m_lightning_controls) {
+        static_cast<CWeatherTrackBar*>(control.slider)->SetEditorValue(settings.values[control.index]);
+        string64 text;
+        if(lightning_editor::parameters[control.index].integral) xr_sprintf(text,"%.0f",settings.values[control.index]);
+        else if(settings.values[control.index]>=1000.f) xr_sprintf(text,"%.0f",settings.values[control.index]);
+        else xr_sprintf(text,"%.2f",settings.values[control.index]);
+        static_cast<CWeatherValueEdit*>(control.value)->SetEditorText(text);
+    }
+    if(assets) {
+        const auto found=std::find(m_lightning_particles.begin(),m_lightning_particles.end(),settings.particle);
+        static_cast<CWeatherResourceCombo*>(m_lightning_particle)->SetResource(
+            static_cast<int>(found - m_lightning_particles.begin()));
+        const auto sound=std::find(m_lightning_sounds.begin(),m_lightning_sounds.end(),settings.sound);
+        static_cast<CWeatherResourceCombo*>(m_lightning_sound)->SetResource(
+            static_cast<int>(sound - m_lightning_sounds.begin()));
+    }
+    m_synchronizing=false;
+}
+
+bool CUIWeatherEditor::ApplyLightningAssets() {
+    auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;if(!effect) return false;
+    auto settings=effect->GetEditorSettings();const int i=m_lightning_particle->CurrentID();
+    if(i>=0 && static_cast<unsigned>(i)<m_lightning_particles.size())settings.particle=m_lightning_particles[i];
+    const int sound=m_lightning_sound->CurrentID();
+    if(sound>=0 && static_cast<unsigned>(sound)<m_lightning_sounds.size())settings.sound=m_lightning_sounds[sound];
+    if(!effect->ApplyEditorSettings(settings)) {SetStatus("ui_lightning_assets_error");return false;}
+    return true;
+}
+
+void CUIWeatherEditor::OnSelectTab(CUIWindow* window,void*) {
+    const bool lightning=window==m_lightning_tab;
+    if(lightning==m_lightning_mode) return;
+    CommitNumericEdits();
+    if(m_lightning_mode && !ApplyLightningAssets()) return;
+    SetLightningPage(lightning);
+    auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;
+    SetStatus(m_lightning_mode?(effect && effect->IsCustomLightningEnabled()?"ui_lightning_ready":"ui_lightning_disabled"):
+              "ui_weather_editor_status_ready");
+}
+void CUIWeatherEditor::OnLightningChanged(CUIWindow* window,void*) {
+    if(m_synchronizing || !m_lightning_mode) return;
+    auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;if(!effect)return;
+    auto settings=effect->GetEditorSettings();
+    for(auto& control:m_lightning_controls) if(control.slider==window) {
+        lightning_editor::change(settings,control.index,control.slider->GetFValue());
+        if(!effect->ApplyEditorSettings(settings))SetStatus("ui_lightning_assets_error");
+        SyncLightningControls();return;
+    }
+}
+void CUIWeatherEditor::OnLightningMulti(CUIWindow*,void*) {
+    if(m_synchronizing || !m_lightning_mode) return;
+    auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;if(!effect)return;
+    auto settings=effect->GetEditorSettings();settings.values[0]=m_multi_strikes->GetCheck()?1.f:0.f;
+    effect->ApplyEditorSettings(settings);SyncLightningControls();m_next_dirty_update=0;
+}
+void CUIWeatherEditor::OnLightningAssets(CUIWindow*,void*) {
+    CommitNumericEdits();
+    if(ApplyLightningAssets())SetStatus("ui_lightning_assets_applied");
+}
+void CUIWeatherEditor::OnTestLightning(CUIWindow*,void*) {
+    CommitNumericEdits();
+    if(!m_lightning_mode || !ApplyLightningAssets())return;
+    auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;
+    const int selected=m_lightning_collection->CurrentID();
+    if(!effect || selected<0 || static_cast<unsigned>(selected)>=m_thunderbolt_definitions.size() ||
+        !effect->PreviewEditor(m_thunderbolt_definitions[selected].c_str(),m_descriptor?m_descriptor->bolt_duration:.5f)) {
+        SetStatus("ui_lightning_test_error");return;
+    }
+    SetStatus("ui_lightning_test_started");
 }
 
 void CUIWeatherEditor::SelectCurrentWeather() {
@@ -967,7 +1923,7 @@ void CUIWeatherEditor::SelectCurrentWeather() {
             break;
     }
     if (weather_index < m_weather_names.size())
-        m_weather->SetItemIDX((int)weather_index);
+        static_cast<CWeatherResourceCombo*>(m_weather)->SetResource((int)weather_index);
 
     FillFrameList();
     u32 frame_index = 0;
@@ -1015,6 +1971,8 @@ void CUIWeatherEditor::ApplyEditorTime(float game_time) {
 void CUIWeatherEditor::SyncTimeControl(float game_time) {
     m_editor_time = clampr(game_time, 0.f, DAY_LENGTH - 1.f);
     static_cast<CWeatherTrackBar*>(m_time_slider)->SetEditorValue(m_editor_time);
+    const u32 seconds=static_cast<u32>(iFloor(m_editor_time+.5f));string32 text;
+    xr_sprintf(text,"%02u:%02u:%02u",seconds/3600,(seconds%3600)/60,seconds%60);m_time_value->SetText(text);
 }
 
 void CUIWeatherEditor::SyncPropertyControls() {
@@ -1022,7 +1980,7 @@ void CUIWeatherEditor::SyncPropertyControls() {
         return;
     m_synchronizing = true;
     for (SPropertyControl& control : m_property_controls) {
-        const SPropertyInfo& property = properties[control.property_index];
+        const SPropertyInfo& property = property_info(control.property_index);
         const float maximum = control.property_index == 3
                                   ? std::min(property.maximum, m_descriptor->far_plane)
                                   : property.maximum;
@@ -1033,7 +1991,7 @@ void CUIWeatherEditor::SyncPropertyControls() {
 
         string32 value_text;
         xr_sprintf(value_text, "%.3f", GetPropertyValue(control.property_index));
-        control.value->SetText(value_text);
+        static_cast<CWeatherValueEdit*>(control.value)->SetEditorText(value_text);
     }
     for (SColorControl& control : m_color_controls)
         control.swatch->SetColor(GetPropertyValue(control.first_property_index),
@@ -1125,11 +2083,11 @@ void CUIWeatherEditor::RefreshTextureSelection() {
     const auto sky = std::find(m_sky_textures.begin(), m_sky_textures.end(),
                                m_descriptor->sky_texture_name);
     if (sky != m_sky_textures.end())
-        m_sky->SetItemIDX((int)std::distance(m_sky_textures.begin(), sky));
+        static_cast<CWeatherResourceCombo*>(m_sky)->SetResource((int)std::distance(m_sky_textures.begin(), sky));
     const auto clouds = std::find(m_cloud_textures.begin(), m_cloud_textures.end(),
                                   m_descriptor->clouds_texture_name);
     if (clouds != m_cloud_textures.end())
-        m_clouds->SetItemIDX((int)std::distance(m_cloud_textures.begin(), clouds));
+        static_cast<CWeatherResourceCombo*>(m_clouds)->SetResource((int)std::distance(m_cloud_textures.begin(), clouds));
     m_synchronizing = false;
 }
 
@@ -1143,19 +2101,19 @@ void CUIWeatherEditor::RefreshDefinitionSelection() {
     const auto ambient = std::find(m_ambient_definitions.begin(), m_ambient_definitions.end(),
                                    ambient_name);
     if (ambient != m_ambient_definitions.end())
-        m_ambient_definition->SetItemIDX(
+        static_cast<CWeatherResourceCombo*>(m_ambient_definition)->SetResource(
             (int)std::distance(m_ambient_definitions.begin(), ambient));
 
     const auto sun = std::find(m_sun_definitions.begin(), m_sun_definitions.end(),
                                m_descriptor->lens_flare_id);
     if (sun != m_sun_definitions.end())
-        m_sun_definition->SetItemIDX((int)std::distance(m_sun_definitions.begin(), sun));
+        static_cast<CWeatherResourceCombo*>(m_sun_definition)->SetResource((int)std::distance(m_sun_definitions.begin(), sun));
 
     const auto thunderbolt =
         std::find(m_thunderbolt_definitions.begin(), m_thunderbolt_definitions.end(),
                   m_descriptor->tb_id);
     if (thunderbolt != m_thunderbolt_definitions.end())
-        m_thunderbolt_definition->SetItemIDX(
+        static_cast<CWeatherResourceCombo*>(m_thunderbolt_definition)->SetResource(
             (int)std::distance(m_thunderbolt_definitions.begin(), thunderbolt));
     m_synchronizing = false;
 }
@@ -1179,7 +2137,7 @@ void CUIWeatherEditor::UpdateLearningHint() {
     bool immediate = false;
     const auto use_hint = [&hovered, &hint_id, &immediate](CUIWindow* window, LPCSTR id,
                                                           bool show_immediately) {
-        if (!hovered && window && window->CursorOverWindow()) {
+        if (!hovered && window && window->IsShown() && window->CursorOverWindow()) {
             hovered = window;
             hint_id = id;
             immediate = show_immediately;
@@ -1202,28 +2160,45 @@ void CUIWeatherEditor::UpdateLearningHint() {
         use_hint(m_ambient_definition, "ui_weather_editor_hint_ambient_definition", false);
         use_hint(m_sun_definition, "ui_weather_editor_hint_sun_definition", false);
         use_hint(m_thunderbolt_definition,
-                 "ui_weather_editor_hint_thunderbolt_definition", false);
+                 m_lightning_mode?"ui_lightning_hint_collection":"ui_weather_editor_hint_thunderbolt_definition", false);
         use_hint(m_time_slider, "ui_weather_editor_hint_time", false);
         use_hint(m_time_value, "ui_weather_editor_hint_time", false);
         use_hint(m_new_weather_name, "ui_weather_editor_hint_new_file", false);
         use_hint(m_create_weather, "ui_weather_editor_hint_create_file", false);
         use_hint(m_add_frame, "ui_weather_editor_hint_add_section", false);
         use_hint(m_preview, "ui_weather_editor_hint_preview", false);
-        use_hint(m_save, "ui_weather_editor_hint_save", false);
-        use_hint(m_revert, "ui_weather_editor_hint_revert", false);
+        use_hint(m_weather_tab,"ui_lightning_hint_page",false);
+        use_hint(m_lightning_tab,"ui_lightning_hint_page",false);
+        if(m_lightning_mode) use_hint(m_lightning_collection,"ui_lightning_hint_collection",false);
+        use_hint(m_save,m_lightning_mode?"ui_lightning_hint_save":"ui_weather_editor_hint_save",false);
+        use_hint(m_revert,m_lightning_mode?"ui_lightning_hint_revert":"ui_weather_editor_hint_revert",false);
         use_hint(m_close, "ui_weather_editor_hint_close", false);
 
-        for (const SColorControl& control : m_color_controls) {
+        if(m_lightning_mode) {
+            use_hint(m_multi_strikes,"ui_lightning_hint_enable_multi_strikes",false);
+            use_hint(m_lightning_particle,"ui_lightning_hint_particle",false);
+            use_hint(m_lightning_sound,"ui_lightning_hint_sound",false);
+            use_hint(m_lightning_apply,"ui_lightning_hint_assets",false);
+            use_hint(m_lightning_test,"ui_lightning_hint_test",false);
+            for(const auto& control:m_lightning_controls) {
+                use_hint(control.label,lightning_hint_ids[control.index],false);
+                use_hint(control.slider,lightning_hint_ids[control.index],false);
+                use_hint(control.value,lightning_hint_ids[control.index],false);
+            }
+        }
+        if(!m_lightning_mode) for (const SColorControl& control : m_color_controls) {
             use_hint(control.header, property_hint_ids[control.first_property_index], false);
             use_hint(control.swatch, property_hint_ids[control.first_property_index], false);
         }
-        for (const SPropertyControl& control : m_property_controls) {
+        if(!m_lightning_mode) for (const SPropertyControl& control : m_property_controls) {
             use_hint(control.label, property_hint_ids[control.property_index], false);
             use_hint(control.slider, property_hint_ids[control.property_index], false);
             use_hint(control.value, property_hint_ids[control.property_index], false);
         }
     }
 
+    if(hovered && hint_id) m_context_help->SetTextST(hint_id);
+    else m_context_help->SetTextST("ui_env_live_hint");
     if (!hovered) {
         ClearLearningHint();
         return;
@@ -1392,23 +2367,28 @@ void CUIWeatherEditor::SetPropertyValue(u32 property_index, float value) {
 }
 
 void CUIWeatherEditor::OnWeatherChanged(CUIWindow*, void*) {
+    CommitNumericEdits();
     if (m_synchronizing)
         return;
     const int index = m_weather->CurrentID();
     if (index < 0 || (u32)index >= m_weather_names.size())
         return;
     CEnvironment& environment = g_pGamePersistent->Environment();
+    const auto old=environment.CurrentCycleName;
+    m_weather_dirty[old]=m_weather_baselines[old]!=WeatherSignature(old);
     environment.UpdateWeatherEditorSession(m_weather_names[index], m_editor_time);
     FillFrameList();
     SelectFrame(0);
 }
 
 void CUIWeatherEditor::OnFrameChanged(CUIWindow*, void*) {
+    CommitNumericEdits();
     if (!m_synchronizing)
         SelectFrame((u32)m_frame->CurrentID());
 }
 
 void CUIWeatherEditor::OnTimeChanged(CUIWindow*, void*) {
+    CommitNumericEdits();
     if (m_synchronizing || !m_descriptor)
         return;
     // Mouse motion can generate several callbacks before the next rendered
@@ -1493,6 +2473,7 @@ void CUIWeatherEditor::OnSunChanged(CUIWindow*, void*) {
 }
 
 void CUIWeatherEditor::OnThunderboltChanged(CUIWindow*, void*) {
+    if(m_lightning_mode) return;
     if (m_synchronizing || !m_descriptor)
         return;
     const int index = m_thunderbolt_definition->CurrentID();
@@ -1508,6 +2489,7 @@ void CUIWeatherEditor::OnThunderboltChanged(CUIWindow*, void*) {
 }
 
 void CUIWeatherEditor::OnColorSwatch(CUIWindow* window, void*) {
+    CommitNumericEdits();
     if (!m_descriptor)
         return;
 
@@ -1561,6 +2543,7 @@ void CUIWeatherEditor::OnColorPicked(CUIWindow*, void*) {
 }
 
 void CUIWeatherEditor::OnAddFrame(CUIWindow*, void*) {
+    CommitNumericEdits();
     if (!m_descriptor)
         return;
 
@@ -1586,6 +2569,7 @@ void CUIWeatherEditor::OnAddFrame(CUIWindow*, void*) {
 }
 
 void CUIWeatherEditor::OnCreateWeather(CUIWindow*, void*) {
+    CommitNumericEdits();
     if (!m_descriptor)
         return;
 
@@ -1597,13 +2581,16 @@ void CUIWeatherEditor::OnCreateWeather(CUIWindow*, void*) {
         return;
     }
 
+    const auto old=environment.CurrentCycleName;
+    m_weather_dirty[old]=m_weather_baselines[old]!=WeatherSignature(old);
+    m_weather_baselines[name]=WeatherSignature(name);m_weather_dirty[name]=false;
     environment.UpdateWeatherEditorSession(name, 0.f);
     FillWeatherList();
     for (u32 index = 0; index < m_weather_names.size(); ++index) {
         if (m_weather_names[index] != name)
             continue;
         m_synchronizing = true;
-        m_weather->SetItemIDX((int)index);
+        static_cast<CWeatherResourceCombo*>(m_weather)->SetResource((int)index);
         m_synchronizing = false;
         break;
     }
@@ -1614,6 +2601,8 @@ void CUIWeatherEditor::OnCreateWeather(CUIWindow*, void*) {
 }
 
 void CUIWeatherEditor::OnPreview(CUIWindow*, void*) {
+    CommitNumericEdits();
+    if(m_lightning_mode && !ApplyLightningAssets()) return;
     SetStatus("ui_weather_editor_status_preview");
     EnterPreview();
 }
@@ -1621,11 +2610,34 @@ void CUIWeatherEditor::OnPreview(CUIWindow*, void*) {
 void CUIWeatherEditor::EnterPreview() {
     if (!m_session_active || !IsShown())
         return;
+    CommitNumericEdits();
+    CloseLists();
+    ClearLearningHint();
+    m_color_picker->Show(false);
+    m_active_color_property = -1;
     m_previewing = true;
-    HideDialog();
+    GetUICursor().Hide();
+    release_weather_preview();
+    // Keep the dialog/input receiver alive: F7 must work in release builds
+    // and must not reach Level_input's developer quick-reload binding.
+}
+
+void CUIWeatherEditor::LeavePreview() {
+    if (!m_previewing) return;
+    if (g_pGameLevel) {
+        // The editor captures subsequent key releases after leaving preview.
+        if (auto* actor = smart_cast<CActor*>(Level().CurrentEntity())) {
+            actor->IR_OnKeyboardRelease(kWPN_FIRE);
+            actor->IR_OnKeyboardRelease(kWPN_ZOOM);
+        }
+    }
+    m_previewing = false;
+    GetUICursor().Show();
+    SetStatus("ui_weather_editor_status_ready");
 }
 
 void CUIWeatherEditor::CloseEditorSession() {
+    CommitNumericEdits();
     if (!m_session_active)
         return;
 
@@ -1644,6 +2656,17 @@ void CUIWeatherEditor::CloseEditorSession() {
 }
 
 void CUIWeatherEditor::OnSave(CUIWindow*, void*) {
+    m_save_ok = false;
+    CommitNumericEdits();
+    if(m_lightning_mode) {
+        auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;
+        if(!effect || !ApplyLightningAssets()) return;
+        if(!effect->SaveEditorSettings()) {SetStatus("ui_lightning_save_error");return;}
+        m_lightning_baseline=effect->GetEditorSettings();m_lightning_saved=m_lightning_baseline;
+        SetStatus("ui_lightning_saved");
+        m_save_ok = true;
+        return;
+    }
     CEnvironment& environment = g_pGamePersistent->Environment();
     std::string path;
     if (!environment.SaveWeather(environment.CurrentCycleName, true, &path)) {
@@ -1664,6 +2687,8 @@ void CUIWeatherEditor::OnSave(CUIWindow*, void*) {
             Snapshot(descriptor);
         }
     }
+    m_weather_baselines[environment.CurrentCycleName]=WeatherSignature(environment.CurrentCycleName);
+    m_weather_dirty[environment.CurrentCycleName]=false;
     if (environment.eff_Rain && !environment.eff_Rain->SaveWindSettings()) {
         SetStatus("ui_weather_editor_status_rain_save_error");
         return;
@@ -1672,10 +2697,33 @@ void CUIWeatherEditor::OnSave(CUIWindow*, void*) {
         ? environment.eff_Rain->GetWindTiltMultiplier() : 1.f;
     m_rain_speed_baseline = environment.eff_Rain
         ? environment.eff_Rain->GetWindSpeedMultiplier() : 0.f;
+    m_rain_tilt_saved=m_rain_tilt_baseline;m_rain_speed_saved=m_rain_speed_baseline;
+    m_next_dirty_update=0;
     SetStatus("ui_weather_editor_status_saved", path.c_str());
+    m_save_ok = true;
+}
+
+void CUIWeatherEditor::OnSaveClose(CUIWindow*, void*) {
+    // F7: no file is written. The window is hidden, the session stays active, so the weather and the
+    // time set in the editor remain fixed in the game until the editor is reopened and closed
+    // with Esc, or "weather_editor off".
+    CommitNumericEdits();
+    if (m_lightning_mode && !ApplyLightningAssets())
+        return;
+    m_keep_session = true;
+    m_close_requested = true;
 }
 
 void CUIWeatherEditor::OnRevert(CUIWindow*, void*) {
+    CommitNumericEdits(false);
+    if(m_lightning_mode) {
+        auto* effect=g_pGamePersistent->Environment().eff_Thunderbolt;
+        if(effect && effect->ApplyEditorSettings(m_lightning_baseline)) {
+            FillLightningParticles(); FillLightningSounds(); SyncLightningControls(true);
+            SetStatus("ui_lightning_reverted");
+        } else SetStatus("ui_lightning_assets_error");
+        return;
+    }
     SDescriptorState* state = FindSnapshot(m_descriptor);
     if (!state)
         return;
@@ -1691,7 +2739,7 @@ void CUIWeatherEditor::OnRevert(CUIWindow*, void*) {
     SetStatus("ui_weather_editor_status_reverted");
 }
 
-void CUIWeatherEditor::OnClose(CUIWindow*, void*) { m_close_requested = true; }
+void CUIWeatherEditor::OnClose(CUIWindow*, void*) { m_keep_session = false; m_close_requested = true; }
 
 void ToggleWeatherEditor(bool force_show, bool force_hide) {
     if (!g_pGameLevel || !g_pGamePersistent)
@@ -1705,6 +2753,10 @@ void ToggleWeatherEditor(bool force_show, bool force_hide) {
         return;
     }
 
+    if (force_show && weather_editor->IsPreviewing()) {
+        weather_editor->LeavePreview();
+        return;
+    }
     const bool show = force_show || !weather_editor->IsShown();
     if (show && !weather_editor->IsShown())
         weather_editor->ShowDialog(true);
@@ -1725,3 +2777,26 @@ void DestroyWeatherEditor() {
 }
 
 bool WeatherEditorShown() { return weather_editor && weather_editor->IsSessionActive(); }
+
+
+bool WeatherEditorPreviewAllowsInput(const CUIDialogWnd* receiver, int key) {
+    if (!weather_editor || receiver != weather_editor || !weather_editor->IsPreviewing())
+        return false;
+    if (key < 0)
+        return true; // Mouse look.
+    if (key == DIK_F7 || key == DIK_ESCAPE)
+        return false;
+    switch (get_binded_action(key)) {
+    case kFWD: case kBACK: case kL_STRAFE: case kR_STRAFE:
+    case kJUMP: case kCROUCH: case kACCEL: case kSPRINT_TOGGLE:
+    case kL_LOOKOUT: case kR_LOOKOUT:
+    case kWPN_1: case kWPN_2: case kWPN_3: case kWPN_4: case kWPN_5: case kWPN_6:
+    case kWPN_FIRE: case kWPN_ZOOM: case kWPN_RELOAD: case kWPN_FUNC:
+    case kWPN_FIREMODE_PREV: case kWPN_FIREMODE_NEXT: case kWPN_NEXT:
+    case kWPN_ZOOM_INC: case kWPN_ZOOM_DEC: case kWPN_ZOOM_ALTER: case kWPN_INSPECT:
+    case kNEXT_SLOT: case kPREV_SLOT: case kQUICK_GRENADE: case kQUICK_KICK: case kDROP:
+        return true;
+    default:
+        return false;
+    }
+}

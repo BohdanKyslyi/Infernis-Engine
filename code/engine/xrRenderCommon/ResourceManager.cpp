@@ -126,6 +126,11 @@ Shader* CResourceManager::_cpp_Create(IBlender* B, LPCSTR s_shader, LPCSTR s_tex
     _ParseList(C.L_constants, s_constants);
     _ParseList(C.L_matrices, s_matrices);
 
+#if defined(USE_DX11)
+    // SSFX: HUD models use the *_hud shader variants
+    C.HudElement = ::Render->hud_loading && RImplementation.o.ssfx_core;
+#endif
+
     auto CompileElement = [&](int element_id, bool apply_detail) {
         C.iElement = element_id;
         if (apply_detail) {

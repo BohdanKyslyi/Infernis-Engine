@@ -1,10 +1,10 @@
 #pragma once
-#include "customdetector.h"
+#include "Flashlight.h"
 
 class CUIArtefactDetectorSimple;
 
-class CSimpleDetector : public CCustomDetector {
-    typedef CCustomDetector inherited;
+class CSimpleDetector : public CFlashlight {
+    typedef CFlashlight inherited;
 
 public:
     CSimpleDetector();

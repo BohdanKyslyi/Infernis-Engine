@@ -1,0 +1,26 @@
+#include "screenspace_common.h"
+#include "screenspace_mvectors.h"
+
+struct v2p
+{
+	float4	vel_curr 	: TEXCOORD2;
+	float4	vel_prev 	: TEXCOORD3;
+	float4  sv			: SV_Position;
+};
+
+struct _out
+{
+	float4 	velocity : SV_Target2;
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Pixel
+_out main( v2p I )
+{
+	_out o;
+
+	// Motion vectors
+	o.velocity = ssfx_mv_calc(I.vel_curr, I.vel_prev, 0, 0);
+
+	return o;
+}

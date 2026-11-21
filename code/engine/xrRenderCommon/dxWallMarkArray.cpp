@@ -12,7 +12,16 @@ dxWallMarkArray::~dxWallMarkArray() {
 
 void dxWallMarkArray::AppendMark(LPCSTR s_textures) {
     ref_shader s;
+#if RENDER == R_R4
+    // Screen Space Shaders, Monolith dxWallMarkArray.cpp: blood marks (every texture named
+    // wm_blood_*) are drawn with the SSFX blood shader when the blood module is installed.
+    LPCSTR sh_name = "effects\\wallmark";
+    if (RImplementation.o.ssfx_blood && strstr(s_textures, "wm_blood_"))
+        sh_name = "effects\\wallmark_blood";
+    s.create(sh_name, s_textures);
+#else
     s.create("effects\\wallmark", s_textures);
+#endif
     m_CollideMarks.push_back(s);
 }
 

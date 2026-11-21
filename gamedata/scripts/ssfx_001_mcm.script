@@ -1,0 +1,90 @@
+-- @ Version: SCREEN SPACE SHADERS - UPDATE 18
+-- @ Description: SSS Main script
+-- @ Author: https://www.moddb.com/members/ascii1457
+-- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+
+function on_mcm_load()
+
+	op =  { id= "general", sh=true, text="ui_mcm_ssfx_module_general", gr ={
+				{id = "title",type= "slide",link= "ui_options_slider_player",text="ui_mcm_ssfx_module_general_title",size= {512,50},spacing= 20 },
+				
+				{id = "shaderscope_patch_mcm", type = "check", val = 1, def=false},
+			}
+		}
+
+	return op, "ssfx_module"
+end
+
+function on_option_change()
+
+	if ssfx_module_installed(ssfx_wetness) then
+		get_console():execute("ssfx_gloss_method 1" )
+	else
+		get_console():execute("ssfx_gloss_method 0" )
+		get_console():execute("r3_dynamic_wet_surfaces_sm_res 2048" )
+		get_console():execute("r3_dynamic_wet_surfaces_far 100" )
+	end
+
+	-- Apply general settings
+	if ssfx_get_setting("general", "shaderscope_patch", ssfx_001_settings) then
+		get_console():execute("r__fakescope 1")
+	else
+		get_console():execute("r__fakescope 0")
+	end
+end
+
+function ssfx_get_setting(module_name, var_name, default_script)
+
+	-- Get MCM setting
+	if ui_mcm then 
+		return ui_mcm.get("ssfx_module/" .. module_name .. "/" .. var_name .. "_mcm")
+	end
+
+	-- The native settings page stands where MCM stood for the settings that only a script uses
+	-- ( weapon DOF, rain footsteps, the HUD raindrop speeds, auto gloss ): it keeps each of them
+	-- in a console variable of its own, and ssfx_menu_vars.script knows which. Asked only once
+	-- the player has applied the page; until then the *_settings.script table below is the
+	-- reference, the same as for every other setting.
+	if menu_owns_settings() then
+		local value = ssfx_menu_vars.get(module_name, var_name)
+		if value ~= nil then
+			return value
+		end
+	end
+
+	-- Get Default
+	return default_script.ssfx_default_settings[var_name]
+end
+
+-- 1 when the native SSFX settings menu owns the module settings.
+--
+-- Every applier in this addon reads it before pushing the values from its own
+-- *_settings.script table into the console. The engine applies the player's saved values
+-- from user.ltx at startup, so without this the file defaults would overwrite the menu on
+-- every game start and the sliders would look broken.
+--
+-- ssfx_menu is registered by the engine ( xrEngine\\xr_ioc_cmd.cpp ). Set it to 0 to hand
+-- the scripts back their old role and tune the *_settings.script files by hand again.
+function menu_owns_settings()
+	if get_console():get_integer("ssfx_menu") ~= 1 then
+		return false
+	end
+
+	-- Until the player has applied something in the menu, the appliers still do their job. The
+	-- values in the *_settings.script tables are the reference for every module and a few of them
+	-- differ from the engine defaults on purpose, so a fresh installation has to get them.
+	return get_console():get_integer("ssfx_menu_configured") == 1
+end
+
+function ssfx_module_installed(script)
+	if script then
+		return script.module_installed or nil
+	else
+		return false
+	end
+end
+
+function on_game_start()
+	RegisterScriptCallback("on_option_change", on_option_change)
+	on_option_change()
+end

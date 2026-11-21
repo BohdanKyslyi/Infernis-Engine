@@ -1,0 +1,12 @@
+#include "common.h"
+#include "gs_weapon_computer.h"
+
+sampler2D s_gauss_mui_13;
+float4 main(float2 uv : TEXCOORD0) : COLOR
+{
+    float4 texel = tex2D(s_base, uv);
+    if (weapon_computer_display.w == 13.0)
+        texel = tex2D(s_gauss_mui_13, uv);
+    texel.rgb = saturate(texel.rgb + weapon_computer_noise(uv));
+    return texel;
+}

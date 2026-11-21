@@ -1,0 +1,105 @@
+-- Original editor concept: SGM team / stalker-MiX.
+-- Infernis Core Spawner: Infernis
+local function api() return infernis_spawner end
+local settings = {closed=true, empty=false, auto=false, name="default_way", comment=""}
+
+local function show_result(result)
+    local box = CUIMessageBoxEx()
+    box:InitMessageBox("message_box_ok")
+    box:SetText(result.ok and (result.text or game.translate_string("st_infernis_spawner_saved")) or result.error)
+    box:ShowDialog(true)
+    ui_god_editor.result_box = box
+    return result.ok
+end
+
+function waypoint_editor_start()
+    if api().actor_state().ready then ui_god_editor.editor = waypoint_editor(); ui_god_editor.editor:ShowDialog(true) end
+end
+function position_printer_start()
+    if api().actor_state().ready then ui_god_editor.printer = position_printer(); ui_god_editor.printer:ShowDialog(true) end
+end
+
+class "waypoint_editor" (CUIScriptWnd)
+function waypoint_editor:__init() super()
+    self:SetWndRect(Frect():set(0,0,1024,768))
+    local xml = CScriptXmlInit(); xml:ParseFile("ui_god_editor.xml")
+    local form = xml:InitStatic("waypoint_editor_form", self)
+    self.name = xml:InitEditBox("waypoint_editor_form:waypoint_name_field", form)
+    self.name:SetText(settings.name)
+    self.animation = xml:InitEditBox("waypoint_editor_form:point_animation_field", form)
+    self.signal = xml:InitEditBox("waypoint_editor_form:point_signal_field", form)
+    self.closed = xml:InitCheck("waypoint_editor_form:check_way_closed", form); self.closed:SetCheck(settings.closed)
+    self.empty = xml:InitCheck("waypoint_editor_form:check_empty_flags", form); self.empty:SetCheck(settings.empty)
+    self.auto = xml:InitCheck("waypoint_editor_form:check_autochange", form); self.auto:SetCheck(settings.auto)
+    self.info = xml:InitStatic("waypoint_editor_form:waypoint_info", form)
+    local buttons = {btn_mark_point=self.mark, btn_print_waypoint=self.export, btn_show_waypoint=self.preview, btn_close=self.close}
+    for name, callback in pairs(buttons) do
+        self:Register(xml:Init3tButton("waypoint_editor_form:"..name, form), name)
+        self:AddCallback(name, ui_events.BUTTON_CLICKED, callback, self)
+    end
+    local state = api().preview_waypoints(self.name:GetText(), self.closed:GetCheck())
+    self.info:TextControl():SetText(game.translate_string("st_infernis_spawner_points")..tostring(state.count or 0))
+end
+function waypoint_editor:close()
+    settings.name=self.name:GetText(); settings.closed=self.closed:GetCheck()
+    settings.empty=self.empty:GetCheck(); settings.auto=self.auto:GetCheck()
+    self:HideDialog()
+end
+function waypoint_editor:mark()
+    local result = api().mark_waypoint(self.animation:GetText(), self.signal:GetText(), not self.empty:GetCheck())
+    if result.ok then self:close() else show_result(result) end
+end
+function waypoint_editor:export()
+    local name = self.name:GetText()
+    local result = api().export_waypoints(name, self.closed:GetCheck())
+    if show_result(result) then
+        if self.auto:GetCheck() then
+            if string.sub(name, -5) == "_walk" then name=string.sub(name,1,-6).."_look"
+            elseif string.sub(name,-5) == "_look" then name=string.sub(name,1,-6).."_walk"
+            else name=name.."_walk" end
+            self.name:SetText(name)
+        end
+        self:close()
+    end
+end
+function waypoint_editor:preview() show_result(api().preview_waypoints(self.name:GetText(), self.closed:GetCheck())) end
+function waypoint_editor:Update()
+    CUIScriptWnd.Update(self)
+    if not api().actor_state().ready then self:close() end
+end
+function waypoint_editor:OnKeyboard(dik, action)
+    CUIScriptWnd.OnKeyboard(self, dik, action)
+    if action == ui_events.WINDOW_KEY_PRESSED then
+        if dik == DIK_keys.DIK_ESCAPE then self:close()
+        elseif dik == DIK_keys.DIK_SPACE then self:mark()
+        elseif dik == DIK_keys.DIK_RETURN then self:export()
+        elseif dik == DIK_keys.DIK_SUBTRACT then self.name:SetText(self.name:GetText().."_spawn_point")
+        elseif dik == DIK_keys.DIK_ADD then self.name:SetText(self.name:GetText().."_traveller_actor") end
+    end
+    return true
+end
+
+class "position_printer" (CUIScriptWnd)
+function position_printer:__init() super()
+    self:SetWndRect(Frect():set(0,0,1024,768))
+    local xml=CScriptXmlInit(); xml:ParseFile("ui_god_editor.xml")
+    local form=xml:InitStatic("position_printer_form", self)
+    self.comment=xml:InitEditBox("position_printer_form:position_comment_field", form); self.comment:SetText(settings.comment)
+    self:Register(xml:Init3tButton("position_printer_form:btn_print_pos",form), "print")
+    self:Register(xml:Init3tButton("position_printer_form:btn_close",form), "close")
+    self:AddCallback("print",ui_events.BUTTON_CLICKED,self.print,self)
+    self:AddCallback("close",ui_events.BUTTON_CLICKED,self.close,self)
+end
+function position_printer:print()
+    if show_result(api().print_position(self.comment:GetText())) then self:close() end
+end
+function position_printer:close() settings.comment=self.comment:GetText(); self:HideDialog() end
+function position_printer:Update()
+    CUIScriptWnd.Update(self)
+    if not api().actor_state().ready then self:close() end
+end
+function position_printer:OnKeyboard(dik, action)
+    CUIScriptWnd.OnKeyboard(self,dik,action)
+    if action==ui_events.WINDOW_KEY_PRESSED and dik==DIK_keys.DIK_ESCAPE then self:close() end
+    return true
+end

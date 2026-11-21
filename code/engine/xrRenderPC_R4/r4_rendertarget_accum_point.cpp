@@ -100,6 +100,13 @@ void CRenderTarget::accum_point(light* L) {
         RCache.set_c("Ldynamic_color", L_clr.x, L_clr.y, L_clr.z, L_spec);
         RCache.set_c("m_texgen", m_Texgen);
 
+        // Screen Space Shaders: the light's lane in the local-light SSS target.
+        // Monolith tests its second viewport here; the 3D-scope lens pass is this engine's one.
+        if (!Device.scopeLensPass)
+            RCache.set_c("sss_id", L->sss_id);
+        else
+            RCache.set_c("sss_id", -1);
+
         // Fetch4 : enable
         //		if (RImplementation.o.HW_smap_FETCH4)	{
         //. we hacked the shader to force smap on S0

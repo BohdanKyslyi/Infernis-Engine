@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <algorithm>
 
 #include "UIHudEditor.h"
 #include "UI3tButton.h"
@@ -64,9 +65,20 @@ static LPCSTR const group_hint_ids[] = {
 };
 
 CUIHudEditor* hud_editor = nullptr;
-CWeapon* crosshair_override_weapon = nullptr;
-bool crosshair_override_active = false;
-bool crosshair_override_hide = true;
+
+EHudEditorAim current_aim_mode(const CWeapon& weapon) {
+    if (weapon.UsesGrenadeHudPose())
+        return EHudEditorAim::Grenade;
+    return weapon.IsAlternativeAimActive() ? EHudEditorAim::Alternative : EHudEditorAim::Primary;
+}
+
+LPCSTR aim_key(EHudEditorAim mode, bool rotation) {
+    if (mode == EHudEditorAim::Grenade)
+        return rotation ? "gl_hud_offset_rot" : "gl_hud_offset_pos";
+    if (mode == EHudEditorAim::Alternative)
+        return rotation ? "alter_aim_hud_offset_rot" : "alter_aim_hud_offset_pos";
+    return rotation ? "aim_hud_offset_rot" : "aim_hud_offset_pos";
+}
 
 std::string trim_copy(const std::string& value) {
     const size_t first = value.find_first_not_of(" \t\r\n");
@@ -143,7 +155,10 @@ void write_setting(std::string& text, const std::string& section, const std::str
             break;
         cursor = next + 1;
     }
-    text.insert(section_end, key + " = " + value + newline);
+    if (section_end && text[section_end - 1] != '\n')
+        text.insert(section_end, std::string(newline) + key + " = " + value + newline);
+    else
+        text.insert(section_end, key + " = " + value + newline);
 }
 
 bool read_config_file(LPCSTR relative, std::string& text) {
@@ -194,55 +209,99 @@ bool write_file(LPCSTR path, const std::string& text) {
     return true;
 }
 
-bool save_profiles(LPCSTR section, const CUIHudEditor::SProfile* profiles,
-                   bool hide_crosshair, std::string& saved_path) {
-    std::string relative;
+struct HudSettingEdit {
+    shared_str section;
+    std::string key;
+    std::string value;
+};
+
+struct HudFileEdit {
+    std::string game_path;
+    std::string disk_path;
     std::string text;
-    if (!find_section_file(section, relative, text)) {
-        Msg("! HUD editor: cannot find source .ltx for section [%s]", section);
-        return false;
-    }
-    const std::string original_text = text;
+    xr_vector<const HudSettingEdit*> settings;
+};
 
-    static LPCSTR suffixes[] = {"", "_16x9"};
-    for (u32 i = 0; i < 2; ++i) {
-        const std::string suffix = suffixes[i];
-        write_setting(text, section, "hands_position" + suffix,
-                      vector_text(profiles[i].hands_position));
-        write_setting(text, section, "hands_orientation" + suffix,
-                      vector_text(profiles[i].hands_orientation));
-        write_setting(text, section, "aim_hud_offset_pos" + suffix,
-                      vector_text(profiles[i].aim_position));
-        write_setting(text, section, "aim_hud_offset_rot" + suffix,
-                      vector_text(profiles[i].aim_rotation));
+void apply_saved_setting(const HudSettingEdit& edit) {
+    // Update only the saved entry in the loaded INI's sorted section.
+    auto& lines = pSettings->r_section(edit.section).Data;
+    const auto it = std::lower_bound(lines.begin(), lines.end(), edit.key.c_str(),
+        [](const CInifile::Item& item, LPCSTR key) { return xr_strcmp(item.first.c_str(), key) < 0; });
+    if (it != lines.end() && xr_strcmp(it->first.c_str(), edit.key.c_str()) == 0) {
+        it->second = edit.value.c_str();
+    } else {
+        CInifile::Item line;
+        line.first = edit.key.c_str();
+        line.second = edit.value.c_str();
+        lines.insert(it, line);
     }
-    write_setting(text, section, "zoom_hide_crosshair", hide_crosshair ? "true" : "false");
+}
 
-    string_path path;
-    FS.update_path(path, "$game_config$", relative.c_str());
+bool save_hud_file(const HudFileEdit& file) {
+    const LPCSTR path = file.disk_path.c_str();
     string_path temporary;
     xr_strcpy(temporary, path);
     xr_strcat(temporary, ".hud_editor.tmp");
-    if (!write_file(temporary, text))
-        return false;
 
     string_path backup;
     xr_strcpy(backup, path);
     xr_strcat(backup, ".hud_editor.bak");
-    if (!FS.exist(backup) && !write_file(backup, original_text)) {
+    if (!CopyFileA(path, backup, TRUE) && GetLastError() != ERROR_FILE_EXISTS)
+        return false;
+    if (!write_file(temporary, file.text))
+        return false;
+
+    // Use the same replacement path for loose files and mounted addon files.
+    if (!FS.addon_file_replace(file.game_path.c_str(), temporary, path)) {
         FS.file_delete(temporary);
+        Msg("! HUD editor: cannot replace [%s]", path);
         return false;
     }
+    for (const auto* setting : file.settings)
+        apply_saved_setting(*setting);
+    Msg("* HUD editor: saved [%s]", path);
+    return true;
+}
 
-    const DWORD attributes = GetFileAttributes(path);
-    if (attributes != DWORD(-1) && (attributes & FILE_ATTRIBUTE_READONLY))
-        SetFileAttributes(path, attributes & ~FILE_ATTRIBUTE_READONLY);
-    FS.file_rename(temporary, path, true);
-    if (_access(path, 0) != 0 || _access(temporary, 0) == 0)
-        return false;
-
-    saved_path = path;
-    Msg("* HUD editor: saved section [%s] to [%s]", section, path);
+bool save_settings(const xr_vector<HudSettingEdit>& settings, std::string& saved_path) {
+    xr_vector<HudFileEdit> files;
+    for (const auto& edit : settings) {
+        auto file = std::find_if(files.begin(), files.end(), [&](const HudFileEdit& entry) {
+            return std::any_of(entry.settings.begin(), entry.settings.end(),
+                [&](const HudSettingEdit* setting) { return setting->section == edit.section; });
+        });
+        if (file == files.end()) {
+            std::string relative, text;
+            if (!find_section_file(edit.section.c_str(), relative, text)) {
+                Msg("! HUD editor: cannot find source .ltx for section [%s]", edit.section.c_str());
+                return false;
+            }
+            string_path game_path;
+            FS.update_path(game_path, "$game_config$", relative.c_str());
+            const LPCSTR addon = FS.addon_file(game_path);
+            const LPCSTR disk_path = addon ? addon : game_path;
+            if (_access(disk_path, 0) != 0) {
+                Msg("! HUD editor: the source section [%s] has no loose .ltx file", edit.section.c_str());
+                return false;
+            }
+            file = std::find_if(files.begin(), files.end(), [&](const HudFileEdit& entry) {
+                return entry.game_path == game_path;
+            });
+            if (file == files.end()) {
+                files.push_back({game_path, disk_path, std::move(text), {}});
+                file = files.end() - 1;
+            }
+        }
+        write_setting(file->text, edit.section.c_str(), edit.key, edit.value);
+        file->settings.push_back(&edit);
+    }
+    for (const auto& file : files) {
+        if (!save_hud_file(file))
+            return false;
+        if (!saved_path.empty())
+            saved_path += ", ";
+        saved_path += file.disk_path;
+    }
     return true;
 }
 
@@ -378,8 +437,6 @@ void CUIHudEditor::Init() {
                 CUIWndCallback::void_function(this, &CUIHudEditor::OnProfileChanged));
     AddCallback(m_force_aim, BUTTON_CLICKED,
                 CUIWndCallback::void_function(this, &CUIHudEditor::OnForceAimChanged));
-    AddCallback(m_hide_crosshair, BUTTON_CLICKED,
-                CUIWndCallback::void_function(this, &CUIHudEditor::OnHideCrosshairChanged));
     AddCallback(m_learning_mode, BUTTON_CLICKED,
                 CUIWndCallback::void_function(this, &CUIHudEditor::OnLearningModeChanged));
     AddCallback(m_preview, BUTTON_CLICKED,
@@ -416,14 +473,6 @@ void CUIHudEditor::Show(bool status) {
         static_cast<CHudEditorComboBox*>(m_profile)->CloseEditorList();
         if (!m_previewing) {
             SetForcedAim(false);
-            if (m_hud_item) {
-                m_synchronizing = true;
-                m_profile->SetItemToken(UI().is_widescreen() ? 1 : 0);
-                m_synchronizing = false;
-                ApplySelectedProfile();
-            }
-            crosshair_override_active = false;
-            crosshair_override_weapon = nullptr;
             m_session_active = false;
         }
     }
@@ -449,7 +498,6 @@ void CUIHudEditor::Update() {
     }
     if (m_force_aim->GetCheck() && !m_weapon->IsZoomed())
         m_weapon->OnZoomIn();
-    ApplySelectedProfile();
     UpdateLearningHint();
 }
 
@@ -491,8 +539,6 @@ bool CUIHudEditor::SelectActiveWeapon(bool force) {
     if (!weapon || !item || item->m_parent_hud_item != weapon) {
         if (m_weapon) {
             SetForcedAim(false);
-            crosshair_override_active = false;
-            crosshair_override_weapon = nullptr;
             m_weapon = nullptr;
             m_hud_item = nullptr;
             m_section = shared_str();
@@ -502,57 +548,84 @@ bool CUIHudEditor::SelectActiveWeapon(bool force) {
         }
         return false;
     }
-    if (!force && m_weapon == weapon && m_hud_item == item && m_section == item->m_sect_name)
+    if (!force && m_hud_item == item && MatchesWeapon(weapon))
         return true;
 
-    SetForcedAim(false);
+    const bool same_weapon = weapon == m_weapon;
+    if (!same_weapon || force)
+        SetForcedAim(false);
     m_weapon = weapon;
     m_hud_item = item;
     m_section = item->m_sect_name;
+    m_scope_wrapper = weapon->AttachedScopeWrapper();
+    m_pose_section = weapon->ScopeHudPoseSection();
+    if (!m_pose_section.size())
+        m_pose_section = m_section;
+    m_aim_mode = current_aim_mode(*weapon);
     m_weapon_name->SetText(weapon->cNameSect().c_str());
-    m_hud_section->SetText(m_section.c_str());
+    m_hud_section->SetText(m_pose_section.c_str());
+    m_group_headers[2]->SetText(aim_key(m_aim_mode, false));
+    m_group_headers[3]->SetText(aim_key(m_aim_mode, true));
     CaptureProfiles();
-    m_profile->SetItemToken(UI().is_widescreen() ? 1 : 0);
-    m_snapshot_hide_crosshair = !!READ_IF_EXISTS(
-        pSettings, r_bool, m_section.c_str(), "zoom_hide_crosshair", true);
+    if (force || !same_weapon) {
+        m_synchronizing = true;
+        m_profile->SetItemToken(UI().is_widescreen() ? 1 : 0);
+        m_synchronizing = false;
+    }
+    constexpr LPCSTR crosshair_key = "zoom_hide_crosshair";
+    const auto source = weapon->HudPoseSettingSection(crosshair_key);
+    const bool fallback = READ_IF_EXISTS(pSettings, r_bool, m_section, crosshair_key, true);
+    m_snapshot_hide_crosshair = source.size()
+        ? READ_IF_EXISTS(pSettings, r_bool, source, crosshair_key, fallback) : fallback;
     m_hide_crosshair->SetCheck(m_snapshot_hide_crosshair);
-    crosshair_override_weapon = weapon;
-    crosshair_override_active = true;
-    crosshair_override_hide = m_snapshot_hide_crosshair;
-    m_force_aim->SetCheck(false);
-    m_was_zoomed = weapon->IsZoomed();
     SyncControls();
-    ApplySelectedProfile();
     SetStatus("ui_hud_editor_status_ready");
     return true;
 }
 
 void CUIHudEditor::CaptureProfiles() {
     const Fvector zero = Fvector().set(0.f, 0.f, 0.f);
-    m_profiles[0].hands_position = read_vector(m_section.c_str(), "hands_position", zero);
-    m_profiles[0].hands_orientation = read_vector(m_section.c_str(), "hands_orientation", zero);
-    m_profiles[0].aim_position = read_vector(m_section.c_str(), "aim_hud_offset_pos", zero);
-    m_profiles[0].aim_rotation = read_vector(m_section.c_str(), "aim_hud_offset_rot", zero);
-    m_profiles[1].hands_position =
-        read_vector(m_section.c_str(), "hands_position_16x9", m_profiles[0].hands_position);
-    m_profiles[1].hands_orientation = read_vector(
-        m_section.c_str(), "hands_orientation_16x9", m_profiles[0].hands_orientation);
-    m_profiles[1].aim_position =
-        read_vector(m_section.c_str(), "aim_hud_offset_pos_16x9", m_profiles[0].aim_position);
-    m_profiles[1].aim_rotation =
-        read_vector(m_section.c_str(), "aim_hud_offset_rot_16x9", m_profiles[0].aim_rotation);
-    m_snapshot_profiles[0] = m_profiles[0];
-    m_snapshot_profiles[1] = m_profiles[1];
+    const bool grenade = m_aim_mode == EHudEditorAim::Grenade;
+    const LPCSTR pos_key = grenade ? "gl_hud_offset_pos" : "aim_hud_offset_pos";
+    const LPCSTR rot_key = grenade ? "gl_hud_offset_rot" : "aim_hud_offset_rot";
+    for (u32 i = 0; i < 2; ++i) {
+        const bool wide = i != 0;
+        const auto read_base = [&](LPCSTR key) {
+            const auto standard = read_vector(m_section.c_str(), key, zero);
+            if (!wide)
+                return standard;
+            string64 wide_key;
+            xr_sprintf(wide_key, "%s_16x9", key);
+            return read_vector(m_section.c_str(), wide_key, standard);
+        };
+        auto& profile = m_profiles[i];
+        profile.hands_position = read_base("hands_position");
+        profile.hands_orientation = read_base("hands_orientation");
+        profile.aim_position = read_base(pos_key);
+        profile.aim_rotation = read_base(rot_key);
+        m_weapon->ApplyHudPoseSettings("hands_position", "hands_orientation", wide, false,
+                                       profile.hands_position, profile.hands_orientation);
+        if (!grenade)
+            m_weapon->ApplyHudPoseSettings(pos_key, rot_key, wide, false, profile.aim_position,
+                                           profile.aim_rotation);
+        if (m_aim_mode == EHudEditorAim::Alternative)
+            m_weapon->ApplyHudPoseSettings(aim_key(m_aim_mode, false), aim_key(m_aim_mode, true),
+                                           wide, true, profile.aim_position, profile.aim_rotation);
+        m_snapshot_profiles[i] = profile;
+    }
 }
 
-void CUIHudEditor::ApplySelectedProfile() {
-    if (!m_hud_item)
-        return;
-    const SProfile& profile = m_profiles[clampr(m_profile->CurrentID(), 0, 1)];
-    m_hud_item->m_measures.m_hands_attach[0] = profile.hands_position;
-    m_hud_item->m_measures.m_hands_attach[1] = profile.hands_orientation;
-    m_hud_item->m_measures.m_hands_offset[0][1] = profile.aim_position;
-    m_hud_item->m_measures.m_hands_offset[1][1] = profile.aim_rotation;
+bool CUIHudEditor::MatchesWeapon(const CWeapon* weapon) const {
+    return m_session_active && weapon && m_weapon == weapon && m_section == weapon->HudSection() &&
+        m_scope_wrapper == weapon->AttachedScopeWrapper() && m_aim_mode == current_aim_mode(*weapon);
+}
+
+const CUIHudEditor::SProfile& CUIHudEditor::SelectedProfile() const {
+    return m_profiles[clampr(m_profile->CurrentID(), 0, 1)];
+}
+
+bool CUIHudEditor::HideCrosshair() const {
+    return m_hide_crosshair->GetCheck();
 }
 
 void CUIHudEditor::SyncControls() {
@@ -572,20 +645,18 @@ void CUIHudEditor::SyncControl(SControl& control) {
 void CUIHudEditor::RestoreSnapshot() {
     m_profiles[0] = m_snapshot_profiles[0];
     m_profiles[1] = m_snapshot_profiles[1];
-    if (m_weapon) {
+    if (m_weapon)
         m_hide_crosshair->SetCheck(m_snapshot_hide_crosshair);
-        crosshair_override_weapon = m_weapon;
-        crosshair_override_active = true;
-        crosshair_override_hide = m_snapshot_hide_crosshair;
-    }
     SyncControls();
-    ApplySelectedProfile();
 }
 
 void CUIHudEditor::SetForcedAim(bool enabled) {
     if (!m_force_aim)
         return;
     m_force_aim->SetCheck(enabled);
+    if (enabled == m_forced_aim_applied)
+        return;
+    m_forced_aim_applied = enabled;
     if (!m_weapon || !g_pGameLevel)
         return;
     if (enabled) {
@@ -723,7 +794,6 @@ void CUIHudEditor::OnProfileChanged(CUIWindow*, void*) {
     if (m_synchronizing)
         return;
     SyncControls();
-    ApplySelectedProfile();
     SetStatus(m_profile->CurrentID() ? "ui_hud_editor_status_profile_wide"
                                      : "ui_hud_editor_status_profile_standard");
 }
@@ -738,7 +808,6 @@ void CUIHudEditor::OnValueChanged(CUIWindow* window, void*) {
         m_synchronizing = true;
         SyncControl(control);
         m_synchronizing = false;
-        ApplySelectedProfile();
         return;
     }
 }
@@ -767,7 +836,6 @@ void CUIHudEditor::OnValueCommitted(CUIWindow* window, void*) {
         m_synchronizing = true;
         SyncControl(control);
         m_synchronizing = false;
-        ApplySelectedProfile();
         SetStatus("ui_hud_editor_status_number_applied");
         return;
     }
@@ -788,19 +856,12 @@ void CUIHudEditor::OnValueStep(CUIWindow* window, void*) {
         m_synchronizing = true;
         SyncControl(control);
         m_synchronizing = false;
-        ApplySelectedProfile();
         return;
     }
 }
 
 void CUIHudEditor::OnForceAimChanged(CUIWindow*, void*) {
     SetForcedAim(m_force_aim->GetCheck());
-}
-
-void CUIHudEditor::OnHideCrosshairChanged(CUIWindow*, void*) {
-    crosshair_override_weapon = m_weapon;
-    crosshair_override_active = m_weapon != nullptr;
-    crosshair_override_hide = m_hide_crosshair->GetCheck();
 }
 
 void CUIHudEditor::OnLearningModeChanged(CUIWindow*, void*) {
@@ -813,16 +874,44 @@ void CUIHudEditor::OnPreview(CUIWindow*, void*) { EnterPreview(); }
 void CUIHudEditor::OnFire(CUIWindow*, void*) { FireOnce(); }
 
 void CUIHudEditor::OnSave(CUIWindow*, void*) {
-    if (!m_weapon || !m_hud_item)
+    if (!SelectActiveWeapon(false))
         return;
+
+    xr_vector<HudSettingEdit> settings;
+    const auto& aim_section = m_aim_mode == EHudEditorAim::Grenade ? m_section : m_pose_section;
+    for (u32 i = 0; i < 2; ++i) {
+        const auto& profile = m_profiles[i];
+        const auto& original = m_snapshot_profiles[i];
+        const auto add = [&](const shared_str& section, LPCSTR key, const Fvector& value,
+                             const Fvector& previous) {
+            const std::string formatted = vector_text(value);
+            if (formatted != vector_text(previous))
+                settings.push_back({section, std::string(key) + (i ? "_16x9" : ""), formatted});
+        };
+        add(m_pose_section, "hands_position", profile.hands_position, original.hands_position);
+        add(m_pose_section, "hands_orientation", profile.hands_orientation, original.hands_orientation);
+        add(aim_section, aim_key(m_aim_mode, false), profile.aim_position, original.aim_position);
+        add(aim_section, aim_key(m_aim_mode, true), profile.aim_rotation, original.aim_rotation);
+    }
+    if (HideCrosshair() != m_snapshot_hide_crosshair)
+        settings.push_back({m_pose_section, "zoom_hide_crosshair", HideCrosshair() ? "true" : "false"});
+    if (settings.empty()) {
+        SetStatus("ui_hud_editor_status_ready");
+        return;
+    }
     std::string path;
-    if (!save_profiles(m_section.c_str(), m_profiles, m_hide_crosshair->GetCheck(), path)) {
+    const bool saved = save_settings(settings, path);
+    // A base hands or launcher offset can be cached in the attached HUD item.
+    if (!path.empty())
+        m_hud_item->m_measures.load(m_section, m_hud_item->m_model,
+                                    m_hud_item->m_controller_pose_section);
+    if (!saved) {
         SetStatus("ui_hud_editor_status_save_error");
         return;
     }
-    m_snapshot_profiles[0] = m_profiles[0];
-    m_snapshot_profiles[1] = m_profiles[1];
-    m_snapshot_hide_crosshair = m_hide_crosshair->GetCheck();
+    CaptureProfiles();
+    SyncControls();
+    m_snapshot_hide_crosshair = HideCrosshair();
     SetStatus("ui_hud_editor_status_saved", path.c_str());
 }
 
@@ -854,14 +943,6 @@ void CUIHudEditor::CloseEditorSession() {
     }
     m_previewing = false;
     SetForcedAim(false);
-    if (m_hud_item) {
-        m_synchronizing = true;
-        m_profile->SetItemToken(UI().is_widescreen() ? 1 : 0);
-        m_synchronizing = false;
-        ApplySelectedProfile();
-    }
-    crosshair_override_active = false;
-    crosshair_override_weapon = nullptr;
     m_session_active = false;
 }
 
@@ -898,8 +979,25 @@ void DestroyHudEditor() {
 bool HudEditorShown() { return hud_editor && hud_editor->IsSessionActive(); }
 
 bool HudEditorCrosshairOverride(const CWeapon* weapon, bool& visible) {
-    if (!crosshair_override_active || !weapon || weapon != crosshair_override_weapon)
+    if (!hud_editor || !hud_editor->MatchesWeapon(weapon))
         return false;
-    visible = !weapon->IsZoomed() || !crosshair_override_hide;
+    visible = !weapon->IsZoomed() || !hud_editor->HideCrosshair();
     return true;
+}
+
+void HudEditorHandsOverride(const CWeapon* weapon, Fvector& position, Fvector& orientation) {
+    if (hud_editor && hud_editor->MatchesWeapon(weapon)) {
+        const auto& profile = hud_editor->SelectedProfile();
+        position = profile.hands_position;
+        orientation = profile.hands_orientation;
+    }
+}
+
+void HudEditorAimOverride(const CWeapon* weapon, EHudEditorAim mode, Fvector& position,
+                          Fvector& rotation) {
+    if (hud_editor && hud_editor->MatchesWeapon(weapon) && hud_editor->AimMode() == mode) {
+        const auto& profile = hud_editor->SelectedProfile();
+        position = profile.aim_position;
+        rotation = profile.aim_rotation;
+    }
 }

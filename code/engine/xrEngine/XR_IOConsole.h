@@ -104,6 +104,16 @@ public:
     void ExecuteCommand(LPCSTR cmd, bool record_cmd = true);
     void SelectCommand();
 
+    LPCSTR ScriptCaller() const;
+
+    // Exported on its own: dllexport on CConsole does not reach nested classes, and xrGame
+    // ( console_execute ) constructs it from another module.
+    struct ENGINE_API ScriptCallerScope {
+        string256 prev;
+        ScriptCallerScope(LPCSTR src);
+        ~ScriptCallerScope();
+    };
+
     bool GetBool(LPCSTR cmd) const;
     float GetFloat(LPCSTR cmd, float& min, float& max) const;
     int GetInteger(LPCSTR cmd, int& min, int& max) const;

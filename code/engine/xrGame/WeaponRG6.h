@@ -15,6 +15,7 @@ public:
     virtual void OnEvent(NET_Packet& P, u16 type);
 
 protected:
+    bool install_upgrade_impl(LPCSTR section, bool test) override;
     virtual void FireStart();
     virtual u8 AddCartridge(u8 cnt);
 

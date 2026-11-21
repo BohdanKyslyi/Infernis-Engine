@@ -44,6 +44,8 @@ static bool ItemUseBlocksAction(int cmd) {
     switch (cmd) {
     case kDETECTOR:
     case kTORCH:
+    case kWPN_TORCH:
+    case kWPN_LASER:
     case kNIGHT_VISION:
     case kWPN_1:
     case kWPN_2:
@@ -58,6 +60,8 @@ static bool ItemUseBlocksAction(int cmd) {
     case kWPN_ZOOM_ALTER:
     case kWPN_ZOOM_INC:
     case kWPN_ZOOM_DEC:
+    case kSCOPE_BRIGHTNESS_PLUS:
+    case kSCOPE_BRIGHTNESS_MINUS:
     case kWPN_RELOAD:
     case kWPN_INSPECT:
     case kQUICK_KICK:
@@ -73,6 +77,7 @@ static bool ItemUseBlocksAction(int cmd) {
     case kQUICK_USE_3:
     case kQUICK_USE_4:
     case kUSE:
+    case kDROP:
         return true;
     default:
         return false;
@@ -118,7 +123,8 @@ void CActor::IR_OnKeyboardPress(int cmd) {
         return;
     }
 
-    if (m_item_use && m_item_use->IsWeaponLocked() && ItemUseBlocksAction(cmd))
+    if (m_item_use && (m_item_use->IsWeaponLocked() || m_item_use->HasWeaponHudAction()) &&
+        ItemUseBlocksAction(cmd))
         return;
 
     switch (cmd) {
@@ -168,6 +174,20 @@ void CActor::IR_OnKeyboardPress(int cmd) {
         if (psActorFlags.test(AF_CROUCH_TOGGLE))
             mstate_wishful ^= mcCrouch;
     } break;
+    // Ported from Monolith ( ActorInput.cpp:146-163 ): with g_lookout_toggle a press leans to that
+    // side, or straightens up when already leaning there; leaning to one side ends the other.
+    case kL_LOOKOUT: {
+        if (psActorFlags.test(AF_LOOKOUT_TOGGLE)) {
+            mstate_wishful &= ~mcRLookout;
+            mstate_wishful ^= mcLLookout;
+        }
+    } break;
+    case kR_LOOKOUT: {
+        if (psActorFlags.test(AF_LOOKOUT_TOGGLE)) {
+            mstate_wishful &= ~mcLLookout;
+            mstate_wishful ^= mcRLookout;
+        }
+    } break;
     case kCAM_1:
         cam_Set(eacFirstEye);
         break;
@@ -205,13 +225,26 @@ void CActor::IR_OnKeyboardPress(int cmd) {
             (detector && !detector->IsHidden()))
             break;
 
+        if (pSettings->section_exist("items_animations") &&
+            !READ_IF_EXISTS(pSettings, r_bool, "items_animations", "enable_quick_kick", true))
+            break;
+        if (active_weapon && active_weapon->TryBayonetStrike())
+            break;
+
         CWeaponKnife* knife = smart_cast<CWeaponKnife*>(inventory().ItemFromSlot(KNIFE_SLOT));
-        if (knife && inventory().ActiveItem() != knife)
+        if (knife && knife == active_weapon) {
+            if (knife->GetState() == CWeapon::eIdle && knife->GetNextState() == CWeapon::eIdle) {
+                knife->Action(kWPN_FIRE, CMD_START);
+                knife->Action(kWPN_FIRE, CMD_STOP);
+            }
+        } else if (knife) {
             m_item_use->StartQuickKnife(knife);
+        }
     } break;
     case kQUICK_GRENADE: {
         if (hud_adj_mode || (m_item_use && m_item_use->IsBusy()) ||
-            inventory().GetActiveSlot() == GRENADE_SLOT)
+            inventory().GetActiveSlot() == GRENADE_SLOT ||
+            inventory().GetActiveSlot() != inventory().GetNextActiveSlot())
             break;
         if (pSettings->section_exist("items_animations") &&
             pSettings->line_exist("items_animations", "enable_quick_throw_grenades") &&
@@ -226,9 +259,10 @@ void CActor::IR_OnKeyboardPress(int cmd) {
             break;
 
         CGrenade* grenade = smart_cast<CGrenade*>(inventory().ItemFromSlot(GRENADE_SLOT));
-        if (grenade) {
+        if (grenade && READ_IF_EXISTS(pSettings, r_bool, grenade->cNameSect(),
+                                      "supports_quick_throw", true)) {
             const u16 return_slot = inventory().GetActiveSlot();
-            inventory().Activate(GRENADE_SLOT, true);
+            inventory().Activate(GRENADE_SLOT);
             if (inventory().GetNextActiveSlot() == GRENADE_SLOT)
                 grenade->PrepareQuickThrow(return_slot);
         }
@@ -258,6 +292,8 @@ void CActor::IR_OnKeyboardPress(int cmd) {
                     }break;
     */
     case kUSE:
+        if (m_item_use && m_item_use->StartSelfExtinguish())
+            return;
         ActorUse();
         break;
     case kDROP:
@@ -402,11 +438,15 @@ void CActor::IR_OnKeyboardHold(int cmd) {
     case kR_STRAFE:
         mstate_wishful |= mcRStrafe;
         break;
+    // Held only without g_lookout_toggle ( Monolith ActorInput.cpp:392-403; its free-look check
+    // is left out - this engine has no free look ).
     case kL_LOOKOUT:
-        mstate_wishful |= mcLLookout;
+        if (!psActorFlags.test(AF_LOOKOUT_TOGGLE))
+            mstate_wishful |= mcLLookout;
         break;
     case kR_LOOKOUT:
-        mstate_wishful |= mcRLookout;
+        if (!psActorFlags.test(AF_LOOKOUT_TOGGLE))
+            mstate_wishful |= mcRLookout;
         break;
     case kFWD:
         mstate_wishful |= mcFwd;
@@ -448,6 +488,8 @@ void CActor::IR_OnMouseMove(int dx, int dy) {
 
     CCameraBase* C = cameras[cam_active];
     float scale = (C->f_fov / g_fov) * psMouseSens * psMouseSensScale / 50.f / LookFactor;
+    if (auto* weapon = iitem ? iitem->cast_weapon() : nullptr)
+        scale *= weapon->AimMouseSensitivity();
     if (dx) {
         float d = float(dx) * scale;
         cam_Active()->Move((d < 0) ? kLEFT : kRIGHT, xr::abs(d));
@@ -715,6 +757,8 @@ void CActor::set_input_external_handler(CActorInputHandler* handler) {
 }
 
 void CActor::SwitchNightVision() {
+    if (m_item_use && (m_item_use->IsWeaponLocked() || m_item_use->HasWeaponHudAction()))
+        return;
     CWeapon* wpn1 = NULL;
     CWeapon* wpn2 = NULL;
     CWeapon* wpn_extra = NULL;
@@ -752,6 +796,8 @@ void CActor::SwitchNightVision() {
 }
 
 void CActor::SwitchTorch() {
+    if (m_item_use && (m_item_use->IsWeaponLocked() || m_item_use->HasWeaponHudAction()))
+        return;
     xr_vector<CAttachableItem*> const& all = CAttachmentOwner::attached_objects();
     xr_vector<CAttachableItem*>::const_iterator it = all.begin();
     xr_vector<CAttachableItem*>::const_iterator it_e = all.end();

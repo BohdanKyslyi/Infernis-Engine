@@ -24,6 +24,8 @@ public:
     // data
     Fmatrix mTransform;       // final x-form matrix (local to model)
     Fmatrix mRenderTransform; // final x-form matrix (model_base -> bone -> model)
+    Fmatrix mRenderTransform_prev; // SSFX: previous frame x-form (motion vectors)
+    Fmatrix mRenderTransform_temp; // SSFX: this frame x-form, becomes prev next frame
 private:
     BoneCallback Callback;
     void* Callback_Param;
@@ -526,6 +528,8 @@ IC void CBoneInstance::construct() {
     mTransform.identity();
 
     mRenderTransform.identity();
+    mRenderTransform_prev.identity();
+    mRenderTransform_temp.identity();
     Callback_overwrite = FALSE;
 }
 

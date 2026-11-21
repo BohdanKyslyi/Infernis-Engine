@@ -14,6 +14,10 @@ extern "C" {
 #include "script_thread.h"
 #include "ai_space.h"
 
+#ifndef XRSE_FACTORY_EXPORTS
+#include "../xrGame/ui/LuaWorkbench.h"
+#endif
+
 #define LUABIND_HAS_BUGS_WITH_LUA_THREADS
 
 #ifdef USE_DEBUGGER
@@ -100,6 +104,10 @@ CScriptThread::CScriptThread(LPCSTR caNamespaceName, bool do_string, bool reload
 #endif // #ifdef DEBUG
 #endif // #ifndef USE_LUA_STUDIO
 
+#ifndef XRSE_FACTORY_EXPORTS
+        lua_workbench::Live().RefreshHook();
+#endif
+
         if (!do_string)
             xr_sprintf(S, "%s.main()", caNamespaceName);
         else
@@ -115,6 +123,9 @@ CScriptThread::CScriptThread(LPCSTR caNamespaceName, bool do_string, bool reload
 }
 
 CScriptThread::~CScriptThread() {
+#ifndef XRSE_FACTORY_EXPORTS
+    lua_workbench::Live().ForgetThread(lua());
+#endif
 #ifdef DEBUG
     Msg("* Destroying script thread %s", *m_script_name);
 #endif
@@ -134,10 +145,18 @@ bool CScriptThread::update() {
     if (!m_active)
         R_ASSERT2(false, "Cannot resume dead Lua thread!");
 
+#ifndef XRSE_FACTORY_EXPORTS
+    if (!lua_workbench::Live().EnterScheduled(lua()))
+        return true;
+#endif
+
     try {
         ai().script_engine().current_thread(this);
 
         int l_iErrorCode = lua_resume(lua(), 0);
+#ifndef XRSE_FACTORY_EXPORTS
+        lua_workbench::Live().LeaveScheduled(lua(), l_iErrorCode);
+#endif
 
         if (l_iErrorCode && (l_iErrorCode != LUA_YIELD)) {
             ai().script_engine().print_output(lua(), *script_name(), l_iErrorCode);
@@ -167,6 +186,9 @@ bool CScriptThread::update() {
 
         ai().script_engine().current_thread(0);
     } catch (...) {
+#ifndef XRSE_FACTORY_EXPORTS
+        lua_workbench::Live().ForgetThread(lua());
+#endif
         ai().script_engine().current_thread(0);
         m_active = false;
     }

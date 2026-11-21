@@ -1,3 +1,77 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+// Screen Space Shaders: Infernis's accum_indirect.ps ( gamedata ) with the pseudo-PBR branch of the
+// Enhanced Shaders 1.10 copy of this file added ( SSFX_ENHANCED_SHADERS, which lmodel.h reads ).
+// This is the bounced light of the r2_gi console flag ( r2_R_lights.cpp ), off unless it is set.
+// With the module off the text is the gamedata file's.
+#include "common.h"
+#include "lmodel.h"
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Pixel
+// Note: this is a float-sphere
+uniform float3 direction;
+
+#ifdef MSAA_OPTIMIZATION
+#ifdef GBUFFER_OPTIMIZATION
+float4 main ( float4 tc:TEXCOORD0, float4 pos2d : SV_Position, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#else
+float4 main ( float4 tc:TEXCOORD0, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#endif
+#else
+#ifdef GBUFFER_OPTIMIZATION
+float4 main ( float4 tc:TEXCOORD0, float4 pos2d : SV_Position ) : SV_Target
+#else
+float4 main ( float4 tc:TEXCOORD0 ) : SV_Target
+#endif
+#endif
+{
+// float4 _P = tex2Dproj (s_position, tc); 
+// float4 _N = tex2Dproj (s_normal, tc); 
+ float2 tcProj = tc.xy / tc.w;
+
+ gbuffer_data gbd = gbuffer_load_data( GLD_P(tcProj, pos2d, ISAMPLE) );
+
+ // PBR materials use their own indirect / IBL path.
+// For now, prevent legacy reflected lighting
+// from contaminating the PBR accumulator.
+if (gbd.pbr > 0.5f)
+{
+    return float4(
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f
+    );
+}
+
+ //float4 _P = s_position.Sample( smp_nofilter, tcProj );
+ //float4 _N = s_normal.Sample( smp_nofilter, tcProj );
+ float4 _P = float4( gbd.P, gbd.mtl );
+ float4 _N = float4( gbd.N, gbd.hemi );
+
+ float3 L2P = _P.xyz - Ldynamic_pos.xyz; // light2point
+ float3 L2P_N = normalize ( L2P ); // light2point
+ float rsqr = dot ( L2P, L2P ); // distance 2 light (squared)
+ float att = saturate ( 1 - rsqr*Ldynamic_pos.w );// q-linear attenuate
+ float light = saturate ( dot( -L2P_N, _N.xyz ) );
+ float hemi = saturate ( dot( L2P_N, direction ) );
+
+ // Final color
+#ifdef SSFX_ENHANCED_SHADERS
+ // Screen Space Shaders: the pseudo-PBR module - linear light, albedo included ( Enhanced Shaders
+ // accum_indirect.ps:21, 31-33 ).
+ float4 _C = float4( gbd.C, gbd.gloss );
+ float3 result = SRGBToLinear(att) * hemi;
+ result *= SRGBToLinear(_C.rgb) * SRGBToLinear(Ldynamic_color.rgb) * light;
+ return float4(result, 0);
+#else
+ return blendp( float4( Ldynamic_color.xyz * att * light * hemi, 0 ), tc );
+#endif
+}
+#else
 #include "common.h"
 #include "lmodel.h"
 
@@ -54,3 +128,4 @@ if (gbd.pbr > 0.5f)
  // Final color
  return blendp( float4( Ldynamic_color.xyz * att * light * hemi, 0 ), tc );
 }
+#endif

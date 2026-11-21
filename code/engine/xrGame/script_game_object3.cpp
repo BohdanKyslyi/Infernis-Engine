@@ -1281,3 +1281,22 @@ void CScriptGameObject::restore_bone_look(LPCSTR bone_name) {
     B.set_callback(bctCustom, NULL, NULL, FALSE);
 }
 // ----------------------------------------
+
+// Screen Space Shaders. Monolith script_game_object3.cpp:1863-1880, unchanged. The animation state
+// of a held item: a weapon answers directly, any other inventory item through its HUD part, and an
+// object that is neither returns 65535, which the caller reads as "no state".
+u32 CScriptGameObject::GetState() {
+    CWeapon* Weapon = object().cast_weapon();
+    if (Weapon) {
+        return Weapon->GetState();
+    }
+
+    CInventoryItem* IItem = object().cast_inventory_item();
+    if (IItem) {
+        CHudItem* itm = IItem->cast_hud_item();
+        if (itm)
+            return itm->GetState();
+    }
+
+    return 65535;
+}

@@ -8,6 +8,9 @@
 
 #include "xrEngine/xr_efflensflare.h"
 
+// SSFX: sky matrix of the previous frame ( Motion vectors )
+static Fmatrix mSky_prev = Fidentity;
+
 //////////////////////////////////////////////////////////////////////////
 // half box def
 static Fvector3 hbox_verts[24] = {
@@ -189,7 +192,7 @@ void dxEnvironmentRender::OnLoad() {
 
 void dxEnvironmentRender::OnUnload() { tonemap = 0; }
 
-void dxEnvironmentRender::RenderSky(CEnvironment& env) {
+void dxEnvironmentRender::RenderSky(CEnvironment& env, bool OnlyMV) {
     // clouds_sh.create		("clouds","null");
     //. this is the bug-fix for the case when the sky is broken
     //. for some unknown reason the geoms happen to be invalid sometimes
@@ -232,27 +235,44 @@ void dxEnvironmentRender::RenderSky(CEnvironment& env) {
 
     // Render
     RCache.set_xform_world(mSky);
-    RCache.set_Geometry(sh_2geom);
-    RCache.set_Shader(sh_2sky);
-    //	RCache.set_Textures			(&env.CurrentEnv->sky_r_textures);
-    RCache.set_Textures(&mixRen.sky_r_textures);
-    RCache.Render(D3DPT_TRIANGLELIST, v_offset, 0, 12, i_offset, 20);
+
+    if (OnlyMV) {
+        // SSFX: motion vectors only ( element 1 )
+        RCache.set_xform_world_prev(mSky_prev);
+        mSky_prev = mSky;
+
+        RCache.set_Geometry(sh_2geom);
+        RCache.set_Shader(sh_2sky);
+        RCache.set_Element(sh_2sky->E[1]);
+        RCache.Render(D3DPT_TRIANGLELIST, v_offset, 0, 12, i_offset, 20);
+
+        RCache.set_xform_world_prev(Fidentity);
+    } else {
+        RCache.set_Geometry(sh_2geom);
+        RCache.set_Shader(sh_2sky);
+        //	RCache.set_Textures			(&env.CurrentEnv->sky_r_textures);
+        RCache.set_Textures(&mixRen.sky_r_textures);
+        RCache.Render(D3DPT_TRIANGLELIST, v_offset, 0, 12, i_offset, 20);
+    }
 
     // Sun
     ::Render->rmNormal();
+
+    if (!OnlyMV) {
 #if RENDER != R_R1
-    //
-    // This hack is done to make sure that the state is set for sure:
-    // The state may be not set by RCache if the state is changed using API SetRenderState()
-    // function before and the RCache flag will remain unchanged to it's old value.
-    //
-    RCache.set_Z(FALSE);
-    RCache.set_Z(TRUE);
-    env.eff_LensFlare->Render(TRUE, FALSE, FALSE);
-    RCache.set_Z(FALSE);
+        //
+        // This hack is done to make sure that the state is set for sure:
+        // The state may be not set by RCache if the state is changed using API SetRenderState()
+        // function before and the RCache flag will remain unchanged to it's old value.
+        //
+        RCache.set_Z(FALSE);
+        RCache.set_Z(TRUE);
+        env.eff_LensFlare->Render(TRUE, FALSE, FALSE);
+        RCache.set_Z(FALSE);
 #else
-    env.eff_LensFlare->Render(TRUE, FALSE, FALSE);
+        env.eff_LensFlare->Render(TRUE, FALSE, FALSE);
 #endif
+    }
 }
 
 void dxEnvironmentRender::RenderClouds(CEnvironment& env) {

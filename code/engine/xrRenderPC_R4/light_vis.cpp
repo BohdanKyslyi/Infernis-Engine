@@ -43,8 +43,11 @@ void light::vis_prepare() {
     //	TODO: DX10: Remove this pessimization
     // skiptest	= true;
 
-    if (skiptest || Device.vCameraPosition.distance_to(spatial.sphere.P) <=
-                        (spatial.sphere.R * 1.01f + safe_area)) { // small error
+    // Screen Space Shaders: the volumetric fade needs this distance, and the visibility test
+    // below wants the very same number, so it is computed once here.
+    vis.distance = Device.vCameraPosition.distance_to(spatial.sphere.P);
+
+    if (skiptest || vis.distance <= (spatial.sphere.R * 1.01f + safe_area)) { // small error
         vis.visible = true;
         vis.pending = false;
         vis.frame2test = frame + ::Random.randI(delay_small_min, delay_small_max);

@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "UIDialogHolder.h"
 #include "ui/UIDialogWnd.h"
+#include "ui/UIWeatherEditor.h"
 #include "UIGameCustom.h"
 #include "UICursor.h"
 #include "level.h"
@@ -225,6 +226,8 @@ bool CDialogHolder::IR_UIOnKeyboardPress(int dik) {
     CUIDialogWnd* TIR = TopInputReceiver();
     if (!TIR)
         return false;
+    if (WeatherEditorPreviewAllowsInput(TIR, dik))
+        return false;
     if (!TIR->IR_process())
         return false;
     // mouse click
@@ -262,6 +265,8 @@ bool CDialogHolder::IR_UIOnKeyboardRelease(int dik) {
     CUIDialogWnd* TIR = TopInputReceiver();
     if (!TIR)
         return false;
+    if (WeatherEditorPreviewAllowsInput(TIR, dik))
+        return false;
     if (!TIR->IR_process())
         return false;
 
@@ -294,6 +299,8 @@ bool CDialogHolder::IR_UIOnKeyboardHold(int dik) {
     CUIDialogWnd* TIR = TopInputReceiver();
     if (!TIR)
         return false;
+    if (WeatherEditorPreviewAllowsInput(TIR, dik))
+        return false;
     if (!TIR->IR_process())
         return false;
 
@@ -316,6 +323,8 @@ bool CDialogHolder::IR_UIOnMouseWheel(int direction) {
     CUIDialogWnd* TIR = TopInputReceiver();
     if (!TIR)
         return false;
+    if (WeatherEditorPreviewAllowsInput(TIR, -1))
+        return false;
     if (!TIR->IR_process())
         return false;
 
@@ -329,6 +338,8 @@ bool CDialogHolder::IR_UIOnMouseWheel(int direction) {
 bool CDialogHolder::IR_UIOnMouseMove(int dx, int dy) {
     CUIDialogWnd* TIR = TopInputReceiver();
     if (!TIR)
+        return false;
+    if (WeatherEditorPreviewAllowsInput(TIR, -1))
         return false;
     if (!TIR->IR_process())
         return false;

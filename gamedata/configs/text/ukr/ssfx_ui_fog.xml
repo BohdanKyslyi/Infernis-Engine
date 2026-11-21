@@ -1,0 +1,57 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 23
+- @ Description: Fog - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Button -->
+	<string id="ui_mcm_ssfx_module_fog">
+		<text>Туман</text>
+	</string>
+
+	<!-- SSR Settings -->
+	<string id="ui_mcm_ssfx_module_fog_title">
+		<text>Налаштування туману</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_fog_height_mcm">
+		<text>Об'єм</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_fog_height_mcm_desc">
+		<text>Налаштування об'єму туману. Чим вище значення - тим плавніший перехід.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_fog_density_mcm">
+		<text>Щільність</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_fog_density_mcm_desc">
+		<text>Налаштування щільності туману. Базове значення регулюється погодними пресетами.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_fog_suncolor_mcm">
+		<text>Сонячне світло</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_fog_suncolor_mcm_desc">
+		<text>Налаштування впливу сонячного світла на туман.</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_fog_scattering_mcm">
+		<text>Розсіювання</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_fog_scattering_mcm_desc">
+		<text>Інтенсивність ефекту розсіювання. Додає відчуття додаткової щільності.</text>
+	</string>
+
+
+
+</string_table>

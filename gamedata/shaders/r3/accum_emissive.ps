@@ -1,0 +1,49 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+
+// Screen Space Shaders: the pseudo-PBR module ( SSFX_ENHANCED_SHADERS ). With it on, this glow pass
+// writes the surface colour in linear light and the glow strength in alpha, and combine_1.ps adds
+// alpha * albedo to the light: the Enhanced Shaders 1.10 copy of this file, below, word for word
+// but for the glow strength, a setting of the SSS window now ( ES_EMISSIVE, pbr_settings.h - 16 in
+// the donor ).
+// It reads the texture through p_flat, so models_selflight.s pairs it with deffer_model_flat and binds s_base.
+// With the module off this is the stock Call of Pripyat shader, unchanged.
+#include "check_screenspace_ES.h"
+
+#ifdef SSFX_ENHANCED_SHADERS
+#include "sload.h"
+#include "pbr_settings.h" // ES_EMISSIVE; nothing this file includes brings it in
+
+float4 main( p_flat I ) : SV_Target
+{
+  //f_deffer	O;
+
+  // diffuse
+  float3 D	= tbase		(I.tcdh);	// IN:  rgb.a
+  D	= SRGBToLinear(D);
+	
+	float brightness = ES_EMISSIVE; // this port: 16 in the donor, a setting ( pbr_settings.h )
+	float4 color = float4(D.rgb,1);
+	//color *= float4(brightness,brightness,brightness,brightness);
+	color.w *= brightness;
+  return color;
+}
+#else
+//float4  main  ( p_flat I )  : SV_Target
+float4 main() : SV_Target
+{
+  return   float4    (1,1,1,1)*16.0h;
+}
+#endif
+#else
+#include "common.h"
+
+//float4  main  ( p_flat I )  : SV_Target
+float4 main() : SV_Target
+{
+  return   float4    (1,1,1,1)*16.0h;
+}
+#endif

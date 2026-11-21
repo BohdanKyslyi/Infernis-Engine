@@ -31,6 +31,21 @@ public:
     vis_data hom;
     u32 frame_render{0};
 
+    // Screen Space Shaders. The SSS pass keeps up to 8 shadow casting lights in fixed slots, so it
+    // has to recognise a light across frames (sss_id), tell an omnipart face from its parent, and
+    // know how far the light is. `distance` is the squared distance written by get_LOD(); it is
+    // mutable because get_LOD() is const here and that signature must not change.
+    int omnipart_num{0};
+    int sss_id{-1};
+    int sss_refresh{0};
+    s8 sss_priority{0};
+    bool sss_is_playerlight{false};
+    fastdelegate::FastDelegate1<light*, void> sss_on_light_destroy;
+
+    light* omipart_parent{nullptr};
+    mutable float distance{0.f};
+    float distance_lpos{0.f};
+
     float m_volumetric_quality{1.f};
     float m_volumetric_intensity{1.f};
     float m_volumetric_distance{1.f};
@@ -41,6 +56,7 @@ public:
     float attenuation1{0.f}; 
     float attenuation2{0.f}; 
 
+    u32 frame_scope_render{0};
     light* omnipart[6]{nullptr}; 
     xr_vector<light_indirect> indirect;
     u32 indirect_photons{0};
@@ -61,12 +77,14 @@ public:
     Fmatrix m_xform;
 
     struct _vis {
-        u32 frame2test;  
-        u32 query_id;    
-        u32 query_order; 
-        bool visible;    
-        bool pending;    
+        u32 frame2test;
+        u32 query_id;
+        u32 query_order;
+        bool visible;
+        bool pending;
         u16 smap_ID;
+        // Screen Space Shaders: distance to the camera, used to fade volumetric lights out
+        float distance;
     } vis{};
 
     union _xform {
@@ -102,11 +120,21 @@ public:
     void set_active(bool b) override;
     bool get_active() override { return flags.bActive; }
     void set_shadow(bool b) override { flags.bShadow = b; }
+#if RENDER == R_R4
+    // Screen Space Shaders: on DX11 these three are defined in light.cpp (Monolith light.h).
+    // The other renderers keep the stock inline setters below.
+    void set_volumetric(bool b) override;
+
+    void set_volumetric_quality(float fValue) override { m_volumetric_quality = fValue; }
+    void set_volumetric_intensity(float fValue) override;
+    void set_volumetric_distance(float fValue) override;
+#else
     void set_volumetric(bool b) override { flags.bVolumetric = b; }
 
     void set_volumetric_quality(float fValue) override { m_volumetric_quality = fValue; }
     void set_volumetric_intensity(float fValue) override { m_volumetric_intensity = fValue; }
     void set_volumetric_distance(float fValue) override { m_volumetric_distance = fValue; }
+#endif
 
     void set_position(const Fvector& P) override;
     void set_rotation(const Fvector& D, const Fvector& R) override;
@@ -118,6 +146,7 @@ public:
     void set_texture(LPCSTR name) override;
     void set_hud_mode(bool b) override { flags.bHudMode = b; }
     bool get_hud_mode() override { return flags.bHudMode; }
+    void set_is_playerlight(bool b) override { sss_is_playerlight = b; }
 
     void spatial_move() override;
     Fvector spatial_sector_point() override;
@@ -130,6 +159,7 @@ public:
     void xform_calc();
     void vis_prepare();
     void vis_update();
+    bool visible_in_current_view();
     void export_(light_Package& dest);
     void set_attenuation_params(float a0, float a1, float a2, float fo);
 #endif // (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)

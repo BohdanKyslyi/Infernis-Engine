@@ -441,6 +441,11 @@ public:
     //////////////////////////////////////////////////////////////////////////
 
     LPCSTR GetPatrolPathName();
+    // Screen Space Shaders. Monolith script_game_object.h, exported there as "get_state".
+    // ssfx_weapons_dof.script asks a held item for its animation state (0 idle, 1 raise, 2 lower,
+    // 7 reload) to decide when to fade the weapon depth of field; without it that script errors on
+    // the first reload and stops.
+    u32 GetState();
     u32 GetAmmoElapsed();
     void SetAmmoElapsed(int ammo_elapsed);
     u32 GetSuitableAmmoTotal() const;

@@ -12,6 +12,16 @@ public:
     virtual BOOL canBeLMAPped() { return FALSE; }
 
     virtual void Compile(CBlender_Compile& C) {
+#if defined(USE_DX11)
+        // SSFX: element 1 writes the sky motion vectors. ssfx_sky_mv ships with the addon, so
+        // without it every element stays the stock sky pass.
+        if (C.iElement == 1 && RImplementation.o.ssfx_motionvectors) {
+            C.r_Pass("ssfx_sky_mv", "ssfx_sky_mv", FALSE, TRUE, FALSE);
+            C.PassSET_ZB(FALSE, FALSE);
+            C.r_End();
+            return;
+        }
+#endif
         C.r_Pass("sky2", "sky2", FALSE, TRUE, FALSE);
 #if defined(USE_DX10) || defined(USE_DX11)
         // C.r_Sampler_clf		("s_sky0",		"$null"			);
@@ -68,7 +78,7 @@ public:
     virtual void OnFrame(CEnvironment& env);
     virtual void OnLoad();
     virtual void OnUnload();
-    virtual void RenderSky(CEnvironment& env);
+    virtual void RenderSky(CEnvironment& env, bool OnlyMV = false);
     virtual void RenderClouds(CEnvironment& env);
     virtual void OnDeviceCreate();
     virtual void OnDeviceDestroy();

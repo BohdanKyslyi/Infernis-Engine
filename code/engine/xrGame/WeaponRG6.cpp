@@ -38,6 +38,12 @@ void CWeaponRG6::Load(LPCSTR section) {
     inheritedRL::Load(section);
     inheritedSG::Load(section);
 }
+bool CWeaponRG6::install_upgrade_impl(LPCSTR section, bool test) {
+    bool result = inheritedSG::install_upgrade_impl(section, test);
+    result |= process_if_exists(section, "launch_speed", &CInifile::r_float, m_fLaunchSpeed, test);
+    return result;
+}
+
 #include "inventory.h"
 #include "inventoryOwner.h"
 void CWeaponRG6::FireStart() {

@@ -87,14 +87,14 @@ bool CUISequenceItem::Stop(bool bForce) {
 
 CUISequencer::CUISequencer() { m_flags.zero(); }
 
-void CUISequencer::Start(LPCSTR tutor_name) {
+void CUISequencer::Start(LPCSTR tutor_name, LPCSTR xml_file) {
     VERIFY(m_sequencer_items.size() == 0);
     Device.seqFrame.Add(this, REG_PRIORITY_LOW - 10000);
 
     m_UIWindow = xr_new<CUIWindow>();
 
     CUIXml uiXml;
-    uiXml.Load(CONFIG_PATH, UI_PATH, "game_tutorials.xml");
+    uiXml.Load(CONFIG_PATH, UI_PATH, xml_file);
 
     int items_count = uiXml.GetNodesNum(tutor_name, 0, "item");
     VERIFY(items_count > 0);

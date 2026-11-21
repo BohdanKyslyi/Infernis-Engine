@@ -1,0 +1,91 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 17
+- @ Description: SSS HUD Raindrops - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Raindrops Title -->
+	<string id="ui_mcm_ssfx_module_hud_raindrops_title">
+		<text>Налаштування крапель дощу на руках/зброї</text>
+	</string>
+
+	<!-- Raindrops Settings -->
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_density_mcm">
+		<text>Частота</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_density_mcm_desc">
+		<text>Частота та розмір крапель</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_reflection_str_mcm">
+		<text>Інтенсивність відбиттів</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_reflection_str_mcm_desc">
+		<text>Інтенсивність відбиттів крапель дощу</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_refraction_str_mcm">
+		<text>Інтенсивність заломлення</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_refraction_str_mcm_desc">
+		<text>Інтенсивність заломлення крапель дощу</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_animation_speed_mcm">
+		<text>Швидкість анімації</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_animation_speed_mcm_desc">
+		<text>Швидкість анімації крапель</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_buildup_mcm">
+		<text>Швидкість появи</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_buildup_mcm_desc">
+		<text>Налаштування швидкості появи крапель на руках/зброї</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_drying_mcm">
+		<text>Швидкість висихання</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_drying_mcm_desc">
+		<text>Налаштування швидкості зникнення крапель</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_size_mcm">
+		<text>Розмір</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_size_mcm_desc">
+		<text>Розмір краплі</text>
+	</string>
+
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_gloss_mcm">
+		<text>Блиск</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_gloss_mcm_desc">
+		<text>Інтенсивність блиску крапель</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_extra_gloss_mcm">
+		<text>Додатковий блиск</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_ssfx_rain_module_ssfx_rain_hud_raindrops_extra_gloss_mcm_desc">
+		<text>Налаштування додаткового блиску рук/зброї під час дощу</text>
+	</string>
+
+</string_table>

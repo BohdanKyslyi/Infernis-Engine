@@ -3,6 +3,7 @@
 #pragma once
 
 #include "xrRender/FactoryPtr.h"
+#include "LightningEditorSettings.h"
 #include "xrRender/LensFlareRender.h"
 #include "xrRender/ThunderboltDescRender.h"
 #include "xrRender/ThunderboltRender.h"
@@ -127,6 +128,9 @@ private:
     float m_fDistMediumMin{10.f}, m_fDistMediumMax{40.f};
     float m_fDistFarMin{40.f}, m_fDistFarMax{150.f};
     
+    bool m_editor_safe_preview{false};
+    shared_str m_sStrikeSoundName;
+    shared_str m_sConfiguredStrikeParticle;
     shared_str m_sStrikeParticle; 
     ref_sound m_StrikeSound;
 
@@ -150,6 +154,11 @@ public:
     CEffect_Thunderbolt();
     ~CEffect_Thunderbolt();
 
+    lightning_editor::Settings GetEditorSettings() const;
+    bool ApplyEditorSettings(const lightning_editor::Settings& settings);
+    bool SaveEditorSettings();
+    bool PreviewEditor(LPCSTR collection_id, float duration);
+    bool IsCustomLightningEnabled() const { return m_bEnableCustomLightning; }
     void OnFrame(const std::string& id, const float period, const float duration);
     void Render();
 

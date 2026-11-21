@@ -62,7 +62,9 @@ private:
     BOOL bNoRecurse;
 
     void ScanAddons();
-    void ScanAddonDirectory(const xr_string& disk_path, const xr_string& game_path);
+    // late_pack / late_archives: a pack mounted after the others ( ssfx_addons, LocatorAPI.cpp )
+    void ScanAddonDirectory(const xr_string& disk_path, const xr_string& game_path,
+                            LPCSTR late_pack = nullptr, u32 late_archives = 0);
 
     void Register(LPCSTR name, u32 vfs, u32 crc, u32 ptr, u32 size_real, u32 size_compressed,
                   u32 modif);
@@ -154,6 +156,20 @@ public:
     void file_copy(LPCSTR src, LPCSTR dest);
     void file_rename(LPCSTR src, LPCSTR dest, bool bOwerwrite = true);
     int file_length(LPCSTR src);
+
+    // Screen Space Shaders: the addon packs listed in [shader_extensions] ssfx_addons
+    // ( engine_external.ltx ) are left out at start and mounted here if SSS runs ( x_ray.cpp ).
+    void ssfx_addons(bool mount);
+    // Their folder names, as found on the disk, a space between two ( "" for none ): the shader
+    // cache check keeps them with the SSS switch ( xrEngine, ssfx_profile_cache_check ).
+    void ssfx_addon_names(string_path& names);
+    // The addon file the game reads for a game path, or nullptr ( the weather editor saves there ).
+    LPCSTR addon_file(LPCSTR game_file);
+    // new_file replaces disk_file, and from now on the game reads disk_file for game_file.
+    bool addon_file_replace(LPCSTR game_file, LPCSTR new_file, LPCSTR disk_file);
+    // Where a new file for a game path goes in the mounted packs of ssfx_addons: the last one that
+    // has its folder ( the weather editor puts a new weather there ). false: no such pack.
+    bool ssfx_addon_target(LPCSTR game_file, string_path& disk_file);
 
     u32 get_file_age(LPCSTR nm);
     void set_file_age(LPCSTR nm, u32 age);

@@ -1,0 +1,31 @@
+/**
+ * @ Version: SCREEN SPACE SHADERS - UPDATE 23
+ * @ Description: TAA Implementation - Prepare depth and motion vector history
+ * @ Modified time: 2025-05-27 19:06:23
+ * @ Author: https://www.moddb.com/members/ascii1457
+ * @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+ */
+
+#include "common.h"
+
+Texture2D s_ssfx_taa;
+Texture2D s_motion_vectors;
+
+float4 main(p_screen I) : SV_Target
+{
+	
+#ifndef USE_MSAA
+	float4 Pos = s_position.Sample( smp_linear, I.tc0.xy );
+#else
+	float4 Pos = s_position.Load( int3( I.hpos.xy, 0 ), 0 );
+#endif
+
+	float4 MV = s_motion_vectors.Sample(smp_linear, I.tc0.xy);
+
+	Pos.z = Pos.z < 0.01f ? 1000000 : Pos.z;
+
+	float mv_acc = lerp(length(MV.xy), s_ssfx_taa.Sample(smp_linear, I.tc0.xy).a, 0.5f );
+
+	return float4(MV.xy, Pos.z, mv_acc);
+	// ------------------------------------
+}

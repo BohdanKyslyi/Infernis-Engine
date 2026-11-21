@@ -66,7 +66,35 @@ void CDetailManager::cache_Task(int gx, int gz, Slot* D) {
             poolSI.destroy(item);
         }
         D->G[i].items.clear();
+
+#if RENDER == R_R4
+        // DEVIATION FROM THE DONOR, and a real bug fix.
+        //
+        // r_items holds raw SlotItem* that point into poolSI, and the loop above has just handed
+        // every one of them back to the pool. Leaving the three lists populated leaves dangling
+        // pointers behind, and UpdateVisibleM pushes r_items into m_visibles on every single
+        // frame while only rebuilding them when the frame counter passes Slot::frame - which was
+        // set to dwFrame + 15..30 before this slot was recycled. Until that rebuild the renderer
+        // reads SlotItems the pool has already given to a different slot.
+        //
+        // Vanilla X-Ray has the same hole and Monolith inherits it. It only becomes visible with
+        // SSFX installed, because the grass vertex shader now displaces the vertex by the
+        // per-blade terrain normal it reads out of exdata ( active while ssfx_terrain_grass_align
+        // is on ). A stale blade therefore stops being a blade in the wrong place and becomes a
+        // blade smeared across the level - the torn grass seen after a level change or a new game.
+        D->G[i].r_items[0].clear();
+        D->G[i].r_items[1].clear();
+        D->G[i].r_items[2].clear();
+#endif
     }
+
+#if RENDER == R_R4
+    // Same fix, other half: force UpdateVisibleM to rebuild this slot on the next frame instead of
+    // sitting out the refresh interval the slot was given before it was recycled. A slot that is
+    // still stPending has no items yet, so the rebuild simply leaves r_items empty and the slot
+    // contributes nothing until cache_Decompress has filled it.
+    D->frame = 0;
+#endif
 
     if (old_type != stPending) {
         VERIFY(stPending == D->type);

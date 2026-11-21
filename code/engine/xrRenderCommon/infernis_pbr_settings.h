@@ -1,39 +1,20 @@
 #pragma once
 
+#include "../xrEngine/infernis_pbr_console_vars.h"
+
 // Values are compiled into shader permutations. They are deliberately read
 // only while shaders/resources are being built, never from a pixel hot path.
+//
+// Both belong to the settings page now ( pbr_enable, pbr_sslr_mode ), and what is returned here is
+// the pair the game STARTED with - xrEngine/infernis_pbr_console_vars.h says why not the live one.
+// Their start values are still the two lines of [shader_extensions] this file used to read itself
+// ( pbr_settings_config_loaded in xrEngine/xr_ioc_cmd.cpp, same fallbacks ).
 inline bool infernis_pbr_rendering_enabled()
 {
-    if (!pSettings || !pSettings->section_exist("shader_extensions"))
-        return true;
-
-    return READ_IF_EXISTS(
-        pSettings,
-        r_bool,
-        "shader_extensions",
-        "enable_pbr_rendering",
-        true
-    );
+    return pbr_session_enable != 0;
 }
 
 inline u32 infernis_pbr_sslr_mode()
 {
-    if (!pSettings || !pSettings->section_exist("shader_extensions") ||
-        !pSettings->line_exist("shader_extensions", "sslr_mode"))
-        return 1; // performance
-
-    LPCSTR mode = pSettings->r_string("shader_extensions", "sslr_mode");
-
-    if (0 == stricmp(mode, "off"))
-        return 0;
-    if (0 == stricmp(mode, "balanced"))
-        return 2;
-    if (0 == stricmp(mode, "quality"))
-        return 3;
-    if (0 == stricmp(mode, "reference"))
-        return 4;
-
-    // Unknown values and the explicit "performance" value use the safe,
-    // production default rather than enabling an expensive permutation.
-    return 1;
+    return pbr_session_sslr_mode;
 }

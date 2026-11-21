@@ -1,0 +1,16 @@
+<w>
+	<file name="ui\ui_actor_god">
+		<texture id="ui_inGame2_god_cheat_mode" x="0" y="314" width="327" height="246" />
+		<texture id="ui_god_help_e" x="150" y="220" width="26" height="27" />
+		<texture id="ui_god_help_h" x="150" y="252" width="26" height="27" />
+		<texture id="ui_god_help_t" x="150" y="252" width="26" height="27" />
+
+		<texture id="ui_god_button1_e" x="20" y="220" width="116" height="22"/>
+		<texture id="ui_god_button1_t" x="20" y="247" width="116" height="22"/>
+		<texture id="ui_god_button1_h" x="20" y="274" width="116" height="22"/>
+
+		<texture id="ui_inGame2_god_waypoint_editor_wnd" x="0" y="0" width="366" height="203"/>
+		<texture id="ui_inGame2_god_position_printer_wnd" x="400" y="0" width="366" height="203"/>
+
+	</file>
+</w>

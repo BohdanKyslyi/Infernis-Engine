@@ -198,29 +198,47 @@ void CPhysicObject::SpawnInitPhysics(CSE_Abstract* D) {
     RunStartupAnim(D);
 }
 
+
 void CPhysicObject::RunStartupAnim(CSE_Abstract* D) {
     if (Visual() && smart_cast<IKinematics*>(Visual())) {
-        //		CSE_PHSkeleton	*po	= smart_cast<CSE_PHSkeleton*>(D);
-		
-        IKinematicsAnimated* PKinematicsAnimated = NULL;
-        R_ASSERT(Visual() && smart_cast<IKinematics*>(Visual()));
-        PKinematicsAnimated = smart_cast<IKinematicsAnimated*>(Visual());
+        IKinematicsAnimated* PKinematicsAnimated = smart_cast<IKinematicsAnimated*>(Visual());
+
         if (PKinematicsAnimated) {
             CSE_Visual* visual = smart_cast<CSE_Visual*>(D);
             R_ASSERT(visual);
-            R_ASSERT2(*visual->startup_animation, "no startup animation");
 
-            VERIFY2((!!PKinematicsAnimated->LL_MotionID(visual->startup_animation.c_str()).valid()),
-                    (make_string(" animation %s not faund ", visual->startup_animation.c_str()) +
-                     dbg_object_base_dump_string(this))
-                        .c_str());
-            m_anim_blend =
-                m_anim_script_callback.play_cycle(PKinematicsAnimated, visual->startup_animation);
+            const LPCSTR anim_name = visual->startup_animation.c_str();
+
+            R_ASSERT2(*anim_name, "no startup animation");
+
+            MotionID motion = PKinematicsAnimated->LL_MotionID(anim_name);
+
+            if (motion.valid()) {
+                // Animation exists: use original behaviour.
+                m_anim_blend = m_anim_script_callback.play_cycle(PKinematicsAnimated,
+                                                                 visual->startup_animation);
+            } else if (xr_strcmp(anim_name, "$editor") == 0) {
+                // Missing SDK $editor animation.
+                // Keep the original skeleton pose.
+                m_anim_blend = nullptr;
+
+                Msg("~ [PHYS STARTUP ANIM] Skipping missing $editor");
+                Msg("~ Object: %s", cName().c_str());
+                Msg("~ Visual: %s", cNameVisual().c_str());
+            } else {
+                // Missing real animation: preserve diagnostics.
+                VERIFY2(motion.valid(), (make_string(" animation %s not found ", anim_name) +
+                                         dbg_object_base_dump_string(this))
+                                            .c_str());
+            }
         }
-        smart_cast<IKinematics*>(Visual())->CalculateBones_Invalidate();
-        smart_cast<IKinematics*>(Visual())->CalculateBones(TRUE);
+
+        IKinematics* K = smart_cast<IKinematics*>(Visual());
+        K->CalculateBones_Invalidate();
+        K->CalculateBones(TRUE);
     }
 }
+
 IC bool check_blend(CBlend* b, LPCSTR name, LPCSTR sect, LPCSTR visual) {
 #ifdef DEBUG
     if (!b)

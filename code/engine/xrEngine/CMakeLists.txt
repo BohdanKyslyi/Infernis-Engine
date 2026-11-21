@@ -176,7 +176,10 @@ set(EDITOR_ENVIRONMENT_SUNS_MANAGER_SUN_GRADIENT editor_environment_suns_gradien
                                                  editor_environment_suns_gradient.cpp)
 
 set(ENGINE_CONSOLE_COMMANDS xr_ioc_cmd.h
-                            xr_ioc_cmd.cpp)
+                            ssfx_console_vars.h
+                            shader_bus.h
+                            xr_ioc_cmd.cpp
+                            shader_bus.cpp)
 
 set(INTERFACES_RENDER_EXECUTION__AND__3D_TEXTCONSOLE Text_Console.h
                                                      Text_Console.cpp
@@ -242,7 +245,9 @@ set(INTERFACES_PHYSICS IObjectPhysicsCollision.h
 set(EDITOR_ENVIRONMENT_AMBIENTS editor_environment_ambients_manager.hpp
                                 editor_environment_ambients_manager.cpp)
 
-set(GAME_API_ENVIRONMENT_EFFECTS WeatherWindMath.h
+set(GAME_API_ENVIRONMENT_EFFECTS LightningEditorSettings.h
+                                 WeatherEffectConfig.h
+                                 WeatherWindMath.h
                                  RainConfigEdit.h
                                  Rain.h
                                  thunderbolt.h

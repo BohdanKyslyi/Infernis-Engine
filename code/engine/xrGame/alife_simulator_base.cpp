@@ -90,6 +90,14 @@ CSE_Abstract* CALifeSimulatorBase::spawn_item(LPCSTR section, const Fvector& pos
                                               u32 level_vertex_id,
                                               GameGraph::_GRAPH_ID game_vertex_id, u16 parent_id,
                                               bool registration) {
+    return spawn_item_initialized(section, position, level_vertex_id, game_vertex_id,
+                                  parent_id, nullptr, nullptr, registration);
+}
+
+CSE_Abstract* CALifeSimulatorBase::spawn_item_initialized(
+    LPCSTR section, const Fvector& position, u32 level_vertex_id,
+    GameGraph::_GRAPH_ID game_vertex_id, u16 parent_id,
+    bool (*initialize)(CSE_Abstract*, void*), void* context, bool registration) {
     CSE_Abstract* abstract = F_entity_Create(section);
     R_ASSERT3(abstract, "Cannot find item with section", section);
 
@@ -125,6 +133,13 @@ CSE_Abstract* CALifeSimulatorBase::spawn_item(LPCSTR section, const Fvector& pos
     dynamic_object->m_tNodeID = level_vertex_id;
     dynamic_object->m_tGraphID = game_vertex_id;
     dynamic_object->m_tSpawnID = u16(-1);
+
+    // World fields must exist before registration, spawn supplies and on_spawn.
+    if (initialize && !initialize(abstract, context)) {
+        server().FreeID(abstract->ID, Device.TimerAsync());
+        F_entity_Destroy(abstract);
+        return nullptr;
+    }
 
     if (registration)
         register_object(dynamic_object, true);

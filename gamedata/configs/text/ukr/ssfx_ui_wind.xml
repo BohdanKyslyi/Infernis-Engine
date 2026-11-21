@@ -1,0 +1,79 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 19
+- @ Description: Wind - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Wind Title -->
+	<string id="ui_mcm_ssfx_module_wind_title">
+		<text>Налаштування вітру</text>
+	</string>
+
+	<!-- Button -->
+	<string id="ui_mcm_ssfx_module_wind">
+		<text>Вітер</text>
+	</string>
+
+	<!-- Wind Settings -->
+	<string id="ui_mcm_ssfx_module_wind_grass_speed_mcm">
+		<text>Швидкість анімації трави</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_grass_speed_mcm_desc">
+		<text>Максимальна швидкість анімації трави.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_grass_turbulence_mcm">
+		<text>Чутливість</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_grass_turbulence_mcm_desc">
+		<text>Чутливість трави до поривів вітру.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_grass_push_mcm">
+		<text>Нахил</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_grass_push_mcm_desc">
+		<text>Інтенсивність нахилу.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_grass_wave_mcm">
+		<text>Хвиля</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_grass_wave_mcm_desc">
+		<text>Інтенсивність хвиль по траві.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_trees_speed_mcm">
+		<text>Швидкість анімації гілок</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_trees_speed_mcm_desc">
+		<text>Швидкість анімації руху гілок.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_trees_trunk_mcm">
+		<text>Швидкість анімації стовбура дерева</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_trees_trunk_mcm_desc">
+		<text>Швидкість анімації руху стовбура дерева.</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_trees_bend_mcm">
+		<text>Нахил дерев</text>
+	</string>
+
+	<string id="ui_mcm_ssfx_module_wind_trees_bend_mcm_desc">
+		<text>Максимальне зміщення дерева при анімації.</text>
+	</string>
+
+</string_table>

@@ -1,0 +1,222 @@
+/**
+ * @ Version: SCREEN SPACE SHADERS - UPDATE 21
+ * @ Description: AO implementation
+ * @ Modified time: 2025-05-20 04:53:43
+ * @ Author: https://www.moddb.com/members/ascii1457
+ * @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+ */
+
+#ifndef SSFX_READY
+	#include "screenspace_common.h"
+#endif
+
+#include "settings_screenspace_AO.h"
+
+// Internal values
+uniform float4 ao_setup; // Res, Intensity, -, Radius
+uniform float4 ssfx_ao_setup2; // Distance, HUD, Flora, MaxOcc
+
+float4x4 m_current; // Current projection matrix
+float4x4 m_previous; // Previous projection matrix
+
+Texture2D ssfx_ao;
+Texture2D s_motion_vectors;
+Texture2D s_prev_pos;
+Texture2D jitter0;
+
+sampler smp_jitter;
+
+float4 main(p_screen I) : SV_Target
+{
+	// Scale TexCoor
+	float2 tc = I.tc0.xy * ao_setup.x;
+	float2 Pos2D = I.hpos.xy * ao_setup.x;
+
+	// Sample position buffer
+#ifndef USE_MSAA
+	float4 Pos = s_position.Sample( smp_nofilter, tc );
+#else
+	float4 Pos = s_position.Load( int3( Pos2D, 0 ), 0 );
+#endif
+
+	// Reconstruct Position, Normal and Material
+	float3 P 	= float3( Pos.z * ( Pos2D * pos_decompression_params.zw - pos_decompression_params.xy ), Pos.z );
+	float3 N 	= gbuf_unpack_normal( Pos.xy );
+	//float mtl	= gbuf_unpack_mtl( Pos.w );
+
+	// Rendering AO till ssfx_ao_setup2.x || Sky
+	if (P.z >= ssfx_ao_setup2.x || P.z <= SKY_EPS)
+		return float4(0,0,0,1);
+
+	// Ao Noise
+	float3 ao_noise = jitter0.Sample(smp_jitter, (tc + timers.xx) * 100).xyz;
+
+	// MAT_FLORA from current pixel?
+	bool mat_flora = false;//abs(mtl - MAT_FLORA) <= 0.04f;
+
+	// [ xy = MV | z = HUD Mask ] The s_motion_vectors is declared on "screenspace_shadows.h"
+	float4 Motion_Vectors = s_motion_vectors.Sample(smp_nofilter, tc);
+
+	float WeaponFactor = Motion_Vectors.z;
+
+	if (Motion_Vectors.w < -0.5)
+		mat_flora = true;
+
+	
+	float HUD_Multiply = clamp(1.0 - WeaponFactor, ssfx_ao_setup2.y, 1.0f);
+
+	// Var to accumulate the AO
+	float occ = 0;
+	float Seed = 0.04f;
+
+	// Sample radius
+	float radius = 0.1f;
+
+	// Radius weapon adjustements
+	radius *= clamp(1.0 - WeaponFactor, 0.1f, 1.0f);
+	
+	[unroll (SSFX_AO_QUALITY)]
+	for (int i = 0; i < SSFX_AO_QUALITY; i++)
+	{
+		[unroll (2)]
+		for (int j = 1; j <= 2; i++)
+		{
+			// Random
+			ao_noise.xyz = hash33(float3(frac(tc.x + Seed), ao_noise.x + Seed, ao_noise.z - Seed));
+			ao_noise.xyz = ao_noise.xyz * 2 - 1;
+			Seed += 0.1031f;
+
+			// Use surface normal and add the hemisphere distribution
+			float3 sample_rays = reflect(ssfx_hemisphere[i], ao_noise * ao_setup.w) + N.xyz;
+
+			// Sample position
+			float3 occ_pos = P.xyz + sample_rays * radius * j;
+			
+			// Sample position to UV
+			float2 occ_pos_uv = SSFX_view_to_uv(occ_pos);
+
+			// Process valid UV coor
+			if (SSFX_is_valid_uv(occ_pos_uv))
+			{
+				// Sample depth buffer
+				float4 sample_pos = SSFX_get_position(occ_pos_uv, 0);
+				
+				// HUD & Flora Mask
+				float2 Mask = s_motion_vectors.Sample(smp_nofilter, occ_pos_uv).zw;
+				
+				// Difference ( Reconstruct sample position )
+				float3 diff = float3( sample_pos.z * ( Pos2D * pos_decompression_params.zw - pos_decompression_params.xy ), sample_pos.z ) - occ_pos;
+
+				// Distance
+				float Dist = length(diff);
+
+				// Sample Normal
+				float3 sample_N = gbuf_unpack_normal( sample_pos.xy );
+
+				// Calc occlusion
+				float AO = saturate(dot(sample_N, diff) + 0.1f);
+				AO *= 1.0f - saturate(dot(sample_N, N));
+
+				// Flora mod
+				if (Mask.y < -0.5 || mat_flora)
+					AO = (1.0 - smoothstep(0.0f, 0.5f, Dist)) * ssfx_ao_setup2.z;
+
+				AO *= saturate((1.0f + ao_setup.w * 0.2f) - Dist);
+
+				// Discard sky.
+				AO *= !is_sky(sample_pos.z);
+
+				// Don't cast AO from HUD elements to scenary or vice versa.
+				AO *= WeaponFactor > 0 == Mask.x > 0;
+
+				// Accumulate final AO
+				occ += AO * HUD_Multiply;
+			}
+			else
+			{
+				radius *= 0.5;
+			}
+		}
+	}
+
+	// Normalize AO
+	occ /= SSFX_AO_QUALITY * 2;
+	
+	// Invert AO
+	occ = saturate(1.0f - occ * 2);
+	
+	// AO intensity 
+	occ = pow(occ, ao_setup.y * 10.0f);
+
+	// Fadeout using ssfx_ao_setup2.x
+	float Fadeoff = smoothstep(ssfx_ao_setup2.x * 0.7f, ssfx_ao_setup2.x, P.z);
+	occ = saturate(occ + Fadeoff);
+
+// -------------
+
+	// Position
+	float4 P4 = float4(P.xyz, 1.0);
+
+	// Get current
+	float4 p_current = mul(m_current, P4);
+	
+	// Get previous
+	float4 p_previous = mul(m_previous, P4);
+
+	float2 current = p_current.xy / p_current.w;
+	float2 previous = p_previous.xy / p_previous.w;
+
+	// Reprojection UV
+	float2 cam_rp = current.xy - previous.xy;
+	cam_rp = float2(cam_rp.x, -cam_rp.y) * 0.5f;
+	
+
+	// Velocity
+	float vel = length(Motion_Vectors.xy) * 10;
+
+	// Without Camera MV
+	float vel_history = length(Motion_Vectors.xy - cam_rp * (1.0f - WeaponFactor)) * 100;
+
+	// HUD Mask
+	if (WeaponFactor)
+		vel_history *= 0.2f;
+
+	// Noise
+	float2 rnd = hash22(tc * 100 + timers.xx * 100) * 2.0f - 1.0f;
+	rnd = rnd * (1.0f / screen_res.xy) * 0.25f;
+
+	float2 Rep_Tc = (tc + rnd) - Motion_Vectors.xy;
+
+	// Sample previous frame + Reprojection UV
+	float4 prev = ssfx_ao.Sample(smp_rtlinear, clamp(Rep_Tc / ao_setup.x, 0.0f, float2(0.999f, 0.99f) / ao_setup.x));
+
+	// Prev Position + Reprojection UV
+	float4 prev_P = s_prev_pos.Sample( smp_rtlinear, Rep_Tc );
+
+	// Offscreen?
+	float outoffsrc = any(Rep_Tc < 0) + any(Rep_Tc > 1.0f);
+	outoffsrc = lerp(outoffsrc, prev.g, 0.9f);
+
+	// Disocclusion
+	float docc = abs(1.0f - P.z / prev_P.z);
+
+	// Increase disocclusion for the HUD elements
+	docc *= 1.0f + 1.0f * WeaponFactor;
+
+	// 0 Current frame ~ 1 Prev frame
+	float weight = saturate(0.92f - (vel + outoffsrc + docc + prev.b));
+
+	// Mix previous frames
+	occ = lerp(occ, prev.w, weight);
+	
+// -------------
+
+	// Limit AO maximum occlusion
+	occ = clamp(occ, ssfx_ao_setup2.w, 1.0f);
+	
+	// Disocclusion mask
+	float docc_mask = saturate(docc - 0.05f);
+	docc_mask = lerp((docc + vel + outoffsrc) * 10, prev.r, 0.95f);
+
+	return saturate(float4(docc_mask, outoffsrc, lerp(vel_history, saturate(prev.b - 0.001f), 0.92f), occ));
+}

@@ -1,0 +1,231 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#if ( defined(MSAA_ALPHATEST_DX10_1_ATOC) || defined(MSAA_ALPHATEST_DX10_1) ) 
+#define EXTEND_F_DEFFER
+#endif
+
+#include "common.h"
+#include "sload.h"
+#include "screenspace_mvectors.h"
+
+// Screen Space Shaders: the deffer_base_hud_* wrappers set this to flag HUD pixels in the motion vectors
+#ifndef SSFX_MV_HUD
+#define SSFX_MV_HUD 0
+#endif
+
+#ifdef	ATOC
+
+float4 	main	( p_flat I ) : SV_Target
+{
+	// Screen Space Shaders: the donor reads the base texture directly in this coverage prepass.
+	// This engine routed it through tbase(), which is the PBR-aware base sampler in sload.h. The
+	// prepass only needs the base alpha to build the coverage mask, so it follows the donor.
+	float4 D 	= s_base.Sample	(smp_linear, I.tcdh);
+	D.w = (D.w-def_aref*0.5f)/(1-def_aref*0.5f);
+	return D;
+}
+
+#else	//	ATOC
+
+#ifdef	MSAA_ALPHATEST_DX10_1_ATOC
+f_deffer 	main	( p_flat I, float4 pos2d : SV_Position )
+#else	//	MSAA_ALPHATEST_DX10_1_ATOC
+f_deffer 	main	( p_flat I )
+#endif	//	MSAA_ALPHATEST_DX10_1_ATOC
+{
+  f_deffer	O;
+
+  // 1. Base texture + kill pixels with low alpha
+  
+#if !defined(MSAA_ALPHATEST_DX10_1)
+
+  float4 D 	= tbase	 	(I.tcdh);
+
+#if	!( defined(MSAA_ALPHATEST_DX10_1_ATOC) || defined(MSAA_ALPHATEST_DX10_0_ATOC) )
+	clip					(D.w-def_aref);
+#endif	//	!( defined(MSAA_ALPHATEST_DX10_1_ATOC) || defined(MSAA_ALPHATEST_DX10_1_ATOC) )
+#ifdef 	MSAA_ALPHATEST_DX10_1_ATOC
+	float alpha = (D.w-def_aref*0.5f)/(1-def_aref*0.5f);
+	uint mask = alpha_to_coverage ( alpha, pos2d );
+#endif	//	MSAA_ALPHATEST_DX10_1_ATOC
+
+#else
+  uint mask = 0x0;
+  float2 ddx_base = ddx( I.tcdh );
+  float2 ddy_base = ddy( I.tcdh );
+
+  float2 pixeloffset = MSAAOffsets[0]*(1.0/16.0);
+  
+  float2 texeloffset =  pixeloffset.x * ddx_base + pixeloffset.y * ddy_base;
+      	
+  float4 D 	= tbase(I.tcdh+texeloffset);
+	
+  if( D.w-def_aref >= 0 ) mask |= 0x1;
+	
+  [unroll] for( int i = 1; i < MSAA_SAMPLES; ++i )
+  {
+	pixeloffset = MSAAOffsets[i]*(1.0/16.0);
+	texeloffset =  pixeloffset.x * ddx_base + pixeloffset.y * ddy_base;
+	float4 DI 	= tbase(I.tcdh+texeloffset);
+	if( DI.w-def_aref >= 0 ) mask |= ( uint(0x1) << i );
+  }
+	
+  if( mask == 0x0 )
+	discard;
+#endif
+
+#ifdef	USE_TDETAIL
+//	D.rgb	= 2*D.rgb*tex2D	(s_detail, I.tcdbump).rgb;
+	D.rgb	= 2*D.rgb * s_detail.Sample( smp_base, I.tcdbump ).rgb;
+#endif
+
+	// hemi,sun,material
+	float 	ms	= xmaterial		;
+#ifdef USE_LM_HEMI
+//	float4	lm 	= tex2D			(s_hemi, I.lmh);
+	float4	lm 	= s_hemi.Sample( smp_rtlinear, I.lmh);
+//	float 	h  	= dot			(lm.rgb,1.h/3.h);
+	float 	h  	= get_hemi(lm);
+# ifdef USE_R2_STATIC_SUN
+//		 	ms 	= lm.w			;
+			ms 	= get_sun(lm);
+# endif
+#else
+	float 	h	= I.position.w	;
+# ifdef USE_R2_STATIC_SUN
+		 	ms	= I.tcdh.w		;
+# endif
+#endif
+
+  // 2. Standart output
+  float4 Ne     = float4	(normalize((float3)I.N.xyz), 					h			);
+#if !( defined(MSAA_ALPHATEST_DX10_1_ATOC) || defined(MSAA_ALPHATEST_DX10_1) )
+  O				= pack_gbuffer(
+  								Ne,
+								float4 	(I.position.xyz + Ne.xyz*def_virtualh/2.h	, 	ms			),
+								float4	(D.rgb,											def_gloss	) );
+#else
+  O				= pack_gbuffer(
+  								Ne,
+								float4 	(I.position.xyz + Ne.xyz*def_virtualh/2.h	, 	ms			),
+								float4	(D.rgb,											def_gloss	),
+								mask );
+#endif
+
+	// Motion vectors
+	O.velocity = ssfx_mv_calc(I.vel_curr, I.vel_prev, SSFX_MV_HUD, 0);
+
+  return O;
+}
+
+#endif	//	ATOC
+#else
+#if ( defined(MSAA_ALPHATEST_DX10_1_ATOC) || defined(MSAA_ALPHATEST_DX10_1) ) 
+#define EXTEND_F_DEFFER
+#endif
+
+#include "common.h"
+#include "sload.h"
+
+#ifdef	ATOC
+
+float4 	main	( p_flat I ) : SV_Target
+{
+	float4 D 	= tbase	 	(I.tcdh);
+	D.w = (D.w-def_aref*0.5f)/(1-def_aref*0.5f);
+	return D;
+}
+
+#else	//	ATOC
+
+#ifdef	MSAA_ALPHATEST_DX10_1_ATOC
+f_deffer 	main	( p_flat I, float4 pos2d : SV_Position )
+#else	//	MSAA_ALPHATEST_DX10_1_ATOC
+f_deffer 	main	( p_flat I )
+#endif	//	MSAA_ALPHATEST_DX10_1_ATOC
+{
+  f_deffer	O;
+
+  // 1. Base texture + kill pixels with low alpha
+  
+#if !defined(MSAA_ALPHATEST_DX10_1)
+
+  float4 D 	= tbase	 	(I.tcdh);
+
+#if	!( defined(MSAA_ALPHATEST_DX10_1_ATOC) || defined(MSAA_ALPHATEST_DX10_0_ATOC) )
+	clip					(D.w-def_aref);
+#endif	//	!( defined(MSAA_ALPHATEST_DX10_1_ATOC) || defined(MSAA_ALPHATEST_DX10_1_ATOC) )
+#ifdef 	MSAA_ALPHATEST_DX10_1_ATOC
+	float alpha = (D.w-def_aref*0.5f)/(1-def_aref*0.5f);
+	uint mask = alpha_to_coverage ( alpha, pos2d );
+#endif	//	MSAA_ALPHATEST_DX10_1_ATOC
+
+#else
+  uint mask = 0x0;
+  float2 ddx_base = ddx( I.tcdh );
+  float2 ddy_base = ddy( I.tcdh );
+
+  float2 pixeloffset = MSAAOffsets[0]*(1.0/16.0);
+  
+  float2 texeloffset =  pixeloffset.x * ddx_base + pixeloffset.y * ddy_base;
+      	
+  float4 D 	= tbase(I.tcdh+texeloffset);
+	
+  if( D.w-def_aref >= 0 ) mask |= 0x1;
+	
+  [unroll] for( int i = 1; i < MSAA_SAMPLES; ++i )
+  {
+	pixeloffset = MSAAOffsets[i]*(1.0/16.0);
+	texeloffset =  pixeloffset.x * ddx_base + pixeloffset.y * ddy_base;
+	float4 DI 	= tbase(I.tcdh+texeloffset);
+	if( DI.w-def_aref >= 0 ) mask |= ( uint(0x1) << i );
+  }
+	
+  if( mask == 0x0 )
+	discard;
+#endif
+
+#ifdef	USE_TDETAIL
+//	D.rgb	= 2*D.rgb*tex2D	(s_detail, I.tcdbump).rgb;
+	D.rgb	= 2*D.rgb * s_detail.Sample( smp_base, I.tcdbump ).rgb;
+#endif
+
+	// hemi,sun,material
+	float 	ms	= xmaterial		;
+#ifdef USE_LM_HEMI
+//	float4	lm 	= tex2D			(s_hemi, I.lmh);
+	float4	lm 	= s_hemi.Sample( smp_rtlinear, I.lmh);
+//	float 	h  	= dot			(lm.rgb,1.h/3.h);
+	float 	h  	= get_hemi(lm);
+# ifdef USE_R2_STATIC_SUN
+//		 	ms 	= lm.w			;
+			ms 	= get_sun(lm);
+# endif
+#else
+	float 	h	= I.position.w	;
+# ifdef USE_R2_STATIC_SUN
+		 	ms	= I.tcdh.w		;
+# endif
+#endif
+
+  // 2. Standart output
+  float4 Ne     = float4	(normalize((float3)I.N.xyz), 					h			);
+#if !( defined(MSAA_ALPHATEST_DX10_1_ATOC) || defined(MSAA_ALPHATEST_DX10_1) )
+  O				= pack_gbuffer(
+  								Ne,
+								float4 	(I.position.xyz + Ne.xyz*def_virtualh/2.h	, 	ms			),
+								float4	(D.rgb,											def_gloss	) );
+#else
+  O				= pack_gbuffer(
+  								Ne,
+								float4 	(I.position.xyz + Ne.xyz*def_virtualh/2.h	, 	ms			),
+								float4	(D.rgb,											def_gloss	),
+								mask );
+#endif
+  return O;
+}
+
+#endif	//	ATOC
+#endif

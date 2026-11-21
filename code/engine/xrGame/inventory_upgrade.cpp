@@ -130,6 +130,9 @@ void Upgrade::fill_root_container(Root* root) {
 }
 
 UpgradeStateResult Upgrade::can_install(CInventoryItem& item, bool loading) {
+    if (item.IsUpgradeBanned(id()))
+        return result_e_unknown;
+
     UpgradeStateResult res = inherited::can_install(item, loading);
     if (res != result_ok) {
         return res;

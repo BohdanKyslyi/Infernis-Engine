@@ -1,0 +1,65 @@
+<!--
+- @ Version: SCREEN SPACE SHADERS - UPDATE 18
+- @ Description: Gloss - MCM UKR strings
+- @ Author: https://www.moddb.com/members/ascii1457
+- @ Mod: https://www.moddb.com/mods/stalker-anomaly/addons/screen-space-shaders
+-->
+<?xml version="1.0" encoding="windows-1251"?>
+
+<string_table>
+
+	<!-- Title -->
+	<string id="ui_mcm_ssfx_module_gloss_title">
+		<text>Блиск - налаштування</text>
+	</string>
+	
+	<!-- Gloss Settings -->
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_min_gloss_mcm">
+		<text>Мінімальний рівень</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_min_gloss_mcm_desc">
+		<text>Основний показник блиску. Якщо "Автоналаштування блиску" вимкнено - цей показник буде статичним</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_max_gloss_mcm">
+		<text>Максимальний рівень</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_max_gloss_mcm_desc">
+		<text>Коли "Автоналаштування блиску" увімкнено - цей показник застосовується при максимальному рівні намокання</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_auto_gloss_mcm">
+		<text>Автоналаштування блиску</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_auto_gloss_mcm_desc">
+		<text>Автоматичне підлаштування блиску. Варіюється між мінімальним та максимальним рівнями залежно від ступеня намокання</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_auto_gloss_max_mcm">
+		<text>Рівень впливу автоналаштування блиску</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_auto_gloss_max_mcm_desc">
+		<text>Вплив на максимальний рівень блиску при увімкненому автоналаштуванні. 0 = 0%, 1 = 100%</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_specular_int_mcm">
+		<text>Інтенсивність відбиття світла</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_specular_int_mcm_desc">
+		<text>Налаштування інтенсивності світловідбиття</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_specular_color_mcm">
+		<text>Кольоровість світловідбиття</text>
+	</string>
+	
+	<string id="ui_mcm_ssfx_module_ssfx_wetness_ssfx_gloss_specular_color_mcm_desc">
+		<text>Рівень насиченості світловідбиття</text>
+	</string>
+
+</string_table>

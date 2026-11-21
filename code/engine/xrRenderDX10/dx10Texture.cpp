@@ -435,7 +435,19 @@ _DDS_2D : {
 #else
     D3DX10_IMAGE_LOAD_INFO LoadInfo;
 #endif
+#if RENDER == R_R4
+    // Lower texture quality, as in Monolith ( its dx10Texture.cpp:504-505 ): D3DX11 starts at the
+    // file's own smaller mip level, the size Reduce() below gives, and resamples nothing. Resampling
+    // the full top level crashed inside d3dx11_43.dll ( 2026-11-03, a 4096x4096 DXT5 ). Only the
+    // levels the file has are skipped, as many as Reduce() halves; at full quality nothing is set.
+    const int lod_skip = std::min(img_loaded_lod, int(IMG.MipLevels) - 1);
+    if (lod_skip > 0) {
+        LoadInfo.FirstMipLevel = UINT(lod_skip);
+        LoadInfo.MipLevels = IMG.MipLevels;
+    }
+#else
     // LoadInfo.FirstMipLevel = img_loaded_lod;
+#endif
     LoadInfo.Width = IMG.Width;
     LoadInfo.Height = IMG.Height;
 

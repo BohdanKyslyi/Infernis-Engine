@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="windows-1251" ?>
+<w>
+<!-----[Редактор точек путей]------>
+<waypoint_editor_form x="330" y="308" width="366" height="203">
+	<texture>ui_inGame2_god_waypoint_editor_wnd</texture>
+	<waypoint_name_field x="29" y="5" width="311" height="26">
+		<text font="letterica18" color="ui_gray" vert_align="c"/>
+	</waypoint_name_field>
+	<point_animation_field x="155" y="76" width="66" height="17">
+		<text font="letterica18" color="ui_green" vert_align="c"/>
+	</point_animation_field>
+	<point_signal_field x="155" y="102" width="68" height="20">
+		<text font="letterica18" color="ui_green" vert_align="c"/>
+	</point_signal_field>
+	<waypoint_info x="73" y="46" width="227" height="18">
+		<text font="letterica16" color="ui_4" vert_align="c" align="c"></text>
+	</waypoint_info>
+	<check_way_closed x="321" y="49" width="32" height="21" hint="st_infernis_spawner_hint_closed">
+		<texture>ui_inGame2_checkbox</texture>
+	</check_way_closed>
+	<check_empty_flags x="321" y="74" width="32" height="21" hint="st_infernis_spawner_hint_flags">
+		<texture>ui_inGame2_checkbox</texture>
+	</check_empty_flags>
+	<check_autochange x="321" y="99" width="32" height="21" hint="st_infernis_spawner_hint_auto">
+		<texture>ui_inGame2_checkbox</texture>
+	</check_autochange>
+	<btn_show_waypoint x="28" y="42" width="27" height="28">
+		<texture_e>ui_god_help_e</texture_e>
+		<texture_t>ui_god_help_t</texture_t>
+		<texture_h>ui_god_help_h</texture_h>
+	</btn_show_waypoint>
+	<btn_print_waypoint x="127" y="143" width="116" height="22">
+		<texture_e>ui_god_button1_e</texture_e>
+		<texture_t>ui_god_button1_t</texture_t>
+		<texture_h>ui_god_button1_h</texture_h>
+		<text font="letterica16">st_infernis_spawner_export</text>
+	</btn_print_waypoint>
+	<btn_mark_point x="63" y="168" width="116" height="22">
+		<texture_e>ui_god_button1_e</texture_e>
+		<texture_t>ui_god_button1_t</texture_t>
+		<texture_h>ui_god_button1_h</texture_h>
+		<text font="letterica16">st_infernis_spawner_mark</text>
+	</btn_mark_point>
+	<btn_close x="185" y="168" width="116" height="22">
+		<texture_e>ui_god_button1_e</texture_e>
+		<texture_t>ui_god_button1_t</texture_t>
+		<texture_h>ui_god_button1_h</texture_h>
+		<text font="letterica16">st_infernis_spawner_close</text>
+	</btn_close>
+</waypoint_editor_form>
+
+<!-----[Отладка позиции ГГ с возможностью подписи]------>
+<position_printer_form x="330" y="308" width="366" height="203">
+	<texture>ui_inGame2_god_position_printer_wnd</texture>
+	<position_comment_field x="29" y="5" width="311" height="26">
+		<text font="letterica18" color="ui_gray" vert_align="c"/>
+	</position_comment_field>
+	<btn_print_pos x="20" y="168" width="116" height="22">
+		<texture_e>ui_god_button1_e</texture_e>
+		<texture_t>ui_god_button1_t</texture_t>
+		<texture_h>ui_god_button1_h</texture_h>
+		<text font="letterica16">st_infernis_spawner_print</text>
+	</btn_print_pos>
+	<btn_close x="230" y="168" width="116" height="22">
+		<texture_e>ui_god_button1_e</texture_e>
+		<texture_t>ui_god_button1_t</texture_t>
+		<texture_h>ui_god_button1_h</texture_h>
+		<text font="letterica16">st_infernis_spawner_close</text>
+	</btn_close>
+</position_printer_form>
+
+</w>

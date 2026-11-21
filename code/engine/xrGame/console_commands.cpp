@@ -48,7 +48,11 @@
 #include "character_hit_animations_params.h"
 #include "inventory_upgrade_manager.h"
 #include "ui/UIWeatherEditor.h"
+#include "ui/UILuaWorkbench.h"
 #include "ui/UIHudEditor.h"
+#include "infernis_spawner_service.h"
+#include "infernis_spawner_service_rules.h"
+#include "infernis_spawner_world.h"
 
 #include "ai_debug_variables.h"
 #include "../xrphysics/console_vars.h"
@@ -184,15 +188,56 @@ static bool is_dev_mode() {
            strstr(Core.Params, "-developer_mode") != nullptr;
 }
 
+class CCC_LuaWorkbench : public IConsole_Command {
+public:
+    CCC_LuaWorkbench(LPCSTR name) : IConsole_Command(name) {
+        bEmptyArgsHandled = true;
+        bLowerCaseArgs = false;
+    }
+
+    void Execute(LPCSTR args) override {
+        if (!is_dev_mode()) {
+            Msg("! Lua workbench requires -dev_mode");
+            return;
+        }
+        if (!g_pGameLevel || !CurrentGameUI() || !IsGameTypeSingle() || MainMenu()->IsActive()) {
+            Msg("! Lua workbench requires an active single-player level");
+            return;
+        }
+
+        if (!args || !*args || !_stricmp(args, "toggle")) {
+            const bool show = !LuaWorkbenchShown();
+            if (show)
+                Console->Hide();
+            ShowLuaWorkbench(show);
+        } else if (!_stricmp(args, "on")) {
+            Console->Hide();
+            ShowLuaWorkbench(true);
+        } else if (!_stricmp(args, "off")) {
+            ShowLuaWorkbench(false);
+        } else if (!_strnicmp(args, "open ", 5) && args[5]) {
+            // Console::Hide may reset the command editor's argument buffer.
+            const std::string file(args + 5);
+            Console->Hide();
+            OpenLuaWorkbenchScript(file.c_str());
+        } else {
+            Msg("! Usage: lua_workbench [on|off|toggle|open <file.script>]");
+        }
+    }
+
+    void Status(TStatus& status) override {
+        xr_strcpy(status, LuaWorkbenchShown() ? "on" : "off");
+    }
+
+    void Info(TInfo& info) override { xr_strcpy(info, "[on|off|toggle|open <file.script>]"); }
+};
+
 class CCC_WeatherEditor : public IConsole_Command {
 public:
     CCC_WeatherEditor(LPCSTR name) : IConsole_Command(name) { bEmptyArgsHandled = true; }
 
     virtual void Execute(LPCSTR args) {
-        if (!is_dev_mode()) {
-            Msg("! Weather editor is available only in -dev_mode");
-            return;
-        }
+        // The weather editor opens with and without -dev_mode ( F11 too, Level_input.cpp ).
         if (!g_pGameLevel || !CurrentGameUI()) {
             Msg("! Weather editor requires a loaded level");
             return;
@@ -450,27 +495,21 @@ public:
         if (!g_pGameLevel || !Actor())
             return;
 
-        char section[256];
-        int count = 1;
-        if (sscanf(args, "%255s %d", section, &count) < 1) {
-            Msg("! Usage: g_spawn_to_inventory <section> [count]");
+        const auto parsed = infernis_spawner::parse_console_request(args);
+        if (parsed.error[0]) {
+            Msg("! Usage: g_spawn_to_inventory <section> [count]: %s", parsed.error);
             return;
         }
-        if (!pSettings->section_exist(section)) {
-            Msg("! Section [%s] doesn't exist!", section);
-            return;
-        }
-
-        if (count > 250) {
-            Msg("! [g_spawn_to_inventory]: Cancelled. Max count is 250.");
-            count = 250;
-        }
-
-        for (int i = 0; i < count; ++i) {
-            Level().spawn_item(section, Actor()->Position(),
-                               Actor()->ai_location().level_vertex_id(), Actor()->ID());
-        }
-        Msg("~ Spawned %d of [%s] to inventory.", count, section);
+        LPCSTR section = parsed.section.c_str();
+        infernis_spawner::SpawnRequest request;
+        request.section = section;
+        request.quantity = parsed.quantity;
+        const auto result = infernis_spawner::spawn(request);
+        if (!result.ok())
+            Msg("! [g_spawn_to_inventory] [%s]: %s (%u created)", section,
+                result.error.c_str(), result.created);
+        else
+            Msg("~ Spawned %u of [%s] to inventory.", result.created, section);
     }
 };
 
@@ -487,20 +526,52 @@ public:
         if (!g_pGameLevel || !Actor())
             return;
 
-        char section[256];
-        int count = 1;
-        if (sscanf(args, "%255s %d", section, &count) < 1) {
-            Msg("! Usage: g_spawn <section> [count]");
+        const auto parsed = infernis_spawner::parse_console_request(args);
+        if (parsed.error[0]) {
+            Msg("! Usage: g_spawn <section> [count]: %s", parsed.error);
             return;
         }
+        LPCSTR section = parsed.section.c_str();
         if (!pSettings->section_exist(section)) {
             Msg("! Section [%s] doesn't exist!", section);
             return;
         }
 
-        if (count > 250) {
-            Msg("! [g_spawn]: Cancelled. Max count is 250.");
-            count = 250;
+        const auto batch = infernis_spawner::plan_batch(parsed.quantity, false);
+        if (batch.error[0]) {
+            Msg("! [g_spawn]: %s", batch.error);
+            return;
+        }
+        const int count = static_cast<int>(batch.objects);
+
+        // Inventory objects share the same native path as the spawner UI. The existing
+        // generic NPC/zone/physics branch remains below until those types are migrated.
+        if (infernis_spawner::inventory_type(section)) {
+            infernis_spawner::SpawnRequest request;
+            request.section = section;
+            request.target = infernis_spawner::SpawnTarget::crosshair;
+            request.quantity = count;
+            const auto result = infernis_spawner::spawn(request);
+            if (!result.ok())
+                Msg("! [g_spawn] [%s]: %s (%u created)", section,
+                    result.error.c_str(), result.created);
+            else
+                Msg("~ Spawned %u of [%s] at crosshair.", result.created, section);
+            return;
+        }
+
+        if (infernis_spawner::world_type(section) != infernis_spawner::WorldKind::none) {
+            infernis_spawner::SpawnRequest request;
+            request.section = section;
+            request.target = infernis_spawner::SpawnTarget::crosshair;
+            request.quantity = count;
+            const auto result = infernis_spawner::spawn_world(request, 3.0);
+            if (!result.ok())
+                Msg("! [g_spawn] [%s]: %s (%u created)", section,
+                    result.error.c_str(), result.created);
+            else
+                Msg("~ Spawned %u of [%s] at crosshair.", result.created, section);
+            return;
         }
 
         const Fvector& ray_start = Device.vCameraPosition;
@@ -516,7 +587,8 @@ public:
             spawn_position.mad(ray_start, ray_direction, 3.0f);
         }
 
-        u32 level_vertex_id = ai().level_graph().vertex_id(spawn_position);
+        u32 level_vertex_id = ai().level_graph().valid_vertex_position(spawn_position)
+                                  ? ai().level_graph().vertex_id(spawn_position) : u32(-1);
         if (!ai().level_graph().valid_vertex_id(level_vertex_id))
             level_vertex_id = Actor()->ai_location().level_vertex_id();
 
@@ -1902,6 +1974,9 @@ void CCC_RegisterCommands() {
 #endif //#ifdef DEBUG
     // game
     CMD3(CCC_Mask, "g_crouch_toggle", &psActorFlags, AF_CROUCH_TOGGLE);
+    // Ported from Monolith ( console_commands.cpp:2490 ): the lean keys toggle instead of being
+    // held. The flag starts cleared ( psActorFlags, Actor.cpp ), as Monolith sets it.
+    CMD3(CCC_Mask, "g_lookout_toggle", &psActorFlags, AF_LOOKOUT_TOGGLE);
     CMD1(CCC_GameDifficulty, "g_game_difficulty");
     CMD1(CCC_GlobalTimeFactorDev, "time_factor");
     CMD1(CCC_TimeFactorDev, "al_time_factor");
@@ -1944,6 +2019,9 @@ void CCC_RegisterCommands() {
 
     CMD3(CCC_Mask, "hud_crosshair", &psHUD_Flags, HUD_CROSSHAIR);
     CMD3(CCC_Mask, "hud_crosshair_dist", &psHUD_Flags, HUD_CROSSHAIR_DIST);
+
+    extern Flags32 g_gunslinger_real_shooting;
+    CMD3(CCC_Mask, "g_real_shooting", &g_gunslinger_real_shooting, 1);
 
 #ifdef DEBUG_CAPS
     CMD4(CCC_Float, "hud_fov", &psHUD_FOV, 0.1f, 1.0f);
@@ -2098,6 +2176,7 @@ void CCC_RegisterCommands() {
     CMD3(CCC_Mask_Dev, "g_unlimitedammo", &psActorFlags, AF_UNLIMITEDAMMO);
     CMD1(CCC_FovDev, "fov");
     CMD1(CCC_WeatherEditor, "weather_editor");
+    CMD1(CCC_LuaWorkbench, "lua_workbench");
     CMD1(CCC_HudEditor, "hud_editor");
 
 #ifdef DEBUG_CAPS

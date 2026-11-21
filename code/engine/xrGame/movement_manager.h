@@ -58,6 +58,12 @@ class CLevelPathBuilder;
 class CDetailPathBuilder;
 
 class CMovementManager {
+public:
+    // SSFX interactive grass: the slot this object holds in IGame_Persistent::grass_shader_data
+    // ( 0 = none ) and the frame its next check is due. Monolith, movement_manager.h:87-89.
+    u8 grassbender_id;
+    u32 grassbender_frame;
+
 private:
     friend class CLevelPathBuilder;
     friend class CDetailPathBuilder;

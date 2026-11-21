@@ -6,6 +6,7 @@
 #include "xrEngine/environment.h"
 #include "xrEngine/WeatherWindMath.h"
 #include "xrEngine/fmesh.h"
+#include "xrEngine/ssfx_console_vars.h" // ps_ssfx_grass_interactive, ps_ssfx_int_grass_params_1
 
 #include "ftreevisual.h"
 
@@ -17,6 +18,14 @@ shared_str c_wind;
 shared_str c_c_bias;
 shared_str c_c_scale;
 shared_str c_c_sun;
+
+shared_str c_prev_wave;
+shared_str c_prev_wind;
+
+// SSFX interactive grass - the branch shaders read the same three constants the grass does.
+shared_str c_c_PrevBendersPos;
+shared_str c_c_BendersPos;
+shared_str c_c_BendersSetup;
 
 FTreeVisual::FTreeVisual(void) {}
 
@@ -83,6 +92,13 @@ void FTreeVisual::Load(const char* N, IReader* data, u32 dwFlags) {
     c_c_bias = "c_bias";
     c_c_scale = "c_scale";
     c_c_sun = "c_sun";
+
+    c_prev_wave = "prev_wave";
+    c_prev_wind = "prev_wind";
+
+    c_c_PrevBendersPos = "benders_prevpos";
+    c_c_BendersPos = "benders_pos";
+    c_c_BendersSetup = "benders_setup";
 }
 
 struct FTreeVisual_setup {
@@ -101,6 +117,20 @@ struct FTreeVisual_setup {
         wind.set(std::sin(wind_dir), 0, std::cos(wind_dir), 0);
         wind.normalize();
         wind.mul(wind_vel * ps_r__Tree_w_amp * (desc ? weather_motion::tree_amplitude(desc->trees_amplitude) : 1.f));
+#if RENDER == R_R4
+        // Screen Space Shaders: Monolith's wind ( its FTreeVisual.cpp:126-138, TREE_WIND_EFFECT ):
+        // a unit direction turning once in r__d_tree_w_rot seconds, times the weather's
+        // tree_amplitude_intensity, the number the SSS tree shaders are made for. The wind above,
+        // wind_velocity * ps_r__Tree_w_amp, bent the foliage drawn without a bump map
+        // ( deffer_tree_branch_flat.vs ) to breaking in the strong winds of Weather_ATMOS.
+        // The weather editor's tree amplitude ( trees_amplitude, 1 = as before ) scales it too.
+        if (RImplementation.o.ssfx_core) {
+            const float tm_rot = PI_MUL_2 * Device.fTimeGlobal / ps_r__Tree_w_rot;
+            wind.set(std::sin(tm_rot), 0, std::cos(tm_rot), 0);
+            wind.normalize();
+            wind.mul(desc ? desc->m_fTreeAmplitudeIntensity * weather_motion::tree_amplitude(desc->trees_amplitude) : 0.0f); // dir1*amplitude
+        }
+#endif
 
         scale = 1.f / float(FTreeVisual_quant);
 
@@ -112,9 +142,11 @@ struct FTreeVisual_setup {
 };
 
 void FTreeVisual::Render(float LOD) {
-    static FTreeVisual_setup tvs;
-    if (tvs.dwFrame != Device.dwFrame)
+    static FTreeVisual_setup tvs, prev_tvs;
+    if (tvs.dwFrame != Device.dwFrame) {
+        prev_tvs = tvs; // SSFX: previous frame values for motion vectors
         tvs.calculate();
+    }
 // setup constants
 #if RENDER != R_R1
     Fmatrix xform_v;
@@ -131,9 +163,21 @@ void FTreeVisual::Render(float LOD) {
     float fade = (std::sqrt(dx * dx + dz * dz) - 2.f) / 10.f;
     clamp(fade, 0.f, 1.f);
     fade = fade * fade * (3.f - 2.f * fade);
+#if RENDER == R_R4
+    // Screen Space Shaders: no fade, as in Monolith ( its FTreeVisual.cpp:169-172 sets the wind of
+    // this frame and of the last one as they are ).
+    if (RImplementation.o.ssfx_core)
+        fade = 1.f;
+#endif
     Fvector4 wind = tvs.wind;
     wind.mul(fade);
     RCache.tree.set_wind(wind);                         // wind
+
+    // SSFX motion vectors: previous frame wave/wind (same distance fade)
+    Fvector4 prev_wind = prev_tvs.wind;
+    prev_wind.mul(fade);
+    RCache.set_c(c_prev_wave, prev_tvs.wave);
+    RCache.set_c(c_prev_wind, prev_wind);
 #if RENDER != R_R1
     s *= 1.3333f;
     RCache.tree.set_c_scale(s * c_scale.rgb.x, s * c_scale.rgb.y, s * c_scale.rgb.z,
@@ -148,6 +192,66 @@ void FTreeVisual::Render(float LOD) {
                            s * c_bias.rgb.z + desc.ambient.z, s * c_bias.hemi); // bias
 #endif
     RCache.tree.set_c_sun(s * c_scale.sun, s * c_bias.sun, 0, 0); // sun
+
+#if RENDER == R_R4 || RENDER == R_R3
+    // SSFX interactive grass, for bushes and branches. Same contract as the grass renderer: when
+    // SSFX_INT_GRASS is defined the shader loops over these constants, so they have to be written
+    // or it bends the foliage by whatever the buffer last held. Donor FTreeVisual.cpp:186-243.
+    if (ps_ssfx_grass_interactive.y > 0) {
+        // Inter grass Settings
+        RCache.set_c(c_c_BendersSetup, ps_ssfx_int_grass_params_1);
+
+        // Grass benders data ( Player + Characters )
+        IGame_Persistent::grass_data& GData = g_pGamePersistent->grass_shader_data;
+        Fvector4 player_pos = { 0, 0, 0, 0 };
+        int BendersQty = std::min(16, int(ps_ssfx_grass_interactive.y) + 1);
+
+        // Add Player?
+        if (ps_ssfx_grass_interactive.x > 0) {
+            player_pos.set(Device.vCameraPosition.x, Device.vCameraPosition.y,
+                           Device.vCameraPosition.z, -1);
+        }
+
+        Fvector4* c_grass;
+        {
+            void* GrassData;
+            RCache.get_ConstantDirect(c_c_BendersPos, BendersQty * sizeof(Fvector4) * 2, &GrassData,
+                                      0, 0);
+
+            c_grass = (Fvector4*)GrassData;
+        }
+        VERIFY(c_grass);
+
+        if (c_grass) {
+            c_grass[0].set(player_pos);
+            c_grass[16].set(0.0f, -99.0f, 0.0f, 1.0f);
+
+            for (int Bend = 1; Bend < BendersQty; Bend++) {
+                c_grass[Bend].set(GData.pos[Bend].x, GData.pos[Bend].y, GData.pos[Bend].z,
+                                  GData.radius_curr[Bend]);
+                c_grass[Bend + 16].set(GData.dir[Bend].x, GData.dir[Bend].y, GData.dir[Bend].z,
+                                       GData.str[Bend]);
+            }
+        }
+
+        Fvector4* c_prevgrass;
+        {
+            void* prevGrassData;
+            RCache.get_ConstantDirect(c_c_PrevBendersPos, BendersQty * sizeof(Fvector4) * 2,
+                                      &prevGrassData, 0, 0);
+
+            c_prevgrass = (Fvector4*)prevGrassData;
+        }
+        VERIFY(c_prevgrass);
+
+        if (c_prevgrass) {
+            for (int Bend = 0; Bend < BendersQty; Bend++) {
+                c_prevgrass[Bend].set(GData.prev_pos[Bend]);
+                c_prevgrass[Bend + 16].set(GData.prev_dir[Bend]);
+            }
+        }
+    }
+#endif
 }
 
 #define PCOPY(a) a = pFrom->a

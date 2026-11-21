@@ -1151,6 +1151,14 @@ void CRenderTarget::accum_direct_volumetric(u32 sub_phase, const u32 Offset,
     if (!need_to_render_sunshafts())
         return;
 
+    // Monolith r4_rendertarget_accum_direct.cpp:1199, unchanged. In screen_space mode the OGSE
+    // phase draws instead of this one, so this pass has to stand down or the two would add up.
+    // With SSS off there is no OGSE phase and no mode, so this pass always draws - the game's own
+    // function has no such test.
+    if (RImplementation.o.ssfx_core &&
+        !(ps_sunshafts_mode == R2SS_VOLUMETRIC || ps_sunshafts_mode == R2SS_COMBINE_SUNSHAFTS))
+        return;
+
     //	Test. draw only for near part
     //	if (sub_phase!=SE_SUN_N/EAR) return;
     //	if (sub_phase!=SE_SUN_FAR) return;

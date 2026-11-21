@@ -1,4 +1,5 @@
 #include "pch_script.h"
+#include "infernis_spawner_runtime.h"
 #include "UIGameCustom.h"
 #include "level.h"
 #include "ui/UIXmlInit.h"
@@ -13,6 +14,7 @@
 #include "ui/UIMessagesWindow.h"
 #include "ui/UIHudStatesWnd.h"
 #include "ui/UIWeatherEditor.h"
+#include "ui/UILuaWorkbench.h"
 #include "ui/UIHudEditor.h"
 #include "actor.h"
 #include "inventory.h"
@@ -49,8 +51,10 @@ CUIGameCustom::CUIGameCustom()
 bool g_b_ClearGameCaptions = false;
 
 CUIGameCustom::~CUIGameCustom() {
+    infernis_spawner::runtime::release_ui();
     DestroyHudEditor();
     DestroyWeatherEditor();
+    DestroyLuaWorkbench();
     delete_data(m_custom_statics);
     g_b_ClearGameCaptions = false;
 }
@@ -114,6 +118,7 @@ void CUIGameCustom::Render() {
 
     m_pMessagesWnd->Draw();
 
+    infernis_spawner::runtime::render();
     DoRenderDialogs();
 }
 
@@ -517,6 +522,7 @@ void CUIGameCustom::SetClGame(game_cl_GameState* g) { g->SetGameUI(this); }
 
 void CUIGameCustom::UnLoad() {
     DestroyWeatherEditor();
+    DestroyLuaWorkbench();
     m_pda_hud_animation_active = false;
     m_pda_hud_pending_open = false;
     m_inventory_hud_animation_active = false;

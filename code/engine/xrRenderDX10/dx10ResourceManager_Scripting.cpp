@@ -14,6 +14,9 @@
 #include "luabind/return_reference_to_policy.hpp"
 
 #include "xrRenderCommon/dxRenderDeviceRender.h"
+#if RENDER == R_R4
+#include "xrEngine/ssfx_console_vars.h" // ssfx_session_enable
+#endif
 
 using namespace luabind;
 
@@ -22,6 +25,9 @@ public:
     bool _dx10_msaa_alphatest_atoc() {
         return (RImplementation.o.dx10_msaa_alphatest == CRender::MSAA_ATEST_DX10_0_ATOC);
     }
+
+    // SSFX: details_blend.s builds the per-level grass bump texture path from it
+    LPCSTR _get_level() { return g_pGameLevel->name().c_str(); }
 };
 
 // wrapper
@@ -176,6 +182,10 @@ public:
         C->r_StencilRef(Ref);
         return *this;
     }
+    adopt_compiler& _dx10CullMode(u32 Ref) {
+        C->r_CullMode((D3DCULL)Ref);
+        return *this;
+    }
     adopt_compiler& _dx10ATOC(bool Enable) {
         C->RS.SetRS(XRDX10RS_ALPHATOCOVERAGE, Enable);
         return *this;
@@ -241,9 +251,25 @@ void CResourceManager::LS_Load() {
 
     function(LSVM, "log", LuaLog);
 
+#if RENDER == R_R4
+    // Screen Space Shaders: every .s file SSS changes holds both versions, the SSS one under
+    // "if ssfx_enabled then". Set before the first .s is loaded, from the two things
+    // CRender::create() decides the core module by - the switch as the game started and the core
+    // shader being installed. This runs before CRender::create(), so o.ssfx_core is not set yet.
+    {
+        string_path ssfx_fn;
+        const bool ssfx_on =
+            ssfx_session_enable != 0 &&
+            FS.exist(ssfx_fn, "$game_shaders$", "r3\\screenspace_common", ".h") != nullptr;
+        lua_pushboolean(LSVM, ssfx_on);
+        lua_setglobal(LSVM, "ssfx_enabled");
+    }
+#endif
+
     module(
         LSVM)[class_<adopt_dx10options>("_dx10options")
                   .def("dx10_msaa_alphatest_atoc", &adopt_dx10options::_dx10_msaa_alphatest_atoc)
+                  .def("getLevel", &adopt_dx10options::_get_level)
               //.def("",					&adopt_dx10options::_dx10Options
               //),	// returns options-object
               ,
@@ -297,6 +323,7 @@ void CResourceManager::LS_Load() {
                   .def("dx10stencil", &adopt_compiler::_dx10Stencil, return_reference_to<1>())
                   .def("dx10stencil_ref", &adopt_compiler::_dx10StencilRef,
                        return_reference_to<1>())
+                  .def("dx10cullmode", &adopt_compiler::_dx10CullMode, return_reference_to<1>())
                   .def("dx10atoc", &adopt_compiler::_dx10ATOC, return_reference_to<1>())
                   .def("dx10zfunc", &adopt_compiler::_dx10ZFunc, return_reference_to<1>())
 
@@ -422,6 +449,15 @@ Shader* CResourceManager::_lua_Create(LPCSTR d_shader, LPCSTR s_textures) {
                 dxRenderDeviceRender::Instance().Resources->m_textures_description.GetDetailTexture(
                     C.L_textures[0], C.detail_texture, C.detail_scaler);
             S.E[0] = C._lua_Compile(s_shader, "normal");
+
+            // Screen Space Shaders draw water out of their own bucket, so the water shaders have
+            // to be marked here. Water is the distorting shader whose script is effects_water*.
+#if RENDER == R_R4
+            if (S.E[0]->flags.bDistort) {
+                if (strstr(s_shader, "effects_water"))
+                    S.E[0]->flags.isWater = TRUE;
+            }
+#endif
         }
     }
 

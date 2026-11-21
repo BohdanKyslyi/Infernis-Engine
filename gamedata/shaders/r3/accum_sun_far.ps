@@ -1,3 +1,228 @@
+// Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
+// IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+#ifdef IE_SSFX_ENABLED
+#include "common.h"
+#include "lmodel.h"
+
+#ifdef USE_MINMAX_SM
+#define SM_MINMAX
+#endif
+
+#if SUN_QUALITY>2
+#define ULTRA_SHADOWS_ON
+#endif
+
+#ifdef ULTRA_SHADOWS_ON
+#define USE_ULTRA_SHADOWS
+#endif
+
+#include "shadow.h"
+uniform float3 view_shadow_proj;
+
+// Check Screen Space Shaders modules & addons
+#include "check_screenspace.h"
+
+#ifdef SSFX_SSS
+	#include "screenspace_shadows.h"
+	Texture2D s_ssfx_sss;
+	uniform float4 ssfx_issvp;
+#endif
+
+#ifdef USE_SUNFILTER
+#ifdef MSAA_OPTIMIZATION
+float4 main( v2p_volume I, uint iSample : SV_SAMPLEINDEX  ) : SV_Target
+#else
+float4 main( v2p_volume I  ) : SV_Target
+#endif
+{
+//  float4 	_P	= tex2D 	(s_position, 	tc);
+
+	// Infernis PBR Stage 2.20: derive the G-buffer UV from the exact raster
+	// pixel. Interpolated light-volume UVs can disagree with SV_Position at
+	// cascade edges and make position.w (the PBR marker) come from a neighbour.
+	float2 gbufferTC = I.hpos.xy / pos_decompression_params2.xy;
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.hpos, ISAMPLE) );
+
+#if IE_PBR_SUN_PASS_MODE == 1
+	// Blue: far directional cascade.
+	return float4(0.0f, 0.0f, 0.35f, 0.0f);
+#endif
+
+#ifdef	GBUFFER_OPTIMIZATION
+	//	Emulate virtual offset
+	gbd.P += gbd.N*0.015f;
+#endif	//	GBUFFER_OPTIMIZATION
+
+	float4 	_P	= float4(gbd.P,1.f);
+	float4 	PS	= mul( m_shadow, _P);
+	float s = shadowtest_sun(PS, I.tcJ) * sunmask(_P);
+	return 	s	;
+}
+#else
+#ifdef MSAA_OPTIMIZATION
+float4 main ( v2p_volume I, uint iSample : SV_SAMPLEINDEX ) : SV_Target
+#else
+float4 main ( v2p_volume I ) : SV_Target
+#endif
+{
+//  float4 _P		= tex2D 	(s_position, 	tc);
+//  float4  _N		= tex2D 	(s_normal,   	tc);
+
+	// Infernis PBR Stage 2.20: derive the G-buffer UV from the exact raster
+	// pixel. Interpolated light-volume UVs can disagree with SV_Position at
+	// cascade edges and make position.w (the PBR marker) come from a neighbour.
+	float2 gbufferTC = I.hpos.xy / pos_decompression_params2.xy;
+	gbuffer_data gbd = gbuffer_load_data( GLD_P(gbufferTC, I.hpos, ISAMPLE) );
+
+#if IE_PBR_SUN_PASS_MODE == 1
+	// Blue: far directional cascade.
+	return float4(0.0f, 0.0f, 0.35f, 0.0f);
+#endif
+
+#ifdef	GBUFFER_OPTIMIZATION
+	//	Emulate virtual offset
+	gbd.P += gbd.N*0.015f;
+#endif	//	GBUFFER_OPTIMIZATION
+
+	float4 	_P	= float4(gbd.P,gbd.mtl);
+	float4	_N	= float4(gbd.N,gbd.hemi);
+
+	// ----- light-model
+	float 	m	= xmaterial	;
+# ifndef USE_R2_STATIC_SUN
+			m 	= _P.w		;
+# endif
+	float4 light;
+
+if (gbd.pbr > 0.5f)
+{
+    light =
+        plight_infinity_pbr(
+            gbd,
+            Ldynamic_dir.xyz
+        );
+}
+else
+{
+#ifdef SSFX_ENHANCED_SHADERS
+    // Screen Space Shaders: the pseudo-PBR module. The Enhanced Shaders light model also takes the
+    // pixel's albedo and gloss and returns the complete lit colour ( SSFX accum_sun_far.ps:57, 64 ).
+    float4 _C = float4( gbd.C, gbd.gloss );
+
+    light =
+        plight_infinity(
+            m,
+            _P.xyz,
+            _N.xyz,
+            _C,
+            Ldynamic_dir.xyz
+        );
+#else
+    light =
+        plight_infinity(
+            m,
+            _P.xyz,
+            _N.xyz,
+            Ldynamic_dir.xyz
+        );
+#endif
+}
+
+	// ----- shadow
+	// SHADOWS FIXES - SSS Update 19
+	// Normal offset for biasing. Outside SSFX_SHADOWS the reference only offsets when its TAA
+	// module is on, because the small shift is what stops TAA smearing the shadow edge.
+	float3 NormalOffset = 0;
+#ifdef SSFX_SHADOWS
+	NormalOffset = _N.xyz * ssfx_shadow_bias.y;
+#else
+	#ifdef SSFX_TAA
+		NormalOffset = _N.xyz * 0.01f;
+	#endif
+#endif
+
+  	float4 	P4 	= float4( _P.xyz + NormalOffset, 1.f );
+	float4 	PS	= mul( m_shadow, P4 );
+
+	// SHADOWS FIXES - SSS Update 14.7
+	// New far edge fading code
+	//
+	// Screen Space Shaders: the donor's fade, and the donor's split. The shadow and the cloud mask
+	// live in separate variables so the cascade edge fade only softens the shadow and never fades
+	// the clouds - that is the whole point of the change. This replaces the 1.6.02 half-plane fade
+	// that stood here, which also faded the cloud mask with it. view_shadow_proj is left declared
+	// but is no longer read, exactly as in the donor. shadow(PS) is the single call the donor makes:
+	// the SSFX shadow.h has no shadow_dx10_1, and shadow_high is declared nowhere at all.
+	float s = shadow( PS );			// Far Shadows
+	float shadows = sunmask( P4 );	// Clouds. Don't fade clouds.
+
+	// Fade UV
+	float2 FadeUV = PS.xy / PS.w;
+
+	// Fade calc
+	float4 fade = smoothstep(0.0f, 0.1f, float4(FadeUV.x, 1.0f - FadeUV.x, FadeUV.y, 1.0f - FadeUV.y));
+	float f = fade.x * fade.y * fade.z * fade.w;
+	s += ( 1.0f - s ) * ( 1.0f - f );
+
+	// SSFX_SSS: the subsurface buffer's blue channel is the sun's through-surface term. It lands on
+	// the faded shadow, and the cloud mask multiplies over the result below - the donor's order.
+#ifdef SSFX_SSS
+	s *= saturate(s_ssfx_sss.Sample( smp_nofilter, I.tc.xy / I.tc.w ).b + ssfx_issvp.x);
+#endif
+
+	// Add Shadows
+	shadows *= s;
+
+	// Infernis PBR Stage 2.6: sun radiance and shadow are
+	// converted only for the PBR branch.
+	if (gbd.pbr > 0.5f)
+	{
+#if IE_PBR_SUN_ROUTE_MODE == 1
+	    // Prove whether the white contribution belongs to this PBR sun pass.
+	    return float4(0.0f, 0.0f, 0.0f, 0.0f);
+#elif IE_PBR_SUN_ROUTE_MODE == 2
+	    // Magenta means the runtime G-buffer classified this pixel as PBR.
+	    return float4(0.35f, 0.0f, 0.35f, 0.0f);
+#else
+	    // Screen Space Shaders: shadows is the donor's final value - the faded shadow with the
+	    // cloud mask over it. The PBR transport takes that, not the bare shadow.
+	    float3 pbrTransport =
+	        ie_pbr_prepare_dynamic_radiance(Ldynamic_color.rgb) *
+	        light.rgb *
+	        ie_pbr_prepare_light_factor(shadows);
+
+	    return blend(
+	        float4(pbrTransport, 0.0f),
+	        I.tc.xy / I.tc.w
+	    );
+#endif
+	}
+
+#if IE_PBR_SUN_ROUTE_MODE == 2
+	// Green means the runtime G-buffer classified this pixel as legacy.
+	return blend(
+	    float4(0.0f, 0.35f, 0.0f, 0.0f),
+	    I.tc.xy / I.tc.w
+	);
+#else
+#ifdef SSFX_ENHANCED_SHADERS
+	// Screen Space Shaders: the pseudo-PBR module - light colour and the faded shadow with the cloud
+	// mask in linear light, as the donor returns them ( SSFX accum_sun_far.ps:101-102 ).
+	return blend(
+	    float4( SRGBToLinear( Ldynamic_color.rgb * shadows.xxx ), 1.0f ) * light,
+	    I.tc.xy / I.tc.w
+	);
+#else
+	return blend(
+	    Ldynamic_color * light * shadows,
+	    I.tc.xy / I.tc.w
+	);
+#endif
+#endif
+}
+#endif
+#else
 #include "common.h"
 #include "lmodel.h"
 
@@ -163,4 +388,5 @@ else
 	);
 #endif
 }
+#endif
 #endif

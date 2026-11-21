@@ -1,0 +1,9 @@
+#include "common.h"
+#include "gs_weapon_computer.h"
+
+float4 main(float2 uv : TEXCOORD0) : SV_Target
+{
+    float4 texel = s_base.Sample(smp_base, uv);
+    texel.rgb = saturate(texel.rgb + weapon_computer_noise(uv));
+    return texel;
+}

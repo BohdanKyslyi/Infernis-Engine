@@ -94,6 +94,7 @@ private:
 
 public:
     CUI3tButton* m_btn_repair;
+    CUI3tButton* m_btn_disassemble = nullptr;
 
 protected:
     CUIStatic* m_background;

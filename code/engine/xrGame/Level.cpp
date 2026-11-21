@@ -1,4 +1,5 @@
 #include "pch_script.h"
+#include "ui/LuaWorkbench.h"
 #include "../xrEngine/fdemorecord.h"
 #include "../xrEngine/fdemoplay.h"
 #include "../xrEngine/environment.h"
@@ -43,6 +44,7 @@
 #include "actor_memory.h"
 #include "Inventory.h"
 #include "Weapon.h"
+#include "WeaponMagazined.h"
 #include "player_hud.h"
 #include "UI/UIGameTutorial.h"
 #include "message_filter.h"
@@ -408,6 +410,9 @@ void CLevel::MakeReconnect()
 
 void CLevel::OnFrame() 
 {
+    const float electronics_step = std::max(0.f, Device.fTimeDelta) * 0.5f;
+    m_electronics_problems += clampr(m_electronics_target - m_electronics_problems,
+                                    -electronics_step, electronics_step);
 #ifdef DEBUG
     DBG_RenderUpdate();
 #endif 
@@ -477,7 +482,7 @@ void CLevel::OnFrame()
     else
         m_level_sound_manager->Update();
         
-    if (g_mt_config.test(mtLUA_GC))
+    if (g_mt_config.test(mtLUA_GC) && !lua_workbench::Live().Attached())
         Device.seqParallel.push_back(fastdelegate::FastDelegate0<>(this, &CLevel::script_gc));
     else
         script_gc();
@@ -508,6 +513,16 @@ float CLevel::ScopeLensFov() const
     return weapon->ScopeLensFov();
 }
 
+float CLevel::ScopeLensBlend() const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return 0.f;
+
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    return weapon && weapon->ScopeLensShouldRender() ? weapon->ScopeLensBlend() : 0.f;
+}
+
 u8 CLevel::ScopeLensMode() const
 {
     const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
@@ -526,6 +541,62 @@ void CLevel::ScopeLensGlass(float* params) const
     const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
     if (weapon && weapon->ScopeLensShouldRender())
         weapon->ScopeLensGlass(params);
+}
+
+void CLevel::ScopeLensElectronics(float* params) const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return;
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    if (weapon && weapon->ScopeLensShouldRender())
+        weapon->ScopeLensElectronics(params);
+}
+
+void CLevel::WeaponComputerDisplay(float* params) const
+{
+    const auto* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return;
+
+    const auto* weapon = smart_cast<const CWeaponMagazined*>(actor->inventory().ActiveItem());
+    if (weapon && !weapon->IsHidden()) {
+        params[0] = weapon->RechargeProgress();
+        params[1] = clampr(m_electronics_problems * 0.1f, 0.f, 1.f);
+        params[2] = clampr(weapon->GetCondition(), 0.f, 1.f);
+    }
+}
+
+void CLevel::ScopeLensGauss(float* params) const
+{
+    const CActor* actor = smart_cast<const CActor*>(CurrentViewEntity());
+    if (!actor || actor->cam_Active() != actor->cam_FirstEye())
+        return;
+    const CWeapon* weapon = smart_cast<const CWeapon*>(actor->inventory().ActiveItem());
+    if (weapon && weapon->ScopeLensShouldRender()) {
+        params[0] = weapon->ScopeLensAberration();
+        params[1] = m_electronics_problems * 0.1f;
+    }
+}
+
+bool CLevel::ChangeElectronicsProblems(int delta)
+{
+    if (delta < 0 && m_electronics_target <= 0.f)
+        return false;
+    m_electronics_target = std::max(0.f, m_electronics_target + float(delta));
+    return true;
+}
+
+bool CLevel::ResetElectronicsProblems()
+{
+    m_electronics_target = 0.f;
+    return true;
+}
+
+bool CLevel::ApplyElectronicsProblems()
+{
+    m_electronics_problems = m_electronics_target;
+    return true;
 }
 
 bool CLevel::ScopeLensHasDetector() const

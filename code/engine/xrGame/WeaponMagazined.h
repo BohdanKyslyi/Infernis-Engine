@@ -1,25 +1,30 @@
 #pragma once
 
+class CCustomDetector;
+
 #include "weapon.h"
 #include "hudsound.h"
 #include "ai_sounds.h"
 
 class ENGINE_API CMotionDef;
 
-//размер очереди считается бесконечность
-//заканчиваем стрельбу, только, если кончились патроны
+//Г°Г Г§Г¬ГҐГ° Г®Г·ГҐГ°ГҐГ¤ГЁ Г±Г·ГЁГІГ ГҐГІГ±Гї ГЎГҐГ±ГЄГ®Г­ГҐГ·Г­Г®Г±ГІГј
+//Г§Г ГЄГ Г­Г·ГЁГўГ ГҐГ¬ Г±ГІГ°ГҐГ«ГјГЎГі, ГІГ®Г«ГјГЄГ®, ГҐГ±Г«ГЁ ГЄГ®Г­Г·ГЁГ«ГЁГ±Гј ГЇГ ГІГ°Г®Г­Г»
 #define WEAPON_ININITE_QUEUE -1
+
+class CController;
 
 class CWeaponMagazined : public CWeapon {
 private:
     typedef CWeapon inherited;
 
 protected:
-    //звук текущего выстрела
+    //Г§ГўГіГЄ ГІГҐГЄГіГ№ГҐГЈГ® ГўГ»Г±ГІГ°ГҐГ«Г 
     shared_str m_sSndShotCurrent;
+    bool m_has_breechblock_sound = false;
+    bool m_has_shot_jam_sound = false;
 
-    //дополнительная информация о глушителе
-    LPCSTR m_sSilencerFlameParticles;
+    //Г¤Г®ГЇГ®Г«Г­ГЁГІГҐГ«ГјГ­Г Гї ГЁГ­ГґГ®Г°Г¬Г Г¶ГЁГї Г® ГЈГ«ГіГёГЁГІГҐГ«ГҐ
     LPCSTR m_sSilencerSmokeParticles;
 
     ESoundTypes m_eSoundShow;
@@ -29,7 +34,7 @@ protected:
     ESoundTypes m_eSoundReload;
     bool m_sounds_enabled;
     // General
-    //кадр момента пересчета UpdateSounds
+    //ГЄГ Г¤Г° Г¬Г®Г¬ГҐГ­ГІГ  ГЇГҐГ°ГҐГ±Г·ГҐГІГ  UpdateSounds
     u32 dwUpdateSounds_Frame;
 
 protected:
@@ -44,6 +49,8 @@ protected:
     virtual void switch2_Showing();
 
     virtual void OnShot();
+    virtual LPCSTR ShotSound() const { return m_sSndShotCurrent.c_str(); }
+    virtual bool JamPreventsShot() const { return false; }
 
     virtual void OnEmptyClick();
 
@@ -56,7 +63,7 @@ protected:
 
 protected:
     virtual void ReloadMagazine();
-    int GetAmmoMagSize() const override { return iMagazineSize + (HasChamberRound() ? 1 : 0); }
+    int GetAmmoMagSize() const override;
     virtual bool HasChamberRound() const { return m_chamber_round; }
     void ApplySilencerKoeffs();
     void ResetSilencerKoeffs();
@@ -74,6 +81,10 @@ public:
     virtual CWeaponMagazined* cast_weapon_magazined() { return this; }
 
     virtual void SetDefaults();
+    bool CanFireTelekinetically() const;
+    const Fvector& TelekineticMuzzle();
+    void FireTelekineticShot(CObject& shooter, const Fvector& pos, const Fvector& dir);
+
     virtual void FireStart();
     virtual void FireEnd();
     virtual void Reload();
@@ -88,6 +99,7 @@ public:
     virtual bool Attach(PIItem pIItem, bool b_send_event);
     virtual bool Detach(const char* item_section_name, bool b_spawn_item);
     bool DetachScope(const char* item_section_name, bool b_spawn_item);
+    bool IsAddonCompatible(PIItem addon) const;
     virtual bool CanAttach(PIItem pIItem);
     virtual bool CanDetach(const char* item_section_name);
 
@@ -96,6 +108,17 @@ public:
     virtual bool Action(u16 cmd, u32 flags);
     bool IsAmmoAvailable();
     virtual void UnloadMagazine(bool spawn_ammo = true);
+    bool RequestMagazineUnload(bool animate);
+    enum class SilencerActionResult { UseDefault, Busy, Started };
+    SilencerActionResult RequestSilencerAction(PIItem silencer, LPCSTR detach_section = nullptr);
+    enum class DetectorTransition { Prepare, Draw, Finish };
+    bool RequestDetectorTransition(DetectorTransition phase);
+    bool RequestControllerAttack(CController& attacker);
+    bool IsControllerAttackActive() const {
+        return GetState() == eControllerAttack || GetNextState() == eControllerAttack;
+    }
+    float RechargeProgress() const;
+    bool ImmediatelyRestoreDetector() const { return m_restore_detector_after_reload; }
 
     virtual bool GetBriefInfo(II_BriefInfo& info);
 
@@ -109,34 +132,136 @@ public:
     virtual float GetFireDispersion(float cartridge_k, bool for_crosshair = false);
 
 protected:
-    //максимальный размер очереди, которой можно стрельнуть
+    //Г¬Г ГЄГ±ГЁГ¬Г Г«ГјГ­Г»Г© Г°Г Г§Г¬ГҐГ° Г®Г·ГҐГ°ГҐГ¤ГЁ, ГЄГ®ГІГ®Г°Г®Г© Г¬Г®Г¦Г­Г® Г±ГІГ°ГҐГ«ГјГ­ГіГІГј
     int m_iQueueSize;
-    //количество реально выстреляных патронов
+    int m_max_queue_size = 0;
+    int EffectiveQueueSize() const;
+    //ГЄГ®Г«ГЁГ·ГҐГ±ГІГўГ® Г°ГҐГ Г«ГјГ­Г® ГўГ»Г±ГІГ°ГҐГ«ГїГ­Г»Гµ ГЇГ ГІГ°Г®Г­Г®Гў
     int m_iShotNum;
-    //после какого патрона, при непрерывной стрельбе, начинается отдача (сделано из-за Абакана)
+    //ГЇГ®Г±Г«ГҐ ГЄГ ГЄГ®ГЈГ® ГЇГ ГІГ°Г®Г­Г , ГЇГ°ГЁ Г­ГҐГЇГ°ГҐГ°Г»ГўГ­Г®Г© Г±ГІГ°ГҐГ«ГјГЎГҐ, Г­Г Г·ГЁГ­Г ГҐГІГ±Гї Г®ГІГ¤Г Г·Г  (Г±Г¤ГҐГ«Г Г­Г® ГЁГ§-Г§Г  ГЂГЎГ ГЄГ Г­Г )
     int m_iBaseDispersionedBulletsCount;
-    //скорость вылета патронов, на которые не влияет отдача (сделано из-за Абакана)
+    //Г±ГЄГ®Г°Г®Г±ГІГј ГўГ»Г«ГҐГІГ  ГЇГ ГІГ°Г®Г­Г®Гў, Г­Г  ГЄГ®ГІГ®Г°Г»ГҐ Г­ГҐ ГўГ«ГЁГїГҐГІ Г®ГІГ¤Г Г·Г  (Г±Г¤ГҐГ«Г Г­Г® ГЁГ§-Г§Г  ГЂГЎГ ГЄГ Г­Г )
     float m_fBaseDispersionedBulletsSpeed;
-    //скорость вылета остальных патронов
+    //Г±ГЄГ®Г°Г®Г±ГІГј ГўГ»Г«ГҐГІГ  Г®Г±ГІГ Г«ГјГ­Г»Гµ ГЇГ ГІГ°Г®Г­Г®Гў
     float m_fOldBulletSpeed;
     Fvector m_vStartPos, m_vStartDir;
-    //флаг того, что мы остановились после того как выстреляли
-    //ровно столько патронов, сколько было задано в m_iQueueSize
+    //ГґГ«Г ГЈ ГІГ®ГЈГ®, Г·ГІГ® Г¬Г» Г®Г±ГІГ Г­Г®ГўГЁГ«ГЁГ±Гј ГЇГ®Г±Г«ГҐ ГІГ®ГЈГ® ГЄГ ГЄ ГўГ»Г±ГІГ°ГҐГ«ГїГ«ГЁ
+    //Г°Г®ГўГ­Г® Г±ГІГ®Г«ГјГЄГ® ГЇГ ГІГ°Г®Г­Г®Гў, Г±ГЄГ®Г«ГјГЄГ® ГЎГ»Г«Г® Г§Г Г¤Г Г­Г® Гў m_iQueueSize
     bool m_bStopedAfterQueueFired;
-    //флаг того, что хотя бы один выстрел мы должны сделать
-    //(даже если очень быстро нажали на курок и вызвалось FireEnd)
+    //ГґГ«Г ГЈ ГІГ®ГЈГ®, Г·ГІГ® ГµГ®ГІГї ГЎГ» Г®Г¤ГЁГ­ ГўГ»Г±ГІГ°ГҐГ« Г¬Г» Г¤Г®Г«Г¦Г­Г» Г±Г¤ГҐГ«Г ГІГј
+    //(Г¤Г Г¦ГҐ ГҐГ±Г«ГЁ Г®Г·ГҐГ­Гј ГЎГ»Г±ГІГ°Г® Г­Г Г¦Г Г«ГЁ Г­Г  ГЄГіГ°Г®ГЄ ГЁ ГўГ»Г§ГўГ Г«Г®Г±Гј FireEnd)
     bool m_bFireSingleShot;
-    //режимы стрельбы
+    //Г°ГҐГ¦ГЁГ¬Г» Г±ГІГ°ГҐГ«ГјГЎГ»
     bool m_bHasDifferentFireModes;
     xr_vector<s8> m_aFireModes;
     int m_iCurFireMode;
     int m_iPrefferedFireMode;
+    void ChangeFireMode(int step);
+    shared_str m_fire_mode_motion;
+    u32 m_fire_mode_duration = 0;
+    float m_fBaseDispersionedBulletsTimeDelta = 0.f;
+    float m_fSingleShotsTimeDelta = 0.f;
+    float m_recharge_time = 0.f;
+    u32 m_last_recharge_shot = 0;
+    bool m_has_recharge_shot = false;
+    bool m_telekinetic_flame_active = false;
+    LPCSTR TelekineticRocketSection() const;
 
-    //переменная блокирует использование
-    //только разных типов патронов
+    float m_autoaim_time = 0.f;
+    shared_str m_autoaim_modes;
+    BOOL m_autoaim_only_alive = FALSE;
+    BOOL m_autoaim_ignore_dead = FALSE;
+    BOOL m_autoaim_cancel = FALSE;
+    BOOL m_autoaim_after_release = FALSE;
+    bool m_autoaim_waiting = false;
+    bool m_autoaim_trigger_held = false;
+    u32 m_autoaim_start_time = 0;
+
+    float ActiveAutoAimTime();
+    bool AutoAimAllowsShot(const Fvector& origin, const Fvector& direction, float wait);
+    bool PlayHudActionSound(const shared_str& motion);
+    shared_str MaskedHudMotion(LPCSTR motion, LPCSTR prefix) const;
+    shared_str m_unload_motion;
+    u32 m_unload_commit_time = 0;
+    u32 m_unload_duration = 0;
+    bool m_unload_committed = false;
+    bool m_has_unload_sound = false;
+    void StartMagazineUnload();
+    void UpdateMagazineUnload();
+
+    shared_str m_silencer_action_motion;
+    shared_str m_silencer_to_detach;
+    u32 m_silencer_detach_time = 0;
+    u32 m_silencer_action_duration = 0;
+    bool m_has_silencer_attach_sound = false;
+    bool m_has_silencer_detach_sound = false;
+    void StartSilencerAction();
+    void UpdateSilencerAction();
+    void UpdateMuzzleParticles();
+
+    shared_str m_detector_transition_motion;
+    DetectorTransition m_detector_transition_phase = DetectorTransition::Prepare;
+    u32 m_detector_transition_duration = 0;
+    bool m_has_detector_prepare_sound = false;
+    bool m_has_detector_finish_sound = false;
+    void StartDetectorTransition();
+    void UpdateDetectorTransition();
+
+    enum class ControllerPhase { Prepare, Recover, Shot, GrenadeShot };
+    ControllerPhase m_controller_phase = ControllerPhase::Prepare;
+    u16 m_controller_attacker = u16(-1);
+    u32 m_controller_phase_start = 0;
+    u32 m_controller_phase_duration = 0;
+    shared_str m_controller_prepare_motion;
+    bool m_has_controller_prepare_sound = false;
+    bool m_has_controller_recovery_sound = false;
+    shared_str ControllerMotion(LPCSTR base);
+    u32 PlayControllerMotion(const shared_str& motion, LPCSTR fallback_sound);
+    void StartControllerAttack();
+    void UpdateControllerAttack();
+    void FireControllerShot();
+    void PlayMagazineShotEffects();
+    void PlayMagazineShotSound();
+    void StopCyclicShotSound();
+    shared_str m_cyclic_shot_sound;
+
+    s32 HudLockTime(LPCSTR prefix, LPCSTR motion) const;
+    bool PlayMagazineReloadMotion(const shared_str& motion, BOOL mix);
+    void CommitMagazineReload();
+    void UpdateMagazineReloadTiming();
+    bool m_timed_magazine_reload = false;
+    bool m_magazine_reload_committed = false;
+    bool m_restore_detector_after_reload = false;
+    u32 m_magazine_reload_commit_time = 0;
+    u32 m_magazine_reload_end_time = 0;
+
+    bool PlayTimedHudTransition(const shared_str& motion);
+    bool IsHudTransitionLocked() const;
+    bool HandleTimedFireInput(u32 flags);
+    bool ShouldDelayAimExit();
+    bool DeferAimExit() override;
+    void UpdateTimedHudInput();
+    shared_str SprintTransitionMotion(bool entering) const;
+    shared_str m_timed_hud_motion;
+    u32 m_hud_transition_start = 0;
+    u32 m_hud_transition_lock = 0;
+    bool m_deferred_hud_shot = false;
+    bool m_deferred_aim_exit = false;
+    bool m_fire_press_blocked_by_aim = false;
+    bool IsEnteringAim();
+    bool HasFireActionInProgress();
+
+    //ГЇГҐГ°ГҐГ¬ГҐГ­Г­Г Гї ГЎГ«Г®ГЄГЁГ°ГіГҐГІ ГЁГ±ГЇГ®Г«ГјГ§Г®ГўГ Г­ГЁГҐ
+    //ГІГ®Г«ГјГЄГ® Г°Г Г§Г­Г»Гµ ГІГЁГЇГ®Гў ГЇГ ГІГ°Г®Г­Г®Гў
     bool m_bLockType;
     bool m_chamber_round;
+    bool m_gunslinger_movement_idles = false;
+    float m_upgrade_scope_zoom = 0.f;
+    float m_upgrade_ironsight_zoom = 0.f;
+    u32 m_previous_hud_movement = 0;
     int m_reload_target_capacity;
+    xr_vector<shared_str> m_ammo_capacity_upgrades;
+    int AmmoCapacity(u8 ammo_type) const;
 
 public:
     virtual void OnZoomIn();
@@ -150,12 +275,15 @@ public:
     virtual void load(IReader& input_packet);
 
 protected:
+    void OnUpgradeHudChanged() override;
+    shared_str WeaponActionMotion(LPCSTR base) const override;
+    int FireModeForHudBones() const override { return GetQueueSize(); }
     virtual bool install_upgrade_impl(LPCSTR section, bool test);
 
 protected:
     virtual bool AllowFireWhileWorking() { return false; }
 
-    //виртуальные функции для проигрывания анимации HUD
+    //ГўГЁГ°ГІГіГ Г«ГјГ­Г»ГҐ ГґГіГ­ГЄГ¶ГЁГЁ Г¤Г«Гї ГЇГ°Г®ГЁГЈГ°Г»ГўГ Г­ГЁГї Г Г­ГЁГ¬Г Г¶ГЁГЁ HUD
     virtual void PlayAnimShow();
     virtual void PlayAnimHide();
     virtual void PlayAnimReload();
@@ -168,7 +296,27 @@ protected:
     LPCSTR ReloadMotion(bool launcher = false) const;
     LPCSTR ReloadSound() const;
     LPCSTR OptionalHudMotion(LPCSTR preferred, LPCSTR fallback) const;
+    bool IsLastRoundJam() const;
+    bool IsReloadAmmoChange() const;
+    CCustomDetector* ReloadDetector() const;
+    shared_str DetectorReloadMotion(CCustomDetector* detector) const;
+    shared_str AmmoChangeReloadMotion(LPCSTR suffix, CCustomDetector* detector = nullptr) const;
+    LPCSTR ShootMotion(LPCSTR fallback) const;
+    virtual LPCSTR StateMotion(LPCSTR normal, LPCSTR empty, LPCSTR jammed) const;
+    void PlayDryFireMotion(LPCSTR normal, LPCSTR aimed);
+    virtual shared_str SelectDryFireMotion(LPCSTR normal, LPCSTR aimed) const;
+    virtual shared_str HudStateVariant(LPCSTR base, LPCSTR fallback) const;
+    bool IsAimTransitionPlaying() const;
+    bool RollForLightMisfire() const;
+    void PlayLightMisfire();
     virtual void PlayAnimAim();
+    void PlayAimTransition(bool entering);
+    bool IsRecoveringFromShot() const;
+    bool CanPlayHipIdleDuringRecharge();
+    void UpdateGunslingerMovementIdle();
+    shared_str GunslingerMovementIdle(u32 movement) const;
+    BOOL MixShootMotion() const;
+    void PlayFireMotion(const shared_str& motion);
 
     virtual int ShotsFired() { return m_iShotNum; }
     virtual float GetWeaponDeterioration();

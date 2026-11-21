@@ -9,6 +9,16 @@ enable_dynamic_rain_wind	= true	; Controls raindrop tilt and fall-speed response
 enable_custom_lightning		= true	;Renders lightning strikes around the player based on distance tiers and probability weights
 use_weather_sun_direction	= false	; true = use sun angles from weather .ltx, false = use the engine-calculated sun
 
+; GUNSLINGER single-player monster extensions
+[gunslinger_ie]
+enable_monster_extensions    = false   ; false disables all extensions below
+controller_weapon_attack     = false   ; weapon takeover and forced shot
+burer_enhanced_stamina_wave  = false   ; strong stamina hit, weapon wear and HUD reaction
+burer_tactics                = false   ; reactions to aiming, explosives and healing
+burer_telekinetic_shooting   = false   ; fire lifted weapons during telekinesis
+boar_impact                  = false   ; extra stamina damage and disarm
+pseudogiant_impact           = false   ; extra effects of the melee hit and stomp
+
 ;Extended UI parameters
 [ui_extensions]
 show_dialog_portraits 			= true			; true - показувати бокові панелі в діалогах, false - приховати
@@ -30,7 +40,7 @@ backpack_slot			= true				; false = disable backpack slot
 
 ;Infernis Engine extended HUD parameters
 [hud_extensions]
-viewport_near			= 0.2f				; 0.05f - для юзу сучасних збройових паків, 0.2f - для ванільних
+viewport_near			= 0.05f				; 0.05f - для юзу сучасних збройових паків, 0.2f - для ванільних
 hands_animations_path	= hands_animations\*.omf
 enable_actor_legs		= true				; Enables a synchronized first-person legs model from actor HUD sections
 
@@ -110,9 +120,11 @@ renderer_dx11_image	= renderer_dx11
 ; =======================================================
 
 [shader_extensions]
-enable_pbr_rendering	= false ; увімкнення PBR-рендерингу
+enable_pbr_rendering	= true ; увімкнення PBR-рендерингу
 sslr_mode				= off ; performance / balanced / quality / reference / off
 allow_bloodmarks_on_npc	= true; відображення кривавих слідів у сталкерів і мутантів
+enable_ssfx				= true ; Screen Space Shaders (DX11 only) on a clean profile; the player's choice is kept in user.ltx as ssfx_enable, a change needs a game restart
+ssfx_addons				= Weather_ATMOS ; folders of addons that belong to SSS, comma separated: mounted only while SSS runs (switched on, DX11), a change needs a game restart
 
 ; R4 and R3 draw the scoped world with glass effects; R2 uses a basic DX9 lens.
 ; R1 retains the lens material fallback and the ordinary 2D scope overlay.

@@ -1,0 +1,899 @@
+<w>
+	<background x="0" y="0" width="1024" height="768">
+		<auto_static x="102" y="0" width="819" height="768" stretch="1">
+			<texture>ui_inGame2_opt_background</texture>
+		</auto_static>
+		<auto_static x="253" y="250" width="269" height="176" stretch="1">
+			<texture x="1" y="1" width="335" height="174">ui\video_window</texture>
+		</auto_static>
+		<auto_static x="0" y="0" width="102" height="768" stretch="1">
+			<texture>ui_inGame2_opt_left_widepanel</texture>
+		</auto_static>
+		<auto_static x="921" y="0" width="102" height="768" stretch="1">
+			<texture>ui_inGame2_opt_right_widepanel</texture>
+		</auto_static>
+	</background>
+
+	<form x="152" y="34" width="720" height="700" stretch="1">
+		<texture>ui_inGame2_main_window_small</texture>
+		<caption x="0" y="18" width="720" height="34">
+			<text font="graffiti32" align="c">ui_sss_title</text>
+		</caption>
+		<mod_frame x="22" y="66" width="189" height="536">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</mod_frame>
+		<mod_list x="22" y="68" width="189" height="532" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="0"/>
+		<page_frame x="218" y="66" width="480" height="432">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</page_frame>
+		<page_title x="226" y="70" width="464" height="26">
+			<text font="letterica18" r="235" g="219" b="178" align="l" vert_align="c"/>
+		</page_title>
+		<page x="220" y="98" width="475" height="396" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="1"/>
+		<desc_frame x="218" y="506" width="480" height="96">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</desc_frame>
+		<desc x="226" y="510" width="464" height="88" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="0"/>
+		<legend x="37" y="658" width="189" height="24">
+			<text font="letterica16" r="140" g="140" b="140" align="l" vert_align="c">ui_sss_legend</text>
+		</legend>
+		<btn_reset_all x="234" y="656" width="108" height="26" stretch="1">
+			<text font="letterica18" align="c">ui_sss_reset_all</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_reset_all>
+		<btn_reset x="350" y="656" width="108" height="26" stretch="1">
+			<text font="letterica18" align="c">ui_sss_reset</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_reset>
+		<btn_apply x="466" y="656" width="108" height="26" stretch="1">
+			<text font="letterica18" align="c">ui_mm_apply</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_apply>
+		<btn_cancel x="582" y="656" width="108" height="26" stretch="1">
+			<text font="letterica18" align="c">ui_mm_cancel</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_cancel>
+	</form>
+
+	<tpl>
+		<mod_row width="189" height="19"/>
+		<mod_sel x="0" y="0" width="189" height="19" stretch="1">
+			<texture>ui_inGame2_Mp_bigbuttone_h</texture>
+		</mod_sel>
+		<mod_btn x="0" y="0" width="189" height="19">
+			<text x="7" font="letterica16" align="l" vert_align="c"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="255" g="255" b="255"/>
+			</text_color>
+		</mod_btn>
+		<mod_sub x="0" y="0" width="189" height="19">
+			<text x="17" font="letterica16" align="l" vert_align="c"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="255" g="255" b="255"/>
+			</text_color>
+		</mod_sub>
+		<mod_head x="7" y="0" width="164" height="19">
+			<text font="letterica16" r="235" g="219" b="178" align="l" vert_align="c"/>
+		</mod_head>
+		<row_1 width="459" height="30"/>
+		<sel_1 x="0" y="1" width="459" height="28" stretch="1">
+			<texture>ui_inGame2_combobox_line_b</texture>
+		</sel_1>
+		<cap_1 x="6" y="3" width="226" height="24">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</cap_1>
+		<num_1 x="408" y="3" width="45" height="24">
+			<text font="letterica16" r="170" g="170" b="170" align="r" vert_align="c"/>
+		</num_1>
+		<row_2 width="459" height="44"/>
+		<sel_2 x="0" y="1" width="459" height="42" stretch="1">
+			<texture>ui_inGame2_combobox_line_b</texture>
+		</sel_2>
+		<cap_2 x="6" y="3" width="226" height="38">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</cap_2>
+		<num_2 x="408" y="3" width="45" height="38">
+			<text font="letterica16" r="170" g="170" b="170" align="r" vert_align="c"/>
+		</num_2>
+		<row_3 width="459" height="60"/>
+		<sel_3 x="0" y="1" width="459" height="58" stretch="1">
+			<texture>ui_inGame2_combobox_line_b</texture>
+		</sel_3>
+		<cap_3 x="6" y="3" width="226" height="54">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</cap_3>
+		<num_3 x="408" y="3" width="45" height="54">
+			<text font="letterica16" r="170" g="170" b="170" align="r" vert_align="c"/>
+		</num_3>
+		<desc_text x="0" y="0" width="445" height="16">
+			<text font="letterica16" r="200" g="200" b="200" align="l" complex_mode="1"/>
+		</desc_text>
+	</tpl>
+
+	<rows>
+		<!-- ao -->
+		<l_ao_quality x="245" y="5" width="125" height="20" list_length="3" always_show_scroll="0">
+			<options_item entry="ssfx_ui_ao_quality" group="mm_opt_sss_ao" depend="restart"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_ao_quality>
+		<t_ao_res x="245" y="7" width="160" height="16" step="0.2" invert="1">
+			<options_item entry="ssfx_ui_ao_res" group="mm_opt_sss_ao"/>
+		</t_ao_res>
+		<t_ao_dist x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_ao_dist" group="mm_opt_sss_ao"/>
+		</t_ao_dist>
+		<t_ao_blur x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_ao_blur" group="mm_opt_sss_ao"/>
+		</t_ao_blur>
+		<t_ao_radius x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_ao_radius" group="mm_opt_sss_ao"/>
+		</t_ao_radius>
+		<t_ao_max_occ x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_ao_max_occ" group="mm_opt_sss_ao"/>
+		</t_ao_max_occ>
+		<t_ao_int x="245" y="7" width="160" height="16" step="0.5">
+			<options_item entry="ssfx_ui_ao_int" group="mm_opt_sss_ao"/>
+		</t_ao_int>
+		<t_ao_hud_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_ao_hud_int" group="mm_opt_sss_ao"/>
+		</t_ao_hud_int>
+		<t_ao_flora_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_ao_flora_int" group="mm_opt_sss_ao"/>
+		</t_ao_flora_int>
+		<!-- florafixes -->
+		<t_flora_sss_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_flora_sss_int" group="mm_opt_sss_florafixes"/>
+		</t_flora_sss_int>
+		<t_flora_sss_color x="245" y="14" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_flora_sss_color" group="mm_opt_sss_florafixes"/>
+		</t_flora_sss_color>
+		<t_flora_grass_specular x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_flora_grass_specular" group="mm_opt_sss_florafixes"/>
+		</t_flora_grass_specular>
+		<t_flora_grass_specular_wet x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_flora_grass_specular_wet" group="mm_opt_sss_florafixes"/>
+		</t_flora_grass_specular_wet>
+		<t_flora_trees_specular x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_flora_trees_specular" group="mm_opt_sss_florafixes"/>
+		</t_flora_trees_specular>
+		<t_flora_trees_specular_wet x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_flora_trees_specular_wet" group="mm_opt_sss_florafixes"/>
+		</t_flora_trees_specular_wet>
+		<!-- fog -->
+		<t_fog_height x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_fog_height" group="mm_opt_sss_fog"/>
+		</t_fog_height>
+		<t_fog_density x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_fog_density" group="mm_opt_sss_fog"/>
+		</t_fog_density>
+		<t_fog_suncolor x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_fog_suncolor" group="mm_opt_sss_fog"/>
+		</t_fog_suncolor>
+		<t_fog_scattering x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_fog_scattering" group="mm_opt_sss_fog"/>
+		</t_fog_scattering>
+		<!-- il -->
+		<l_il_quality x="245" y="5" width="125" height="20" list_length="5" always_show_scroll="0">
+			<options_item entry="ssfx_ui_il_quality" group="mm_opt_sss_il" depend="restart"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_il_quality>
+		<t_il_res x="245" y="7" width="160" height="16" step="0.333335" invert="1">
+			<options_item entry="ssfx_ui_il_res" group="mm_opt_sss_il"/>
+		</t_il_res>
+		<t_il_dist x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_il_dist" group="mm_opt_sss_il"/>
+		</t_il_dist>
+		<t_il_blur x="245" y="7" width="160" height="16" step="0.5">
+			<options_item entry="ssfx_ui_il_blur" group="mm_opt_sss_il"/>
+		</t_il_blur>
+		<t_il_vibrance x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_il_vibrance" group="mm_opt_sss_il"/>
+		</t_il_vibrance>
+		<t_il_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_il_int" group="mm_opt_sss_il"/>
+		</t_il_int>
+		<t_il_hud_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_il_hud_int" group="mm_opt_sss_il"/>
+		</t_il_hud_int>
+		<t_il_flora_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_il_flora_int" group="mm_opt_sss_il"/>
+		</t_il_flora_int>
+		<!-- inter_grass -->
+		<k_grass_enable x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_grass_enable" group="mm_opt_sss_inter_grass" depend="restart"/>
+		</k_grass_enable>
+		<t_grass_max_entities x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_grass_max_entities" group="mm_opt_sss_inter_grass" depend="restart"/>
+		</t_grass_max_entities>
+		<t_grass_max_distance x="245" y="7" width="160" height="16" step="10">
+			<options_item entry="ssfx_ui_grass_max_distance" group="mm_opt_sss_inter_grass"/>
+		</t_grass_max_distance>
+		<k_grass_enable_player x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_grass_enable_player" group="mm_opt_sss_inter_grass"/>
+		</k_grass_enable_player>
+		<k_grass_enable_mutants x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_grass_enable_mutants" group="mm_opt_sss_inter_grass"/>
+		</k_grass_enable_mutants>
+		<k_grass_enable_anomalies x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_grass_enable_anomalies" group="mm_opt_sss_inter_grass"/>
+		</k_grass_enable_anomalies>
+		<t_grass_anomalies_distance x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_grass_anomalies_distance" group="mm_opt_sss_inter_grass"/>
+		</t_grass_anomalies_distance>
+		<t_grass_radius x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_grass_radius" group="mm_opt_sss_inter_grass"/>
+		</t_grass_radius>
+		<t_grass_horizontal_str x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_grass_horizontal_str" group="mm_opt_sss_inter_grass"/>
+		</t_grass_horizontal_str>
+		<t_grass_vertical_str x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_grass_vertical_str" group="mm_opt_sss_inter_grass"/>
+		</t_grass_vertical_str>
+		<t_grass_explosions_str x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_grass_explosions_str" group="mm_opt_sss_inter_grass"/>
+		</t_grass_explosions_str>
+		<t_grass_explosions_speed x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_grass_explosions_speed" group="mm_opt_sss_inter_grass"/>
+		</t_grass_explosions_speed>
+		<t_grass_shooting_str x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_grass_shooting_str" group="mm_opt_sss_inter_grass"/>
+		</t_grass_shooting_str>
+		<t_grass_shooting_range x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_grass_shooting_range" group="mm_opt_sss_inter_grass"/>
+		</t_grass_shooting_range>
+		<!-- parallax -->
+		<l_pom_quality x="245" y="5" width="125" height="20" list_length="3" always_show_scroll="0">
+			<options_item entry="ssfx_ui_pom_quality" group="mm_opt_sss_parallax"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_pom_quality>
+		<k_pom_refine x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_pom_refine" group="mm_opt_sss_parallax" depend="restart"/>
+		</k_pom_refine>
+		<t_pom_range x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_pom_range" group="mm_opt_sss_parallax"/>
+		</t_pom_range>
+		<t_pom_height x="245" y="7" width="160" height="16" step="0.001">
+			<options_item entry="ssfx_ui_pom_height" group="mm_opt_sss_parallax"/>
+		</t_pom_height>
+		<t_pom_ao x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_pom_ao" group="mm_opt_sss_parallax"/>
+		</t_pom_ao>
+		<!-- ssfx_bloom -->
+		<k_bloom_use_weather x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_bloom_use_weather" group="mm_opt_sss_ssfx_bloom"/>
+		</k_bloom_use_weather>
+		<t_bloom_threshold x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_bloom_threshold" group="mm_opt_sss_ssfx_bloom"/>
+		</t_bloom_threshold>
+		<t_bloom_exposure x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_bloom_exposure" group="mm_opt_sss_ssfx_bloom"/>
+		</t_bloom_exposure>
+		<t_bloom_blur x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_bloom_blur" group="mm_opt_sss_ssfx_bloom"/>
+		</t_bloom_blur>
+		<t_bloom_vibrance x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_bloom_vibrance" group="mm_opt_sss_ssfx_bloom"/>
+		</t_bloom_vibrance>
+		<t_bloom_sky x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_bloom_sky" group="mm_opt_sss_ssfx_bloom"/>
+		</t_bloom_sky>
+		<t_bloom_lens x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_bloom_lens" group="mm_opt_sss_ssfx_bloom"/>
+		</t_bloom_lens>
+		<t_bloom_dirt x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_bloom_dirt" group="mm_opt_sss_ssfx_bloom"/>
+		</t_bloom_dirt>
+		<!-- ssfx_motionblur -->
+		<l_mblur_quality x="245" y="5" width="125" height="20" list_length="4" always_show_scroll="0">
+			<options_item entry="ssfx_ui_mblur_quality" group="mm_opt_sss_ssfx_motionblur"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_mblur_quality>
+		<t_mblur_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_mblur_int" group="mm_opt_sss_ssfx_motionblur"/>
+		</t_mblur_int>
+		<t_mblur_camera x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_mblur_camera" group="mm_opt_sss_ssfx_motionblur"/>
+		</t_mblur_camera>
+		<k_mblur_hudonly x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_mblur_hudonly" group="mm_opt_sss_ssfx_motionblur"/>
+		</k_mblur_hudonly>
+		<!-- ssfx_taa -->
+		<k_taa_enabled x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_taa_enabled" group="mm_opt_sss_ssfx_taa"/>
+		</k_taa_enabled>
+		<t_taa_sharp x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_taa_sharp" group="mm_opt_sss_ssfx_taa"/>
+		</t_taa_sharp>
+		<!-- ssfx_rain_main -->
+		<l_rain_quality x="245" y="5" width="125" height="20" list_length="3" always_show_scroll="0">
+			<options_item entry="ssfx_ui_rain_quality" group="mm_opt_sss_ssfx_rain_main" depend="restart"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_rain_quality>
+		<t_rain_max_drops x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_rain_max_drops" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_max_drops>
+		<t_rain_radius x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_rain_radius" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_radius>
+		<t_rain_speed x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_rain_speed" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_speed>
+		<t_rain_len x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_rain_len" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_len>
+		<t_rain_width x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_rain_width" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_width>
+		<t_rain_alpha x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_rain_alpha" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_alpha>
+		<t_rain_bright x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_rain_bright" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_bright>
+		<t_rain_refraction x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_rain_refraction" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_refraction>
+		<t_rain_reflection x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_rain_reflection" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_reflection>
+		<t_splash_alpha x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_splash_alpha" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_splash_alpha>
+		<t_rain_splash_refraction x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_rain_splash_refraction" group="mm_opt_sss_ssfx_rain_main"/>
+		</t_rain_splash_refraction>
+		<!-- ssfx_rain_footsteps -->
+		<t_fs_main_vol x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_fs_main_vol" group="mm_opt_sss_ssfx_rain_footsteps"/>
+		</t_fs_main_vol>
+		<t_fs_vol_rnd x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_fs_vol_rnd" group="mm_opt_sss_ssfx_rain_footsteps"/>
+		</t_fs_vol_rnd>
+		<t_fs_multi_no_rain x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_fs_multi_no_rain" group="mm_opt_sss_ssfx_rain_footsteps"/>
+		</t_fs_multi_no_rain>
+		<t_fs_multi_walk x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_fs_multi_walk" group="mm_opt_sss_ssfx_rain_footsteps"/>
+		</t_fs_multi_walk>
+		<t_fs_multi_run x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_fs_multi_run" group="mm_opt_sss_ssfx_rain_footsteps"/>
+		</t_fs_multi_run>
+		<t_fs_jump_vol x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_fs_jump_vol" group="mm_opt_sss_ssfx_rain_footsteps"/>
+		</t_fs_jump_vol>
+		<t_fs_land_vol x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_fs_land_vol" group="mm_opt_sss_ssfx_rain_footsteps"/>
+		</t_fs_land_vol>
+		<!-- ssfx_rain_hud_raindrops -->
+		<t_drops_density x="245" y="7" width="160" height="16" step="0.0015" invert="1">
+			<options_item entry="ssfx_ui_drops_density" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_density>
+		<t_drops_refle x="245" y="7" width="160" height="16" step="0.3">
+			<options_item entry="ssfx_ui_drops_refle" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_refle>
+		<t_drops_refra x="245" y="7" width="160" height="16" step="0.0005">
+			<options_item entry="ssfx_ui_drops_refra" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_refra>
+		<t_drops_animation_speed x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_drops_animation_speed" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_animation_speed>
+		<t_drops_buildup x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_drops_buildup" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_buildup>
+		<t_drops_drying x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_drops_drying" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_drying>
+		<t_drops_size x="245" y="7" width="160" height="16" step="0.01" invert="1">
+			<options_item entry="ssfx_ui_drops_size" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_size>
+		<t_drops_gloss x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_drops_gloss" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_gloss>
+		<t_drops_extragloss x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_drops_extragloss" group="mm_opt_sss_ssfx_rain_hud_raindrops"/>
+		</t_drops_extragloss>
+		<!-- shw_cascades -->
+		<t_cas_size_1 x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_cas_size_1" group="mm_opt_sss_shw_cascades"/>
+		</t_cas_size_1>
+		<t_cas_size_2 x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_cas_size_2" group="mm_opt_sss_shw_cascades"/>
+		</t_cas_size_2>
+		<t_cas_size_3 x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_cas_size_3" group="mm_opt_sss_shw_cascades"/>
+		</t_cas_size_3>
+		<c_cas_grass_shw_quality x="6" y="3" width="189" height="24">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</c_cas_grass_shw_quality>
+		<l_cas_grass_shw_quality x="197" y="5" width="256" height="20" list_length="4" always_show_scroll="0">
+			<options_item entry="ssfx_ui_cas_grass_shw_quality" group="mm_opt_sss_shw_cascades"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_cas_grass_shw_quality>
+		<t_grass_shadows x="245" y="14" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_grass_shadows" group="mm_opt_sss_shw_cascades"/>
+		</t_grass_shadows>
+		<t_cas_grass_shw_nondir_maxdistance x="245" y="14" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_cas_grass_shw_nondir_maxdistance" group="mm_opt_sss_shw_cascades"/>
+		</t_cas_grass_shw_nondir_maxdistance>
+		<!-- shadows -->
+		<t_shw_lod_quality x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_shw_lod_quality" group="mm_opt_sss_shadows"/>
+		</t_shw_lod_quality>
+		<l_shw_lod_min x="245" y="12" width="125" height="20" list_length="5" always_show_scroll="0">
+			<options_item entry="ssfx_ui_shw_lod_min" group="mm_opt_sss_shadows"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_shw_lod_min>
+		<l_shw_lod_max x="245" y="5" width="125" height="20" list_length="5" always_show_scroll="0">
+			<options_item entry="ssfx_ui_shw_lod_max" group="mm_opt_sss_shadows"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_shw_lod_max>
+		<k_shw_volumetric_force x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_shw_volumetric_force" group="mm_opt_sss_shadows"/>
+		</k_shw_volumetric_force>
+		<t_volumetric_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_volumetric_int" group="mm_opt_sss_shadows"/>
+		</t_volumetric_int>
+		<l_shw_volumetric_quality x="245" y="5" width="125" height="20" list_length="5" always_show_scroll="0">
+			<options_item entry="ssfx_ui_shw_volumetric_quality" group="mm_opt_sss_shadows"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_shw_volumetric_quality>
+		<!-- es -->
+		<t_es_albedo_boost x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_es_albedo_boost" group="mm_opt_sss_es"/>
+		</t_es_albedo_boost>
+		<t_es_albedo_amount x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_es_albedo_amount" group="mm_opt_sss_es"/>
+		</t_es_albedo_amount>
+		<t_es_rough_low x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_es_rough_low" group="mm_opt_sss_es"/>
+		</t_es_rough_low>
+		<t_es_rough_high x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_es_rough_high" group="mm_opt_sss_es"/>
+		</t_es_rough_high>
+		<t_es_rough_pow x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_es_rough_pow" group="mm_opt_sss_es"/>
+		</t_es_rough_pow>
+		<t_es_spec_base x="245" y="7" width="160" height="16" step="0.001">
+			<options_item entry="ssfx_ui_es_spec_base" group="mm_opt_sss_es"/>
+		</t_es_spec_base>
+		<t_es_spec_range x="245" y="14" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_es_spec_range" group="mm_opt_sss_es"/>
+		</t_es_spec_range>
+		<t_es_spec_pow x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_es_spec_pow" group="mm_opt_sss_es"/>
+		</t_es_spec_pow>
+		<t_es_metal_boost x="245" y="7" width="160" height="16" step="0.005">
+			<options_item entry="ssfx_ui_es_metal_boost" group="mm_opt_sss_es"/>
+		</t_es_metal_boost>
+		<t_es_metal_threshold x="245" y="7" width="160" height="16" step="0.005">
+			<options_item entry="ssfx_ui_es_metal_threshold" group="mm_opt_sss_es"/>
+		</t_es_metal_threshold>
+		<t_es_shadow_soft x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_es_shadow_soft" group="mm_opt_sss_es"/>
+		</t_es_shadow_soft>
+		<t_es_horizon x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_es_horizon" group="mm_opt_sss_es"/>
+		</t_es_horizon>
+		<t_es_emissive x="245" y="7" width="160" height="16" step="0.5">
+			<options_item entry="ssfx_ui_es_emissive" group="mm_opt_sss_es"/>
+		</t_es_emissive>
+		<t_es_flora_spec x="245" y="7" width="160" height="16" step="0.005">
+			<options_item entry="ssfx_ui_es_flora_spec" group="mm_opt_sss_es"/>
+		</t_es_flora_spec>
+		<t_es_flora_sky x="245" y="14" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_es_flora_sky" group="mm_opt_sss_es"/>
+		</t_es_flora_sky>
+		<t_es_flora_sss x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_es_flora_sss" group="mm_opt_sss_es"/>
+		</t_es_flora_sss>
+		<t_es_water_spec x="245" y="7" width="160" height="16" step="0.002">
+			<options_item entry="ssfx_ui_es_water_spec" group="mm_opt_sss_es"/>
+		</t_es_water_spec>
+		<t_es_water_rough x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_es_water_rough" group="mm_opt_sss_es"/>
+		</t_es_water_rough>
+		<k_es_burley x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_es_burley" group="mm_opt_sss_es" depend="restart"/>
+		</k_es_burley>
+		<k_es_ggx x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_es_ggx" group="mm_opt_sss_es" depend="restart"/>
+		</k_es_ggx>
+		<!-- ssr -->
+		<l_ssr_quality x="245" y="5" width="125" height="20" list_length="6" always_show_scroll="0">
+			<options_item entry="ssfx_ui_ssr_quality" group="mm_opt_sss_ssr" depend="restart"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_ssr_quality>
+		<t_ssr_render_scale x="245" y="7" width="160" height="16" step="0.2" invert="1">
+			<options_item entry="ssfx_ui_ssr_render_scale" group="mm_opt_sss_ssr"/>
+		</t_ssr_render_scale>
+		<t_ssr_blur x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_ssr_blur" group="mm_opt_sss_ssr"/>
+		</t_ssr_blur>
+		<k_ssr_use_noise x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_ssr_use_noise" group="mm_opt_sss_ssr"/>
+		</k_ssr_use_noise>
+		<t_ssr_int x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_ssr_int" group="mm_opt_sss_ssr"/>
+		</t_ssr_int>
+		<t_ssr_sky_int x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_ssr_sky_int" group="mm_opt_sss_ssr"/>
+		</t_ssr_sky_int>
+		<t_ssr_weapon_int x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_ssr_weapon_int" group="mm_opt_sss_ssr"/>
+		</t_ssr_weapon_int>
+		<t_ssr_weapon_int_max x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_ssr_weapon_int_max" group="mm_opt_sss_ssr"/>
+		</t_ssr_weapon_int_max>
+		<!-- sss -->
+		<l_sss_quality_dir x="245" y="5" width="125" height="20" list_length="4" always_show_scroll="0">
+			<options_item entry="ssfx_ui_sss_quality_dir" group="mm_opt_sss_sss" depend="restart"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_sss_quality_dir>
+		<l_sss_quality_point x="245" y="5" width="125" height="20" list_length="4" always_show_scroll="0">
+			<options_item entry="ssfx_ui_sss_quality_point" group="mm_opt_sss_sss" depend="restart"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_sss_quality_point>
+		<k_sss_enable_dir x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_sss_enable_dir" group="mm_opt_sss_sss"/>
+		</k_sss_enable_dir>
+		<k_sss_enable_point x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_sss_enable_point" group="mm_opt_sss_sss"/>
+		</k_sss_enable_point>
+		<t_sss_len_dir x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_sss_len_dir" group="mm_opt_sss_sss"/>
+		</t_sss_len_dir>
+		<t_sss_len_point x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_sss_len_point" group="mm_opt_sss_sss"/>
+		</t_sss_len_point>
+		<!-- terrain -->
+		<t_terrain_dist x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_terrain_dist" group="mm_opt_sss_terrain"/>
+		</t_terrain_dist>
+		<l_terrain_pom_quality x="245" y="5" width="125" height="20" list_length="3" always_show_scroll="0">
+			<options_item entry="ssfx_ui_terrain_pom_quality" group="mm_opt_sss_terrain"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_terrain_pom_quality>
+		<k_terra_pom_refine x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_terra_pom_refine" group="mm_opt_sss_terrain" depend="restart"/>
+		</k_terra_pom_refine>
+		<t_terrain_pom_range x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_terrain_pom_range" group="mm_opt_sss_terrain"/>
+		</t_terrain_pom_range>
+		<t_terrain_pom_height x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_terrain_pom_height" group="mm_opt_sss_terrain"/>
+		</t_terrain_pom_height>
+		<t_terrain_pom_water x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_terrain_pom_water" group="mm_opt_sss_terrain"/>
+		</t_terrain_pom_water>
+		<k_terra_grass_align x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_terra_grass_align" group="mm_opt_sss_terrain"/>
+		</k_terra_grass_align>
+		<t_terra_grass_slope x="245" y="14" width="160" height="16" step="0.011111">
+			<options_item entry="ssfx_ui_terra_grass_slope" group="mm_opt_sss_terrain"/>
+		</t_terra_grass_slope>
+		<!-- water -->
+		<l_water_ssr_quality x="245" y="5" width="125" height="20" list_length="5" always_show_scroll="0">
+			<options_item entry="ssfx_ui_water_ssr_quality" group="mm_opt_sss_water" depend="restart"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_water_ssr_quality>
+		<t_water_ssr_res x="245" y="7" width="160" height="16" step="0.5" invert="1">
+			<options_item entry="ssfx_ui_water_ssr_res" group="mm_opt_sss_water"/>
+		</t_water_ssr_res>
+		<l_water_parallax_quality x="245" y="5" width="125" height="20" list_length="4" always_show_scroll="0">
+			<options_item entry="ssfx_ui_water_parallax_quality" group="mm_opt_sss_water" depend="restart"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_water_parallax_quality>
+		<t_water_parallax_height x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_water_parallax_height" group="mm_opt_sss_water"/>
+		</t_water_parallax_height>
+		<t_water_blur x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_water_blur" group="mm_opt_sss_water"/>
+		</t_water_blur>
+		<t_water_blur_pattern x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_water_blur_pattern" group="mm_opt_sss_water"/>
+		</t_water_blur_pattern>
+		<t_water_distortion x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_water_distortion" group="mm_opt_sss_water"/>
+		</t_water_distortion>
+		<t_water_turbidity x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_water_turbidity" group="mm_opt_sss_water"/>
+		</t_water_turbidity>
+		<t_water_softborder x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_water_softborder" group="mm_opt_sss_water"/>
+		</t_water_softborder>
+		<t_water_reflect x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_water_reflect" group="mm_opt_sss_water"/>
+		</t_water_reflect>
+		<t_water_specular_int x="245" y="7" width="160" height="16" step="0.6">
+			<options_item entry="ssfx_ui_water_specular_int" group="mm_opt_sss_water"/>
+		</t_water_specular_int>
+		<t_water_caustics x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_water_caustics" group="mm_opt_sss_water"/>
+		</t_water_caustics>
+		<t_water_ripples_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_water_ripples_int" group="mm_opt_sss_water"/>
+		</t_water_ripples_int>
+		<!-- wpn_dof -->
+		<t_wdof_aim_fadestart x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wdof_aim_fadestart" group="mm_opt_sss_wpn_dof"/>
+		</t_wdof_aim_fadestart>
+		<t_wdof_aim_fadelen x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wdof_aim_fadelen" group="mm_opt_sss_wpn_dof"/>
+		</t_wdof_aim_fadelen>
+		<t_wdof_aim_blur x="245" y="14" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_wdof_aim_blur" group="mm_opt_sss_wpn_dof"/>
+		</t_wdof_aim_blur>
+		<t_wdof_aim_edgeblur x="245" y="14" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wdof_aim_edgeblur" group="mm_opt_sss_wpn_dof"/>
+		</t_wdof_aim_edgeblur>
+		<t_wdof_fadestart x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wdof_fadestart" group="mm_opt_sss_wpn_dof"/>
+		</t_wdof_fadestart>
+		<t_wdof_fadelen x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wdof_fadelen" group="mm_opt_sss_wpn_dof"/>
+		</t_wdof_fadelen>
+		<t_wdof_blur x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="ssfx_ui_wdof_blur" group="mm_opt_sss_wpn_dof"/>
+		</t_wdof_blur>
+		<t_wdof_edgeblur x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wdof_edgeblur" group="mm_opt_sss_wpn_dof"/>
+		</t_wdof_edgeblur>
+		<k_wdof_reloading x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_wdof_reloading" group="mm_opt_sss_wpn_dof"/>
+		</k_wdof_reloading>
+		<k_wdof_pda x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_wdof_pda" group="mm_opt_sss_wpn_dof"/>
+		</k_wdof_pda>
+		<k_wdof_inventory x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_wdof_inventory" group="mm_opt_sss_wpn_dof"/>
+		</k_wdof_inventory>
+		<k_wdof_fdda x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_wdof_fdda" group="mm_opt_sss_wpn_dof"/>
+		</k_wdof_fdda>
+		<k_wdof_looting_mutant x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_wdof_looting_mutant" group="mm_opt_sss_wpn_dof"/>
+		</k_wdof_looting_mutant>
+		<!-- ssfx_gloss -->
+		<t_gloss_min x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_gloss_min" group="mm_opt_sss_ssfx_gloss"/>
+		</t_gloss_min>
+		<t_gloss_max x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_gloss_max" group="mm_opt_sss_ssfx_gloss"/>
+		</t_gloss_max>
+		<k_gloss_auto_gloss x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="ssfx_ui_gloss_auto_gloss" group="mm_opt_sss_ssfx_gloss"/>
+		</k_gloss_auto_gloss>
+		<t_gloss_auto_gloss_max x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_gloss_auto_gloss_max" group="mm_opt_sss_ssfx_gloss"/>
+		</t_gloss_auto_gloss_max>
+		<t_spec_int x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_spec_int" group="mm_opt_sss_ssfx_gloss"/>
+		</t_spec_int>
+		<t_spec_color x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_spec_color" group="mm_opt_sss_ssfx_gloss"/>
+		</t_spec_color>
+		<!-- ssfx_wet_surf -->
+		<t_wet_buildup x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wet_buildup" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_buildup>
+		<t_wet_dry x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wet_dry" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_dry>
+		<t_wet_ripples_size x="245" y="7" width="160" height="16" step="0.01" invert="1">
+			<options_item entry="ssfx_ui_wet_ripples_size" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_ripples_size>
+		<t_wet_ripples_speed x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wet_ripples_speed" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_ripples_speed>
+		<t_wet_ripples_min_speed x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wet_ripples_min_speed" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_ripples_min_speed>
+		<t_wet_ripples x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wet_ripples" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_ripples>
+		<t_wet_waterfall_size x="245" y="7" width="160" height="16" step="0.01" invert="1">
+			<options_item entry="ssfx_ui_wet_waterfall_size" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_waterfall_size>
+		<t_wet_waterfall_speed x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wet_waterfall_speed" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_waterfall_speed>
+		<t_wet_waterfall_min_speed x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wet_waterfall_min_speed" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_waterfall_min_speed>
+		<t_wet_waterfall x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wet_waterfall" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_waterfall>
+		<l_wet_cover_res x="245" y="5" width="142" height="20" list_length="6" always_show_scroll="0">
+			<options_item entry="ssfx_ui_wet_cover_res" group="mm_opt_sss_ssfx_wet_surf"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_wet_cover_res>
+		<t_wet_cover_distance x="245" y="7" width="160" height="16" step="1">
+			<options_item entry="ssfx_ui_wet_cover_distance" group="mm_opt_sss_ssfx_wet_surf"/>
+		</t_wet_cover_distance>
+		<!-- wind -->
+		<t_wind_min_speed x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wind_min_speed" group="mm_opt_sss_wind"/>
+		</t_wind_min_speed>
+		<t_wind_grass_speed x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wind_grass_speed" group="mm_opt_sss_wind"/>
+		</t_wind_grass_speed>
+		<t_wind_grass_int x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wind_grass_int" group="mm_opt_sss_wind"/>
+		</t_wind_grass_int>
+		<t_wind_grass_push x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wind_grass_push" group="mm_opt_sss_wind"/>
+		</t_wind_grass_push>
+		<t_wind_grass_wave x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wind_grass_wave" group="mm_opt_sss_wind"/>
+		</t_wind_grass_wave>
+		<t_wind_tree_branch x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wind_tree_branch" group="mm_opt_sss_wind"/>
+		</t_wind_tree_branch>
+		<t_wind_tree_trunk x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_ui_wind_tree_trunk" group="mm_opt_sss_wind"/>
+		</t_wind_tree_trunk>
+		<t_wind_tree_bend x="245" y="7" width="160" height="16" step="0.1">
+			<options_item entry="ssfx_ui_wind_tree_bend" group="mm_opt_sss_wind"/>
+		</t_wind_tree_bend>
+		<!-- x -->
+		<r_x_ray_mode x="245" y="5" width="125" height="20" list_length="4" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</r_x_ray_mode>
+		<t_x_sun_min x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="r2_sunshafts_min" group="mm_opt_sss_x"/>
+		</t_x_sun_min>
+		<t_x_sun_value x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="r2_sunshafts_value" group="mm_opt_sss_x"/>
+		</t_x_sun_value>
+		<t_x_ss_length x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="r2_ss_sunshafts_length" group="mm_opt_sss_x"/>
+		</t_x_ss_length>
+		<t_x_ss_radius x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="r2_ss_sunshafts_radius" group="mm_opt_sss_x"/>
+		</t_x_ss_radius>
+		<t_x_hud_hemi x="245" y="7" width="160" height="16" step="0.01">
+			<options_item entry="ssfx_hud_hemi" group="mm_opt_sss_x"/>
+		</t_x_hud_hemi>
+		<t_x_grass_density x="245" y="7" width="160" height="16" step="0.02" invert="1">
+			<options_item entry="r__detail_density" group="mm_opt_sss_x"/>
+		</t_x_grass_density>
+		<t_x_grass_height x="245" y="7" width="160" height="16" step="0.05">
+			<options_item entry="r__detail_height" group="mm_opt_sss_x"/>
+		</t_x_grass_height>
+		<t_x_grass_dist x="245" y="7" width="160" height="16" step="2">
+			<options_item entry="r__detail_radius" group="mm_opt_sss_x"/>
+		</t_x_grass_dist>
+	</rows>
+</w>

@@ -21,7 +21,7 @@ protected:
 public:
     IInputReceiver* m_pStoredInputReceiver;
     CUISequencer();
-    void Start(LPCSTR tutor_name);
+    void Start(LPCSTR tutor_name, LPCSTR xml_file = "game_tutorials.xml");
     void Stop();
     void Next();
 

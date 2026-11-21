@@ -20,6 +20,8 @@
 #include "level_bullet_manager.h"
 #include "xrmessages.h"
 #include "../xrEngine/gamemtllib.h"
+#include "../xrEngine/IGame_Persistent.h"
+#include "../xrEngine/ssfx_console_vars.h" // ps_ssfx_int_grass_params_2
 
 #ifdef DEBUG
 #include "../xrEngine/StatGraph.h"
@@ -315,6 +317,13 @@ void CExplosive::Explode() {
         DBG_DrawPoint(pos, 0.3f, D3DCOLOR_XRGB(255, 0, 0));
     }
 #endif
+    // Interactive Grass FX
+    g_pGamePersistent->GrassBendersAddExplosion(cast_game_object()->ID(), pos,
+                                                Fvector().set(0, -99, 0), 1.33f,
+                                                ps_ssfx_int_grass_params_2.y,
+                                                ps_ssfx_int_grass_params_2.x,
+                                                m_fBlastRadius * 2.0f);
+
     //	Msg("---------CExplosive Explode [%d] frame[%d]",cast_game_object()->ID(), Device.dwFrame);
     OnBeforeExplosion();
     //играем звук взрыва

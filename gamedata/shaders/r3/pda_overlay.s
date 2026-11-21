@@ -1,0 +1,17 @@
+-- Screen Space Shaders on / off ( ssfx_enable ): this shader exists only with SSS on. The
+-- SSS version is copied unchanged ( _ssfx_work\transfer_shaders.py ).
+if ssfx_enabled then
+function normal   (shader, t_base, t_second, t_detail)
+	shader:begin  ("pda_overlay","pda_overlay")
+		: fog			(true)
+		: zb			(true,false)
+		: blend			(true,blend.srcalpha,blend.invsrcalpha)
+		: aref			(true,0)
+		: sorting		(2,true)
+		: distort		(true)
+	shader:dx10texture	("s_base",	t_base)
+	shader:dx10texture	("s_pdascreen",	"$user$ui")
+	shader:dx10texture	("s_hud_rain",	"fx\\hud_rain")
+	shader:dx10sampler	("smp_base")
+end
+end

@@ -1,8 +1,10 @@
 #include "stdafx.h"
+#include <cmath>
 #include "player_hud.h"
 #include "player_hud_legs.h"
 #include "HudItem.h"
 #include "Weapon.h"
+#include "ui/UIHudEditor.h"
 #include "ui_base.h"
 #include "actor.h"
 #include "physic_item.h"
@@ -137,7 +139,8 @@ player_hud_motion* player_hud_motion_container::find_motion(const shared_str& na
     return NULL;
 }
 
-void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_str& sect) {
+void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_str& sect,
+                                       bool show_only) {
     // MotionID is local to a concrete hands model. Outfit changes replace that
     // model, so cached IDs must be rebuilt instead of appended to the old set.
     m_anims.clear();
@@ -151,6 +154,8 @@ void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_
     MotionID motion_ID;
 
     for (; _b != _e; ++_b) {
+        if (show_only && xr_strcmp(_b->first.c_str(), "anm_show") != 0)
+            continue;
         if (strstr(_b->first.c_str(), "anm_") == _b->first.c_str()) {
             const shared_str& anm = _b->second;
             m_anims.resize(m_anims.size() + 1);
@@ -207,6 +212,10 @@ void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_
 #endif // #ifdef DEBUG
                 }
             }
+            if (show_only && pm->m_animations.empty()) {
+                m_anims.pop_back();
+                continue;
+            }
             R_ASSERT2(pm->m_animations.size(),
                       make_string("motion not found [%s]", pm->m_base_name.c_str()).c_str());
         }
@@ -251,7 +260,7 @@ void attachable_hud_item::update(bool bForce) {
     bool is_16x9 = UI().is_widescreen();
 
     if (!!m_measures.m_prop_flags.test(hud_item_measures::e_16x9_mode_now) != is_16x9)
-        m_measures.load(m_sect_name, m_model);
+        m_measures.load(m_sect_name, m_model, m_controller_pose_section);
 
     Fvector ypr = m_measures.m_item_attach[1];
     ypr.mul(PI / 180.f);
@@ -343,19 +352,21 @@ void attachable_hud_item::render_item_ui() {
     m_parent_hud_item->render_item_3d_ui();
 }
 
-void hud_item_measures::load(const shared_str& sect_name, IKinematics* K) {
+void hud_item_measures::load(const shared_str& sect_name, IKinematics* K,
+                             const shared_str& pose_section) {
+    const shared_str& pose = pose_section.size() ? pose_section : sect_name;
     bool is_16x9 = UI().is_widescreen();
     string64 _prefix;
     xr_sprintf(_prefix, "%s", is_16x9 ? "_16x9" : "");
     string128 val_name;
 
     strconcat(sizeof(val_name), val_name, "hands_position", _prefix);
-    m_hands_attach[0] = pSettings->r_fvector3(sect_name, val_name);
+    m_hands_attach[0] = pSettings->r_fvector3(pose, val_name);
     strconcat(sizeof(val_name), val_name, "hands_orientation", _prefix);
-    m_hands_attach[1] = pSettings->r_fvector3(sect_name, val_name);
+    m_hands_attach[1] = pSettings->r_fvector3(pose, val_name);
 
-    m_item_attach[0] = pSettings->r_fvector3(sect_name, "item_position");
-    m_item_attach[1] = pSettings->r_fvector3(sect_name, "item_orientation");
+    m_item_attach[0] = pSettings->r_fvector3(pose, "item_position");
+    m_item_attach[1] = pSettings->r_fvector3(pose, "item_orientation");
 
     shared_str bone_name;
     m_prop_flags.set(e_fire_point, pSettings->line_exist(sect_name, "fire_bone"));
@@ -417,6 +428,24 @@ attachable_hud_item::~attachable_hud_item() {
     m_model = NULL;
 }
 
+void HudInertionParams::Load(LPCSTR section, LPCSTR prefix, LPCSTR suffix, bool allow_negative) {
+    if (!section || !pSettings->section_exist(section))
+        return;
+
+    const auto read = [&](LPCSTR name, float fallback) {
+        string64 key;
+        xr_sprintf(key, "%s%s%s", prefix, name, suffix);
+        const float value = READ_IF_EXISTS(pSettings, r_float, section, key, fallback);
+        return std::isfinite(value) && (allow_negative || value >= 0.f) ? value : fallback;
+    };
+
+    pitch_offsets.x = read("pitch_offset_r", pitch_offsets.x);
+    pitch_offsets.y = read("pitch_offset_n", pitch_offsets.y);
+    pitch_offsets.z = read("pitch_offset_d", pitch_offsets.z);
+    origin_offset = read("origin_offset", origin_offset);
+    speed = read("speed", speed);
+}
+
 void attachable_hud_item::load(const shared_str& sect_name) {
     m_sect_name = sect_name;
 
@@ -425,6 +454,21 @@ void attachable_hud_item::load(const shared_str& sect_name) {
     m_hud_fov = 0.f;
     m_hud_fov_degrees = 0.f;
     m_viewport_near = 0.f;
+    m_hud_fov_factor = READ_IF_EXISTS(pSettings, r_float, sect_name, "hud_fov_factor", 1.f);
+    if (!(m_hud_fov_factor > EPS_S) || !std::isfinite(m_hud_fov_factor))
+        m_hud_fov_factor = 1.f;
+
+    m_hud_inertion = READ_IF_EXISTS(pSettings, r_bool, sect_name, "hud_inertion", true);
+    m_hip_inertion = HudInertionParams{};
+    m_hip_inertion.Load("gunslinger_base", "inertion_default_", "", true);
+    m_aim_inertion = m_hip_inertion;
+    // ADS defaults to zero camera-pitch compensation, even with partial LTX profiles.
+    m_aim_inertion.pitch_offsets.set(0.f, 0.f, 0.f);
+    m_aim_inertion.Load("gunslinger_base", "inertion_aim_default_", "", true);
+    m_grenade_inertion = m_aim_inertion;
+    m_hip_inertion.Load(sect_name.c_str(), "inertion_");
+    m_aim_inertion.Load(sect_name.c_str(), "inertion_aim_");
+    m_grenade_inertion.Load(sect_name.c_str(), "inertion_gl_");
 
     if (pSettings->line_exist(sect_name, "hud_fov")) {
         const float configured_hud_fov = pSettings->r_float(sect_name, "hud_fov");
@@ -470,7 +514,9 @@ void attachable_hud_item::load(const shared_str& sect_name) {
 
     // Visual
     const shared_str& visual_name = pSettings->r_string(sect_name, "item_visual");
+    ::Render->hud_loading = true;
     m_model = smart_cast<IKinematics*>(::Render->model_Create(visual_name.c_str()));
+    ::Render->hud_loading = false;
 
     m_attach_place_idx = pSettings->r_u16(sect_name, "attach_place_idx");
     m_measures.load(sect_name, m_model);
@@ -606,12 +652,14 @@ player_hud::~player_hud() {
     m_pool.clear();
 }
 
-attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_section) {
+attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_section,
+                                                        const shared_str& pose_section,
+                                                        bool show_only) {
     // На всякий случай удаляем предыдущий temporary HUD.
     if (m_controller_item)
         detach_controller_item();
 
-    attachable_hud_item* pi = create_hud_item(hud_section);
+    attachable_hud_item* pi = create_hud_item(hud_section, show_only);
 
     if (!pi)
         return NULL;
@@ -638,6 +686,9 @@ attachable_hud_item* player_hud::attach_controller_item(const shared_str& hud_se
 
     pi->m_parent_hud_item = NULL;
     pi->m_controller_owned = true;
+    pi->m_controller_pose_section = pose_section;
+    if (pose_section.size())
+        pi->m_measures.load(pi->m_sect_name, pi->m_model, pose_section);
 
     m_controller_item = pi;
     m_controller_motion.invalidate();
@@ -661,6 +712,10 @@ void player_hud::detach_controller_item() {
 
     m_controller_item->m_controller_owned = false;
     m_controller_item->m_parent_hud_item = NULL;
+    if (m_controller_item->m_controller_pose_section.size()) {
+        m_controller_item->m_controller_pose_section = nullptr;
+        m_controller_item->m_measures.load(m_controller_item->m_sect_name, m_controller_item->m_model);
+    }
 
     Msg("* ItemUse: detached HUD section [%s]", m_controller_item->m_sect_name.c_str());
 
@@ -686,7 +741,9 @@ void player_hud::load(const shared_str& player_hud_sect) {
 
     m_sect_name = player_hud_sect;
     const shared_str& model_name = pSettings->r_string(player_hud_sect, "visual");
+    ::Render->hud_loading = true;
     m_model = smart_cast<IKinematicsAnimated*>(::Render->model_Create(model_name.c_str()));
+    ::Render->hud_loading = false;
     m_controller_motion.invalidate();
 
     if (pSettings->line_exist("hud_extensions", "hands_animations_path")) {
@@ -703,7 +760,7 @@ void player_hud::load(const shared_str& player_hud_sect) {
     // Rebind them before an attached weapon or a queued controller animation
     // is restarted on the newly selected outfit hands.
     for (attachable_hud_item* item : m_pool)
-        item->m_hand_motions.load(m_model, item->m_sect_name);
+        item->m_hand_motions.load(m_model, item->m_sect_name, item->m_controller_show_only);
 
     m_ancors.clear();
     CInifile::Sect& _sect = pSettings->r_section(player_hud_sect);
@@ -840,9 +897,21 @@ void player_hud::update(const Fmatrix& cam_trans) {
     update_additional(trans);
 
     Fvector ypr = attach_rot();
+    Fvector position = attach_pos();
+    if (const auto* hud = m_attached_items[0]) {
+        if (const auto* weapon = smart_cast<const CWeapon*>(hud->m_parent_hud_item)) {
+            if (weapon->IsScopeAttached()) {
+                const bool wide = hud->m_measures.m_prop_flags.test(
+                    hud_item_measures::e_16x9_mode_now);
+                weapon->ApplyHudPoseSettings("hands_position", "hands_orientation", wide,
+                                             false, position, ypr);
+            }
+            HudEditorHandsOverride(weapon, position, ypr);
+        }
+    }
     ypr.mul(PI / 180.f);
     m_attach_offset.setHPB(ypr.x, ypr.y, ypr.z);
-    m_attach_offset.translate_over(attach_pos());
+    m_attach_offset.translate_over(position);
     m_transform.mul(trans, m_attach_offset);
     // insert inertion here
 
@@ -1051,7 +1120,7 @@ bool player_hud::has_hud_motion(const shared_str& hud_section,
     return false;
 }
 
-bool player_hud::can_attach_controller_item(const shared_str& hud_section) {
+bool player_hud::can_attach_controller_item(const shared_str& hud_section, bool show_only) {
     if (!m_model || !hud_section.size() ||
         !pSettings->section_exist(hud_section.c_str()) ||
         !pSettings->line_exist(hud_section.c_str(), "item_visual") ||
@@ -1080,6 +1149,13 @@ bool player_hud::can_attach_controller_item(const shared_str& hud_section) {
 
     if (!visual_exists)
         return false;
+
+    if (show_only) {
+        // Donor animators play only anm_show; their inherited idles and detector
+        // companion aliases are not needed for a controller one-shot.
+        return pSettings->r_u16(hud_section.c_str(), "attach_place_idx") == 0 &&
+            has_hud_motion(hud_section, "anm_show");
+    }
 
     // create_hud_item() loads every anm_* alias in the section. Verify all of
     // them up front so optional controller HUDs never reach its legacy assert
@@ -1159,19 +1235,37 @@ void player_hud::update_additional(Fmatrix& trans) {
         m_attached_items[1]->update_hud_additional(trans);
 }
 
-static const float PITCH_OFFSET_R = 0.017f;
-static const float PITCH_OFFSET_N = 0.012f;
-static const float PITCH_OFFSET_D = 0.02f;
-static const float ORIGIN_OFFSET = -0.05f;
-static const float TENDTO_SPEED = 5.f;
-
 void player_hud::update_inertion(Fmatrix& trans) {
-    if (inertion_allowed()) {
-        Fmatrix xform;
-        Fvector& origin = trans.c;
-        xform = trans;
+    const auto* hud = m_attached_items[0] ? m_attached_items[0] : m_attached_items[1];
+    const auto* weapon = hud
+        ? smart_cast<const CWeapon*>(hud->m_parent_hud_item) : nullptr;
+    const bool zoomed = weapon && weapon->IsZoomed();
 
-        static Fvector st_last_dir = { 0, 0, 0 };
+    Fmatrix xform;
+    Fvector& origin = trans.c;
+    xform = trans;
+
+    static Fvector st_last_dir = { 0, 0, 0 };
+    static const attachable_hud_item* st_last_hud = nullptr;
+    static bool st_initialized = false;
+    static bool st_zoomed = false;
+
+    // The vanilla history is shared between hip and ADS and is not updated
+    // while inertion is disabled. Never carry that stale camera direction
+    // into another item or across an ADS boundary.
+    const bool reset_history = !st_initialized || st_last_hud != hud ||
+        st_zoomed != zoomed || !inertion_allowed();
+    if (reset_history) {
+        st_last_dir.set(xform.k);
+        st_last_hud = hud;
+        st_initialized = true;
+        st_zoomed = zoomed;
+    }
+
+    if (inertion_allowed()) {
+        HudInertionParams params;
+        if (hud)
+            params = weapon ? weapon->GetHudInertionParams(*hud) : hud->m_hip_inertion;
 
         // calc difference
         Fvector diff_dir;
@@ -1189,28 +1283,34 @@ void player_hud::update_inertion(Fmatrix& trans) {
         }
 
         // tend to forward
-        st_last_dir.mad(diff_dir, TENDTO_SPEED * Device.fTimeDelta);
-        origin.mad(diff_dir, ORIGIN_OFFSET);
+        // Exponential damping cannot overshoot after a long frame and keeps
+        // the same response at every frame rate. Zero speed means that the
+        // profile requests no lag, not a permanently frozen camera history.
+        const float follow = params.speed > EPS_S
+            ? 1.f - std::exp(-params.speed * Device.fTimeDelta) : 1.f;
+        st_last_dir.mad(diff_dir, follow);
+        origin.mad(diff_dir, -params.origin_offset);
 
         // pitch compensation
-        float pitch = angle_normalize_signed(xform.k.getP());
-        origin.mad(xform.k, -pitch * PITCH_OFFSET_D);
-        origin.mad(xform.i, -pitch * PITCH_OFFSET_R);
-        origin.mad(xform.j, -pitch * PITCH_OFFSET_N);
+        const float pitch = angle_normalize_signed(xform.k.getP());
+        origin.mad(xform.k, pitch * params.pitch_offsets.z);
+        origin.mad(xform.i, pitch * params.pitch_offsets.x);
+        origin.mad(xform.j, pitch * params.pitch_offsets.y);
     }
 }
 
-attachable_hud_item* player_hud::create_hud_item(const shared_str& sect) {
+attachable_hud_item* player_hud::create_hud_item(const shared_str& sect, bool show_only) {
     xr_vector<attachable_hud_item*>::iterator it = m_pool.begin();
     xr_vector<attachable_hud_item*>::iterator it_e = m_pool.end();
     for (; it != it_e; ++it) {
         attachable_hud_item* itm = *it;
-        if (itm->m_sect_name == sect)
+        if (itm->m_sect_name == sect && itm->m_controller_show_only == show_only)
             return itm;
     }
     attachable_hud_item* res = xr_new<attachable_hud_item>(this);
+    res->m_controller_show_only = show_only;
     res->load(sect);
-    res->m_hand_motions.load(m_model, sect);
+    res->m_hand_motions.load(m_model, sect, show_only);
     m_pool.push_back(res);
 
     return res;
@@ -1333,11 +1433,11 @@ void player_hud::UpdateHudProjection() {
             ? source->m_hud_fov_degrees / std::max(Device.fFOV, EPS_S)
             : (source ? source->m_hud_fov : 0.f);
 
-    float item_fov_factor = 1.f;
+    float item_fov_factor = source ? source->m_hud_fov_factor : 1.f;
     if (source && source->m_parent_hud_item) {
-        CWeapon* weapon = smart_cast<CWeapon*>(source->m_parent_hud_item);
+        const auto* weapon = smart_cast<const CWeapon*>(source->m_parent_hud_item);
         if (weapon)
-            item_fov_factor = weapon->AlternativeHudFovFactor();
+            item_fov_factor = weapon->HudFovFactor(item_fov_factor);
     }
 
     if (!fsimilar(item_fov_factor, 1.f)) {
@@ -1408,10 +1508,12 @@ void player_hud::calc_transform(u16 attach_slot_idx, const Fmatrix& offset, Fmat
 }
 
 bool player_hud::inertion_allowed() {
-    attachable_hud_item* hi = m_attached_items[0];
+    const auto* hi = m_attached_items[0] ? m_attached_items[0] : m_attached_items[1];
 
     if (!hi)
         return true;
+    if (!hi->m_hud_inertion)
+        return false;
 
     // Controller-owned HUD item не має CHudItem parent.
     if (hi->m_controller_owned || !hi->m_parent_hud_item)

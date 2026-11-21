@@ -1,5 +1,8 @@
 #include "StdAfx.h"
 #include "light.h"
+#if RENDER == R_R4
+#include "xrEngine/ssfx_console_vars.h"
+#endif
 #include <algorithm> // Для std::clamp та std::max
 
 static const float SQRT2 = 1.4142135623730950488016887242097f;
@@ -29,8 +32,13 @@ light::~light() {
     for (auto*& part : omnipart) {
         xr_delete(part);
     }
+
+    // Screen Space Shaders: release the SSS slot this light occupies, otherwise the SSS pass keeps
+    // a dangling pointer to it.
+    if (sss_on_light_destroy)
+        sss_on_light_destroy(this);
 #endif // (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
-    
+
     set_active(false);
 
 #if (RENDER == R_R2) || (RENDER == R_R3) || (RENDER == R_R4)
@@ -235,8 +243,40 @@ void light::xform_calc() {
     }
 }
 
+#if RENDER == R_R4
+// Screen Space Shaders, Monolith light.h: with the volumetric module installed every light gets
+// fog while "Force volumetric" is on, its intensity comes from the menu and the fog always reaches
+// the whole light range. Without the module they do what the stock setters do. DX11 only: the
+// other renderers keep the stock inline setters in light.h.
+void light::set_volumetric(bool b) {
+    if (RImplementation.o.ssfx_volumetric && ps_ssfx_volumetric.x > 0)
+        b = true;
+    flags.bVolumetric = b;
+}
+
+void light::set_volumetric_intensity(float fValue) {
+    if (RImplementation.o.ssfx_volumetric)
+        fValue = ps_ssfx_volumetric.y;
+    m_volumetric_intensity = fValue;
+}
+
+void light::set_volumetric_distance(float fValue) {
+    if (RImplementation.o.ssfx_volumetric)
+        fValue = 1.0f;
+    m_volumetric_distance = fValue;
+}
+
+#endif // RENDER == R_R4
 static const Fvector cmNorm[6] = { {0.f, 1.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, 0.f, -1.f}, {0.f, 0.f, 1.f}, {0.f, 1.f, 0.f}, {0.f, 1.f, 0.f} };
 static const Fvector cmDir[6]  = { {1.f, 0.f, 0.f}, {-1.f, 0.f, 0.f}, {0.f, 1.f, 0.f}, {0.f, -1.f, 0.f}, {0.f, 0.f, 1.f}, {0.f, 0.f, -1.f} };
+
+bool light::visible_in_current_view() {
+    // Occlusion results from the lens projection must not cull the main view.
+    if (Device.scopeLensPass)
+        return true;
+    vis_update();
+    return vis.visible;
+}
 
 void light::export_(light_Package& package) {
     if (flags.bShadow) {
@@ -257,9 +297,22 @@ void light::export_(light_Package& package) {
                 L->set_cone(PI_DIV_2);
                 L->set_range(range);
                 L->set_color(color);
-                L->spatial.sector = spatial.sector; 
+                L->spatial.sector = spatial.sector;
                 L->s_spot = s_spot;
                 L->s_point = s_point;
+
+                // Screen Space Shaders: the SSS pass treats the six faces of a point light as one
+                // light, so every face has to know its index and which light it came from.
+                L->omnipart_num = f;
+                L->omipart_parent = omnipart[0];
+                L->sss_is_playerlight = sss_is_playerlight;
+#if RENDER == R_R4
+                // Monolith light.cpp marks every face active. The SSS pass only takes active
+                // lights, so without it point lights never got screen space shadows. The faces are
+                // never registered in the spatial tree, so set_active() is not involved.
+                if (RImplementation.o.ssfx_sss)
+                    L->flags.bActive = true;
+#endif
 
 #if (RENDER == R_R3) || (RENDER == R_R4)
                 if (RImplementation.o.dx10_msaa) {
@@ -271,7 +324,13 @@ void light::export_(light_Package& package) {
                 }
 #endif // (RENDER==R_R3) || (RENDER==R_R4)
 
+#if RENDER == R_R4
+                // Monolith light.cpp: under "Force volumetric" the faces keep their own flag.
+                if (!RImplementation.o.ssfx_volumetric || ps_ssfx_volumetric.x <= 0)
+                    L->set_volumetric(flags.bVolumetric);
+#else
                 L->set_volumetric(flags.bVolumetric);
+#endif
                 L->set_volumetric_quality(m_volumetric_quality);
                 L->set_volumetric_intensity(m_volumetric_intensity);
                 L->set_volumetric_distance(m_volumetric_distance);
@@ -280,6 +339,10 @@ void light::export_(light_Package& package) {
             }
         } break;
         case IRender_Light::SPOT:
+#if RENDER == R_R4
+            // Monolith light.cpp: the menu intensity is applied again every frame (see the setter).
+            set_volumetric_intensity(m_volumetric_intensity);
+#endif
             package.v_shadowed.push_back(this);
             break;
         }
@@ -309,6 +372,10 @@ extern float ps_r2_slight_fade;
 float light::get_LOD() const {
     if (!flags.bShadow) return 1.f;
     const float distSQ = Device.vCameraPosition.distance_to_sqr(spatial.sphere.P) + EPS;
+
+    // Screen Space Shaders: the SSS pass sorts its light slots by this value.
+    distance = distSQ;
+
     const float ssa = ps_r2_slight_fade * spatial.sphere.R / distSQ;
     
     // МАКСИМАЛЬНА ОПТИМІЗАЦІЯ: Безпечний std::clamp

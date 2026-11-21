@@ -7,6 +7,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "stdafx.h"
+#include "ui/LuaWorkbench.h"
 #include "alife_update_manager.h"
 #include "alife_simulator_header.h"
 #include "alife_time_manager.h"
@@ -99,7 +100,7 @@ void CALifeUpdateManager::shedule_Update(u32 dt) {
     if (!initialized())
         return;
 
-    if (!m_first_time && g_mt_config.test(mtALife)) {
+    if (!m_first_time && g_mt_config.test(mtALife) && !lua_workbench::Live().Attached()) {
         Device.seqParallel.push_back(
             fastdelegate::FastDelegate0<>(this, &CALifeUpdateManager::update));
         return;

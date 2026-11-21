@@ -11,6 +11,7 @@ enum {
     AF_GODMODE_RT = (1 << 8),
     AF_IMPORTANT_SAVE = (1 << 9),
     AF_CROUCH_TOGGLE = (1 << 10),
+    AF_LOOKOUT_TOGGLE = (1 << 16), // Monolith's bit: the lean keys toggle ( g_lookout_toggle )
 };
 
 extern Flags32 psActorFlags;

@@ -1,5 +1,9 @@
 #include "stdafx.h"
 #include "bolt.h"
+#include "actor.h"
+#include "game_object_space.h"
+#include "script_callback_ex.h"
+#include "script_game_object.h"
 #include "ParticlesObject.h"
 #include "../xrphysics/PhysicsShell.h"
 #include "xr_level_controller.h"
@@ -20,8 +24,11 @@ void CBolt::Throw() {
     if (!l_pBolt)
         return;
     l_pBolt->set_destroy_time(u32(m_dwDestroyTimeMax / phTimefactor));
+    auto* actor = OnServer() && Local() ? smart_cast<CActor*>(H_Parent()) : nullptr;
     inherited::Throw();
     spawn_fake_missile();
+    if (actor)
+        actor->callback(GameObject::eOnActorBoltThrow)(lua_game_object());
 }
 
 bool CBolt::Useful() const { return false; }

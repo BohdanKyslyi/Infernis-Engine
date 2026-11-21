@@ -190,6 +190,7 @@ void CBlender_Tree::Compile(CBlender_Compile& C) {
 
     //*************** codepath is the same, only shaders differ
     LPCSTR tvs;
+    LPCSTR tps = "base"; // SSFX: HQ pass pixel shader
     LPCSTR tvs_s;
     if (oNotAnTree.value) {
         tvs = "tree_s";
@@ -210,21 +211,40 @@ void CBlender_Tree::Compile(CBlender_Compile& C) {
 
     switch (C.iElement) {
     case SE_R2_NORMAL_HQ: // deffer
+#if defined(USE_DX11)
+        // Is a branch/bush. Use a different VS
+        if (oBlend.value && RImplementation.o.ssfx_branches) {
+            tvs = "tree_branch";
+            tps = "tree_branch";
+        }
+#endif
+
         if (bUseATOC) {
+            // SSFX: Monolith names this pass tvs + "_atoc", but no deffer_tree*_atoc shaders exist.
+            // base_atoc reads the same v2p_bumped the tree VS writes, as in the LQ pass.
             uber_deffer(C, true, tvs, "base_atoc", oBlend.value, 0, true);
             C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0x7f, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE,
                         D3DSTENCILOP_KEEP);
             C.r_ColorWriteEnable(false, false, false, false);
             C.r_StencilRef(0x01);
+            // Screen Space Shaders - flow map for the tree wind. The tree vertex shaders sample it
+            // only when SSFX_WIND is defined; without that define the compiled shader does not
+            // declare either name and r_dx10Texture / r_dx10Sampler drop the binding.
+            // smp_linear is already taken by the base texture, hence the second sampler.
+            C.r_dx10Texture("s_waves", "fx\\wind_wave");
+            C.r_dx10Sampler("smp_linear2");
             //	Alpha to coverage.
             C.RS.SetRS(XRDX10RS_ALPHATOCOVERAGE, TRUE);
             C.r_End();
         }
 
-        uber_deffer(C, true, tvs, "base", oBlend.value, 0, true);
+        uber_deffer(C, true, tvs, tps, oBlend.value, 0, true);
         C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0x7f, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE,
                     D3DSTENCILOP_KEEP);
         C.r_StencilRef(0x01);
+        // Screen Space Shaders - tree wind flow map, see the note above.
+        C.r_dx10Texture("s_waves", "fx\\wind_wave");
+        C.r_dx10Sampler("smp_linear2");
         // C.PassSET_ZB		(true,false);
         //	Need only for ATOC to emulate stencil test
         if (bUseATOC)
@@ -239,6 +259,11 @@ void CBlender_Tree::Compile(CBlender_Compile& C) {
                         D3DSTENCILOP_KEEP);
             C.r_StencilRef(0x01);
             C.r_ColorWriteEnable(false, false, false, false);
+            // Screen Space Shaders - tree wind flow map, see the note above. Monolith binds it only
+            // in the normal passes; the ATOC pre-pass must move the vertices exactly like the main
+            // pass (D3DCMP_EQUAL below), so it is bound here too.
+            C.r_dx10Texture("s_waves", "fx\\wind_wave");
+            C.r_dx10Sampler("smp_linear2");
             //	Alpha to coverage.
             C.RS.SetRS(XRDX10RS_ALPHATOCOVERAGE, TRUE);
             C.r_End();
@@ -248,6 +273,9 @@ void CBlender_Tree::Compile(CBlender_Compile& C) {
         C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0x7f, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE,
                     D3DSTENCILOP_KEEP);
         C.r_StencilRef(0x01);
+        // Screen Space Shaders - tree wind flow map, see the note above.
+        C.r_dx10Texture("s_waves", "fx\\wind_wave");
+        C.r_dx10Sampler("smp_linear2");
         //	Need only for ATOC to emulate stencil test
         if (bUseATOC)
             C.RS.SetRS(D3DRS_ZFUNC, D3DCMP_EQUAL);
@@ -264,6 +292,10 @@ void CBlender_Tree::Compile(CBlender_Compile& C) {
         C.r_dx10Texture("s_base", C.L_textures[0]);
         C.r_dx10Sampler("smp_base");
         C.r_dx10Sampler("smp_linear");
+        // Screen Space Shaders - tree wind flow map, see the note above. The shadow pass has to
+        // displace its vertices exactly like the deffer pass, or the shadow leaves the tree.
+        C.r_dx10Texture("s_waves", "fx\\wind_wave");
+        C.r_dx10Sampler("smp_linear2");
         C.r_ColorWriteEnable(false, false, false, false);
         C.r_End();
         break;

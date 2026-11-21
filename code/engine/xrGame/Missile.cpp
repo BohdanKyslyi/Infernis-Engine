@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "missile.h"
+#include "grenade.h"
 //.#include "WeaponHUD.h"
 #include "../xrphysics/PhysicsShell.h"
 #include "actor.h"
@@ -14,6 +15,7 @@
 #include "../xrphysics/MathUtils.h"
 #include "characterphysicssupport.h"
 #include "inventory.h"
+#include "player_hud.h"
 #include "../xrEngine/IGame_Persistent.h"
 #ifdef DEBUG
 #include "phdebug.h"
@@ -38,6 +40,7 @@ void create_force_progress() {
 }
 
 CMissile::CMissile(void) {
+    SetNextState(eHidden);
     m_dwStateTime = 0;
     m_bQuickThrowActive = false;
     m_quick_throw_return_slot = NO_ACTIVE_SLOT;
@@ -56,6 +59,7 @@ void CMissile::reinit() {
     SetPending(FALSE);
     m_fake_missile = NULL;
     SetState(eHidden);
+    SetNextState(eHidden);
 }
 
 void CMissile::Load(LPCSTR section) {
@@ -116,10 +120,11 @@ void CMissile::PH_A_CrPr() {
 }
 
 void CMissile::OnActiveItem() {
+    if (IsHidden() && GetNextState() != eHidden)
+        return;
+
     if (m_bQuickThrowActive) {
         inherited::OnActiveItem();
-        SetState(eIdle);
-        SetNextState(eIdle);
         const bool has_quick_motion =
             pSettings->line_exist(HudSection().c_str(), "anm_throw_quick");
         SwitchState(has_quick_motion ? eThrowQuick : eThrowStart);
@@ -127,8 +132,6 @@ void CMissile::OnActiveItem() {
     }
     SwitchState(eShowing);
     inherited::OnActiveItem();
-    SetState(eIdle);
-    SetNextState(eIdle);
 }
 
 void CMissile::OnHiddenItem() {
@@ -199,6 +202,21 @@ void CMissile::UpdateCL() {
     inherited::UpdateCL();
 
     CActor* pActor = smart_cast<CActor*>(H_Parent());
+    if (m_bQuickThrowActive && pActor) {
+        const auto& inventory = pActor->inventory();
+        if (inventory.ActiveItem() != this && inventory.GetNextActiveSlot() != GRENADE_SLOT) {
+            m_bQuickThrowActive = false;
+            m_quick_throw_return_slot = NO_ACTIVE_SLOT;
+        } else if (m_quick_throw_animation_ended && GetState() == GetNextState() &&
+                   (GetState() == eThrow || GetState() == eThrowQuick)) {
+            if (TryReleaseQuickThrow()) {
+                SwitchState(eThrowEnd);
+            } else if (m_dwStateTime >= 2000) {
+                Msg("! Quick grenade [%u]: projectile did not attach", (u32)ID());
+                SwitchState(eThrowEnd);
+            }
+        }
+    }
     if (pActor && !pActor->AnyMove() && this == pActor->inventory().ActiveItem()) {
         if (hud_adj_mode == 0 && GetState() == eIdle &&
             (Device.dwTimeGlobal - m_dw_curr_substate_time > 20000)) {
@@ -264,7 +282,8 @@ void CMissile::State(u32 state) {
         m_fThrowForce = m_fMinForce;
         if (m_bQuickThrowActive)
             m_throw = true;
-        PlayHUDMotion("anm_throw_begin", TRUE, this, GetState());
+        if (!PlayHUDMotion("anm_throw_begin", TRUE, this, GetState()) && m_bQuickThrowActive)
+            OnAnimationEnd(eThrowStart);
     } break;
     case eReady: {
         PlayHUDMotion("anm_throw_idle", TRUE, this, GetState());
@@ -272,20 +291,23 @@ void CMissile::State(u32 state) {
     case eThrow: {
         SetPending(TRUE);
         m_throw = false;
-        PlayHUDMotion("anm_throw", TRUE, this, GetState());
+        if (!PlayHUDMotion("anm_throw", TRUE, this, GetState()) && m_bQuickThrowActive)
+            OnAnimationEnd(eThrow);
     } break;
     case eThrowEnd: {
         if (m_bQuickThrowActive) {
             CActor* actor = smart_cast<CActor*>(H_Parent());
             const u16 return_slot = m_quick_throw_return_slot;
+            if (actor) {
+                auto& inventory = actor->inventory();
+                const u16 slot = return_slot != NO_ACTIVE_SLOT && inventory.ItemFromSlot(return_slot)
+                    ? return_slot : NO_ACTIVE_SLOT;
+                inventory.Activate(slot);
+            }
+            if (GetNextState() != eHidden)
+                SwitchState(eHidden);
             m_bQuickThrowActive = false;
             m_quick_throw_return_slot = NO_ACTIVE_SLOT;
-            if (actor) {
-                const u16 slot = return_slot != NO_ACTIVE_SLOT &&
-                        actor->inventory().ItemFromSlot(return_slot)
-                    ? return_slot : NO_ACTIVE_SLOT;
-                actor->inventory().Activate(slot, true);
-            }
             break;
         }
         SwitchState(eShowing);
@@ -295,7 +317,8 @@ void CMissile::State(u32 state) {
         m_throw = false;
         if (!m_fake_missile && !smart_cast<CMissile*>(H_Parent()))
             spawn_fake_missile();
-        PlayHUDMotion("anm_throw_quick", TRUE, this, GetState());
+        if (!PlayHUDMotion("anm_throw_quick", TRUE, this, GetState()))
+            OnAnimationEnd(eThrowQuick);
     } break;
         /*	case eBore:
                         {
@@ -331,16 +354,17 @@ void CMissile::OnAnimationEnd(u32 state) {
         else
             SwitchState(eReady);
     } break;
-    case eThrow: {
+    case eThrow:
+    case eThrowQuick: {
+        if (m_bQuickThrowActive && !TryReleaseQuickThrow()) {
+            m_quick_throw_animation_ended = true;
+            m_dwStateTime = 0;
+            break;
+        }
         SwitchState(eThrowEnd);
     } break;
     case eThrowEnd: {
         SwitchState(eShowing);
-    } break;
-    case eThrowQuick: {
-        if (H_Parent() && m_fake_missile)
-            Throw();
-        SwitchState(eThrowEnd);
     } break;
     default:
         inherited::OnAnimationEnd(state);
@@ -419,6 +443,53 @@ void CMissile::setup_throw_params() {
         }
 
         entity->g_fireParams(this, FirePos, FireDir);
+        if (auto* actor = smart_cast<CActor*>(entity); actor && IsGameTypeSingle()) {
+            const LPCSTR section = cNameSect().c_str();
+            const shared_str& hud_section = HudSection();
+            const bool hud_mode = GetHUDmode();
+            bool changed_origin = false;
+            if (hud_mode) {
+                const LPCSTR bone_name = READ_IF_EXISTS(pSettings, r_string, hud_section,
+                    "throw_point_bone", READ_IF_EXISTS(pSettings, r_string, section, "throw_point_bone", nullptr));
+                const Fvector point = READ_IF_EXISTS(pSettings, r_fvector3, hud_section,
+                    "throw_point", m_vThrowPoint);
+                auto* hud = HudItemData();
+                const u16 bone = bone_name && bone_name[0] && hud->m_model
+                    ? hud->m_model->LL_BoneID(bone_name) : BI_NONE;
+                if (bone != BI_NONE) {
+                    hud->update(false);
+                    Fvector bone_point;
+                    hud->m_model->LL_GetTransform(bone).transform_tiny(bone_point, point);
+                    hud->m_item_transform.transform_tiny(FirePos, bone_point);
+                    changed_origin = true;
+                } else if (pSettings->line_exist(hud_section, "throw_point")) {
+                    actor->XFORM().transform_dir(FirePos, point);
+                    FirePos.add(actor->Cameras().Position());
+                    changed_origin = true;
+                }
+            } else {
+                constexpr LPCSTR key = "third_person_throw_point_offset";
+                const shared_str offset_section = pSettings->line_exist(hud_section, key)
+                    ? hud_section : cNameSect();
+                if (pSettings->line_exist(offset_section, key)) {
+                    actor->XFORM().transform_tiny(FirePos, pSettings->r_fvector3(offset_section, key));
+                    changed_origin = true;
+                }
+            }
+            if (changed_origin) {
+                Fvector origin = actor->Cameras().Position();
+                if (!hud_mode)
+                    actor->Center(origin);
+                Fvector path;
+                path.sub(FirePos, origin);
+                const float distance = path.magnitude();
+                collide::rq_result hit;
+                if (distance > EPS_S && Level().ObjectSpace.RayPick(origin, path.div(distance),
+                    distance, collide::rqtStatic, hit, actor)) {
+                    FirePos.mad(origin, path, std::max(0.f, hit.range - 0.03f));
+                }
+            }
+        }
     } else {
         FirePos = XFORM().c;
         FireDir = XFORM().k;
@@ -433,7 +504,9 @@ void CMissile::setup_throw_params() {
 void CMissile::OnMotionMark(u32 state, const motion_marks& M) {
     inherited::OnMotionMark(state, M);
     if ((state == eThrow || state == eThrowQuick) && !m_throw) {
-        if (H_Parent())
+        if (m_bQuickThrowActive)
+            TryReleaseQuickThrow();
+        else if (H_Parent())
             Throw();
     }
 }
@@ -473,6 +546,16 @@ void CMissile::PrepareQuickThrow(u16 return_slot) {
         return;
     m_bQuickThrowActive = true;
     m_quick_throw_return_slot = return_slot;
+    m_quick_throw_released = false;
+    m_quick_throw_animation_ended = false;
+}
+
+bool CMissile::TryReleaseQuickThrow() {
+    if (!m_quick_throw_released && H_Parent() && m_fake_missile) {
+        m_quick_throw_released = true;
+        Throw();
+    }
+    return m_quick_throw_released;
 }
 
 void CMissile::OnEvent(NET_Packet& P, u16 type) {
@@ -635,7 +718,8 @@ void CMissile::net_Relcase(CObject* O) {
     inherited::net_Relcase(O);
     if (PPhysicsShell() && PPhysicsShell()->isActive()) {
         if (O == smart_cast<CObject*>((CPhysicsShellHolder*)PPhysicsShell()->get_CallbackData())) {
-            PPhysicsShell()->remove_ObjectContactCallback(ExitContactCallback);
+            if (!smart_cast<CGrenade*>(this))
+                PPhysicsShell()->remove_ObjectContactCallback(ExitContactCallback);
             PPhysicsShell()->set_CallbackData(NULL);
         }
     }
@@ -687,8 +771,21 @@ void CMissile::ExitContactCallback(bool& do_colide, bool bo1, dContact& c, SGame
         gd2 = PHRetrieveGeomUserData(c.geom.g1);
         gd1 = PHRetrieveGeomUserData(c.geom.g2);
     }
-    if (gd1 && gd2 && (CPhysicsShellHolder*)gd1->callback_data == gd2->ph_ref_object)
+    if (gd1 && gd1->callback_data && gd2 &&
+        (CPhysicsShellHolder*)gd1->callback_data == gd2->ph_ref_object)
         do_colide = false;
+
+    if (!do_colide)
+        return;
+
+    if (gd1) {
+        if (auto* grenade = smart_cast<CGrenade*>(gd1->ph_ref_object))
+            grenade->OnPhysicsContact();
+    }
+    if (gd2) {
+        if (auto* grenade = smart_cast<CGrenade*>(gd2->ph_ref_object))
+            grenade->OnPhysicsContact();
+    }
 }
 
 bool CMissile::GetBriefInfo(II_BriefInfo& info) {

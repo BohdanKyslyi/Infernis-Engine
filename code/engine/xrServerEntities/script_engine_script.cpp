@@ -28,9 +28,8 @@ void LuaLog(LPCSTR caMessage) {
 
 void ErrorLog(LPCSTR caMessage) {
     ai().script_engine().error_log("%s", caMessage);
-#ifdef PRINT_CALL_STACK
+    // Monolith ( script_engine_script.cpp:39-42 ): the stack in every build
     ai().script_engine().print_stack();
-#endif // #ifdef PRINT_CALL_STACK
 
 #ifdef USE_DEBUGGER
 #ifndef USE_LUA_STUDIO
@@ -47,9 +46,13 @@ void ErrorLog(LPCSTR caMessage) {
         R_ASSERT2(0, caMessage);
 }
 
+// Monolith ( script_engine_script.cpp:59-63 ): print_stack() for the scripts
+void PrintStack() { ai().script_engine().print_stack(); }
+
 void FlushLogs() {
-#ifdef DEBUG
+    // Monolith ( script_engine_script.cpp:67-74 ): FlushLog in every build
     FlushLog();
+#ifdef DEBUG
     ai().script_engine().flush_log();
 #endif // DEBUG
 }
@@ -167,6 +170,7 @@ void CScriptEngine::script_register(lua_State* L) {
                   .def("time", &profile_timer_script::time)];
 
     function(L, "log", LuaLog);
+    function(L, "print_stack", PrintStack); // Monolith ( script_engine_script.cpp:235 )
     function(L, "error_log", ErrorLog);
     function(L, "flush", FlushLogs);
     function(L, "prefetch", prefetch_module);
