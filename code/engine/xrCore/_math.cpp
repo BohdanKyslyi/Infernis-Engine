@@ -2,6 +2,7 @@
 
 #include <process.h>
 #include <powerbase.h>
+#include "xrTasks.h" // item 9 stage B ( multithreading ): CPU::ApplyCoreMode tells it the CPUs
 
 // mmsystem.h
 #define MMNOSOUND
@@ -123,7 +124,9 @@ void initialize() {
 namespace CPU {
 XRCORE_API u64 qpc_freq = []{ 
     u64 result;
-    QueryPerformanceCounter(PLARGE_INTEGER(&result));
+    // Item 9 stage A: the counter's frequency, as Monolith reads it ( _math.cpp:188 ). This read the
+    // counter's value, and the scheduler's time budget per frame ( xrSheduler.cpp ) had no limit.
+    QueryPerformanceFrequency(PLARGE_INTEGER(&result));
     return result; 
 }();
 
@@ -144,6 +147,83 @@ void Detect() {
         // Core.Fatal		("Fatal error: can't detect CPU/FPU.");
         abort();
     }
+}
+
+// Item 9 stage A ( multithreading ): the logical CPUs the game runs on. Windows serves most of its
+// interrupts and deferred calls on the first core, so the game leaves that core to it ( the
+// user's rule ). The process mask is set, and that moves every thread the game already runs as
+// well. "All" is the mask the process started with, so a mask given from outside ( a launcher,
+// "start /affinity" ) is kept. Infernis pinned its main thread to logical CPU 0 ( x_ray.cpp, the
+// pin is gone now ); Monolith pins nothing and leaves no core out. Our own design.
+namespace {
+DWORD_PTR core_mode_start = 0;   // the process mask at start
+DWORD_PTR core_mode_core0 = 0;   // the logical CPUs of physical core 0
+DWORD_PTR core_mode_current = 0; // the mask in use
+bool core_mode_ready = false;
+bool core_mode_logged = false;
+
+u32 core_mode_count(DWORD_PTR mask) {
+    u32 n = 0;
+    for (; mask; mask &= mask - 1)
+        ++n;
+    return n;
+}
+
+void core_mode_init() {
+    core_mode_ready = true;
+    DWORD_PTR process_mask = 0, system_mask = 0;
+    if (!GetProcessAffinityMask(GetCurrentProcess(), &process_mask, &system_mask) || !process_mask)
+        return;
+    core_mode_start = process_mask;
+    core_mode_current = process_mask;
+
+    // Physical core 0: the core that holds logical CPU 0, with its second thread when it has one.
+    core_mode_core0 = 1;
+    DWORD size = 0;
+    GetLogicalProcessorInformation(nullptr, &size);
+    if (!size)
+        return;
+    xr_vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> info(
+        size / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION));
+    if (!GetLogicalProcessorInformation(info.data(), &size))
+        return;
+    for (const SYSTEM_LOGICAL_PROCESSOR_INFORMATION& it : info)
+        if (it.Relationship == RelationProcessorCore && (it.ProcessorMask & 1))
+            core_mode_core0 = it.ProcessorMask;
+}
+} // namespace
+
+// mode ( console cpu_core_mode, xr_ioc_cmd.cpp ): 0 auto - without physical core 0 from 6 logical
+// CPUs up, with all of them below that; 1 always without core 0; 2 all. Core 0 stays when nothing
+// else would be left. One log line at the first call and one at every change.
+XRCORE_API void ApplyCoreMode(u32 mode) {
+    if (!core_mode_ready)
+        core_mode_init();
+    if (!core_mode_start)
+        return;
+
+    const u32 total = core_mode_count(core_mode_start);
+    const DWORD_PTR without_core0 = core_mode_start & ~core_mode_core0;
+    DWORD_PTR wanted = core_mode_start;
+    if (without_core0 && (mode == 1 || (mode == 0 && total >= 6)))
+        wanted = without_core0;
+
+    if (wanted != core_mode_current) {
+        if (!SetProcessAffinityMask(GetCurrentProcess(), wanted)) {
+            Msg("! CPU core mode: SetProcessAffinityMask failed, error %lu", GetLastError());
+            return;
+        }
+        core_mode_current = wanted;
+    } else if (core_mode_logged)
+        return;
+    core_mode_logged = true;
+
+    Msg("* CPU core mode: %s, %u of %u logical CPUs in use%s",
+        mode == 0 ? "auto" : (mode == 1 ? "without core 0" : "all"), core_mode_count(wanted),
+        total, (wanted & core_mode_core0) ? "" : ", core 0 left out");
+
+    // Item 9 stage B: the task system's workers follow the CPUs in use ( xrTasks.cpp )
+    xrTasks::OnCoreMaskChanged(wanted);
 }
 
 } // namespace CPU

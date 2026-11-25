@@ -185,6 +185,17 @@ void ssfx_profile_cache_check(); // the renderer is loaded: a cache of another r
                                  // set of SSS addon packs goes
 void ssfx_profile_backup();      // the last save is done: a copy of each profile
 
+// Weather_ATMOS ( the user, 2026-11-10, xr_ioc_cmd.cpp ): the SSS settings follow the addon pack
+// addons\Weather_ATMOS - once each time it is put in or taken out, not at every start, so what
+// the player changes stays until the pack goes or comes. ssfx_atmos_state is the pack as the last
+// start found it: -1 nothing remembered yet ( the first start of the build that has this ), 0 it
+// was not there, 1 it was. A console command like the others, kept in user_sss.ltx only ( its
+// name starts with ssfx_, ssfx_profile_keeps ). Our own design, the donor has none.
+extern ENGINE_API int ps_ssfx_atmos_state;
+// Called by the engine start-up ( x_ray.cpp ) right after the SSS addon packs are mounted. Nothing
+// happens unless SSS runs ( switched on, DX11 ).
+void ssfx_atmos_switch();
+
 // Not SSFX. Monolith (Swartz): the actor's own shadow in first person, console r__actor_shadow,
 // off by default as in the donor ( xrRender_console.cpp:482 and :1339 ). Kept here for the same
 // reason as the variables above: xrGame reads it in CActor::AllowActorShadow, which allows it on

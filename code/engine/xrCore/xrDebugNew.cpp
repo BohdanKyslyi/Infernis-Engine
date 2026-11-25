@@ -543,6 +543,225 @@ void debug_on_thread_spawn() {
     _set_purecall_handler(&pure_call_handler);
 }
 
+// Logging part C ( 2026-11-10, my design, not the donor's - Monolith has no such handler ): a C++
+// exception thrown by the game's own code goes to the log at the moment it is thrown, before LuaJIT
+// turns it into the bare "C++ exception" or a crash loses its type. One record: type, text, C++ stack
+// from the throw on, Lua stack ( through the hook script_engine.cpp sets ). The handler only reads:
+// it always lets the exception go on, nothing is caught or hidden.
+// - only code 0xE06D7363 ( MSVC C++ throw ) and only when a game module threw it: xrEngine.exe,
+//   xr*.dll, luabind.dll ( drivers, OpenAL and Windows throw and catch such exceptions themselves );
+// - at most 16 places per run ( place = type + address of the throw ), each place written once.
+static void (*volatile cpp_exception_lua_hook)() = nullptr;
+// script_engine.cpp: prints the Lua stack of the running script; nullptr = none
+XRCORE_API void SetCppExceptionLuaHook(void (*hook)()) { cpp_exception_lua_hook = hook; }
+#if defined(_M_X64)
+namespace {
+constexpr DWORD cpp_exception_code = 0xE06D7363;
+constexpr int cpp_exception_places = 16;
+volatile LONG64 cpp_exception_place_keys[cpp_exception_places] = {};
+volatile LONG cpp_exception_limit_written = 0;
+thread_local bool cpp_exception_busy = false;
+
+// MSVC x64 throw description ( ehdata.h ): the links are offsets from the image base of the thrower
+struct cpp_throw_info { unsigned attributes; int unwind; int forward_compat; int catchable_types; };
+struct cpp_catchable_types { int count; int types[1]; };
+struct cpp_catchable_type { unsigned properties; int type; int mdisp; int pdisp; int vdisp; int size; int copy; };
+struct cpp_type_descriptor { const void* vftable; void* spare; char name[1]; };
+enum class cpp_place_state { fresh, seen, full };
+
+bool cpp_name_starts(const wchar_t* name, const wchar_t* prefix) {
+    return !_wcsnicmp(name, prefix, wcslen(prefix));
+}
+
+// 1 = game ( xrEngine.exe, xr*.dll, luabind.dll ), 0 = Windows / C++ runtime ( skipped ), -1 = other / none
+int cpp_frame_owner(const void* address) {
+    HMODULE module = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            static_cast<LPCWSTR>(address), &module))
+        return -1;
+    wchar_t path[MAX_PATH];
+    const DWORD length = GetModuleFileNameW(module, path, MAX_PATH);
+    if (!length || length >= MAX_PATH)
+        return -1;
+    const wchar_t* name = wcsrchr(path, L'\\');
+    name = name ? name + 1 : path;
+    if (!_wcsicmp(name, L"ntdll.dll") || !_wcsicmp(name, L"kernelbase.dll") || !_wcsicmp(name, L"kernel32.dll") ||
+        cpp_name_starts(name, L"vcruntime") || cpp_name_starts(name, L"msvcp") || cpp_name_starts(name, L"ucrtbase"))
+        return 0;
+    if (cpp_name_starts(name, L"xr") || !_wcsicmp(name, L"luabind.dll"))
+        return 1;
+    return -1;
+}
+
+// the frame that threw: unwinds from the exception's own context ( RaiseException first ) past Windows / runtime
+void* cpp_exception_thrower(const CONTEXT* thrown) {
+    CONTEXT context = *thrown;
+    for (int frame = 0; frame < 32 && context.Rip; ++frame) {
+        void* const address = reinterpret_cast<void*>(context.Rip);
+        const int owner = cpp_frame_owner(address);
+        if (owner)
+            return owner > 0 ? address : nullptr;
+        DWORD64 image_base = 0;
+        const PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &image_base, nullptr);
+        if (function) {
+            void* handler_data = nullptr;
+            DWORD64 establisher_frame = 0;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, image_base, context.Rip, function, &context, &handler_data,
+                             &establisher_frame, nullptr);
+        } else { // leaf function: the return address is on the top of the stack
+            context.Rip = *reinterpret_cast<const DWORD64*>(context.Rsp);
+            context.Rsp += 8;
+        }
+    }
+    return nullptr;
+}
+
+cpp_place_state cpp_exception_take_place(LONG64 key) {
+    for (int i = 0; i < cpp_exception_places; ++i) {
+        const LONG64 previous = InterlockedCompareExchange64(&cpp_exception_place_keys[i], key, 0);
+        if (!previous)
+            return cpp_place_state::fresh;
+        if (previous == key)
+            return cpp_place_state::seen;
+    }
+    return cpp_place_state::full;
+}
+
+// ".?AVout_of_range@std@@" -> "std::out_of_range"; other forms ( templates, pointers ) stay as they are
+void cpp_type_name(const char* raw, char* out, size_t out_size) {
+    std::snprintf(out, out_size, "%s", raw);
+    if (std::strncmp(raw, ".?AV", 4) && std::strncmp(raw, ".?AU", 4))
+        return;
+    const char* const begin = raw + 4;
+    const char* const end = std::strstr(begin, "@@");
+    if (!end || end == begin)
+        return;
+    for (const char* c = begin; c < end; ++c)
+        if (*c == '?' || *c == '$')
+            return;
+    char result[256];
+    size_t length = 0;
+    const char* part_end = end;
+    while (part_end > begin) {
+        const char* part_begin = part_end;
+        while (part_begin > begin && part_begin[-1] != '@')
+            --part_begin;
+        const size_t part_length = static_cast<size_t>(part_end - part_begin);
+        if (!part_length || length + part_length + 3 > sizeof(result))
+            return;
+        if (length) {
+            result[length++] = ':';
+            result[length++] = ':';
+        }
+        std::memcpy(result + length, part_begin, part_length);
+        length += part_length;
+        part_end = part_begin > begin ? part_begin - 1 : begin;
+    }
+    result[length] = 0;
+    std::snprintf(out, out_size, "%s", result);
+}
+
+// what() of the std::exception part ( virtual slot 1 of the MSVC std::exception ); false = none
+bool cpp_exception_text(const void* object, char* out, size_t out_size) {
+    out[0] = 0;
+    __try {
+        using what_function = const char* (*)(const void*);
+        const what_function* const table = *static_cast<const what_function* const*>(object);
+        const char* const text = table[1](object);
+        if (!text)
+            return false;
+        size_t i = 0;
+        for (; i + 1 < out_size && text[i]; ++i)
+            out[i] = text[i];
+        out[i] = 0;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        out[0] = 0;
+        return false;
+    }
+}
+
+void cpp_exception_write(const EXCEPTION_POINTERS* info) {
+    const EXCEPTION_RECORD* const record = info->ExceptionRecord;
+    void* const thrower = cpp_exception_thrower(info->ContextRecord);
+    if (!thrower)
+        return;
+    const char* const base = reinterpret_cast<const char*>(record->ExceptionInformation[3]);
+    const auto* const throw_info = reinterpret_cast<const cpp_throw_info*>(record->ExceptionInformation[2]);
+    const char* const object = reinterpret_cast<const char*>(record->ExceptionInformation[1]);
+    const char* raw_name = "?";
+    const void* std_exception = nullptr;
+    if (throw_info->catchable_types) {
+        const auto* const types = reinterpret_cast<const cpp_catchable_types*>(base + throw_info->catchable_types);
+        for (int i = 0; i < types->count && i < 64; ++i) {
+            const auto* const type = reinterpret_cast<const cpp_catchable_type*>(base + types->types[i]);
+            if (!type->type)
+                continue;
+            const auto* const descriptor = reinterpret_cast<const cpp_type_descriptor*>(base + type->type);
+            if (!i)
+                raw_name = descriptor->name;
+            if (object && !std_exception && type->pdisp < 0 && !std::strcmp(descriptor->name, ".?AVexception@std@@"))
+                std_exception = object + type->mdisp;
+        }
+    }
+    unsigned long long hash = 0xcbf29ce484222325ULL; // FNV-1a of the type, then the address of the throw
+    for (const char* c = raw_name; *c; ++c) {
+        hash ^= static_cast<unsigned char>(*c);
+        hash *= 0x100000001b3ULL;
+    }
+    hash ^= reinterpret_cast<unsigned long long>(thrower);
+    const cpp_place_state state = cpp_exception_take_place(static_cast<LONG64>(hash | 1));
+    if (state == cpp_place_state::seen)
+        return;
+    if (state == cpp_place_state::full) {
+        if (!InterlockedExchange(&cpp_exception_limit_written, 1)) {
+            Msg("! C++ exceptions: %d places written, further ones are not logged", cpp_exception_places);
+            FlushLog();
+        }
+        return;
+    }
+    char type_name[256];
+    cpp_type_name(raw_name, type_name, sizeof(type_name));
+    char text[512];
+    if (std_exception && cpp_exception_text(std_exception, text, sizeof(text)) && text[0])
+        Msg("! C++ exception: %s \"%s\"", type_name, text);
+    else
+        Msg("! C++ exception: %s", type_name);
+    BuildStackTrace(stackTrace);
+    size_t first = 0; // the stack from the throw on: the frames up to _CxxThrowException are the handler's own
+    for (size_t i = 0; i < stackTrace.count && i < 32; ++i)
+        if (std::strstr(stackTrace[i], "CxxThrowException"))
+            first = i + 1;
+    Msg("! C++ stack:");
+    for (size_t i = first; i < stackTrace.count; ++i)
+        LogMsg("{}", stackTrace[i]);
+    void (*const hook)() = cpp_exception_lua_hook;
+    if (hook)
+        hook();
+    FlushLog();
+}
+
+LONG NTAPI cpp_exception_logger(EXCEPTION_POINTERS* info) {
+    const EXCEPTION_RECORD* const record = info ? info->ExceptionRecord : nullptr;
+    if (!record || record->ExceptionCode != cpp_exception_code || record->NumberParameters < 4)
+        return EXCEPTION_CONTINUE_SEARCH;
+    const ULONG_PTR magic = record->ExceptionInformation[0];
+    if (magic < 0x19930520 || magic > 0x19930522 || !record->ExceptionInformation[2] ||
+        !record->ExceptionInformation[3])
+        return EXCEPTION_CONTINUE_SEARCH;
+    if (cpp_exception_busy || cpp_exception_limit_written || !shared_str_initialized)
+        return EXCEPTION_CONTINUE_SEARCH;
+    cpp_exception_busy = true;
+    __try {
+        cpp_exception_write(info);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    cpp_exception_busy = false;
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+} // namespace
+#endif // _M_X64
+
 void xrDebug::_initialize() {
     *g_bug_report_file = 0;
 
@@ -550,4 +769,8 @@ void xrDebug::_initialize() {
 
     previous_filter = ::SetUnhandledExceptionFilter(
         UnhandledFilter); // exception handler to all "unhandled" exceptions
+#if defined(_M_X64)
+    // logging part C ( see cpp_exception_logger ): first in the chain, only reads
+    AddVectoredExceptionHandler(1, cpp_exception_logger);
+#endif // _M_X64
 }
