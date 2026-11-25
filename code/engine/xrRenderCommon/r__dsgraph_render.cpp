@@ -17,6 +17,16 @@ extern float r_ssaDISCARD;
 extern float r_ssaDONTSORT;
 extern float r_ssaHZBvsTEX;
 extern float r_ssaGLOD_start, r_ssaGLOD_end;
+#if RENDER == R_R4
+
+// Written by Ivan Danko, 2026-11-17: FPS plan step 2b - the particles' update batch of the DX11 render
+// ( xrRenderPC_R4\r4_R_render.cpp ), shared by the views and the shadow passes below.
+// Створено (Ivan Danko, 2026-11-17): крок 2б плану FPS - пачка оновлення частинок рендера DX11
+// ( xrRenderPC_R4\r4_R_render.cpp ), спільна для видів і проходів тіней нижче.
+bool r4_ps_batch_on();
+bool r4_ps_batch_is(IRenderable* renderable);
+void r4_ps_batch_update(const xr_vector<IRenderable*>& list);
+#endif
 
 ICF float calcLOD(float ssa /*fDistSq*/, float R) {
     return std::sqrt(clampr((ssa - r_ssaGLOD_end) / (r_ssaGLOD_start - r_ssaGLOD_end), 0.f, 1.f));
@@ -906,6 +916,17 @@ void R_dsgraph_structure::r_dsgraph_render_subspace(IRender_Sector* _sector, CFr
         // Traverse object database
         g_SpatialSpace->q_frustum(lstRenderables, ISpatial_DB::O_ORDERED, STYPE_RENDERABLE,
                                   ViewBase);
+#if RENDER == R_R4
+        // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - the particle effects of this pass wait for
+        // one update batch after the walk ( xrRenderPC_R4\r4_R_render.cpp ), each with the frustum it was
+        // met in
+        // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - ефекти частинок цього проходу чекають на
+        // одну пачку оновлення після обходу ( xrRenderPC_R4\r4_R_render.cpp ), кожен з тією пірамідою
+        // видимості, у якій його зустріли
+        const bool ps_batch = r4_ps_batch_on();
+        static xr_vector<IRenderable*> ps_list;
+        static xr_vector<CFrustum*> ps_view;
+#endif
 
         // Determine visibility for dynamic part of scene
         for (u32 o_it = 0; o_it < lstRenderables.size(); o_it++) {
@@ -925,9 +946,33 @@ void R_dsgraph_structure::r_dsgraph_render_subspace(IRender_Sector* _sector, CFr
                 if (!renderable)
                     continue; // unknown, but renderable object (r1_glow???)
 
+#if RENDER == R_R4
+                // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - a particle effect waits for the batch
+                // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - ефект частинок чекає на пачку
+                if (ps_batch && r4_ps_batch_is(renderable)) {
+                    ps_list.push_back(renderable);
+                    ps_view.push_back(&(sector->r_frustums[v_it]));
+                    continue;
+                }
+#endif
                 renderable->renderable_Render();
             }
         }
+#if RENDER == R_R4
+        // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - one update batch on all cores, then into the
+        // render as before, each in its own frustum and as many times as met
+        // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - одна пачка оновлення на всіх ядрах, потім у
+        // рендер, як раніше, кожен у своїй піраміді видимості й стільки разів, скільки зустріли
+        if (!ps_list.empty()) {
+            r4_ps_batch_update(ps_list);
+            for (u32 i = 0; i < ps_list.size(); ++i) {
+                set_Frustum(ps_view[i]);
+                ps_list[i]->renderable_Render();
+            }
+            ps_list.clear();
+            ps_view.clear();
+        }
+#endif
     }
 
     // Restore

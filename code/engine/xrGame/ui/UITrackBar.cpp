@@ -143,6 +143,28 @@ void CUITrackBar::UndoOptValue() {
     CUIOptionsItem::UndoOptValue();
 }
 
+// Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 13 "Mods" - a script
+// sets the value of a slider ( the "Mods" window, ui_mods_menu.script ). Adapted: m_f_* and m_i_*
+// share a union here, so an integer slider takes the value into m_i_val ( Monolith writes
+// iFloor(f) into m_f_val ).
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 13 «Моди» - скрипт
+// задає значення повзунка ( вікно «Моди», ui_mods_menu.script ). Адаптовано: m_f_* і m_i_* тут
+// ділять один union, тому цілочисельний повзунок записує значення в m_i_val ( Monolith пише
+// iFloor(f) у m_f_val ).
+void CUITrackBar::SetIValue(int i) {
+    m_i_val = i;
+    UpdatePos();
+}
+
+void CUITrackBar::SetFValue(float f) {
+    if (m_b_is_float)
+        m_f_val = f;
+    else
+        m_i_val = iFloor(f);
+
+    UpdatePos();
+}
+
 void CUITrackBar::SetStep(float step) {
     if (m_b_is_float)
         m_f_step = step;

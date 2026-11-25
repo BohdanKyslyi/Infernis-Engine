@@ -7,6 +7,12 @@
 #include "ps_instance.h"
 #include "IGame_Persistent.h"
 
+// Written by Ivan Danko, 2026-11-17: FPS plan step 2b - the entry of the particles' update batch
+// ( PS_instance.h ); xrGame\ParticlesObject.cpp sets it while the game module is loaded.
+// Створено (Ivan Danko, 2026-11-17): крок 2б плану FPS - точка входу пачки оновлення частинок
+// ( PS_instance.h ); xrGame\ParticlesObject.cpp задає її, поки модуль гри завантажено.
+ENGINE_API ps_batch_update_fn* g_ps_batch_update = nullptr;
+
 CPS_Instance::CPS_Instance(bool destroy_on_game_load)
     : ISpatial(g_SpatialSpace), m_destroy_on_game_load(destroy_on_game_load) {
     g_pGamePersistent->ps_active.insert(this);

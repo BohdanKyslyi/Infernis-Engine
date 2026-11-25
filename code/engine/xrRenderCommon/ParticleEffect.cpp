@@ -14,6 +14,25 @@ using namespace PS;
 
 const u32 PS::uDT_STEP = 33;
 const float PS::fDT_STEP = float(uDT_STEP) / 1000.f;
+#if RENDER == R_R4
+
+// Written by Ivan Danko, 2026-11-17: FPS plan step 2b - true on a thread while it runs the DX11 render's
+// batch of particle updates ( xrRenderPC_R4\r4_R_render.cpp ): a particle born there takes its random
+// numbers from that thread's own generator, the shared one ( ::Random ) is not made for many threads.
+// Outside the batch ::Random, as before.
+// Створено (Ivan Danko, 2026-11-17): крок 2б плану FPS - true у потоці, поки він виконує пачку
+// оновлень частинок рендера DX11 ( xrRenderPC_R4\r4_R_render.cpp ): частинка, що там народжується,
+// бере випадкові числа з власного генератора цього потоку, спільний ( ::Random ) не розрахований на
+// багато потоків. Поза пачкою - ::Random, як раніше.
+thread_local bool r4_ps_batch_thread = false;
+
+static CRandom& ps_birth_random() {
+    if (!r4_ps_batch_thread)
+        return ::Random;
+    static thread_local CRandom thread_random(static_cast<s32>(GetCurrentThreadId()));
+    return thread_random;
+}
+#endif
 
 static void ApplyTexgen(const Fmatrix& mVP) {
     Fmatrix mTexgen;
@@ -39,11 +58,24 @@ void PS::OnEffectParticleBirth(void* owner, u32, PAPI::Particle& m, u32) {
     VERIFY(PE);
     CPEDef* PED = PE->GetDefinition();
     if (PED) {
+#if RENDER == R_R4
+        // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - the random numbers of the thread that runs
+        // the update ( ps_birth_random above )
+        // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - випадкові числа потоку, що виконує
+        // оновлення ( ps_birth_random вище )
+        CRandom& rnd = ps_birth_random();
+        if (PED->m_Flags.is(CPEDef::dfRandomFrame))
+            m.frame = static_cast<u16>(iFloor(rnd.randI(PED->m_Frame.m_iFrameCount) * 255.f));
+        if (PED->m_Flags.is(CPEDef::dfAnimated) && PED->m_Flags.is(CPEDef::dfRandomPlayback) &&
+            rnd.randI(2))
+            m.flags.set(Particle::ANIMATE_CCW, TRUE);
+#else
         if (PED->m_Flags.is(CPEDef::dfRandomFrame))
             m.frame = static_cast<u16>(iFloor(Random.randI(PED->m_Frame.m_iFrameCount) * 255.f));
         if (PED->m_Flags.is(CPEDef::dfAnimated) && PED->m_Flags.is(CPEDef::dfRandomPlayback) &&
             Random.randI(2))
             m.flags.set(Particle::ANIMATE_CCW, TRUE);
+#endif
     }
 }
 
@@ -96,6 +128,13 @@ void CParticleEffect::RefreshShader() {
 
 void CParticleEffect::UpdateParent(const Fmatrix& m, const Fvector& velocity, BOOL bXFORM) {
     m_RT_Flags.set(flRT_XFORM, bXFORM);
+#if RENDER == R_R4
+    // Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - the effect gets its place again: its
+    // vertices in the particle vertex buffer are no longer valid ( r4_ps_geom_* below ).
+    // Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - ефект знову отримує своє місце:
+    // його вершини в буфері вершин частинок більше не дійсні ( r4_ps_geom_* нижче ).
+    ps_geom_stamp = 0;
+#endif
     if (bXFORM)
         m_XFORM.set(m);
     else {
@@ -105,8 +144,25 @@ void CParticleEffect::UpdateParent(const Fmatrix& m, const Fvector& velocity, BO
 }
 
 void CParticleEffect::OnFrame(u32 frame_dt) {
+#if RENDER == R_R4
+    // Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - the particles change: their vertices in
+    // the particle vertex buffer are no longer valid ( r4_ps_geom_* below ).
+    // Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - частинки змінюються: їхні
+    // вершини в буфері вершин частинок більше не дійсні ( r4_ps_geom_* нижче ).
+    ps_geom_stamp = 0;
+#endif
     if (m_Def && m_RT_Flags.is(flRT_Playing)) {
         m_MemDT += frame_dt;
+#if RENDER == R_R4
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the effect's own update step times
+        // particle_update_mod, as in Anomaly (Monolith CParticleEffect::OnFrame); these two hide the
+        // fixed 33 ms step PS::uDT_STEP / PS::fDT_STEP in the code below.
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - власний крок оновлення ефекту,
+        // помножений на particle_update_mod, як в Anomaly (Monolith CParticleEffect::OnFrame); ці дві
+        // змінні затуляють фіксований крок 33 мс PS::uDT_STEP / PS::fDT_STEP у коді нижче.
+        const u32 uDT_STEP = m_Def->GetUStep();
+        const float fDT_STEP = m_Def->GetFStep();
+#endif
 
         int StepCount = 0;
         if (m_MemDT >= uDT_STEP) {
@@ -379,7 +435,19 @@ inline void magnitude_sse(Fvector& vec, float& res) {
 
 void ParticleRenderStream(void* lpvParams) {
     float sina = 0.0f, cosa = 0.0f;
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author Xottab_DUTY): FPS plan step 2 - the rotation fix of Anomaly (Monolith
+    // ParticleRenderStream, Xottab_DUTY: "changed angle to be float instead of DWORD"): the sine and
+    // cosine were taken of the angle's bits read as an integer, so rotated particles stood at wrong
+    // angles; now of the angle itself.
+    // Перенесення з Monolith (автор Xottab_DUTY) - Ivan Danko, 2026-11-17: крок 2 плану FPS - виправлення повороту з Anomaly (Monolith
+    // ParticleRenderStream, Xottab_DUTY: кут став float замість DWORD): синус і косинус бралися від
+    // бітів кута, прочитаних як ціле число, тож повернуті частинки стояли під хибними кутами; тепер -
+    // від самого кута.
+    float angle = 0xFFFFFFFF;
+#else
     DWORD angle = 0xFFFFFFFF;
+#endif
 
     PRS_PARAMS* pParams = (PRS_PARAMS*)lpvParams;
 
@@ -397,11 +465,21 @@ void ParticleRenderStream(void* lpvParams) {
 
         _mm_prefetch((char*)&particles[i + 1], _MM_HINT_NTA);
 
+#if RENDER == R_R4
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author Xottab_DUTY): FPS plan step 2 - the angle as a float (see above, Monolith).
+        // Перенесення з Monolith (автор Xottab_DUTY) - Ivan Danko, 2026-11-17: крок 2 плану FPS - кут як float (див. вище, Monolith).
+        if (angle != m.rot.x) {
+            angle = m.rot.x;
+            sina = std::sinf(*(float*)&angle);
+            cosa = std::cosf(*(float*)&angle);
+        }
+#else
         if (angle != *((DWORD*)&m.rot.x)) {
             angle = *((DWORD*)&m.rot.x);
             sina = std::sin(angle);
             cosa = std::cos(angle);
         }
+#endif
 
         _mm_prefetch(64 + (char*)&particles[i + 1], _MM_HINT_NTA);
 
@@ -481,6 +559,276 @@ void ParticleRenderStream(void* lpvParams) {
         }
     }
 }
+#if RENDER == R_R4
+
+// Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B ( "all particle geometry of a frame in one
+// batch on all cores" ). Before, every draw of a sprite effect built its vertices again on the drawing
+// thread ( ParticleRenderStream ) into the common vertex stream: in the 3D scope's lens, in the main
+// view and once more for the heat haze. Now the effects the frame will draw wait in a queue ( the scene
+// graph puts them there, r__dsgraph_build.cpp ); at the first draw the vertices of all of them are built
+// at once, on all cores, into the buffer below, and every draw of the frame takes them from there. An
+// effect that changed after that ( an update, a move ) or did not fit is drawn the old way. Only with
+// "mt_particles 1"; "mt_particles 0" = the old way for all.
+// Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B ( "уся геометрія частинок кадру однією
+// пачкою на всіх ядрах" ). Раніше кожне малювання ефекту-спрайта знову будувало його вершини в потоці
+// малювання ( ParticleRenderStream ) у спільний потік вершин: у лінзі 3D-прицілу, в основному виді й ще
+// раз для марева. Тепер ефекти, які кадр малюватиме, чекають у черзі ( туди їх ставить граф сцени,
+// r__dsgraph_build.cpp ); на першому малюванні вершини їх усіх будуються разом, на всіх ядрах, у буфер
+// нижче, і кожне малювання кадру бере їх звідти. Ефект, що змінився після цього ( оновлення, рух ) або
+// не вмістився, малюється по-старому. Лише з "mt_particles 1"; "mt_particles 0" = по-старому для всіх.
+#include "xrCore/xrTasks.h"
+
+bool r4_ps_batch_on(); // xrRenderPC_R4\r4_R_render.cpp: "mt_particles 1" and the game's update entry
+
+namespace {
+constexpr u32 r4_ps_geom_quads = 4096;           // RCache.QuadIB holds 4096 quads: one a particle
+constexpr u32 r4_ps_geom_piece = 256;            // particles of one effect in one piece of work
+constexpr u32 r4_ps_geom_task = 512;             // particles a task at least ( less costs more to hand out )
+constexpr u32 r4_ps_geom_min = 4 * 1024 * 1024;  // the buffer's first size, bytes
+constexpr u32 r4_ps_geom_max = 64 * 1024 * 1024; // the buffer's biggest size, bytes
+constexpr u32 r4_ps_geom_step = 1024 * 1024;     // the buffer grows in these steps, bytes
+
+struct r4_ps_geom_state {
+    ID3DVertexBuffer* vb = nullptr;     // the buffer
+    ref_geom* geom = nullptr;           // its geometry ( on the heap: no destructor at the DLL's unload )
+    bool broken = false;                // no buffer could be made: the old way until the next reset
+    u32 size = 0;                       // the buffer's size, bytes
+    u32 used = 0;                       // filled in this frame, bytes
+    u32 need = 0;                       // asked for in this frame, bytes ( the next frame's size )
+    u32 frame = 0;                      // the frame of used / need / stamp
+    u32 stamp = 1;                      // new with every frame and every buffer, never 0
+    bool discarded = false;             // mapped with DISCARD in this frame already
+    xr_vector<CParticleEffect*> queue;  // this frame's effects waiting for their vertices
+    xr_vector<CParticleEffect*> filled; // the effects of one fill
+    xr_vector<PRS_PARAMS> pieces;       // the pieces of work of one fill
+};
+r4_ps_geom_state r4_ps_geom;
+
+void r4_ps_geom_free(r4_ps_geom_state& g) {
+    if (g.geom) {
+        g.geom->destroy();
+        xr_delete(g.geom);
+    }
+    if (g.vb) {
+        HW.stats_manager.decrement_stats_vb(g.vb);
+        _RELEASE(g.vb);
+    }
+    g.size = 0;
+    g.used = 0;
+    g.discarded = false;
+    if (++g.stamp == 0)
+        g.stamp = 1;
+}
+
+bool r4_ps_geom_create(r4_ps_geom_state& g, u32 size) {
+    D3D_BUFFER_DESC desc = {};
+    desc.ByteWidth = size;
+    desc.Usage = D3D_USAGE_DYNAMIC;
+    desc.BindFlags = D3D_BIND_VERTEX_BUFFER;
+    desc.CPUAccessFlags = D3D_CPU_ACCESS_WRITE;
+    desc.MiscFlags = 0;
+    ID3DVertexBuffer* vb = nullptr;
+    if (FAILED(HW.pDevice->CreateBuffer(&desc, nullptr, &vb)) || !vb)
+        return false;
+    HW.stats_manager.increment_stats_vb(vb);
+    g.vb = vb;
+    g.geom = xr_new<ref_geom>();
+    g.geom->create(FVF::F_LIT, g.vb, RCache.QuadIB);
+    if ((*g.geom)->vb_stride != sizeof(FVF::LIT)) {
+        r4_ps_geom_free(g);
+        return false;
+    }
+    g.size = size;
+    g.used = 0;
+    g.discarded = false;
+    return true;
+}
+
+// the first call of a frame: the last frame's queue goes untouched ( those effects may be gone ), the
+// new stamp leaves every effect unfilled, the buffer grows when the last frame asked for more
+void r4_ps_geom_frame(r4_ps_geom_state& g) {
+    if (g.frame == Device.dwFrame)
+        return;
+    g.frame = Device.dwFrame;
+    if (g.vb && g.need > g.size && g.size < r4_ps_geom_max) {
+        const u32 old_size = g.size;
+        u64 want = u64(g.need) + g.need / 4;
+        want = (want + r4_ps_geom_step - 1) / r4_ps_geom_step * r4_ps_geom_step;
+        const u32 size = u32(std::min<u64>(want, r4_ps_geom_max));
+        r4_ps_geom_free(g);
+        if (!r4_ps_geom_create(g, size) && !r4_ps_geom_create(g, old_size))
+            g.broken = true;
+    }
+    g.used = 0;
+    g.need = 0;
+    g.discarded = false;
+    if (++g.stamp == 0)
+        g.stamp = 1;
+    g.queue.clear();
+}
+
+// the vertices of every effect in the queue at once: the places first ( one after another behind what
+// this frame filled already ), then one map of the buffer, the pieces on all cores, unmap
+void r4_ps_geom_fill(r4_ps_geom_state& g) {
+    r4_ps_geom_frame(g);
+    if (g.queue.empty())
+        return;
+    if (!g.vb && !g.broken && !r4_ps_geom_create(g, r4_ps_geom_min))
+        g.broken = true;
+    if (!g.vb) {
+        for (CParticleEffect* e : g.queue)
+            e->ps_geom_queued = 0;
+        g.queue.clear();
+        return;
+    }
+
+    constexpr u32 stride = sizeof(FVF::LIT);
+    u32 at = g.used;
+    g.filled.clear();
+    for (CParticleEffect* e : g.queue) {
+        e->ps_geom_queued = 0;
+        PAPI::Particle* particles;
+        u32 p_cnt;
+        ParticleManager()->GetParticles(e->GetHandleEffect(), particles, p_cnt);
+        if (!p_cnt || p_cnt > r4_ps_geom_quads)
+            continue; // nothing to draw, or more than the index buffer holds: the old way, as before
+        const u32 bytes = p_cnt * 4 * stride;
+        g.need += bytes;
+        if (bytes > g.size - at)
+            continue; // does not fit: the old way, the next frame's buffer is bigger
+        e->ps_geom_offset = at / stride;
+        e->ps_geom_count = p_cnt * 4;
+        at += bytes;
+        g.filled.push_back(e);
+    }
+    g.queue.clear();
+    if (g.filled.empty())
+        return;
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    const D3D_MAP mode = g.discarded ? D3D_MAP_WRITE_NO_OVERWRITE : D3D_MAP_WRITE_DISCARD;
+    if (FAILED(HW.pContext->Map(g.vb, 0, mode, 0, &mapped)) || !mapped.pData) {
+        g.filled.clear();
+        return;
+    }
+    g.discarded = true;
+
+    FVF::LIT* base = static_cast<FVF::LIT*>(mapped.pData);
+    u32 total = 0;
+    g.pieces.clear();
+    for (CParticleEffect* e : g.filled) {
+        PAPI::Particle* particles;
+        u32 p_cnt;
+        ParticleManager()->GetParticles(e->GetHandleEffect(), particles, p_cnt);
+        const u32 count = std::min(p_cnt, e->ps_geom_count / 4); // never past the effect's place
+        total += count;
+        for (u32 from = 0; from < count; from += r4_ps_geom_piece) {
+            PRS_PARAMS piece;
+            piece.pv = base + e->ps_geom_offset + from * 4;
+            piece.p_from = from;
+            piece.p_to = std::min(count, from + r4_ps_geom_piece);
+            piece.particles = particles;
+            piece.pPE = e;
+            g.pieces.push_back(piece);
+        }
+    }
+    PRS_PARAMS* pieces = g.pieces.data();
+    const u32 n = u32(g.pieces.size());
+    u32 tasks = total / r4_ps_geom_task;
+    const u32 most = xrTasks::Slots() * 4;
+    if (tasks > most)
+        tasks = most;
+    if (tasks < 1)
+        tasks = 1;
+    const u32 grain = (n + tasks - 1) / tasks;
+    xrTasks::ParallelFor(n, grain, [pieces](u32 begin, u32 end) {
+        for (u32 i = begin; i < end; ++i)
+            ParticleRenderStream(&pieces[i]);
+    });
+    HW.pContext->Unmap(g.vb, 0);
+
+    g.used = at;
+    for (CParticleEffect* e : g.filled)
+        e->ps_geom_stamp = g.stamp;
+    g.filled.clear();
+}
+
+// one draw of an effect from the buffer: true = drawn, false = draw it the old way; the draw itself is
+// the old way's ( CParticleEffect::Render below ) with this buffer and the effect's place in it
+bool r4_ps_geom_draw(CParticleEffect& e, u32 p_cnt) {
+    r4_ps_geom_state& g = r4_ps_geom;
+    r4_ps_geom_frame(g);
+    if (e.ps_geom_stamp != g.stamp) {
+        if (e.ps_geom_queued != Device.dwFrame)
+            return false;
+        r4_ps_geom_fill(g);
+        if (e.ps_geom_stamp != g.stamp)
+            return false;
+    }
+    const u32 dwCount = p_cnt << 2;
+    if (!g.geom || e.ps_geom_count != dwCount)
+        return false;
+
+    Fmatrix Pold = Device.mProject;
+    Fmatrix FTold = Device.mFullTransform;
+    if (e.GetHudMode()) {
+        RDEVICE.mProject.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT,
+                                          IE_VIEWPORT_NEAR,
+                                          g_pGamePersistent->Environment().CurrentEnv->far_plane);
+
+        Device.mFullTransform.mul(Device.mProject, Device.mView);
+        RCache.set_xform_project(Device.mProject);
+        RImplementation.rmNear();
+        ApplyTexgen(Device.mFullTransform);
+    }
+
+    RCache.set_xform_world(Fidentity);
+    RCache.set_Geometry(*g.geom);
+
+    RCache.set_CullMode(e.m_Def->m_Flags.is(CPEDef::dfCulling)
+                            ? (e.m_Def->m_Flags.is(CPEDef::dfCullCCW) ? CULL_CCW : CULL_CW)
+                            : CULL_NONE);
+    RCache.Render(D3DPT_TRIANGLELIST, e.ps_geom_offset, 0, dwCount, 0, dwCount / 2);
+    RCache.set_CullMode(CULL_CCW);
+    if (e.GetHudMode()) {
+        RImplementation.rmNormal();
+        Device.mProject = Pold;
+        Device.mFullTransform = FTold;
+        RCache.set_xform_project(Device.mProject);
+        ApplyTexgen(Device.mFullTransform);
+    }
+    return true;
+}
+} // namespace
+
+// the scene graph puts here every effect the frame will draw ( r__dsgraph_build.cpp, insert_dynamic )
+void r4_ps_geom_queue(dxRender_Visual* visual) {
+    r4_ps_geom_state& g = r4_ps_geom;
+    if (g.broken || !r4_ps_batch_on())
+        return;
+    auto* e = static_cast<CParticleEffect*>(visual);
+    if (!e->m_Def || !e->m_Def->m_Flags.is(CPEDef::dfSprite))
+        return;
+    r4_ps_geom_frame(g);
+    if (e->ps_geom_stamp == g.stamp || e->ps_geom_queued == Device.dwFrame)
+        return;
+    e->ps_geom_queued = Device.dwFrame;
+    g.queue.push_back(e);
+}
+
+// the renderer's end and a device reset ( r4.cpp: CRender::destroy, CRender::reset_begin ): the buffer
+// goes before the resources it depends on; a new one is made when it is needed
+void r4_ps_geom_release() {
+    r4_ps_geom_state& g = r4_ps_geom;
+    r4_ps_geom_free(g);
+    g.broken = false;
+    g.need = 0;
+    g.frame = 0;
+    g.queue.clear();
+    g.filled.clear();
+    g.pieces.clear();
+}
+#endif
 
 void CParticleEffect::Render(float) {
     u32 dwOffset, dwCount;
@@ -490,9 +838,62 @@ void CParticleEffect::Render(float) {
 
     if (p_cnt) {
         if (m_Def && m_Def->m_Flags.is(CPEDef::dfSprite)) {
+#if RENDER == R_R4
+            // Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - the vertices from the frame's
+            // particle vertex buffer, built for all the effects at once ( r4_ps_geom_draw above ); the
+            // code below is the old way, for what is not there.
+            // Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - вершини з буфера вершин
+            // частинок кадру, збудовані для всіх ефектів разом ( r4_ps_geom_draw вище ); код нижче -
+            // старий шлях для того, чого там немає.
+            if (r4_ps_geom_draw(*this, p_cnt))
+                return;
+#endif
             FVF::LIT* pv_start = (FVF::LIT*)RCache.Vertex.Lock(p_cnt * 4 * 4, geom->vb_stride, dwOffset);
             FVF::LIT* pv = pv_start;
 
+#if RENDER == R_R4
+            // Edited by Ivan Danko, 2026-11-14: FPS fix step 1 - an effect whose vertices are one piece
+            // of work fills them right here. Handing that one piece to a task worker and waiting for it
+            // cost more than the work itself, and a far view draws hundreds of effects a frame. Bigger
+            // effects are cut into pieces as before; the #else part is the code as it was.
+            // Змінено (Ivan Danko, 2026-11-14): крок 1 виправлення FPS - ефект, вершини якого є одним
+            // шматком роботи, заповнює їх одразу тут. Передача цього шматка робочому потоку й
+            // очікування на нього коштували більше за саму роботу, а дальній вид малює сотні ефектів
+            // за кадр. Більші ефекти діляться на шматки, як і раніше; у частині #else - код без змін.
+            size_t nWorkers = ttapi.threads.size();
+
+            if (p_cnt < nWorkers * 20)
+                nWorkers = 1;
+
+            if (nWorkers == 1) {
+                PRS_PARAMS prsParam;
+                prsParam.pv = pv;
+                prsParam.p_from = 0;
+                prsParam.p_to = p_cnt;
+                prsParam.particles = particles;
+                prsParam.pPE = this;
+                ParticleRenderStream((void*)&prsParam);
+            } else {
+                // КРИТИЧНИЙ ФІКС: Безпечна пам'ять (std::vector) замість _alloca
+                std::vector<PRS_PARAMS> prsParams(nWorkers);
+
+                u32 nSlice = p_cnt / 128;
+                u32 nStep = ((p_cnt - nSlice) / nWorkers);
+
+                for (u32 i = 0; i < nWorkers; ++i) {
+                    prsParams[i].pv = pv + i * nStep * 4;
+                    prsParams[i].p_from = i * nStep;
+                    prsParams[i].p_to = (i == (nWorkers - 1)) ? p_cnt : (prsParams[i].p_from + nStep);
+                    prsParams[i].particles = particles;
+                    prsParams[i].pPE = this;
+
+                    PRS_PARAMS* pParam = &prsParams[i];
+                    ttapi.threads[i]->addJob([pParam] { ParticleRenderStream((void*)pParam); });
+                }
+
+                ttapi.wait();
+            }
+#else
             size_t nWorkers = ttapi.threads.size();
 
             if (p_cnt < nWorkers * 20)
@@ -516,6 +917,7 @@ void CParticleEffect::Render(float) {
             }
 
             ttapi.wait();
+#endif
 
             dwCount = p_cnt << 2;
 

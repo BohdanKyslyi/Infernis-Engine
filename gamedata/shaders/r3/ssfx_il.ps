@@ -69,7 +69,7 @@ float4 main(p_screen I) : SV_Target
 	// Sample radius
 	float radius = 3.0f;
 
-	[unroll (SSFX_IL_QUALITY)]
+	[loop]
 	for (int i = 0; i < SSFX_IL_QUALITY; i++)
 	{
 		ao_noise.xyz = hash33(float3(tc.x + Seed, ao_noise.x + Seed, ao_noise.z - Seed));
@@ -109,7 +109,7 @@ float4 main(p_screen I) : SV_Target
 
 			// Sample light accumulator
 	#ifndef USE_MSAA
-			float3 L = saturate(s_accumulator.Sample( smp_nofilter, occ_pos_uv ) * 10);
+			float3 L = saturate(s_accumulator.SampleLevel( smp_nofilter, occ_pos_uv, 0 ) * 10);
 	#else
 			float3 L = saturate(s_accumulator.Load( int3( occ_pos_uv * screen_res.xy, 0 ), 0 ) * 10);
 	#endif

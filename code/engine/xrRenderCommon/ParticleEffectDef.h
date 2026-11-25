@@ -76,6 +76,16 @@ public:
     
     // compiled actions
     CMemoryWriter m_Actions;
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the update step of every effect as in Anomaly
+    // (Monolith ParticleEffectDef.h): 33 ms by default, a loose .pe file may set its own
+    // ([_effect] update_step); the console value particle_update_mod scales it (GetUStep / GetFStep).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - крок оновлення кожного ефекту як в Anomaly
+    // (Monolith ParticleEffectDef.h): типово 33 мс, окремий файл .pe може задати власний
+    // ([_effect] update_step); консольне значення particle_update_mod масштабує його (GetUStep / GetFStep).
+    u32 m_uStep = 33;
+    float m_fStep = 33.0f / 1000.0f;
+#endif
     
     float m_fTimeLimit = 0.0f;           
     int m_MaxParticles = 0;              
@@ -98,6 +108,14 @@ public:
 public:
     CPEDef();
     ~CPEDef();
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the effect's update step times
+    // particle_update_mod, as in Monolith (ms / seconds).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - крок оновлення ефекту, помножений на
+    // particle_update_mod, як у Monolith (мс / секунди).
+    u32 GetUStep();
+    float GetFStep();
+#endif
 
     void SetName(LPCSTR name);
     [[nodiscard]] IC LPCSTR Name() const { return *m_Name; }
@@ -110,6 +128,22 @@ public:
     void Save2(CInifile& ini);
     BOOL Load2(CInifile& ini);
 
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the editor action list in the game, as in
+    // Anomaly (Monolith builds it outside the editor too): the actions of a loose .pe file and the
+    // editor data of particles.xr are compiled into m_Actions (ParticleEffectActions.h).
+    // Adapted: DEFINE_VECTOR -> using (our xrCore has no DEFINE_VECTOR).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - список дій редактора у грі, як в Anomaly
+    // (Monolith збирає його і поза редактором): дії окремого файлу .pe і дані редактора з particles.xr
+    // компілюються в m_Actions (ParticleEffectActions.h).
+    // Адаптовано: DEFINE_VECTOR -> using (у нашому xrCore немає DEFINE_VECTOR).
+public:
+    using EPAVec = xr_vector<EParticleAction*>;
+    using EPAVecIt = EPAVec::iterator;
+    EPAVec m_EActionList;
+
+    void Compile(EPAVec& v);
+#endif
 #ifdef _EDITOR
 public:
     DEFINE_VECTOR(EParticleAction*, EPAVec, EPAVecIt);

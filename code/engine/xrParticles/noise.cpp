@@ -36,6 +36,56 @@ template <typename T>
 }
 
 void noise3Init() {
+    // Edited by Ivan Danko, 2026-11-17: FPS plan step 2 - with the Anomaly behaviour on (psystem.h),
+    // the turbulence table as in Monolith (xrParticles\noise.cpp: srand(1) + rand() of the MSVC
+    // runtime). The same generator runs here on a local seed, so the table is Anomaly's and nobody
+    // else's random sequence is touched. Off = the code as it was.
+    // Змінено (Ivan Danko, 2026-11-17): крок 2 плану FPS - з увімкненою поведінкою Anomaly (psystem.h)
+    // таблиця завихрень як у Monolith (xrParticles\noise.cpp: srand(1) + rand() середовища MSVC). Той
+    // самий генератор працює тут на власному зерні, тож таблиця як в Anomaly, а чужі послідовності
+    // випадкових чисел не зачіпаються. Вимкнено = код без змін.
+    if (PAPI::AnomalyMode()) {
+        u32 seed = 1;
+        auto msvc_rand = [&seed]() -> int {
+            seed = seed * 214013u + 2531011u;
+            return static_cast<int>((seed >> 16) & 0x7fff);
+        };
+
+        int i, j, k;
+        float v[3], s;
+        int rnd;
+
+        for (i = 0; i < B; i++) {
+            do {
+                for (j = 0; j < 3; j++) {
+                    rnd = msvc_rand();
+                    v[j] = float((rnd % (B + B)) - B) / B;
+                }
+                s = DOT(v, v);
+            } while (s > 1.0);
+            s = std::sqrt(s);
+            for (j = 0; j < 3; j++)
+                g[i][j] = v[j] / s;
+        }
+
+        for (i = 0; i < B; i++)
+            p[i] = i;
+
+        for (i = B; i > 0; i -= 2) {
+            rnd = msvc_rand();
+            k = p[i];
+            p[i] = p[(j = rnd % B)];
+            p[j] = k;
+        }
+
+        for (i = 0; i < B + 2; i++) {
+            p[B + i] = p[i];
+            for (j = 0; j < 3; j++)
+                g[B + i][j] = g[i][j];
+        }
+        return;
+    }
+
     std::mt19937 rng(1);
     std::uniform_real_distribution<float> dist_v(-1.0f, 1.0f);
     std::uniform_int_distribution<int> dist_idx(0, B - 1);

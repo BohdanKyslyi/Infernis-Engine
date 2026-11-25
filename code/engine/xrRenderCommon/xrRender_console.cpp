@@ -493,6 +493,97 @@ public:
     }
 };
 
+#if RENDER == R_R4
+// Item 9 stage B ( multithreading ): the shader build measurement into the log - how many shaders
+// came from the cache, how many were compiled and how long it took ( xrRenderPC_R4\r4.cpp ).
+void shader_build_stats_print();
+
+class CCC_ShaderBuildStats : public IConsole_Command {
+public:
+    CCC_ShaderBuildStats(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; };
+    virtual void Execute(LPCSTR args) { shader_build_stats_print(); }
+};
+
+// Item 9 stage D ( multithreading ): textures on all cores at level load ( ResourceManager.cpp,
+// CResourceManager::DeferredUpload ); 0 = one by one, as before.
+int ps_r__mt_textures = 1;
+// Edited by Ivan Danko, 2026-11-14: item 9 stage E point 4 ( multithreading ): the shaders built
+// ahead on all cores at renderer start ( xrRenderPC_R4\r4_shader_prebuild.h ); 0 = only when the
+// game asks for them, as before.
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 етап E пункт 4 ( багатопотоковість ): шейдери
+// збираються наперед на всіх ядрах під час запуску рендера ( xrRenderPC_R4\r4_shader_prebuild.h );
+// 0 = лише тоді, коли їх запитує гра, як і раніше.
+int ps_r__shader_prebuild = 1;
+// Written by Ivan Danko, 2026-11-15: FPS fix step 1 "do not draw what cannot be seen"
+// ( xrRenderPC_R4\r4_R_render.cpp, r__dsgraph_build.cpp ). r__far_cull: far small objects are not
+// drawn when their diameter on the screen ( measured on a 1080-pixel-high screen with the view's
+// own zoom - the 3D scope lens has its own ) is under the limit: 0 = off, as before; 1 = soft
+// ( objects 2 px, particles 3 px ); 2 = stronger ( 4 px / 6 px ). Characters and monsters, trees,
+// LODs and glowing static meshes always stay. r__occlusion_ext: the frame's occlusion test ( HOM )
+// also for the 3D scope lens view and for the transparent pass ( particles ); 0 = as before.
+// Створено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS "не малювати те, чого не видно"
+// ( xrRenderPC_R4\r4_R_render.cpp, r__dsgraph_build.cpp ). r__far_cull: дрібні далекі об'єкти не
+// малюються, коли їхній діаметр на екрані ( міряється на екрані висотою 1080 пікселів зі
+// збільшенням цього виду - лінза 3D-прицілу має своє ) менший за межу: 0 = вимкнено, як раніше;
+// 1 = м'яко ( об'єкти 2 пікс., частинки 3 пікс. ); 2 = сильніше ( 4 / 6 пікс. ). Персонажі й
+// монстри, дерева, LOD і статичні сітки, що світяться, лишаються завжди. r__occlusion_ext:
+// перевірка перекриття кадру ( HOM ) також для виду лінзи 3D-прицілу і для проходу прозорого
+// ( частинки ); 0 = як раніше.
+int ps_r__far_cull = 0;
+int ps_r__occlusion_ext = 1;
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the particle update coefficient of Anomaly
+// (Monolith xrRender_console.cpp ps_particle_update_coeff, console particle_update_mod 0.04 .. 10): the
+// update step of every effect is multiplied by it (ParticleEffectDef.cpp GetUStep / GetFStep), the
+// turbulence strength too (xrParticles); 1 = 33 ms (30 updates a second), 0.5 = 60, 2 = 15.
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - коефіцієнт оновлення частинок з Anomaly
+// (Monolith xrRender_console.cpp ps_particle_update_coeff, консоль particle_update_mod 0.04 .. 10): на
+// нього множиться крок оновлення кожного ефекту (ParticleEffectDef.cpp GetUStep / GetFStep) і сила
+// завихрень (xrParticles); 1 = 33 мс (30 оновлень на секунду), 0.5 = 60, 2 = 15.
+float ps_particle_update_coeff = 1.f;
+
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the console commands part_export / part_import of
+// Anomaly (Monolith xr_ioc_cmd.cpp CCC_PART_Export / CCC_PART_Import + r4.cpp ExportParticles /
+// ImportParticles). Adapted: the DX11 renderer registers them here, not the engine through two new
+// IRender functions (that would change the interface of every renderer). part_export reloads the
+// particle library and writes every effect and group as loose .pe / .pg files into gamedata\particles
+// (the folder is emptied first); part_import reads the loose files and writes gamedata\particles.xr.
+// Both reload the particle library: main menu only - effects alive in a level would keep pointers to
+// freed descriptions (the same in Anomaly).
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - консольні команди part_export / part_import
+// з Anomaly (Monolith xr_ioc_cmd.cpp CCC_PART_Export / CCC_PART_Import + r4.cpp ExportParticles /
+// ImportParticles). Адаптовано: їх реєструє тут рендер DX11, а не рушій через дві нові функції IRender
+// (це змінило б інтерфейс усіх рендерів). part_export перезавантажує бібліотеку частинок і записує
+// кожен ефект і групу окремими файлами .pe / .pg у gamedata\particles (тека спершу очищається);
+// part_import читає окремі файли і записує gamedata\particles.xr. Обидві перезавантажують бібліотеку
+// частинок: лише в головному меню - ефекти, живі на рівні, тримали б вказівники на звільнені описи
+// (так само в Anomaly).
+class CCC_PART_Export : public IConsole_Command {
+public:
+    CCC_PART_Export(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = TRUE; };
+
+    virtual void Execute(LPCSTR args) {
+        Msg("Exporting particles...");
+        Msg("Export particles with R4");
+        RImplementation.PSLibrary.Reload();
+        RImplementation.PSLibrary.Save2();
+    }
+};
+
+class CCC_PART_Import : public IConsole_Command {
+public:
+    CCC_PART_Import(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = TRUE; };
+
+    virtual void Execute(LPCSTR args) {
+        Msg("Importing particles...");
+        Msg("Import particles with R4");
+        RImplementation.PSLibrary.OnDestroy();
+        RImplementation.PSLibrary.Load2();
+        RImplementation.PSLibrary.Save();
+        RImplementation.PSLibrary.Reload();
+    }
+};
+#endif // RENDER == R_R4
+
 #if RENDER != R_R1
 #include "r__pixel_calculator.h"
 class CCC_BuildSSA : public IConsole_Command {
@@ -706,6 +797,32 @@ void xrRender_initconsole() {
 
     // Common
     CMD1(CCC_Screenshot, "screenshot");
+#if RENDER == R_R4
+    // Item 9 stage B ( multithreading ): the shader build measurement
+    CMD1(CCC_ShaderBuildStats, "r__shader_build_stats");
+    // Item 9 stage D ( multithreading ): textures on all cores at level load ( 0 = one by one )
+    CMD4(CCC_Integer, "r__mt_textures", &ps_r__mt_textures, 0, 1);
+    // Edited by Ivan Danko, 2026-11-14: item 9 stage E point 4 - the shaders built ahead on all
+    // cores ( 0 = only when the game asks for them )
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 етап E пункт 4 - шейдери збираються наперед на всіх
+    // ядрах ( 0 = лише тоді, коли їх запитує гра )
+    CMD4(CCC_Integer, "r__shader_prebuild", &ps_r__shader_prebuild, 0, 1);
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - far small objects not drawn ( 0 off,
+    // 1 soft, 2 stronger ) and the frame's occlusion test for the 3D scope lens view and the
+    // transparent pass ( 0 = as before )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - дрібні далекі об'єкти не
+    // малюються ( 0 вимк., 1 м'яко, 2 сильніше ) і перевірка перекриття кадру для виду лінзи
+    // 3D-прицілу та проходу прозорого ( 0 = як раніше )
+    CMD4(CCC_Integer, "r__far_cull", &ps_r__far_cull, 0, 2);
+    CMD4(CCC_Integer, "r__occlusion_ext", &ps_r__occlusion_ext, 0, 1);
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the particle update coefficient and the
+    // particle export / import of Anomaly (see above)
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - коефіцієнт оновлення частинок і
+    // експорт / імпорт частинок з Anomaly (див. вище)
+    CMD4(CCC_Float, "particle_update_mod", &ps_particle_update_coeff, 0.04f, 10.f);
+    CMD1(CCC_PART_Export, "part_export");
+    CMD1(CCC_PART_Import, "part_import");
+#endif
 
     //	Igor: just to test bug with rain/particles corruption
     CMD1(CCC_RestoreQuadIBData, "r_restore_quad_ib_data");

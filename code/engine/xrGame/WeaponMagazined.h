@@ -8,8 +8,8 @@ class CCustomDetector;
 
 class ENGINE_API CMotionDef;
 
-//Г°Г Г§Г¬ГҐГ° Г®Г·ГҐГ°ГҐГ¤ГЁ Г±Г·ГЁГІГ ГҐГІГ±Гї ГЎГҐГ±ГЄГ®Г­ГҐГ·Г­Г®Г±ГІГј
-//Г§Г ГЄГ Г­Г·ГЁГўГ ГҐГ¬ Г±ГІГ°ГҐГ«ГјГЎГі, ГІГ®Г«ГјГЄГ®, ГҐГ±Г«ГЁ ГЄГ®Г­Г·ГЁГ«ГЁГ±Гј ГЇГ ГІГ°Г®Г­Г»
+//размер очереди считается бесконечность
+//заканчиваем стрельбу, только, если кончились патроны
 #define WEAPON_ININITE_QUEUE -1
 
 class CController;
@@ -19,12 +19,12 @@ private:
     typedef CWeapon inherited;
 
 protected:
-    //Г§ГўГіГЄ ГІГҐГЄГіГ№ГҐГЈГ® ГўГ»Г±ГІГ°ГҐГ«Г 
+    //звук текущего выстрела
     shared_str m_sSndShotCurrent;
     bool m_has_breechblock_sound = false;
     bool m_has_shot_jam_sound = false;
 
-    //Г¤Г®ГЇГ®Г«Г­ГЁГІГҐГ«ГјГ­Г Гї ГЁГ­ГґГ®Г°Г¬Г Г¶ГЁГї Г® ГЈГ«ГіГёГЁГІГҐГ«ГҐ
+    //дополнительная информация о глушителе
     LPCSTR m_sSilencerSmokeParticles;
 
     ESoundTypes m_eSoundShow;
@@ -34,7 +34,7 @@ protected:
     ESoundTypes m_eSoundReload;
     bool m_sounds_enabled;
     // General
-    //ГЄГ Г¤Г° Г¬Г®Г¬ГҐГ­ГІГ  ГЇГҐГ°ГҐГ±Г·ГҐГІГ  UpdateSounds
+    //кадр момента пересчета UpdateSounds
     u32 dwUpdateSounds_Frame;
 
 protected:
@@ -132,26 +132,26 @@ public:
     virtual float GetFireDispersion(float cartridge_k, bool for_crosshair = false);
 
 protected:
-    //Г¬Г ГЄГ±ГЁГ¬Г Г«ГјГ­Г»Г© Г°Г Г§Г¬ГҐГ° Г®Г·ГҐГ°ГҐГ¤ГЁ, ГЄГ®ГІГ®Г°Г®Г© Г¬Г®Г¦Г­Г® Г±ГІГ°ГҐГ«ГјГ­ГіГІГј
+    //максимальный размер очереди, которой можно стрельнуть
     int m_iQueueSize;
     int m_max_queue_size = 0;
     int EffectiveQueueSize() const;
-    //ГЄГ®Г«ГЁГ·ГҐГ±ГІГўГ® Г°ГҐГ Г«ГјГ­Г® ГўГ»Г±ГІГ°ГҐГ«ГїГ­Г»Гµ ГЇГ ГІГ°Г®Г­Г®Гў
+    //количество реально выстреляных патронов
     int m_iShotNum;
-    //ГЇГ®Г±Г«ГҐ ГЄГ ГЄГ®ГЈГ® ГЇГ ГІГ°Г®Г­Г , ГЇГ°ГЁ Г­ГҐГЇГ°ГҐГ°Г»ГўГ­Г®Г© Г±ГІГ°ГҐГ«ГјГЎГҐ, Г­Г Г·ГЁГ­Г ГҐГІГ±Гї Г®ГІГ¤Г Г·Г  (Г±Г¤ГҐГ«Г Г­Г® ГЁГ§-Г§Г  ГЂГЎГ ГЄГ Г­Г )
+    //после какого патрона, при непрерывной стрельбе, начинается отдача (сделано из-за Абакана)
     int m_iBaseDispersionedBulletsCount;
-    //Г±ГЄГ®Г°Г®Г±ГІГј ГўГ»Г«ГҐГІГ  ГЇГ ГІГ°Г®Г­Г®Гў, Г­Г  ГЄГ®ГІГ®Г°Г»ГҐ Г­ГҐ ГўГ«ГЁГїГҐГІ Г®ГІГ¤Г Г·Г  (Г±Г¤ГҐГ«Г Г­Г® ГЁГ§-Г§Г  ГЂГЎГ ГЄГ Г­Г )
+    //скорость вылета патронов, на которые не влияет отдача (сделано из-за Абакана)
     float m_fBaseDispersionedBulletsSpeed;
-    //Г±ГЄГ®Г°Г®Г±ГІГј ГўГ»Г«ГҐГІГ  Г®Г±ГІГ Г«ГјГ­Г»Гµ ГЇГ ГІГ°Г®Г­Г®Гў
+    //скорость вылета остальных патронов
     float m_fOldBulletSpeed;
     Fvector m_vStartPos, m_vStartDir;
-    //ГґГ«Г ГЈ ГІГ®ГЈГ®, Г·ГІГ® Г¬Г» Г®Г±ГІГ Г­Г®ГўГЁГ«ГЁГ±Гј ГЇГ®Г±Г«ГҐ ГІГ®ГЈГ® ГЄГ ГЄ ГўГ»Г±ГІГ°ГҐГ«ГїГ«ГЁ
-    //Г°Г®ГўГ­Г® Г±ГІГ®Г«ГјГЄГ® ГЇГ ГІГ°Г®Г­Г®Гў, Г±ГЄГ®Г«ГјГЄГ® ГЎГ»Г«Г® Г§Г Г¤Г Г­Г® Гў m_iQueueSize
+    //флаг того, что мы остановились после того как выстреляли
+    //ровно столько патронов, сколько было задано в m_iQueueSize
     bool m_bStopedAfterQueueFired;
-    //ГґГ«Г ГЈ ГІГ®ГЈГ®, Г·ГІГ® ГµГ®ГІГї ГЎГ» Г®Г¤ГЁГ­ ГўГ»Г±ГІГ°ГҐГ« Г¬Г» Г¤Г®Г«Г¦Г­Г» Г±Г¤ГҐГ«Г ГІГј
-    //(Г¤Г Г¦ГҐ ГҐГ±Г«ГЁ Г®Г·ГҐГ­Гј ГЎГ»Г±ГІГ°Г® Г­Г Г¦Г Г«ГЁ Г­Г  ГЄГіГ°Г®ГЄ ГЁ ГўГ»Г§ГўГ Г«Г®Г±Гј FireEnd)
+    //флаг того, что хотя бы один выстрел мы должны сделать
+    //(даже если очень быстро нажали на курок и вызвалось FireEnd)
     bool m_bFireSingleShot;
-    //Г°ГҐГ¦ГЁГ¬Г» Г±ГІГ°ГҐГ«ГјГЎГ»
+    //режимы стрельбы
     bool m_bHasDifferentFireModes;
     xr_vector<s8> m_aFireModes;
     int m_iCurFireMode;
@@ -251,8 +251,8 @@ protected:
     bool IsEnteringAim();
     bool HasFireActionInProgress();
 
-    //ГЇГҐГ°ГҐГ¬ГҐГ­Г­Г Гї ГЎГ«Г®ГЄГЁГ°ГіГҐГІ ГЁГ±ГЇГ®Г«ГјГ§Г®ГўГ Г­ГЁГҐ
-    //ГІГ®Г«ГјГЄГ® Г°Г Г§Г­Г»Гµ ГІГЁГЇГ®Гў ГЇГ ГІГ°Г®Г­Г®Гў
+    //переменная блокирует использование
+    //только разных типов патронов
     bool m_bLockType;
     bool m_chamber_round;
     bool m_gunslinger_movement_idles = false;
@@ -283,7 +283,7 @@ protected:
 protected:
     virtual bool AllowFireWhileWorking() { return false; }
 
-    //ГўГЁГ°ГІГіГ Г«ГјГ­Г»ГҐ ГґГіГ­ГЄГ¶ГЁГЁ Г¤Г«Гї ГЇГ°Г®ГЁГЈГ°Г»ГўГ Г­ГЁГї Г Г­ГЁГ¬Г Г¶ГЁГЁ HUD
+    //виртуальные функции для проигрывания анимации HUD
     virtual void PlayAnimShow();
     virtual void PlayAnimHide();
     virtual void PlayAnimReload();

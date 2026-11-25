@@ -6,6 +6,13 @@
 #include "xrEngine/environment.h"
 #include "xrEngine/ssfx_console_vars.h"
 #include <xmmintrin.h>
+#if RENDER == R_R4
+// Edited by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores" - the grass parts of
+// "cpu_frame_stats 1" ( FP_GRASS_WAIT in Render below )
+// Змінено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах" - частини трави для
+// "cpu_frame_stats 1" ( FP_GRASS_WAIT у Render нижче )
+#include "xrEngine/frame_parts.h"
+#endif
 
 const float dbgOffset = 0.f;
 const int dbgItems = 128;
@@ -329,7 +336,18 @@ void CDetailManager::Render() {
     if (!dtFS || !psDeviceFlags.is(rsDetails)) return;
 #endif
 
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores" - "cpu_frame_stats 1":
+    // the wait for the grass calculation ( MT_CALC: done on the second thread, or here )
+    // Змінено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах" - "cpu_frame_stats 1":
+    // очікування розрахунку трави ( MT_CALC: виконаний у другому потоці або тут )
+    const u64 mt_wait = frame_part_begin();
     MT_SYNC();
+    if (mt_wait)
+        frame_part_add(FP_GRASS_WAIT, frame_part_now() - mt_wait);
+#else
+    MT_SYNC();
+#endif
 
     RDEVICE.Statistic->RenderDUMP_DT_Render.Begin();
 
@@ -380,6 +398,25 @@ void __stdcall CDetailManager::MT_CALC() {
             cache_Update(s_x, s_z, EYE, dm_max_decompress);
             RDEVICE.Statistic->RenderDUMP_DT_Cache.End();
 
+#if RENDER == R_R4
+            // Written by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores" - did the
+            // visibility lists keep entries since the last frame? They are emptied after each draw or
+            // at the frame's end ( dx10DetailManager_VS.cpp, details_clear ); a list left in them would
+            // stand in them twice after the fill below, so such a frame is drawn the old way
+            // ( m_mt_lists_stale, DetailManager.h ).
+            // Створено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах" - чи лишилися
+            // в списках видимості записи з минулого кадру? Вони спорожняються після кожного малювання
+            // або в кінці кадру ( dx10DetailManager_VS.cpp, details_clear ); список, що лишився в них,
+            // стояв би там двічі після заповнення нижче, тож такий кадр малюється по-старому
+            // ( m_mt_lists_stale, DetailManager.h ).
+            m_mt_lists_stale = false;
+            for (u32 v = 0; v < 3 && !m_mt_lists_stale; ++v)
+                for (const auto& vis : m_visibles[v])
+                    if (!vis.empty()) {
+                        m_mt_lists_stale = true;
+                        break;
+                    }
+#endif
             UpdateVisibleM();
             m_frame_calc.store(RDEVICE.dwFrame, std::memory_order_release);
         }

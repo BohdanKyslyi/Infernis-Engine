@@ -67,7 +67,7 @@ bool CWeaponAutomaticShotgun::Action(u16 cmd, u32 flags) {
         return true;
 
     if (m_bTriStateReload && GetState() == eReload && cmd == kWPN_FIRE && flags & CMD_START &&
-        m_sub_state == eSubstateReloadInProcess) //Ã®Ã±Ã²Ã Ã­Ã®Ã¢Ã¨Ã²Ã¼ Ã¯Ã¥Ã°Ã¥Ã§Ã Ã£Ã°Ã³Ã§ÃªÃ³
+        m_sub_state == eSubstateReloadInProcess) //îñòàíîâèòü ïåðåçàãðóçêó
     {
         AddCartridge(1);
         m_sub_state = eSubstateReloadEnd;
@@ -641,7 +641,7 @@ u8 CWeaponAutomaticShotgun::AddCartridge(u8 cnt) {
 
     VERIFY((u32)iAmmoElapsed == m_magazine.size());
 
-    //Ã¢Ã»ÃªÃ¨Ã­Ã³Ã²Ã¼ ÃªÃ®Ã°Ã®Ã¡ÃªÃ³ Ã¯Ã Ã²Ã°Ã®Ã­Ã®Ã¢, Ã¥Ã±Ã«Ã¨ Ã®Ã­Ã  Ã¯Ã³Ã±Ã²Ã Ã¿
+    //âûêèíóòü êîðîáêó ïàòðîíîâ, åñëè îíà ïóñòàÿ
     if (m_pCurrentAmmo && !m_pCurrentAmmo->m_boxCurr && OnServer())
         m_pCurrentAmmo->SetDropManual(TRUE);
 

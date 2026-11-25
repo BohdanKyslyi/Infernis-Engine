@@ -3,6 +3,277 @@
 
 #include "ResourceManager.h"
 
+#if RENDER == R_R4
+// Item 9 stage A ( multithreading ): the GPU time of a frame for the frame measurement
+// ( "cpu_frame_stats 1", xrEngine\device.cpp ). Two timestamps a frame - right after Begin and
+// right before Present - inside a disjoint query. Six sets in a ring, each read back five frames
+// later without waiting ( D3D11_ASYNC_GETDATA_DONOTFLUSH ), so the measurement never holds a frame
+// up; a set the GPU has not finished by then is dropped. DX11 only: the other renderers keep their
+// code. Our own design, the donor has none.
+extern ENGINE_API int ps_cpu_frame_stats;
+ENGINE_API void frame_stats_add_gpu(float ms);
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the render parts of a frame
+// ( r4_frame_parts.h ): at each boundary between two parts its CPU time and a GPU timestamp; the CPU
+// parts are handed over at the frame's end, the GPU ones when the frame's set is read back. The video
+// memory every 30 frames ( r4_vram_query.cpp, Windows 10+ ).
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини рендеру кадру
+// ( r4_frame_parts.h ): на кожній межі між двома частинами - її час процесора й мітка часу
+// відеокарти; частини процесора передаються в кінці кадру, частини відеокарти - коли набір кадру
+// зчитується. Відеопам'ять - кожні 30 кадрів ( r4_vram_query.cpp, Windows 10+ ).
+#include "r4_frame_parts.h"
+ENGINE_API void frame_stats_add_render_parts(const float* cpu_ms, const char* const* names,
+                                             u32 count);
+ENGINE_API void frame_stats_add_gpu_parts(const float* gpu_ms, u32 count, float frame_ms);
+ENGINE_API void frame_stats_set_vram(u64 used, u64 budget, u64 nonlocal);
+bool r4_vram_query(IUnknown* device, unsigned long long* used, unsigned long long* budget,
+                   unsigned long long* nonlocal);
+
+namespace {
+const u32 gpu_timer_sets = 6;
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the boundaries a frame can have
+// ( the main view 15, the lens view 2 )
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - скільки меж може мати кадр
+// ( основний вид 15, вид лінзи 2 )
+const u32 gpu_part_marks = 32;
+
+struct gpu_frame_timer {
+    ID3D11Query* disjoint = nullptr;
+    ID3D11Query* stamp_begin = nullptr;
+    ID3D11Query* stamp_end = nullptr;
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the boundaries of the render parts
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - межі частин рендеру
+    ID3D11Query* stamp_mark[gpu_part_marks] = {};
+    u8 mark_part[gpu_part_marks] = {}; // the part of the work before the boundary
+    u32 marks = 0;                     // the boundaries of the views that reached their end
+    bool issued = false;
+};
+gpu_frame_timer gpu_timers[gpu_timer_sets];
+u32 gpu_timer_frame = 0;
+bool gpu_timer_open = false; // Begin started the set of this frame
+
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the render parts of this frame on
+// the CPU side and the hand-over of a frame's parts ( the comment at the top )
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини рендеру цього кадру з боку
+// процесора й передавання частин кадру ( коментар угорі )
+struct render_part_state {
+    u64 qpc[gpu_part_marks] = {}; // the CPU time of each boundary of this frame
+    u32 pending = 0;              // the boundaries written this frame
+    u32 view_frame = 0;           // Device.dwFrame of the open view
+    bool open = false;            // a view is open
+    bool lens = false;            // the open view is the 3D scope's lens
+};
+render_part_state render_parts;
+const u8 render_part_view_start = 0xff; // a boundary that starts a view: no part ends at it
+const char* const render_part_names[R4P_COUNT] = {
+    "visibility", "GPU sync wait", "scene",  "grass", "SSS",         "sun",        "emissive",
+    "lights",     "AO+IL",         "combine/reflections + water", "transparent", "post",
+    "scope lens"};
+
+double render_parts_ms_per_tick() {
+    LARGE_INTEGER freq;
+    QueryPerformanceFrequency(&freq);
+    return 1000.0 / double(freq.QuadPart);
+}
+
+// a boundary of the open view in this frame's set
+void render_parts_boundary(u8 part) {
+    render_part_state& r = render_parts;
+    if (r.pending >= gpu_part_marks)
+        return;
+    gpu_frame_timer& t = gpu_timers[gpu_timer_frame % gpu_timer_sets];
+    const u32 i = r.pending++;
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    r.qpc[i] = u64(now.QuadPart);
+    t.mark_part[i] = part;
+    if (t.stamp_mark[i])
+        HW.pContext->End(t.stamp_mark[i]);
+}
+
+// this frame's CPU parts ( gpu_timer_end, before Present )
+void render_parts_hand_cpu(const gpu_frame_timer& t) {
+    if (!t.marks)
+        return;
+    float ms[R4P_COUNT] = {};
+    const double k = render_parts_ms_per_tick();
+    for (u32 i = 1; i < t.marks; ++i)
+        if (t.mark_part[i] < R4P_COUNT)
+            ms[t.mark_part[i]] += float(double(render_parts.qpc[i] - render_parts.qpc[i - 1]) * k);
+    frame_stats_add_render_parts(ms, render_part_names, R4P_COUNT);
+}
+
+// an earlier frame's GPU parts, its set read back ( gpu_timer_end ); a stamp not ready drops them
+void render_parts_hand_gpu(const gpu_frame_timer& t, UINT64 frequency, UINT64 frame_ticks) {
+    if (!t.marks)
+        return;
+    UINT64 stamp[gpu_part_marks] = {};
+    for (u32 i = 0; i < t.marks; ++i)
+        if (!t.stamp_mark[i] ||
+            HW.pContext->GetData(t.stamp_mark[i], &stamp[i], sizeof(UINT64),
+                                 D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK)
+            return;
+    float ms[R4P_COUNT] = {};
+    for (u32 i = 1; i < t.marks; ++i) {
+        if (t.mark_part[i] >= R4P_COUNT)
+            continue;
+        if (stamp[i] < stamp[i - 1])
+            return;
+        ms[t.mark_part[i]] += float(double(stamp[i] - stamp[i - 1]) * 1000.0 / double(frequency));
+    }
+    frame_stats_add_gpu_parts(ms, R4P_COUNT,
+                              float(double(frame_ticks) * 1000.0 / double(frequency)));
+}
+
+// the video memory ( every 30 frames while measured )
+void render_vram_read() {
+    unsigned long long used = 0, budget = 0, nonlocal = 0;
+    if (r4_vram_query(HW.pDevice, &used, &budget, &nonlocal))
+        frame_stats_set_vram(used, budget, nonlocal);
+}
+
+void gpu_timer_release(ID3D11Query*& q) {
+    if (q) {
+        q->Release();
+        q = nullptr;
+    }
+}
+
+void gpu_timers_release() {
+    for (gpu_frame_timer& t : gpu_timers) {
+        gpu_timer_release(t.disjoint);
+        gpu_timer_release(t.stamp_begin);
+        gpu_timer_release(t.stamp_end);
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the boundaries' queries and the
+        // open view
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - запити меж і відкритий
+        // вид
+        for (ID3D11Query*& q : t.stamp_mark)
+            gpu_timer_release(q);
+        t.marks = 0;
+        t.issued = false;
+    }
+    gpu_timer_open = false;
+    render_parts.open = false;
+}
+
+bool gpu_timers_create() {
+    if (gpu_timers[0].disjoint)
+        return true;
+    D3D11_QUERY_DESC disjoint_desc = { D3D11_QUERY_TIMESTAMP_DISJOINT, 0 };
+    D3D11_QUERY_DESC stamp_desc = { D3D11_QUERY_TIMESTAMP, 0 };
+    for (gpu_frame_timer& t : gpu_timers)
+        if (FAILED(HW.pDevice->CreateQuery(&disjoint_desc, &t.disjoint)) ||
+            FAILED(HW.pDevice->CreateQuery(&stamp_desc, &t.stamp_begin)) ||
+            FAILED(HW.pDevice->CreateQuery(&stamp_desc, &t.stamp_end))) {
+            gpu_timers_release();
+            return false;
+        }
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the boundaries' queries; a frame
+    // without them keeps its total
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - запити меж; кадр без них зберігає
+    // свій загальний час
+    for (gpu_frame_timer& t : gpu_timers)
+        for (ID3D11Query*& q : t.stamp_mark)
+            if (FAILED(HW.pDevice->CreateQuery(&stamp_desc, &q)))
+                q = nullptr;
+    return true;
+}
+
+void gpu_timer_begin() {
+    gpu_timer_open = false;
+    if (!ps_cpu_frame_stats) {
+        for (gpu_frame_timer& t : gpu_timers)
+            t.issued = false;
+        return;
+    }
+    if (!gpu_timers_create())
+        return;
+    gpu_frame_timer& t = gpu_timers[gpu_timer_frame % gpu_timer_sets];
+    HW.pContext->Begin(t.disjoint);
+    HW.pContext->End(t.stamp_begin);
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - this frame's render parts start
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - починаються частини рендеру цього
+    // кадру
+    t.marks = 0;
+    render_parts.pending = 0;
+    render_parts.open = false;
+    gpu_timer_open = true;
+}
+
+void gpu_timer_end() {
+    if (!gpu_timer_open)
+        return;
+    gpu_timer_open = false;
+    gpu_frame_timer& t = gpu_timers[gpu_timer_frame % gpu_timer_sets];
+    HW.pContext->End(t.stamp_end);
+    HW.pContext->End(t.disjoint);
+    t.issued = true;
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - this frame's CPU parts; the video
+    // memory every 30 frames
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини процесора цього кадру;
+    // відеопам'ять кожні 30 кадрів
+    render_parts.open = false;
+    render_parts_hand_cpu(t);
+    ++gpu_timer_frame;
+    if (gpu_timer_frame % 30 == 0)
+        render_vram_read();
+
+    // the oldest set, the one the next frame starts again
+    gpu_frame_timer& old = gpu_timers[gpu_timer_frame % gpu_timer_sets];
+    if (!old.issued)
+        return;
+    old.issued = false;
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT dj = {};
+    UINT64 t0 = 0, t1 = 0;
+    if (HW.pContext->GetData(old.disjoint, &dj, sizeof(dj), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK ||
+        HW.pContext->GetData(old.stamp_begin, &t0, sizeof(t0), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK ||
+        HW.pContext->GetData(old.stamp_end, &t1, sizeof(t1), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK)
+        return;
+    if (dj.Disjoint || !dj.Frequency || t1 < t0)
+        return;
+    frame_stats_add_gpu(float(double(t1 - t0) * 1000.0 / double(dj.Frequency)));
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - that frame's GPU parts
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини відеокарти того кадру
+    render_parts_hand_gpu(old, dj.Frequency, t1 - t0);
+}
+} // namespace
+
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the marks of the render parts
+// ( r4_frame_parts.h ): a view opens in CRender::Calculate and counts at the end of CRender::Render;
+// a view that ended early is dropped by the next one
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - позначки частин рендеру
+// ( r4_frame_parts.h ): вид відкривається в CRender::Calculate і зараховується в кінці
+// CRender::Render; вид, що завершився раніше, відкидає наступний
+void r4_frame_parts_pass_begin() {
+    render_part_state& r = render_parts;
+    r.open = false;
+    if (!gpu_timer_open)
+        return;
+    r.pending = gpu_timers[gpu_timer_frame % gpu_timer_sets].marks;
+    r.lens = Device.scopeLensPass;
+    r.view_frame = Device.dwFrame;
+    r.open = true;
+    render_parts_boundary(render_part_view_start);
+}
+
+void r4_frame_parts_mark(u32 part) {
+    if (render_parts.open && !render_parts.lens && gpu_timer_open)
+        render_parts_boundary(u8(part));
+}
+
+void r4_frame_parts_pass_end() {
+    render_part_state& r = render_parts;
+    if (!r.open)
+        return;
+    r.open = false;
+    if (!gpu_timer_open || r.view_frame != Device.dwFrame)
+        return;
+    if (r.lens)
+        render_parts_boundary(u8(R4P_LENS));
+    gpu_timers[gpu_timer_frame % gpu_timer_sets].marks = r.pending;
+}
+#endif // RENDER == R_R4
+
 dxRenderDeviceRender::dxRenderDeviceRender() : Resources(0) { ; }
 
 void dxRenderDeviceRender::Copy(IRenderDeviceRender& _in) { *this = *(dxRenderDeviceRender*)&_in; }
@@ -26,6 +297,9 @@ void dxRenderDeviceRender::OnDeviceDestroy(BOOL bKeepTextures) {
 void dxRenderDeviceRender::ValidateHW() { HW.Validate(); }
 
 void dxRenderDeviceRender::DestroyHW() {
+#if RENDER == R_R4
+    gpu_timers_release(); // item 9 stage A: the frame measurement's GPU queries
+#endif
     xr_delete(Resources);
     HW.DestroyDevice();
 }
@@ -252,6 +526,9 @@ void dxRenderDeviceRender::Begin() {
 #if !defined(USE_DX10) && !defined(USE_DX11)
     CHK_DX(HW.pDevice->BeginScene());
 #endif //	USE_DX10
+#if RENDER == R_R4
+    gpu_timer_begin(); // item 9 stage A: frame measurement
+#endif
     RCache.OnFrameBegin();
     RCache.set_CullMode(CULL_CW);
     RCache.set_CullMode(CULL_CCW);
@@ -290,7 +567,13 @@ void dxRenderDeviceRender::End() {
     DoAsyncScreenshot();
 
 #if defined(USE_DX10) || defined(USE_DX11)
+#if RENDER == R_R4
+    gpu_timer_end(); // item 9 stage A: frame measurement
+    // item 9 stage C1: "rs_v_sync" works on DX11 - one vertical blank a frame while it is on
+    HW.m_pSwapChain->Present(psDeviceFlags.test(rsVSync) ? 1 : 0, 0);
+#else
     HW.m_pSwapChain->Present(0, 0);
+#endif
 #else //	USE_DX10
     CHK_DX(HW.pDevice->EndScene());
 

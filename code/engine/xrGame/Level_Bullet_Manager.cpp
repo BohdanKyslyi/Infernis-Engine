@@ -10,6 +10,11 @@
 #include "gamepersistent.h"
 #include "mt_config.h"
 #include "game_cl_base_weapon_usage_statistic.h"
+// Ported by Ivan Danko, 2026-11-17, from Monolith (authors themrdemonized, momopate): FPS plan step 2 - CWeapon for the silencer check of the tracers
+// (Monolith).
+// Перенесення з Monolith (автори themrdemonized, momopate) - Ivan Danko, 2026-11-17: крок 2 плану FPS - CWeapon для перевірки глушника трасерів
+// (Monolith).
+#include "Weapon.h"
 
 #include "xrRender/UIRender.h"
 #include "xrRender/Kinematics.h"
@@ -34,6 +39,12 @@ float g_bullet_time_factor = 1.f;
 SBullet::SBullet() {}
 
 SBullet::~SBullet() {}
+
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author momopate): FPS plan step 2 - console allow_silencer_hide_tracer of Anomaly
+// (Monolith Level_Bullet_Manager.cpp, momopate): 1 = a silencer hides the tracers; 0 by default, as there.
+// Перенесення з Monolith (автор momopate) - Ivan Danko, 2026-11-17: крок 2 плану FPS - консоль allow_silencer_hide_tracer з Anomaly
+// (Monolith Level_Bullet_Manager.cpp, momopate): 1 = глушник ховає трасери; типово 0, як там.
+BOOL g_allow_silencer_hide_tracer = 0;
 
 void SBullet::Init(const Fvector& position, const Fvector& direction, float starting_speed,
                    float power,
@@ -75,6 +86,24 @@ void SBullet::Init(const Fvector& position, const Fvector& direction, float star
     VERIFY(u16(-1) != bullet_material_idx);
 
     flags.allow_tracer = !!cartridge.m_flags.test(CCartridge::cfTracer);
+
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (authors themrdemonized, momopate): FPS plan step 2 - the silencer hides the tracer, as in Anomaly
+    // (Monolith Level_Bullet_Manager.cpp, the original comments of demonized / momopate below): with
+    // allow_silencer_hide_tracer 1 and a silencer on the weapon the tracer follows the weapon's
+    // silenced_tracers (no by default); ammo with tracer_silenced keeps its tracer.
+    // Перенесення з Monolith (автори themrdemonized, momopate) - Ivan Danko, 2026-11-17: крок 2 плану FPS - глушник ховає трасер, як в Anomaly
+    // (Monolith Level_Bullet_Manager.cpp, оригінальні коментарі demonized / momopate нижче): з
+    // allow_silencer_hide_tracer 1 і глушником на зброї трасер залежить від silenced_tracers зброї
+    // (типово ні); набої з tracer_silenced зберігають трасер.
+    // demonized: hide tracer when weapon has silencer
+    if (!cartridge.param_s.tracer_silenced && g_allow_silencer_hide_tracer) { // momopate: Make it optional
+        CObject* g_obj = Level().Objects.net_Find(weapon_id);
+        if (g_obj) {
+            CWeapon* weapon = smart_cast<CWeapon*>(g_obj);
+            if (weapon && weapon->IsSilencerAttached())
+                flags.allow_tracer = (weapon->GetSilencedTracers()); // momopate: customize per weapon
+        }
+    }
     flags.allow_ricochet = !!cartridge.m_flags.test(CCartridge::cfRicochet);
     flags.explosive = !!cartridge.m_flags.test(CCartridge::cfExplosive);
     flags.magnetic_beam = !!cartridge.m_flags.test(CCartridge::cfMagneticBeam);
@@ -772,6 +801,13 @@ float SqrDistancePointToSegment(const Fvector& pt, const Fvector& orig, const Fv
     return diff.square_magnitude();
 }
 
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author momopate): FPS plan step 2 - console render_short_tracers of Anomaly (Monolith
+// Level_Bullet_Manager.cpp, momopate): 1 = a tracer shorter than tracer_length_min is drawn at that length
+// (the default, as there), 0 = it is not drawn (as before in our game).
+// Перенесення з Monolith (автор momopate) - Ivan Danko, 2026-11-17: крок 2 плану FPS - консоль render_short_tracers з Anomaly (Monolith
+// Level_Bullet_Manager.cpp, momopate): 1 = трасер, коротший за tracer_length_min, малюється такої довжини
+// (типово, як там), 0 = не малюється (як раніше в нашій грі).
+BOOL g_render_short_tracers = 1;
 void CBulletManager::Render() {
 #ifdef DEBUG
     if (g_bDrawBulletHit && !m_bullet_points.empty()) {
@@ -823,6 +859,10 @@ void CBulletManager::Render() {
         SBullet* bullet = &(*it);
         if (!bullet->flags.allow_tracer)
             continue;
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - g_use_tracers 0 hides all tracers (Monolith).
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - g_use_tracers 0 ховає всі трасери (Monolith).
+        if (!psActorFlags.test(AF_USE_TRACERS))
+            continue;
 
         if (!bullet->CanBeRenderedNow())
             continue;
@@ -832,8 +872,15 @@ void CBulletManager::Render() {
         Fvector const tracer_direction =
             length >= EPS_L ? Fvector(tracer).mul(1.f / length) : Fvector().set(0.f, 0.f, 1.f);
 
-        if (length < m_fTracerLengthMin)
-            continue;
+        if (length < m_fTracerLengthMin) {
+            // Ported by Ivan Danko, 2026-11-17, from Monolith (author momopate): FPS plan step 2 - render_short_tracers (Monolith, see above).
+            // Перенесення з Monolith (автор momopate) - Ivan Danko, 2026-11-17: крок 2 плану FPS - render_short_tracers (Monolith, див. вище).
+            // momopate: Optionally cap tracers to their minimum length instead of not rendering them
+            if (g_render_short_tracers)
+                length = m_fTracerLengthMin;
+            else
+                continue;
+        }
 
         if (length > m_fTracerLengthMax)
             length = m_fTracerLengthMax;

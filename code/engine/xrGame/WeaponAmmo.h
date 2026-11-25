@@ -7,6 +7,13 @@ struct SCartridgeParam {
     float impair;
     float fWallmarkSize;
     u8 u8ColorID;
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the ammo setting tracer_silenced of Anomaly
+    // (Monolith WeaponAmmo.h): such a cartridge keeps its tracer with a silencer
+    // (allow_silencer_hide_tracer, Level_Bullet_Manager.cpp).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - налаштування набоїв tracer_silenced з
+    // Anomaly (Monolith WeaponAmmo.h): такий набій зберігає трасер із глушником
+    // (allow_silencer_hide_tracer, Level_Bullet_Manager.cpp).
+    bool tracer_silenced;
 
     IC void Init() {
         kDist = kDisp = kHit = kImpulse = 1.0f;
@@ -17,6 +24,9 @@ struct SCartridgeParam {
         impair = 1.0f;
         fWallmarkSize = 0.0f;
         u8ColorID = 0;
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 (Monolith WeaponAmmo.h).
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS (Monolith WeaponAmmo.h).
+        tracer_silenced = false;
     }
 };
 

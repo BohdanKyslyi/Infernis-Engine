@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- The "Engine settings" window ( ui_cpu_menu.script ) and its button on the video page.
+     Written by Ivan Danko, 2026-11-18: item 9 stage F + FPS plan step 2. The labels of the
+     particle and tracer settings follow the wording of Anomaly's "Modded Exes" menu ( Monolith,
+     author themrdemonized, configs\text\eng\ui_mm_modded_exes.xml ).
+     Створено (Ivan Danko, 2026-11-18): пункт 9 етап F + крок 2 плану FPS. Назви налаштувань
+     частинок і трасерів повторюють меню "Modded Exes" Anomaly ( Monolith, автор themrdemonized,
+     configs\text\eng\ui_mm_modded_exes.xml ). -->
+<string_table>
+
+	<string id="ui_cpu_button">
+		<text>Engine settings</text>
+	</string>
+	<string id="ui_cpu_title">
+		<text>Engine settings</text>
+	</string>
+
+	<string id="ui_cpu_grp_cores">
+		<text>Cores and threads</text>
+	</string>
+	<string id="ui_cpu_grp_frame">
+		<text>Frame</text>
+	</string>
+	<string id="ui_cpu_grp_load">
+		<text>Loading</text>
+	</string>
+	<string id="ui_cpu_grp_particles">
+		<text>Particles</text>
+	</string>
+	<string id="ui_cpu_grp_test">
+		<text>Test</text>
+	</string>
+
+	<string id="ui_cpu_core_mode">
+		<text>CPU cores (Auto: without core 0 from 6 logical CPUs)</text>
+	</string>
+	<string id="cpu_mode_auto">
+		<text>Auto</text>
+	</string>
+	<string id="cpu_mode_no_core0">
+		<text>Without core 0</text>
+	</string>
+	<string id="cpu_mode_all">
+		<text>All cores</text>
+	</string>
+	<string id="ui_cpu_tasks">
+		<text>Task system (engine work on all cores)</text>
+	</string>
+	<string id="ui_cpu_lua_gc">
+		<text>Lua parallel garbage collection</text>
+	</string>
+
+	<string id="ui_cpu_framelimit">
+		<text>Frame limit (0 = no limit)</text>
+	</string>
+	<string id="ui_cpu_framelimit_menu">
+		<text>Limit the menu and pause to the monitor refresh rate</text>
+	</string>
+	<string id="ui_cpu_show_fps">
+		<text>FPS counter</text>
+	</string>
+	<string id="ui_cpu_fps_pos">
+		<text>FPS counter position</text>
+	</string>
+	<string id="ui_cpu_fps_pos_left">
+		<text>Top left</text>
+	</string>
+	<string id="ui_cpu_fps_pos_center">
+		<text>Top centre</text>
+	</string>
+	<string id="ui_cpu_fps_pos_right">
+		<text>Top right</text>
+	</string>
+
+	<string id="ui_cpu_mt_textures">
+		<text>Textures on all cores at level load</text>
+	</string>
+	<string id="ui_cpu_shader_prebuild">
+		<text>Shader build on all cores (after a game restart)</text>
+	</string>
+
+	<string id="ui_cpu_particle_rate">
+		<text>Particle update rate (times a second)</text>
+	</string>
+	<string id="ui_cpu_rate_15">
+		<text>15</text>
+	</string>
+	<string id="ui_cpu_rate_30">
+		<text>30</text>
+	</string>
+	<string id="ui_cpu_rate_60">
+		<text>60</text>
+	</string>
+	<string id="ui_cpu_rate_90">
+		<text>90</text>
+	</string>
+	<string id="ui_cpu_rate_120">
+		<text>120</text>
+	</string>
+	<string id="ui_cpu_step_distance">
+		<text>Footstep particle effects distance, m</text>
+	</string>
+	<string id="ui_cpu_tracers">
+		<text>Bullet tracers</text>
+	</string>
+	<string id="ui_cpu_short_tracers">
+		<text>Always render short tracers</text>
+	</string>
+	<string id="ui_cpu_silencer_tracer">
+		<text>Allow silencers to hide tracers</text>
+	</string>
+	<string id="ui_cpu_mt_particles">
+		<text>Multithreaded particles (on all cores)</text>
+	</string>
+
+	<string id="ui_cpu_test_mode">
+		<text>Test mode (measurements in the game log)</text>
+	</string>
+
+</string_table>

@@ -17,6 +17,7 @@
 #include "xrRender/RenderDeviceRender.h"
 
 #include "xr_object.h"
+#include "../xrCore/xrTasks.h" // item 9 stage B ( multithreading ): cpu_tasks, cpu_task_stats
 
 xr_token* vid_quality_token = nullptr;
 
@@ -803,6 +804,10 @@ ENGINE_API int ps_ssfx_menu_configured = 0;
 ENGINE_API int ps_ssfx_enable = 1;
 ENGINE_API int ssfx_session_enable = 1;
 
+// Weather_ATMOS: the pack as the last start found it, -1 until a start has remembered it
+// ( ssfx_console_vars.h ).
+ENGINE_API int ps_ssfx_atmos_state = -1;
+
 // Monolith xrRender_console.cpp:482, off by default. See ssfx_console_vars.h.
 ENGINE_API Flags32 ps_actor_shadow_flags = {0};
 
@@ -912,7 +917,41 @@ static LPCSTR ssfx_profile_shared_cmds[] = {
     "g_important_save", "hud_draw", "r__actor_shadow", "snd_volume_eff", "snd_volume_music",
     "snd_device", "snd_efx", "g_dynamic_music", "snd_hrtf", "snd_output", "snd_acoustics",
     "snd_acoustics_preset", "snd_language", "text_language", "mouse_sens", "mouse_invert",
-    "default_controls", "unbindall", "bind", "bind_sec", "bind_console", nullptr};
+    "default_controls", "unbindall", "bind", "bind_sec", "bind_console",
+    // item 9 stage A: which CPUs the game runs on is the machine's, not the graphics' - one value
+    "cpu_core_mode",
+    // item 9 stage B: whether the task system's workers run the engine's parallel work - one value
+    "cpu_tasks",
+    // item 9 stage C: the frame limiter and the Lua collector's thread are the machine's - one value
+    "r__framelimit", "r__framelimit_menu", "lua_parallel_gc", "lua_parallel_gcstep",
+    "lua_parallel_gc_call_amount",
+    // the FPS counter ( 2026-11-13, Stats.cpp ): whether and where it shows - one value
+    "r__show_fps", "r__show_fps_pos",
+    // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - the particles' update on all cores is the
+    // machine's, not the graphics' - one value
+    // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - оновлення частинок на всіх ядрах - справа
+    // машини, а не графіки - одне значення
+    "mt_particles",
+    // Edited by Ivan Danko, 2026-11-18: FPS plan step 3 - the grass on all cores is the machine's, not the
+    // graphics' - one value
+    // Змінено (Ivan Danko, 2026-11-18): крок 3 плану FPS - трава на всіх ядрах - справа машини, а не
+    // графіки - одне значення
+    "mt_grass",
+    // Edited by Ivan Danko, 2026-11-18: item 9 stage F - the settings of the "Engine settings" window are
+    // the machine's, not the graphics' - one value for both profiles: the test mode, the textures and the
+    // shaders on all cores at load ( DX11 ), the particles' update rate ( DX11 ), the tracers; and the
+    // enemy manager's cache ( console only )
+    // Змінено (Ivan Danko, 2026-11-18): пункт 9 етап F - налаштування вікна "Налаштування рушія" - справа
+    // машини, а не графіки - одне значення для обох профілів: режим тесту, текстури й шейдери на всіх
+    // ядрах під час завантаження ( DX11 ), частота оновлення частинок ( DX11 ), трасери; і кеш менеджера
+    // ворогів ( лише консоль )
+    "cpu_test_mode", "r__mt_textures", "r__shader_prebuild", "particle_update_mod", "g_use_tracers",
+    "render_short_tracers", "allow_silencer_hide_tracer", "g_enemy_manager_useful_cache_time",
+    // Edited by Ivan Danko, 2026-11-18: FPS plan step 2 - the footstep particle distance of the
+    // "Particles" page - one value
+    // Змінено (Ivan Danko, 2026-11-18): крок 2 плану FPS - дальність частинок кроків зі сторінки
+    // "Частинки" - одне значення
+    "step_particle_distance", nullptr};
 
 // The SSS settings that do not start with "ssfx_": the ones SSS added to the engine, set by its
 // settings page ( mm_opt_ssfx ) or by its scripts ( r__fakescope ).
@@ -984,6 +1023,20 @@ static bool ssfx_profile_read(LPCSTR full, xr_vector<xr_string>& lines) {
     return true;
 }
 
+// Written by Ivan Danko, 2026-11-18: item 9 stage F - whether a profile's lines hold the command ( the
+// first word of a line, ssfx_profile_word )
+// Створено (Ivan Danko, 2026-11-18): пункт 9 етап F - чи є в рядках профілю ця команда ( перше слово
+// рядка, ssfx_profile_word )
+static bool ssfx_profile_has(const xr_vector<xr_string>& lines, LPCSTR name) {
+    string64 word;
+    for (const xr_string& line : lines) {
+        ssfx_profile_word(line.c_str(), word);
+        if (0 == xr_strcmp(word, name))
+            return true;
+    }
+    return false;
+}
+
 // The profile "to" takes the shared settings of the profile "from" in place of its own. user.ltx
 // gets switch_line in place of its own switch line when there is one, and renderer_line in place
 // of its own renderer line when there is one; user_sss.ltx loses any switch line.
@@ -1002,7 +1055,13 @@ static void ssfx_profile_share(LPCSTR from, LPCSTR to, LPCSTR switch_line, LPCST
     string64 word;
     for (const xr_string& line : dst_lines) {
         ssfx_profile_word(line.c_str(), word);
-        if (ssfx_profile_listed(word, ssfx_profile_shared_cmds))
+        // Edited by Ivan Danko, 2026-11-18: item 9 stage F - a shared line of "to" gives way only to the
+        // same command of "from": a command "from" does not hold ( a DX11 one after a game on another
+        // renderer ) keeps its value in "to" ( was: dropped, the value lost )
+        // Змінено (Ivan Danko, 2026-11-18): пункт 9 етап F - спільний рядок "to" поступається лише тій
+        // самій команді з "from": команда, якої "from" не має ( команда DX11 після гри на іншому рендері ),
+        // зберігає своє значення в "to" ( було: відкидалася, значення втрачалося )
+        if (ssfx_profile_listed(word, ssfx_profile_shared_cmds) && ssfx_profile_has(src_lines, word))
             continue;
         if (drop_switch && 0 == xr_strcmp(word, "ssfx_enable"))
             continue;
@@ -1155,6 +1214,82 @@ void ssfx_profile_backup() {
     ssfx_profile_copy(ssfx_profile_sss, "user_sss_backup.ltx");
 }
 
+// Screen Space Shaders + Weather_ATMOS ( the user, 2026-11-10 ): the settings of the SSS menu follow
+// the addon pack addons\Weather_ATMOS, once each time it is put in or taken out - not at every
+// start, so what the player changes stays until the pack goes or comes ( "reset once, not on every
+// start" ). The pack as a start found it is ssfx_atmos_state in user_sss.ltx: -1 nothing
+// remembered yet, 0 not there, 1 there. Called by Startup right after FS.ssfx_addons, when the pack
+// is mounted, so the list is read from it. Nothing happens unless SSS runs ( switched on, DX11 ):
+// SSS off is the game without SSS. Our own design, the donor has none.
+static LPCSTR ssfx_atmos_pack = "Weather_ATMOS";
+static LPCSTR ssfx_atmos_list = "ssfx_atmos_switch.ltx";
+
+// The pack is on the disk: ssfx_addon_names gives the packs of ssfx_addons that are, folder names
+// as found there, a space between two.
+static bool ssfx_atmos_there() {
+    string_path packs;
+    FS.ssfx_addon_names(packs);
+    const int count = _GetItemCount(packs, ' ');
+    for (int i = 0; i < count; ++i) {
+        string_path name;
+        _GetItem(packs, i, name, ' ');
+        if (0 == _stricmp(name, ssfx_atmos_pack))
+            return true;
+    }
+    return false;
+}
+
+// configs\ssfx_atmos_switch.ltx, one console command a line ( blank lines and lines of ';' are left
+// out ): gamedata's copy holds the settings of SSS alone, the pack's copy those of Weather_ATMOS, and
+// FS gives the pack's while the pack is mounted. false: no such file, or nothing in it.
+static bool ssfx_atmos_run_list(u32& count, string_path& source) {
+    string_path full;
+    FS.update_path(full, "$game_config$", ssfx_atmos_list);
+    xr_vector<xr_string> lines;
+    if (!ssfx_profile_read(full, lines))
+        return false;
+    LPCSTR addon = FS.addon_file(full);
+    xr_strcpy(source, addon ? addon : full);
+    count = 0;
+    for (const xr_string& line : lines) {
+        LPCSTR cmd = line.c_str();
+        while (*cmd == ' ' || *cmd == '\t')
+            ++cmd;
+        if (!*cmd || *cmd == ';')
+            continue;
+        Console->Execute(cmd);
+        ++count;
+    }
+    return count != 0;
+}
+
+void ssfx_atmos_switch() {
+    if (!ssfx_session_enable || g_current_renderer != 4)
+        return;
+
+    const int there = ssfx_atmos_there() ? 1 : 0;
+    if (ps_ssfx_atmos_state == there)
+        return;
+
+    if (ps_ssfx_atmos_state < 0) {
+        // nothing remembered yet: the first start of this build. Remember the pack, change no setting.
+        Msg("* SSS: %s is %s: remembered, the settings stay as they are", ssfx_atmos_pack,
+            there ? "there" : "not there");
+    } else {
+        u32 count = 0;
+        string_path source;
+        if (!ssfx_atmos_run_list(count, source)) {
+            Msg("! SSS: %s is %s now, but the list [%s] is missing or empty: the settings stay as they are",
+                ssfx_atmos_pack, there ? "there" : "not there", ssfx_atmos_list);
+            return;
+        }
+        Msg("* SSS: %s %s: %u settings set from [%s]", ssfx_atmos_pack,
+            there ? "put in" : "taken out", count, source);
+    }
+    ps_ssfx_atmos_state = there;
+    Console->Execute("cfg_save");
+}
+
 // Screen Space Shaders: settings that never reach a shader through a vector the settings page
 // could aim a control at. The author's MCM held them and his scripts read them from there, so the
 // donor engine has no console variable for any of them. With the native page in charge each one
@@ -1298,7 +1433,6 @@ static xr_token tok_water_ssr_quality[] = {
     { 0, 0 },
 };
 static xr_token tok_water_parallax_quality[] = {
-    { "ui_mcm_lst_ssfx_disable", 0 },
     { "ui_mcm_lst_ssfx_quality_low", 1 },
     { "ui_mcm_lst_ssfx_quality_medium", 2 },
     { "ui_mcm_lst_ssfx_quality_high", 3 },
@@ -1567,6 +1701,120 @@ private:
     }
 };
 
+// Item 9 stage A ( multithreading ): the logical CPUs the game runs on ( CPU::ApplyCoreMode,
+// xrCore\_math.cpp ). "cpu_mode_auto" leaves physical core 0 out from 6 logical CPUs up,
+// "cpu_mode_no_core0" always, "cpu_mode_all" takes every CPU the game started with. A token's name
+// is also the string id the settings page is to show ( stage F ). It takes effect at once, and once
+// more right after the profile is read ( Startup, x_ray.cpp ) for a profile without the line. Both
+// profiles keep one value ( ssfx_profile_shared_cmds ).
+namespace CPU {
+XRCORE_API void ApplyCoreMode(u32 mode);
+}
+
+static u32 ps_cpu_core_mode = 0;
+static xr_token tok_cpu_core_mode[] = {
+    { "cpu_mode_auto", 0 },
+    { "cpu_mode_no_core0", 1 },
+    { "cpu_mode_all", 2 },
+    { 0, 0 },
+};
+
+class CCC_CpuCoreMode : public CCC_Token {
+public:
+    CCC_CpuCoreMode(LPCSTR N, u32* V, xr_token* T) : CCC_Token(N, V, T){};
+    virtual void Execute(LPCSTR args) {
+        CCC_Token::Execute(args);
+        CPU::ApplyCoreMode(*value);
+    }
+};
+
+void cpu_core_mode_apply() { CPU::ApplyCoreMode(ps_cpu_core_mode); }
+
+// Item 9 stage A: the frame measurement ( xrEngine\device.cpp ), one log line every 5 s while it is
+// on. A tool, not a setting: never saved, so every start begins with it off.
+ENGINE_API int ps_cpu_frame_stats = 0;
+
+class CCC_CpuFrameStats : public CCC_Integer {
+public:
+    CCC_CpuFrameStats(LPCSTR N, int* V) : CCC_Integer(N, V, 0, 1){};
+    virtual void Save(IWriter*) {}
+};
+
+// Written by Ivan Danko, 2026-11-18: item 9 stage F - "Test mode" of the "Engine settings" window: one
+// switch for the test tools, so none has to be typed into the console. "cpu_test_mode 1" turns on the
+// frame measurement ( cpu_frame_stats ), the task system's line every 5 s ( device.cpp ) and the shader
+// build line after each level load ( x_ray.cpp, DX11 ); "cpu_test_mode 0" turns the measurement off.
+// Saved: a start with it on measures at once. Both profiles keep one value ( ssfx_profile_shared_cmds ).
+// Створено (Ivan Danko, 2026-11-18): пункт 9 етап F - "Режим тесту" вікна "Налаштування рушія": один
+// вимикач для засобів тесту, щоб жоден не треба було вводити в консоль. "cpu_test_mode 1" вмикає замір
+// кадру ( cpu_frame_stats ), рядок системи задач раз на 5 с ( device.cpp ) і рядок збирання шейдерів
+// після кожного завантаження рівня ( x_ray.cpp, DX11 ); "cpu_test_mode 0" вимикає замір. Зберігається:
+// запуск з увімкненим режимом одразу заміряє. Обидва профілі мають одне значення
+// ( ssfx_profile_shared_cmds ).
+ENGINE_API int ps_cpu_test_mode = 0;
+
+class CCC_CpuTestMode : public CCC_Integer {
+public:
+    CCC_CpuTestMode(LPCSTR N, int* V) : CCC_Integer(N, V, 0, 1){};
+    virtual void Execute(LPCSTR args) {
+        CCC_Integer::Execute(args);
+        ps_cpu_frame_stats = *value;
+    }
+};
+
+// Item 9 stage B ( multithreading ): the X-Ray task system ( xrCore\xrTasks.cpp ). "cpu_tasks 1"
+// ( the default ) runs the engine's parallel work on the worker threads; "cpu_tasks 0" runs every
+// task on the thread that hands it out, as if there were no workers - to compare, and as a way
+// out. It takes effect at once. Both profiles keep one value ( ssfx_profile_shared_cmds ).
+static int ps_cpu_tasks = 1;
+
+class CCC_CpuTasks : public CCC_Integer {
+public:
+    CCC_CpuTasks(LPCSTR N, int* V) : CCC_Integer(N, V, 0, 1){};
+    virtual void Execute(LPCSTR args) {
+        CCC_Integer::Execute(args);
+        xrTasks::SetEnabled(*value != 0);
+    }
+};
+
+// Written by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores". "mt_grass 1" ( the default ):
+// the DX11 render works the blades of grass out on all cores before it draws them
+// ( xrRenderDX10\dx10DetailManager_VS.cpp ); "mt_grass 0": the drawing thread works out each blade
+// itself, as before - to compare. The other renders do not use it. It takes effect at once. Both
+// profiles keep one value ( ssfx_profile_shared_cmds ).
+// Створено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах". "mt_grass 1"
+// ( за замовчуванням ): рендер DX11 рахує травинки на всіх ядрах, перш ніж їх малювати
+// ( xrRenderDX10\dx10DetailManager_VS.cpp ); "mt_grass 0": потік малювання сам рахує кожну травинку,
+// як раніше, - для порівняння. Інші рендери його не використовують. Діє одразу. Обидва профілі мають
+// одне значення ( ssfx_profile_shared_cmds ).
+ENGINE_API int ps_mt_grass = 1;
+
+// Item 9 stage B: the task system's counters since the last call, one line in the log. A tool:
+// no value, nothing saved.
+class CCC_CpuTaskStats : public IConsole_Command {
+public:
+    CCC_CpuTaskStats(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; };
+    virtual void Execute(LPCSTR) { xrTasks::PrintStats(); }
+};
+
+// Item 9 stage C ( multithreading ): the frame limiter and the Lua collector ( device.cpp ).
+extern int ps_r_framelimit;
+extern int ps_r_framelimit_menu;
+extern ENGINE_API BOOL ps_lua_parallel_gc;
+extern int ps_lua_parallel_gc_step;
+extern int ps_lua_parallel_gc_call_amount;
+
+// The FPS counter ( 2026-11-13, Stats.cpp ): "r__show_fps 1" shows it, "r__show_fps_pos" puts it at
+// the top left, the top centre or the top right.
+extern int ps_r_show_fps;
+extern u32 ps_r_show_fps_pos;
+static xr_token tok_fps_pos[] = {
+    { "left", 0 },
+    { "center", 1 },
+    { "right", 2 },
+    { 0, 0 },
+};
+
 void CCC_Register() {
     // General
     CMD1(CCC_Help, "help");
@@ -1581,9 +1829,17 @@ void CCC_Register() {
     CMD1(CCC_TexturesStat, "stat_textures");
 #endif // DEBUG
 
-#ifdef DEBUG
+    // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - "mt_particles" in every build ( was: DEBUG
+    // only ): on = the DX11 render updates the particles of a view in one batch on all cores
+    // ( xrRenderPC_R4\r4_R_render.cpp ), off = each effect is updated where it is met, as before. The
+    // other renders do not use it.
+    // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - "mt_particles" у кожній збірці ( було:
+    // лише DEBUG ): увімкнено = рендер DX11 оновлює частинки виду однією пачкою на всіх ядрах
+    // ( xrRenderPC_R4\r4_R_render.cpp ), вимкнено = кожен ефект оновлюється там, де його зустріли, як
+    // раніше. Інші рендери його не використовують.
     CMD3(CCC_Mask, "mt_particles", &psDeviceFlags, mtParticles);
 
+#ifdef DEBUG
     CMD1(CCC_DbgStrCheck, "dbg_str_check");
     CMD1(CCC_DbgStrDump, "dbg_str_dump");
 
@@ -1706,6 +1962,28 @@ void CCC_Register() {
     CMD4(CCC_Integer, "sv_console_update_rate", &g_svTextConsoleUpdateRate, 1, 100);
 
     CMD1(CCC_HideConsole, "hide");
+
+    // Item 9 stage A ( multithreading ): the CPU core mode and the frame measurement
+    CMD3(CCC_CpuCoreMode, "cpu_core_mode", &ps_cpu_core_mode, tok_cpu_core_mode);
+    CMD2(CCC_CpuFrameStats, "cpu_frame_stats", &ps_cpu_frame_stats);
+    // Written by Ivan Danko, 2026-11-18: item 9 stage F - "Test mode" ( CCC_CpuTestMode )
+    // Створено (Ivan Danko, 2026-11-18): пункт 9 етап F - "Режим тесту" ( CCC_CpuTestMode )
+    CMD2(CCC_CpuTestMode, "cpu_test_mode", &ps_cpu_test_mode);
+    // Item 9 stage B ( multithreading ): the task system's switch and its counters
+    CMD2(CCC_CpuTasks, "cpu_tasks", &ps_cpu_tasks);
+    CMD1(CCC_CpuTaskStats, "cpu_task_stats");
+    // Written by Ivan Danko, 2026-11-18: FPS plan step 3 - the grass on all cores ( ps_mt_grass )
+    // Створено (Ivan Danko, 2026-11-18): крок 3 плану FPS - трава на всіх ядрах ( ps_mt_grass )
+    CMD4(CCC_Integer, "mt_grass", &ps_mt_grass, 0, 1);
+    // Item 9 stage C ( multithreading ): the frame limiter and the Lua collector ( device.cpp )
+    CMD4(CCC_Integer, "r__framelimit", &ps_r_framelimit, 0, 500);
+    CMD4(CCC_Integer, "r__framelimit_menu", &ps_r_framelimit_menu, 0, 1);
+    CMD4(CCC_Integer, "lua_parallel_gc", &ps_lua_parallel_gc, 0, 1);
+    CMD4(CCC_Integer, "lua_parallel_gcstep", &ps_lua_parallel_gc_step, 1, 100);
+    CMD4(CCC_Integer, "lua_parallel_gc_call_amount", &ps_lua_parallel_gc_call_amount, 1, 50);
+    // The FPS counter ( 2026-11-13, Stats.cpp )
+    CMD4(CCC_Integer, "r__show_fps", &ps_r_show_fps, 0, 1);
+    CMD3(CCC_Token, "r__show_fps_pos", &ps_r_show_fps_pos, tok_fps_pos);
 
     // Screen Space Shaders
     {
@@ -1914,6 +2192,9 @@ void CCC_Register() {
         // SSS on or off ( ssfx_console_vars.h ). The renderer and the scripts take it when the game
         // starts, so a change shows after the game is started again.
         CMD4(CCC_Integer, "ssfx_enable", &ps_ssfx_enable, 0, 1);
+        // Weather_ATMOS ( ssfx_console_vars.h ): -1 nothing remembered, 0 the pack was not there at
+        // the last start, 1 it was. Only user_sss.ltx keeps it ( ssfx_profile_keeps ).
+        CMD4(CCC_Integer, "ssfx_atmos_state", &ps_ssfx_atmos_state, -1, 1);
 
         // Monolith xrRender_console.cpp:1339: the actor's own shadow in first person ( DX11 only ).
         CMD3(CCC_Mask, "r__actor_shadow", &ps_actor_shadow_flags, RFLAG_ACTOR_SHADOW);

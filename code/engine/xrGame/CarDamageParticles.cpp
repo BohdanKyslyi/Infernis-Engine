@@ -56,6 +56,29 @@ void CCarDamageParticles::Play2(CCar* car) {
     }
 }
 
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author Ray Twitty (aka Shadows)): FPS plan step 2 - Monolith's Stop1 / Stop2 (added by Ray Twitty (aka
+// Shadows)): they stop the damage smoke on the bones of Play1 / Play2. Adapted: BIDS_I -> auto (our
+// CarDamageParticles.h has no BIDS_I).
+// ѕеренесенн€ з Monolith (автор Ray Twitty (aka Shadows)) - Ivan Danko, 2026-11-17: крок 2 плану FPS - Stop1 / Stop2 з Monolith (додав Ray Twitty
+// (aka Shadows)): зупин€ють дим пошкоджень на к≥стках Play1 / Play2. јдаптовано: BIDS_I -> auto (у
+// нашому CarDamageParticles.h немаЇ BIDS_I).
+void CCarDamageParticles::Stop1(CCar* car) {
+    if (*m_car_damage_particles1) {
+        auto i = bones1.begin(), e = bones1.end();
+        for (; e != i; ++i)
+            car->StopParticles(car->ID(), *i, false);
+    }
+}
+
+void CCarDamageParticles::Stop2(CCar* car) {
+    VERIFY(!physics_world()->Processing());
+    if (*m_car_damage_particles2) {
+        auto i = bones2.begin(), e = bones2.end();
+        for (; e != i; ++i)
+            car->StopParticles(car->ID(), *i, false);
+    }
+}
+
 void CCarDamageParticles::PlayWheel1(CCar* car, u16 bone_id) const {
     VERIFY(!physics_world()->Processing());
     if (*m_wheels_damage_particles1)

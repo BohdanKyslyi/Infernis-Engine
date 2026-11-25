@@ -239,6 +239,45 @@ public:
     // The grass density ( r__detail_density ) the cache was laid out with: with SSS, MT_CALC lays
     // the cached grass out again once the slider gives another value ( user 2026-11-04 ).
     float m_density_laid{0.f};
+
+    // Written by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores" ( "mt_grass", on by
+    // default, xrEngine\xr_ioc_cmd.cpp ). Before, the drawing thread worked every blade out by itself
+    // in hw_Render_dump ( dx10DetailManager_VS.cpp ): its opacity, its fade, its matrix, its colour and
+    // its normal, one blade after another, and drew them a batch ( hw_BatchSize ) at a time. Now
+    // hw_Render first works out the blades of all three variants ( the still grass and the two waves )
+    // at once on all cores into the pieces below ( mt_prepare ), and the drawing thread only copies the
+    // finished values into the constant buffer and draws: the same blades, the same values, the same
+    // draw calls. A piece = up to 32 lists of one grass type of one variant, in the order the draw takes
+    // them. m_mt_lists_stale: the visibility lists still held the last frame's entries when MT_CALC
+    // filled them ( a list could then stand in them twice ) - such a frame is drawn the old way.
+    // Створено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах" ( "mt_grass",
+    // увімкнено за замовчуванням, xrEngine\xr_ioc_cmd.cpp ). Раніше потік малювання сам рахував кожну
+    // травинку в hw_Render_dump ( dx10DetailManager_VS.cpp ): її непрозорість, згасання, матрицю, колір
+    // і нормаль, одну за одною, і малював їх пачками ( hw_BatchSize ). Тепер hw_Render спершу рахує
+    // травинки всіх трьох варіантів ( нерухома трава й дві хвилі ) разом на всіх ядрах у шматки нижче
+    // ( mt_prepare ), а потік малювання лише копіює готові значення в буфер констант і малює: ті самі
+    // травинки, ті самі значення, ті самі виклики малювання. Шматок = до 32 списків одного типу трави
+    // одного варіанта в тому порядку, в якому їх бере малювання. m_mt_lists_stale: списки видимості ще
+    // тримали записи минулого кадру, коли MT_CALC їх заповнював ( список міг би тоді стояти в них
+    // двічі ), - такий кадр малюється по-старому.
+    struct mt_piece {
+        u32 var_id = 0;          // the variant ( m_visibles )
+        u32 object = 0;          // the grass type
+        u32 list_begin = 0;      // its lists [ list_begin, list_end ) in m_visibles[ var_id ][ object ]
+        u32 list_end = 0;
+        u32 blades = 0;          // the blades worked out
+        xr_vector<Fvector4> arr; // 4 a blade: "array" ( the matrix rows times the scale, the colour )
+        xr_vector<Fvector4> ex;  // 1 a blade: "exdata" ( the terrain normal, the opacity )
+    };
+    xr_vector<mt_piece> m_mt_pieces;        // grows only; this call's pieces come first
+    u32 m_mt_first[3][dm_max_objects] = {}; // the first piece of a variant's grass type
+    u32 m_mt_count[3][dm_max_objects] = {}; // its pieces
+    bool m_mt_ready = false;                // this hw_Render call worked the blades out ( first pass )
+    bool m_mt_lists_stale = false;          // see above ( MT_CALC, DetailManager.cpp )
+    u32 m_mt_blades = 0;                    // "cpu_frame_stats 1": the blades this call drew
+    u32 m_mt_draws = 0;                     // "cpu_frame_stats 1": its draw calls
+    void mt_prepare();
+    void mt_prepare_piece(mt_piece& piece);
 #endif
 
     void __stdcall MT_CALC();

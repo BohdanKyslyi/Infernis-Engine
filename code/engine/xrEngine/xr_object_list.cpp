@@ -10,6 +10,9 @@
 #include "../xrCore/net_utils.h"
 
 #include "CustomHUD.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the frame parts
+// «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - частини кадру
+#include "frame_parts.h"
 
 class fClassEQ {
     CLASS_ID cls;
@@ -241,8 +244,21 @@ void CObjectList::Update(bool bForce) {
                 (*i)->dwFrame_AsCrow = u32(-1);
             }
 
-            for (CObject** i = b; i != e; ++i)
-                SingleUpdate(*i);
+            // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the objects' update as a part,
+            // each object's time for the slowest one of the frame
+            // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - оновленн€ об'Їкт≥в €к частина,
+            // час кожного об'Їкта дл€ найпов≥льн≥шого за кадр
+            if (ps_cpu_frame_stats) {
+                frame_part_scope fp_objects(FP_OBJECTS);
+                for (CObject** i = b; i != e; ++i) {
+                    const u64 fp_object_start = frame_part_now();
+                    SingleUpdate(*i);
+                    frame_stats_object(1, frame_part_now() - fp_object_start, *(*i)->cName());
+                }
+            } else {
+                for (CObject** i = b; i != e; ++i)
+                    SingleUpdate(*i);
+            }
 
             Device.Statistic->UpdateClient.End();
         }

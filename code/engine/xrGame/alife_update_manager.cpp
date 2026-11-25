@@ -23,6 +23,9 @@
 #include "restriction_space.h"
 #include "profiler.h"
 #include "mt_config.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the frame parts
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини кадру
+#include "../xrEngine/frame_parts.h"
 
 using namespace ALife;
 
@@ -90,6 +93,11 @@ void CALifeUpdateManager::update_scheduled(bool init_ef) {
 }
 
 void CALifeUpdateManager::update() {
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - A-Life as a part ( the secondary
+    // thread's while "mtALife" is on )
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - A-Life як частина ( другого потоку,
+    // поки увімкнено "mtALife" )
+    frame_part_scope fp_alife(FP_ALIFE);
     update_switch();
     update_scheduled(false);
 }

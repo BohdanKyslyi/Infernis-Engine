@@ -11,6 +11,7 @@
 #include "ai_space.h"
 #include "object_factory.h"
 #include "script_process.h"
+#include "script_thread.h" // logging part C: the stack of a running script thread
 
 #ifndef XRSE_FACTORY_EXPORTS
 #include "../xrGame/ui/UILuaWorkbench.h"
@@ -40,6 +41,12 @@ extern Flags32 psAI_Flags;
 #endif
 
 void jit_command(lua_State*, LPCSTR);
+
+// Logging part C ( 2026-11-10 ): xrCore's record of a C++ exception asks this file for the Lua stack
+// ( cpp_exception_lua_stack, after get_lua_stack ). Set by init(), cleared by the destructor.
+XRCORE_API void SetCppExceptionLuaHook(void (*hook)()); // xrCore\xrDebugNew.cpp
+static CScriptEngine* cpp_exception_engine = nullptr;
+static DWORD cpp_exception_script_thread = 0;
 
 #if defined(USE_DEBUGGER) && defined(USE_LUA_STUDIO)
 static void log_callback(LPCSTR message) {
@@ -137,6 +144,10 @@ CScriptEngine::CScriptEngine() {
 }
 
 CScriptEngine::~CScriptEngine() {
+    if (cpp_exception_engine == this) { // logging part C: no Lua stack from a destroyed engine
+        SetCppExceptionLuaHook(nullptr);
+        cpp_exception_engine = nullptr;
+    }
 #ifndef XRSE_FACTORY_EXPORTS
     ResetLuaWorkbenchRun();
 #endif
@@ -195,6 +206,24 @@ xr_vector<xr_string> get_lua_stack(lua_State* L) {
         }
     }
     return res;
+}
+
+// Logging part C: the Lua stack for xrCore's record of a C++ exception. Only on the thread the scripts run
+// on ( the one that ran init() ); a script thread ( run_string in a loaded game ) gives that thread's stack.
+static void cpp_exception_lua_stack() {
+    CScriptEngine* const engine = cpp_exception_engine;
+    if (!engine || GetCurrentThreadId() != cpp_exception_script_thread)
+        return;
+    CScriptThread* const thread = engine->current_thread();
+    lua_State* const L = thread ? thread->lua() : engine->lua();
+    if (!L)
+        return;
+    const auto stack = get_lua_stack(L);
+    if (stack.empty())
+        return;
+    Msg("! Lua stack:");
+    for (auto const& s : stack)
+        Msg("%s", s.c_str());
 }
 
 #ifndef XRSE_FACTORY_EXPORTS
@@ -379,6 +408,10 @@ void CScriptEngine::init() {
 
     luabind::open(lua());
     setup_callbacks();
+    // logging part C: the record of a C++ exception gets the Lua stack of this engine's scripts
+    cpp_exception_engine = this;
+    cpp_exception_script_thread = GetCurrentThreadId();
+    SetCppExceptionLuaHook(&cpp_exception_lua_stack);
     export_classes(lua());
     setup_auto_load();
 

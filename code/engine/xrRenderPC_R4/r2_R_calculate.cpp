@@ -1,5 +1,8 @@
 #include "stdafx.h"
 #include "xrEngine/customhud.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the render parts
+// «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - частини рендеру
+#include "r4_frame_parts.h"
 
 float g_fSCREEN;
 
@@ -12,6 +15,11 @@ extern float r_ssaHZBvsTEX;
 extern float r_ssaGLOD_start, r_ssaGLOD_end;
 
 void CRender::Calculate() {
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - a view starts ( the render parts,
+    // "cpu_frame_stats 1" )
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - починаЇтьс€ вид ( частини рендеру,
+    // "cpu_frame_stats 1" )
+    r4_frame_parts_pass_begin();
     // Transfer to global space to avoid deep pointer access
     IRender_Target* T = getTarget();
     float fov_factor = xr::sqr(90.f / Device.fFOV);

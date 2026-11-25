@@ -53,6 +53,20 @@ bool CEnemyManager::is_useful(const CEntityAlive* entity_alive) const {
     return (m_object->useful(this, entity_alive));
 }
 
+// Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 9 stage F - the "useful"
+// cache of Monolith's enemy_manager.cpp: the Lua callback's answer whether an enemy is worth attention is
+// kept for g_enemy_manager_useful_cache_time ms ( 200 by default, -1 = no cache, as before ), each enemy
+// with a small shift of its own, so the checks of many enemies fall on different frames. The checks
+// before the callback run every time, as before. Adapted: xr_hash_map in place of the donor's
+// xr_unordered_flat_map, which this engine does not have; the donor's profiler event is not taken.
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 9 етап F - кеш "useful" з
+// enemy_manager.cpp Monolith: відповідь Lua-функції, чи вартий ворог уваги, зберігається
+// g_enemy_manager_useful_cache_time мс ( 200 типово, -1 = без кешу, як раніше ), кожен ворог зі своїм
+// невеликим зсувом, щоб перевірки багатьох ворогів припадали на різні кадри. Перевірки перед
+// Lua-функцією виконуються щоразу, як раніше. Адаптовано: xr_hash_map замість xr_unordered_flat_map
+// донора, якого цей рушій не має; подію профайлера донора не перенесено.
+int enemy_manager_useful_cache_time = 200;
+
 bool CEnemyManager::useful(const CEntityAlive* entity_alive) const {
     if (!entity_alive->g_Alive())
         return (false);
@@ -72,9 +86,34 @@ bool CEnemyManager::useful(const CEntityAlive* entity_alive) const {
         (m_object->Position().distance_to(entity_alive->Position()) >= m_max_ignore_distance))
         return (false);
 
-    return (m_useful_callback
-                ? m_useful_callback(m_object->lua_game_object(), entity_alive->lua_game_object())
-                : true);
+    // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): the cache
+    // ( enemy_manager_useful_cache_time )
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: кеш
+    // ( enemy_manager_useful_cache_time )
+    if (enemy_manager_useful_cache_time < 0)
+        return (m_useful_callback
+                    ? m_useful_callback(m_object->lua_game_object(), entity_alive->lua_game_object())
+                    : true);
+
+    u32 current_time = Device.dwTimeGlobal;
+    cached_useful& cache = m_useful_cache[entity_alive->ID()]; // made when not there yet
+    if (current_time < cache.check_time)
+        return cache.result;
+
+    bool result =
+        (m_useful_callback
+             ? m_useful_callback(m_object->lua_game_object(), entity_alive->lua_game_object())
+             : true);
+
+    // a shift by the id, so the next checks of different enemies fall on different frames
+    int jitter = (entity_alive->ID() % 97 + 1) * (entity_alive->ID() & 1 ? -1 : 1);
+    // Adapted by Ivan Danko, 2026-11-18: std::max in place of the donor's _max, which this engine does not have
+    // Адаптовано (Ivan Danko, 2026-11-18): std::max замість _max донора, якого в цьому рушії немає
+    u32 next_time = current_time + std::max(0, enemy_manager_useful_cache_time + jitter);
+    cache.result = result;
+    cache.check_time = next_time;
+
+    return result;
 }
 
 float CEnemyManager::do_evaluate(const CEntityAlive* object) const {

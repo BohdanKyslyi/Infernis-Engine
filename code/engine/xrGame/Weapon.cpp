@@ -395,9 +395,9 @@ void CWeapon::Load(LPCSTR section) {
     iMagazineSize = pSettings->r_s32(section, "ammo_mag_size");
 
     ////////////////////////////////////////////////////
-    // Г¤ГЁГ±ГЇГҐГ°Г±ГЁГї Г±ГІГ°ГҐГ«ГјГЎГ»
+    // дисперсия стрельбы
 
-    //ГЇГ®Г¤ГЎГ°Г Г±Г»ГўГ Г­ГЁГҐ ГЄГ Г¬ГҐГ°Г» ГўГ® ГўГ°ГҐГ¬Гї Г®ГІГ¤Г Г·ГЁ
+    //подбрасывание камеры во время отдачи
     u8 rm = READ_IF_EXISTS(pSettings, r_u8, section, "cam_return", 1);
     cam_recoil.ReturnMode = (rm == 1);
 
@@ -441,8 +441,8 @@ void CWeapon::Load(LPCSTR section) {
     cam_recoil.DispersionFrac =
         xr::abs(READ_IF_EXISTS(pSettings, r_float, section, "cam_dispersion_frac", 0.7f));
 
-    //ГЇГ®Г¤ГЎГ°Г Г±Г»ГўГ Г­ГЁГҐ ГЄГ Г¬ГҐГ°Г» ГўГ® ГўГ°ГҐГ¬Гї Г®ГІГ¤Г Г·ГЁ Гў Г°ГҐГ¦ГЁГ¬ГҐ zoom ==> ironsight or scope
-    // zoom_cam_recoil.Clone( cam_recoil ); ==== Г­ГҐГ«ГјГ§Гї !!!!!!!!!!
+    //подбрасывание камеры во время отдачи в режиме zoom ==> ironsight or scope
+    // zoom_cam_recoil.Clone( cam_recoil ); ==== нельзя !!!!!!!!!!
     zoom_cam_recoil.RelaxSpeed = cam_recoil.RelaxSpeed;
     zoom_cam_recoil.RelaxSpeed_AI = cam_recoil.RelaxSpeed_AI;
     zoom_cam_recoil.DispersionFrac = cam_recoil.DispersionFrac;
@@ -536,7 +536,7 @@ void CWeapon::Load(LPCSTR section) {
     m_fMinRadius = pSettings->r_float(section, "min_radius");
     m_fMaxRadius = pSettings->r_float(section, "max_radius");
 
-    // ГЁГ­ГґГ®Г°Г¬Г Г¶ГЁГї Г® ГўГ®Г§Г¬Г®Г¦Г­Г»Гµ Г ГЇГЈГ°ГҐГ©Г¤Г Гµ ГЁ ГЁГµ ГўГЁГ§ГіГ Г«ГЁГ§Г Г¶ГЁГЁ Гў ГЁГ­ГўГҐГ­ГІГ Г°ГҐ
+    // информация о возможных апгрейдах и их визуализации в инвентаре
     m_eScopeStatus = (ALife::EWeaponAddonStatus)pSettings->r_s32(section, "scope_status");
     m_eSilencerStatus = (ALife::EWeaponAddonStatus)pSettings->r_s32(section, "silencer_status");
     m_eGrenadeLauncherStatus =
@@ -614,6 +614,13 @@ void CWeapon::Load(LPCSTR section) {
 
     m_bHasTracers = !!READ_IF_EXISTS(pSettings, r_bool, section, "tracers", true);
     m_u8TracerColorID = READ_IF_EXISTS(pSettings, r_u8, section, "tracers_color_ID", u8(-1));
+
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author momopate): FPS plan step 2 - the weapon setting silenced_tracers of Anomaly
+    // (Monolith Weapon.cpp; no by default).
+    // Перенесення з Monolith (автор momopate) - Ivan Danko, 2026-11-17: крок 2 плану FPS - налаштування зброї silenced_tracers з
+    // Anomaly (Monolith Weapon.cpp; типово ні).
+    // momopate
+    m_bSilencedTracers = READ_IF_EXISTS(pSettings, r_bool, section, "silenced_tracers", false);
 
     string256 temp;
     for (int i = egdNovice; i < egdCount; ++i) {
@@ -775,7 +782,7 @@ void CWeapon::net_Destroy() {
     m_upgrade_world_visual = shared_str();
     inherited::net_Destroy();
 
-    //ГіГ¤Г Г«ГЁГІГј Г®ГЎГєГҐГЄГІГ» ГЇГ Г°ГІГЁГЄГ«Г®Гў
+    //удалить объекты партиклов
     StopFlameParticles();
     StopFlameParticles2();
     StopLight();
@@ -977,7 +984,7 @@ void CWeapon::OnActiveItem() {
     //-
 
     inherited::OnActiveItem();
-    //ГҐГ±Г«ГЁ Г¬Г» Г§Г Г­Г°ГіГ¦Г ГҐГ¬Г±Гї ГЁ Г®Г°ГіГ¦ГЁГҐ ГЎГ»Г«Г® Гў Г°ГіГЄГ Гµ
+    //если мы занружаемся и оружие было в руках
     //.	SetState					(eIdle);
     //.	SetNextState				(eIdle);
 }
@@ -1036,10 +1043,10 @@ void CWeapon::UpdateCL() {
     UpdateBayonetStrike();
     UpdateHUDAddonsVisibility();
     UpdateLegacyAmmoBones();
-    //ГЇГ®Г¤Г±ГўГҐГІГЄГ  Г®ГІ ГўГ»Г±ГІГ°ГҐГ«Г 
+    //подсветка от выстрела
     UpdateLight();
 
-    //Г­Г Г°ГЁГ±Г®ГўГ ГІГј ГЇГ Г°ГІГЁГЄГ«Г»
+    //нарисовать партиклы
     UpdateFlameParticles();
     UpdateFlameParticles2();
 
@@ -1101,11 +1108,11 @@ bool CWeapon::need_renderable() { return !(IsZoomed() && ZoomTexture() && !IsRot
 void CWeapon::renderable_Render() {
     UpdateXForm();
 
-    //Г­Г Г°ГЁГ±Г®ГўГ ГІГј ГЇГ®Г¤Г±ГўГҐГІГЄГі
+    //нарисовать подсветку
 
     RenderLight();
 
-    //ГҐГ±Г«ГЁ Г¬Г» Гў Г°ГҐГ¦ГЁГ¬ГҐ Г±Г­Г Г©ГЇГҐГ°ГЄГЁ, ГІГ® Г±Г Г¬ HUD Г°ГЁГ±Г®ГўГ ГІГј Г­ГҐ Г­Г Г¤Г®
+    //если мы в режиме снайперки, то сам HUD рисовать не надо
     if (IsZoomed() && !IsRotatingToZoom() && ZoomTexture())
         RenderHud(FALSE);
     else
@@ -1164,7 +1171,7 @@ bool CWeapon::Action(u16 cmd, u32 flags) {
         return true;
     }
     case kWPN_FIRE: {
-        //ГҐГ±Г«ГЁ Г®Г°ГіГ¦ГЁГҐ Г·ГҐГ¬-ГІГ® Г§Г Г­ГїГІГ®, ГІГ® Г­ГЁГ·ГҐГЈГ® Г­ГҐ Г¤ГҐГ«Г ГІГј
+        //если оружие чем-то занято, то ничего не делать
         {
             if (IsPending())
                 return false;
@@ -1373,7 +1380,7 @@ int CWeapon::GetSuitableAmmoTotal(bool use_item_to_spawn) const {
         return ae_count;
     }
 
-    //Г·ГІГ®ГЎ Г­ГҐ Г¤ГҐГ«Г ГІГј Г«ГЁГёГ­ГЁГµ ГЇГҐГ°ГҐГ±Г·ГҐГІГ®Гў
+    //чтоб не делать лишних пересчетов
     if (m_pInventory->ModifyFrame() <= m_BriefInfo_CalcFrame) {
         return ae_count + m_iAmmoCurrentTotal;
     }

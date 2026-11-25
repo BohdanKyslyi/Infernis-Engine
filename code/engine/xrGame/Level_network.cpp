@@ -19,6 +19,9 @@
 #include "ui/UIPdaWnd.h"
 
 #include "../xrphysics/physicscommon.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the frame parts
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини кадру
+#include "../xrEngine/frame_parts.h"
 
 const int max_objects_size = 2 * 1024;
 const int max_objects_size_in_save = 8 * 1024;
@@ -262,6 +265,11 @@ void CLevel::Send(NET_Packet& P, u32 dwFlags, u32 dwTimeout) {
 }
 
 void CLevel::net_Update() {
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the network update as a part ( the
+    // secondary thread's when the network runs there )
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - оновлення мережі як частина ( другого
+    // потоку, коли мережа працює там )
+    frame_part_scope fp_net_update(FP_NET_UPDATE);
     if (game_configured) {
         // If we have enought bandwidth - replicate client data on to server
         Device.Statistic->netClient2.Begin();

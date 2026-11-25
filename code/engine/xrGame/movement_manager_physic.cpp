@@ -18,6 +18,9 @@
 
 // Lain: added
 #include "steering_behaviour.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the frame parts
+// «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - частини кадру
+#include "../xrEngine/frame_parts.h"
 
 #ifdef DEBUG
 #include "PHDebug.h"
@@ -276,6 +279,11 @@ void CMovementManager::move_along_path(CPHMovementControl* movement_control, Fve
 
     // ‘изика устанавливает новую позицию
     Device.Statistic->Physics.Begin();
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the NPC movement as a part; the
+    // measurement takes it out of the stock "Physics" time to get the physics world's own
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - рух NPC €к частина; зам≥р в≥дн≥маЇ
+    // його в≥д штатного часу "Physics", щоб отримати власний час св≥ту ф≥зики
+    const u64 fp_npc_move = frame_part_begin();
 
     // получить физ. объекты в радиусе
     m_nearest_objects.clear();
@@ -360,6 +368,9 @@ void CMovementManager::move_along_path(CPHMovementControl* movement_control, Fve
         }
     }
 
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the NPC movement ends
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - рух NPC зак≥нчуЇтьс€
+    frame_part_end(FP_NPC_MOVE, fp_npc_move);
     Device.Statistic->Physics.End();
 
     STOP_PROFILE

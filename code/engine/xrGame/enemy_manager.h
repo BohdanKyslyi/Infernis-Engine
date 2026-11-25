@@ -15,6 +15,15 @@
 
 class CAI_Stalker;
 
+// Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 9 stage F - the "useful"
+// cache of Monolith's enemy_manager.h: the last answer for an enemy and the time until which it holds
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 9 етап F - кеш "useful" з
+// enemy_manager.h Monolith: остання відповідь для ворога й час, до якого вона дійсна
+struct cached_useful {
+    u32 check_time = 0;
+    bool result = false;
+};
+
 class CEnemyManager : public CObjectManager<const CEntityAlive> {
 public:
     typedef CObjectManager<const CEntityAlive> inherited;
@@ -23,6 +32,11 @@ public:
 
 private:
     CCustomMonster* m_object;
+    // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): the "useful" answers by enemy
+    // id ( useful() )
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: відповіді "useful" за id ворога
+    // ( useful() )
+    mutable xr_hash_map<u16, cached_useful> m_useful_cache;
     CAI_Stalker* m_stalker;
     float m_ignore_monster_threshold;
     float m_max_ignore_distance;

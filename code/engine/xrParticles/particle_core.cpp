@@ -20,10 +20,46 @@ ICF pVector RandVec() {
     return pVector(get_rand(), get_rand(), get_rand()); 
 }
 
+// Written by Ivan Danko, 2026-11-17: FPS plan step 2 - the switch of the Anomaly (Monolith) particle
+// behaviour and the update coefficient (psystem.h); the DX11 render sets them at its start.
+// Створено (Ivan Danko, 2026-11-17): крок 2 плану FPS - перемикач поведінки частинок Anomaly
+// (Monolith) і коефіцієнт оновлення (psystem.h); рендер DX11 задає їх під час старту.
+static bool g_anomaly_mode = false;
+static const float* g_update_coeff = nullptr;
+
+void PAPI::SetAnomalyMode(bool on) { g_anomaly_mode = on; }
+bool PAPI::AnomalyMode() { return g_anomaly_mode; }
+void PAPI::SetUpdateCoeff(const float* coeff) { g_update_coeff = coeff; }
+float PAPI::UpdateCoeff() { return g_update_coeff ? *g_update_coeff : 1.0f; }
+
 // Return a random number with a normal distribution.
 float PAPI::NRand(float sigma) {
     if (sigma == 0.0f)
         return 0.0f;
+
+    // Edited by Ivan Danko, 2026-11-17: FPS plan step 2 - with the Anomaly behaviour on, the spread as
+    // in Monolith (xrParticles\particle_core.cpp): a half-normal number by rejection from an
+    // exponential one, a random sign, scaled by 1 / 0.7975 (about 25% wider than the normal spread
+    // below). Monolith's drand48() / rand() are replaced by this thread's generator: our particles
+    // update on several threads. Off = the code as it was.
+    // Змінено (Ivan Danko, 2026-11-17): крок 2 плану FPS - з увімкненою поведінкою Anomaly розкид як у
+    // Monolith (xrParticles\particle_core.cpp): напівнормальне число відбором з експоненційного,
+    // випадковий знак, масштаб 1 / 0.7975 (приблизно на 25% ширше за нормальний розкид нижче).
+    // drand48() / rand() з Monolith замінено генератором цього потоку: наші частинки оновлюються в
+    // кількох потоках. Вимкнено = код без змін.
+    if (g_anomaly_mode) {
+        constexpr float ONE_OVER_SIGMA_EXP = 1.0f / 0.7975f;
+
+        float y;
+        do {
+            y = -std::log(get_rand());
+        } while (get_rand() > std::exp(-(y - 1.0f) * (y - 1.0f) * 0.5f));
+
+        if (rng() & 0x1)
+            return y * sigma * ONE_OVER_SIGMA_EXP;
+        else
+            return -y * sigma * ONE_OVER_SIGMA_EXP;
+    }
 
     std::normal_distribution<float> norm_dist(0.0f, sigma);
     return norm_dist(rng);

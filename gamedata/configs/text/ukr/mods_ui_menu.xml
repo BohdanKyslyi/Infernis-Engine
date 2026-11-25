@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="windows-1251" ?>
+<!-- The "Mods" window ( ui_mods_menu.script ) and its button on the video page.
+     Written by Ivan Danko, 2026-11-18: item 13 "Mods". The window takes "Defaults", the restart
+     legend and the hint of the "SSS Settings" window ( sss_ui_menu.xml ) and "Apply" / "Cancel"
+     of the options ( ui_st_mm.xml ).
+     Створено (Ivan Danko, 2026-11-18): пункт 13 «Моди». Вікно бере "Типові", позначку перезапуску
+     і підказку вікна "SSS Settings" ( sss_ui_menu.xml ) та "Застосувати" / "Відмінити" з
+     налаштувань ( ui_st_mm.xml ). -->
+<string_table>
+
+	<string id="ui_mods_button">
+		<text>Моди</text>
+	</string>
+	<string id="ui_mods_title">
+		<text>Моди</text>
+	</string>
+	<string id="ui_mods_none">
+		<text>Немає модів із власними налаштуваннями.</text>
+	</string>
+
+</string_table>

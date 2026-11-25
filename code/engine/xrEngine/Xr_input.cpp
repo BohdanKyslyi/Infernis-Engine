@@ -17,8 +17,18 @@ ENGINE_API Flags32 psMouseInvert = { FALSE };
 
 float stop_vibration_time = flt_max;
 
-#define MOUSEBUFFERSIZE 64
-#define KEYBOARDBUFFERSIZE 64
+// Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 9 stage F - the mouse and
+// keyboard buffer sizes of Monolith's Xr_input.cpp ( 1024 / 128 ): a mouse that reports 1000 times a
+// second or more no longer overflows the buffer between two frames at a low frame rate, so no movement
+// is lost ( was: 64 / 64 ). Adapted: fixed sizes in the arrays on the stack, as before - the donor's
+// console commands for them and its arrays on the heap are not taken.
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 9 етап F - розміри буферів
+// миші й клавіатури з Xr_input.cpp Monolith ( 1024 / 128 ): миша, що звітує 1000 разів на секунду й
+// частіше, більше не переповнює буфер між двома кадрами за низької частоти кадрів, тож рух не губиться
+// ( було: 64 / 64 ). Адаптовано: сталі розміри масивів на стеку, як раніше - консольні команди донора
+// для них і його масиви в купі не перенесено.
+#define MOUSEBUFFERSIZE 1024
+#define KEYBOARDBUFFERSIZE 128
 #define _KEYDOWN(name, key) (name[key] & 0x80)
 
 static bool g_exclusive = true;

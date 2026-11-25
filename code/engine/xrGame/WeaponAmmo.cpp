@@ -50,6 +50,12 @@ void CCartridge::Load(LPCSTR section, u8 LocalAmmoType) {
     param_s.impair = pSettings->r_float(section, "impair");
     param_s.fWallmarkSize = pSettings->r_float(section, "wm_size");
 
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the ammo setting tracer_silenced of Anomaly
+    // (Monolith WeaponAmmo.cpp; read only here, as there).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - налаштування набоїв tracer_silenced з
+    // Anomaly (Monolith WeaponAmmo.cpp; читається лише тут, як там).
+    param_s.tracer_silenced = READ_IF_EXISTS(pSettings, r_bool, section, "tracer_silenced", false);
+
     m_flags.set(cfCanBeUnlimited | cfRicochet, TRUE);
     m_flags.set(cfMagneticBeam, FALSE);
 
@@ -77,7 +83,13 @@ void CCartridge::Load(LPCSTR section, u8 LocalAmmoType) {
     m_InvShortName = CStringTable().translate(pSettings->r_string(section, "inv_name_short"));
 }
 
-CWeaponAmmo::CWeaponAmmo(void) {}
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the cartridge parameters of an ammo box start from
+// their defaults, as in Monolith (CWeaponAmmo::CWeaponAmmo, cartridge_param.Init()): Load does not read
+// tracer_silenced, so without this the cartridges from an ammo box would carry a random value of it.
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - параметри набоїв пачки починаються з типових
+// значень, як у Monolith (CWeaponAmmo::CWeaponAmmo, cartridge_param.Init()): Load не читає
+// tracer_silenced, тож без цього набої з пачки мали б випадкове його значення.
+CWeaponAmmo::CWeaponAmmo(void) { cartridge_param.Init(); }
 
 CWeaponAmmo::~CWeaponAmmo(void) {}
 

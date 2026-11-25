@@ -104,7 +104,12 @@ static Fbox bbCrouchBox;
 static Fvector vFootCenter;
 static Fvector vFootExt;
 
-Flags32 psActorFlags = { AF_GODMODE_RT | AF_AUTOPICKUP | AF_RUN_BACKWARD | AF_IMPORTANT_SAVE };
+// Edited by Ivan Danko, 2026-11-17: FPS plan step 2 - the tracers are on by default, as in Anomaly
+// (Monolith Actor.cpp: AF_USE_TRACERS among the default flags; console g_use_tracers).
+// «м≥нено (Ivan Danko, 2026-11-17): крок 2 плану FPS - трасери типово вв≥мкнен≥, €к в Anomaly
+// (Monolith Actor.cpp: AF_USE_TRACERS серед типових прапорц≥в; консоль g_use_tracers).
+Flags32 psActorFlags = { AF_GODMODE_RT | AF_AUTOPICKUP | AF_RUN_BACKWARD | AF_IMPORTANT_SAVE |
+                         AF_USE_TRACERS };
 int psActorSleepTime = 1;
 
 CActor::CActor() : CEntityAlive(), current_ik_cam_shift(0) {

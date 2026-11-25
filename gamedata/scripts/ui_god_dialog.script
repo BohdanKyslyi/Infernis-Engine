@@ -94,7 +94,13 @@ function god_dialog:FillInventoryList(category)
     self.list_box:RemoveAll()
     mode = "item"
     for _, entry in ipairs(inventory_catalog_api().get_catalog(category)) do
-        self:AddItemToList(game.translate_string(entry.name), entry.section)
+        -- Edited by Ivan Danko, 2026-11-25: the engine catalog gives the name already translated
+        -- ( infernis_spawner_catalog.cpp ); translating it again here only wrote every item name into
+        -- the log as a missing id ( -dev_mode ). The list shows the same names.
+        -- Змінено (Ivan Danko, 2026-11-25): каталог рушія дає назву вже перекладеною
+        -- ( infernis_spawner_catalog.cpp ); повторний переклад тут лише записував кожну назву предмета
+        -- у лог-файл як відсутній id ( -dev_mode ). Список показує ті самі назви.
+        self:AddItemToList(entry.name, entry.section)
     end
 end
 
@@ -502,7 +508,15 @@ else
         end
         return
     end
-    for _, entry in ipairs(entries) do self:AddItemToList(game.translate_string(entry.name), entry.section) end
+    -- Edited by Ivan Danko, 2026-11-25: the engine gives the communities and the squads already translated
+    -- and the music as file paths ( infernis_spawner_tools.cpp ); only the video names come from the XML as
+    -- they are, so only they are translated here. Before, all of them were translated again and went into
+    -- the log as missing ids ( -dev_mode ). The list shows the same names.
+    -- Змінено (Ivan Danko, 2026-11-25): рушій дає угруповання й загони вже перекладеними, а музику - шляхами
+    -- файлів ( infernis_spawner_tools.cpp ); лише назви відео приходять з XML як є, тому тут перекладаються
+    -- тільки вони. Раніше всі вони перекладалися ще раз і потрапляли в лог-файл як відсутні id ( -dev_mode ).
+    -- Список показує ті самі назви.
+    for _, entry in ipairs(entries) do self:AddItemToList(mode == "vid" and game.translate_string(entry.name) or entry.name, entry.section) end
 end
 end
 

@@ -102,6 +102,26 @@ function options_dialog:InitControls()
 	local btn_pbr				= xml:Init3tButton("tab_video:btn_pbr", self.dlg_video)
 	self:Register				(btn_pbr, "btn_pbr")
 
+	-- Written by Ivan Danko, 2026-11-18: item 9 stage F - the "Engine settings" button. It stands on
+	-- the video page above the SSS check box, opens the "Engine settings" window ( ui_cpu_menu.script )
+	-- and is never grey: the engine settings work with and without SSS.
+	-- Створено (Ivan Danko, 2026-11-18): пункт 9 етап F - кнопка "Налаштування рушія". Вона стоїть на
+	-- сторінці відео над прапорцем SSS, відкриває вікно "Налаштування рушія" ( ui_cpu_menu.script ) і
+	-- ніколи не сіра: налаштування рушія працюють і з SSS, і без нього.
+	local btn_cpu				= xml:Init3tButton("tab_video:btn_cpu", self.dlg_video)
+	self:Register				(btn_cpu, "btn_cpu")
+
+	-- Written by Ivan Danko, 2026-11-18: item 13 "Mods" - the "Mods" button. It stands beside "Engine
+	-- settings", where the button of the "Wind Leaves Settings" window of Weather_ATMOS stood, opens
+	-- the "Mods" window ( ui_mods_menu.script ) and is never grey: the window lists the addons with
+	-- settings of their own, with and without SSS.
+	-- Створено (Ivan Danko, 2026-11-18): пункт 13 «Моди» - кнопка «Моди». Вона стоїть поруч із
+	-- "Налаштування рушія", де стояла кнопка вікна "Wind Leaves Settings" аддона Weather_ATMOS,
+	-- відкриває вікно «Моди» ( ui_mods_menu.script ) і ніколи не сіра: вікно показує аддони з
+	-- власними налаштуваннями і з SSS, і без нього.
+	local btn_mods				= xml:Init3tButton("tab_video:btn_mods", self.dlg_video)
+	self:Register				(btn_mods, "btn_mods")
+
 	local btn
 	btn = xml:Init3tButton		("main_dialog:btn_accept", self.dialog)
 	self:Register				(btn, "btn_accept")
@@ -211,6 +231,12 @@ function options_dialog:InitCallBacks()
 	self:AddCallback("btn_pbr",				ui_events.BUTTON_CLICKED,	self.OnBtnPBR,				self)
 	self:AddCallback("btn_pbr_basic",		ui_events.BUTTON_CLICKED,	self.OnBtnPBRBasic,			self)
 	self:AddCallback("btn_pbr_reset",		ui_events.BUTTON_CLICKED,	self.OnBtnPBRReset,			self)
+	-- Written by Ivan Danko, 2026-11-18: item 9 stage F - the "Engine settings" button
+	-- Створено (Ivan Danko, 2026-11-18): пункт 9 етап F - кнопка "Налаштування рушія"
+	self:AddCallback("btn_cpu",				ui_events.BUTTON_CLICKED,	self.OnBtnCPU,				self)
+	-- Written by Ivan Danko, 2026-11-18: item 13 "Mods" - the "Mods" button
+	-- Створено (Ivan Danko, 2026-11-18): пункт 13 «Моди» - кнопка «Моди»
+	self:AddCallback("btn_mods",				ui_events.BUTTON_CLICKED,	self.OnBtnMods,				self)
 	self:AddCallback("btn_accept",			ui_events.BUTTON_CLICKED,	self.OnBtnAccept,			self)
 	self:AddCallback("btn_cancel",			ui_events.BUTTON_CLICKED,	self.OnBtnCancel,			self)
 	self:AddCallback("btn_default_graphic",	ui_events.BUTTON_CLICKED,	self.OnBtnDefGraph,			self)
@@ -391,6 +417,38 @@ function options_dialog:OnBtnSSFX()
 		self.dlg_sss.owner = self
 	end
 	self.dlg_sss:Open()
+	self:HideDialog()
+	self:Show(false)
+end
+
+-- Written by Ivan Danko, 2026-11-18: item 9 stage F - the "Engine settings" button opens the
+-- "Engine settings" window ( ui_cpu_menu.script ), built once per options dialog and kept the way
+-- OnBtnSSFX keeps the "SSS Settings" one.
+-- Створено (Ivan Danko, 2026-11-18): пункт 9 етап F - кнопка "Налаштування рушія" відкриває вікно
+-- "Налаштування рушія" ( ui_cpu_menu.script ), яке будується раз на діалог налаштувань і
+-- зберігається так, як OnBtnSSFX зберігає вікно "SSS Settings".
+function options_dialog:OnBtnCPU()
+	if self.dlg_cpu == nil then
+		self.dlg_cpu = ui_cpu_menu.cpu_menu()
+		self.dlg_cpu.owner = self
+	end
+	self.dlg_cpu:Open()
+	self:HideDialog()
+	self:Show(false)
+end
+
+-- Written by Ivan Danko, 2026-11-18: item 13 "Mods" - the "Mods" button opens the "Mods" window
+-- ( ui_mods_menu.script ), built once per options dialog and kept the way OnBtnCPU keeps the
+-- "Engine settings" one.
+-- Створено (Ivan Danko, 2026-11-18): пункт 13 «Моди» - кнопка «Моди» відкриває вікно «Моди»
+-- ( ui_mods_menu.script ), яке будується раз на діалог налаштувань і зберігається так, як
+-- OnBtnCPU зберігає вікно "Налаштування рушія".
+function options_dialog:OnBtnMods()
+	if self.dlg_mods == nil then
+		self.dlg_mods = ui_mods_menu.mods_menu()
+		self.dlg_mods.owner = self
+	end
+	self.dlg_mods:Open()
 	self:HideDialog()
 	self:Show(false)
 end

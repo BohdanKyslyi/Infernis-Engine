@@ -66,6 +66,9 @@ set(MODELS_VISUALS ../xrRenderDX10/3DFluid/dx103DFluidVolume.h
                    ../xrRenderCommon/ParticleEffect.h
                    ../xrRenderCommon/ParticleEffectDef.h
                    ../xrRenderCommon/ParticleGroup.h
+                   # Edited by Ivan Danko, 2026-11-17: FPS plan step 2 - the particle actions of Anomaly (Monolith), ported
+                   # Змінено (Ivan Danko, 2026-11-17): крок 2 плану FPS - дії частинок з Anomaly (Monolith), перенесено
+                   ../xrRenderCommon/ParticleEffectActions.h
                    ../xrRenderDX10/3DFluid/dx103DFluidVolume.cpp
                    ../xrRenderCommon/FLOD.cpp
                    ../xrRenderCommon/FProgressive.cpp
@@ -74,7 +77,10 @@ set(MODELS_VISUALS ../xrRenderDX10/3DFluid/dx103DFluidVolume.h
                    ../xrRenderCommon/FVisual.cpp
                    ../xrRenderCommon/ParticleEffect.cpp
                    ../xrRenderCommon/ParticleEffectDef.cpp
-                   ../xrRenderCommon/ParticleGroup.cpp)
+                   ../xrRenderCommon/ParticleGroup.cpp
+                   # Edited by Ivan Danko, 2026-11-17: FPS plan step 2 - the particle actions of Anomaly (Monolith), ported
+                   # Змінено (Ivan Danko, 2026-11-17): крок 2 плану FPS - дії частинок з Anomaly (Monolith), перенесено
+                   ../xrRenderCommon/ParticleEffectActions.cpp)
 
 set(INTERFASE_IMPLEMENTATIONS_WALLMARKARRAY ../xrRenderCommon/dxWallMarkArray.h
                                             ../xrRender/WallMarkArray.h
@@ -331,6 +337,12 @@ set(CORE ../xrRenderCommon/PSLibrary.h
          ../xrRenderCommon/QueryHelper.h
          r2_types.h
          r4.h
+         # Edited by Ivan Danko, 2026-11-14: item 9 stage E point 4 - the shader build ahead on all cores
+         # Змінено (Ivan Danko, 2026-11-14): пункт 9 етап E пункт 4 - збирання шейдерів наперед на всіх ядрах
+         r4_shader_prebuild.h
+         # Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the render parts
+         # Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини рендеру
+         r4_frame_parts.h
          r4_R_sun_support.h
          ../xrRenderCommon/r__dsgraph_structure.h
          ../xrRenderCommon/r__dsgraph_types.h
@@ -346,6 +358,12 @@ set(CORE ../xrRenderCommon/PSLibrary.h
          r2_sector_detect.cpp
          r2_test_hw.cpp
          r4.cpp
+         # Edited by Ivan Danko, 2026-11-14: item 9 stage E point 4 - the shader build ahead on all cores
+         # Змінено (Ivan Danko, 2026-11-14): пункт 9 етап E пункт 4 - збирання шейдерів наперед на всіх ядрах
+         r4_shader_prebuild.cpp
+         # Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the video memory ( DXGI 1.4 )
+         # Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - відеопам'ять ( DXGI 1.4 )
+         r4_vram_query.cpp
          r4_loader.cpp
          r4_R_rain.cpp
          r4_R_render.cpp
@@ -507,6 +525,11 @@ add_definitions(-DATIMGPUD_DLL -DXRRENDER_R4_EXPORTS -DUSE_DX11 -D_SECURE_SCL=0)
 # TODO: change precise to fast after msvc bug fix
 add_compile_options(/fp:precise /GR "/Yustdafx.h")
 set_source_files_properties(stdafx.cpp PROPERTIES COMPILE_FLAGS /Yc)
+# Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - DXGI 1.4 needs the Windows SDK
+# headers, the precompiled header has the old DirectX SDK ones
+# Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - DXGI 1.4 потребує заголовків
+# Windows SDK, у попередньо скомпільованому заголовку - старі заголовки DirectX SDK
+set_source_files_properties(r4_vram_query.cpp PROPERTIES COMPILE_FLAGS /Y-)
 
 add_library(xrRender_R4 SHARED ${REFACTORED_EXECUTION__AND__3D_SHADERS_RESOURCES_DX10_R_SHADER}
                                ${DX9_TO_DX10_UTILS}

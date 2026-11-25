@@ -865,21 +865,34 @@ u32 player_hud::motion_length(const MotionID& M, const CMotionDef*& md, float sp
     return 0;
 }
 const Fvector& player_hud::attach_rot() const {
+    // Edited by Ivan Danko, 2026-11-24: with both hands empty this returned a reference to a
+    // temporary vector destroyed on return (MSVC C4172, a dangling reference); now it returns a
+    // static zero vector that lives for the whole game - the same value (0, 0, 0).
+    // Змінено (Ivan Danko, 2026-11-24): коли обидві руки порожні, тут поверталося посилання на
+    // тимчасовий вектор, який знищувався під час виходу з функції (MSVC C4172, висяче посилання);
+    // тепер повертається статичний нульовий вектор, який існує протягом усієї гри - те саме
+    // значення (0, 0, 0).
+    static const Fvector st_zero_rot = {0.f, 0.f, 0.f};
     if (m_attached_items[0])
         return m_attached_items[0]->hands_attach_rot();
     else if (m_attached_items[1])
         return m_attached_items[1]->hands_attach_rot();
     else
-        return Fvector().set(0, 0, 0);
+        return st_zero_rot;
 }
 
 const Fvector& player_hud::attach_pos() const {
+    // Edited by Ivan Danko, 2026-11-24: the same fix as in attach_rot() above (MSVC C4172): a
+    // static zero vector instead of a reference to a destroyed temporary one.
+    // Змінено (Ivan Danko, 2026-11-24): те саме виправлення, що й у attach_rot() вище (MSVC C4172):
+    // статичний нульовий вектор замість посилання на знищений тимчасовий вектор.
+    static const Fvector st_zero_pos = {0.f, 0.f, 0.f};
     if (m_attached_items[0])
         return m_attached_items[0]->hands_attach_pos();
     else if (m_attached_items[1])
         return m_attached_items[1]->hands_attach_pos();
     else
-        return Fvector().set(0, 0, 0);
+        return st_zero_pos;
 }
 
 void player_hud::update(const Fmatrix& cam_trans) {

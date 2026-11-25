@@ -831,6 +831,45 @@ void CLocatorAPI::ScanAddonDirectory(const xr_string& disk_path, const xr_string
             if (addon_archive_name(item.name))
                 continue;
 
+            // Written by Ivan Danko, 2026-11-18: item 13 "Mods" - the key file of an addon that has
+            // settings of its own, mod_settings.ltx in the addon's root folder, is not a gamedata
+            // file: it goes into the index as configs\mod_settings\<addon folder>.ltx, where the
+            // "Mods" window of the options ( ui_mods_menu.script ) finds it. The packs SSS mounts
+            // late ( ssfx_addons ) come here only while SSS runs, so with SSS off theirs is not listed.
+            // Створено (Ivan Danko, 2026-11-18): пункт 13 «Моди» - ключовий файл аддона, що має власні
+            // налаштування, mod_settings.ltx у кореневій теці аддона, не є файлом gamedata: він
+            // потрапляє до індексу як configs\mod_settings\<тека аддона>.ltx, де його знаходить вікно
+            // «Моди» в налаштуваннях ( ui_mods_menu.script ). Пакети, які SSS монтує пізніше
+            // ( ssfx_addons ), проходять тут лише тоді, коли SSS працює, тож із вимкненим SSS їхнього
+            // файлу в списку немає.
+            if (0 == _stricmp(item.name, "mod_settings.ltx") &&
+                0 == _stricmp(game_path.c_str(), ssfx_late_game_path.c_str())) {
+                xr_string pack = disk_path;
+                if (!pack.empty() && (pack.back() == '\\' || pack.back() == '/'))
+                    pack.pop_back();
+                const auto slash = pack.find_last_of("\\/");
+                if (slash != xr_string::npos)
+                    pack.erase(0, slash + 1);
+                if (!pack.empty() && path_exist("$game_config$")) {
+                    string_path folder, settings;
+                    update_path(folder, "$game_config$", "mod_settings\\");
+                    xr_strlwr(folder);
+                    if (xr_strlen(folder) + pack.size() + 5 < sizeof(string256)) {
+                        strconcat(sizeof(settings), settings, folder, pack.c_str(), ".ltx");
+                        xr_strlwr(settings);
+                        if (!exist(folder))
+                            Register(folder, 0xffffffff, 0, 0, 0, 0, 0);
+                        if (m_addon_files.find(settings) != m_addon_files.end())
+                            Msg("! Addon file overridden: %s (by %s)", settings, disk_file);
+                        m_addon_files[settings] = disk_file;
+                        Register(settings, 0xffffffff, 0, 0, item.size, item.size,
+                                 (u32)item.time_write);
+                        Msg("FS: addon settings for the Mods window: %s", settings);
+                    }
+                }
+                continue;
+            }
+
             // Screen Space Shaders: a pack mounted late ( ssfx_addons ) keeps its alphabetical
             // place. A file that a pack after it gives, loose or from its archives, stays that
             // pack's, as when every pack was mounted at start.

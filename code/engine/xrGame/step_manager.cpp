@@ -16,6 +16,16 @@ BOOL debug_step_info_load = FALSE;
 
 extern float psHUDStepSoundVolume;
 
+// Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): FPS plan step 2 -
+// the footstep particle distance of Anomaly (Monolith step_manager.cpp g_step_particle_distance,
+// console step_particle_distance 10 .. 100 m, xrGame\console_commands.cpp). The step sound keeps
+// its 20 m (Monolith's step_sound_distance is a setting of its sound page, not of the particles).
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: крок 2 плану
+// FPS - дальність частинок кроків з Anomaly (Monolith step_manager.cpp g_step_particle_distance,
+// консоль step_particle_distance 10 .. 100 м, xrGame\console_commands.cpp). Звук кроків лишає свої
+// 20 м (step_sound_distance у Monolith - налаштування його сторінки звуку, а не частинок).
+float g_step_particle_distance = 50.0f;
+
 CStepManager::CStepManager() {}
 
 CStepManager::~CStepManager() {}
@@ -159,6 +169,13 @@ void CStepManager::update(bool b_hud_view) {
 
     float dist_sqr = m_object->Position().distance_to_sqr(Device.vCameraPosition);
     bool b_play = dist_sqr < 400.0f; // 20m
+    // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): the footstep
+    // particles play within step_particle_distance (Monolith: b_play_particles); the step sound keeps
+    // b_play above.
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: частинки
+    // кроків грають у межах step_particle_distance (Monolith: b_play_particles); звук кроків лишає
+    // b_play вище.
+    bool b_play_particles = dist_sqr < g_step_particle_distance * g_step_particle_distance;
 
     // получить параметры шага
     SStepParam& step = m_step_info.params;
@@ -217,7 +234,9 @@ void CStepManager::update(bool b_hud_view) {
             }
 
             // Играть партиклы
-            if (b_play && !mtl_pair->CollideParticles.empty()) {
+            // Edited by Ivan Danko, 2026-11-18: b_play_particles (step_particle_distance) in place of b_play
+            // Змінено (Ivan Danko, 2026-11-18): b_play_particles (step_particle_distance) замість b_play
+            if (b_play_particles && !mtl_pair->CollideParticles.empty()) {
                 LPCSTR ps_name =
                     *mtl_pair
                          ->CollideParticles[::Random.randI(0, mtl_pair->CollideParticles.size())];

@@ -112,7 +112,14 @@ void CRender::render_lights(light_Package& LP) {
             if (L->vis.smap_ID != sid)
                 break;
             source.pop_back();
-            Lights_LastFrame.push_back(L);
+            // Edited by Ivan Danko, 2026-11-14: the 3D scope lens pass does not put the lamp into
+            // this list: it issues no shadow test (light_smapvis.cpp), and the list keeps the main
+            // view's lamps, whose tests the main view's next pass reads.
+            // Змінено (Ivan Danko, 2026-11-14): прохід 3D-лінзи не кладе ліхтар у цей список:
+            // він перевірки тіні не робить (light_smapvis.cpp), а список зберігає ліхтарі
+            // основного кадру, чиї перевірки читає наступний прохід основного кадру.
+            if (!Device.scopeLensPass)
+                Lights_LastFrame.push_back(L);
 
             // render
             phase = PHASE_SMAP;

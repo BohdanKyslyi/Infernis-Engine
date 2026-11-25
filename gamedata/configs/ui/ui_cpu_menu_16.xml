@@ -1,0 +1,190 @@
+<w>
+	<!-- The "Engine settings" window ( ui_cpu_menu.script ), 16:9.
+	     Written by Ivan Danko, 2026-11-18: item 9 stage F + FPS plan step 2 - the layout of our
+	     "Wind Leaves Settings" window ( Weather_ATMOS ui_wl_menu_16.xml ) with the engine settings;
+	     the sliders as in the "SSS Settings" window ( ui_sss_menu_16.xml ).
+	     Створено (Ivan Danko, 2026-11-18): пункт 9 етап F + крок 2 плану FPS - розмітка нашого
+	     вікна "Wind Leaves Settings" ( Weather_ATMOS ui_wl_menu_16.xml ) з налаштуваннями рушія;
+	     повзунки - як у вікні "SSS Settings" ( ui_sss_menu_16.xml ). -->
+	<background x="0" y="0" width="1024" height="768">
+		<auto_static x="102" y="0" width="819" height="768" stretch="1">
+			<texture>ui_inGame2_opt_background</texture>
+		</auto_static>
+		<auto_static x="253" y="250" width="269" height="176" stretch="1">
+			<texture x="1" y="1" width="335" height="174">ui\video_window</texture>
+		</auto_static>
+		<auto_static x="0" y="0" width="102" height="768" stretch="1">
+			<texture>ui_inGame2_opt_left_widepanel</texture>
+		</auto_static>
+		<auto_static x="921" y="0" width="102" height="768" stretch="1">
+			<texture>ui_inGame2_opt_right_widepanel</texture>
+		</auto_static>
+	</background>
+
+	<form x="152" y="34" width="720" height="700" stretch="1">
+		<texture>ui_inGame2_main_window_small</texture>
+		<caption x="0" y="18" width="720" height="34">
+			<text font="graffiti32" align="c">ui_cpu_title</text>
+		</caption>
+		<mod_frame x="22" y="66" width="189" height="536">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</mod_frame>
+		<mod_list x="22" y="68" width="189" height="532" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="0"/>
+		<page_frame x="218" y="66" width="480" height="536">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</page_frame>
+		<page_title x="226" y="70" width="464" height="26">
+			<text font="letterica18" r="235" g="219" b="178" align="l" vert_align="c"/>
+		</page_title>
+		<page x="220" y="98" width="475" height="500" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="1"/>
+		<btn_reset x="350" y="656" width="108" height="26" stretch="1">
+			<text font="letterica18" align="c">ui_sss_reset</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_reset>
+		<btn_apply x="466" y="656" width="108" height="26" stretch="1">
+			<text font="letterica18" align="c">ui_mm_apply</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_apply>
+		<btn_cancel x="582" y="656" width="108" height="26" stretch="1">
+			<text font="letterica18" align="c">ui_mm_cancel</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_cancel>
+	</form>
+
+	<tpl>
+		<mod_row width="189" height="19"/>
+		<mod_sel x="0" y="0" width="189" height="19" stretch="1">
+			<texture>ui_inGame2_Mp_bigbuttone_h</texture>
+		</mod_sel>
+		<mod_btn x="0" y="0" width="189" height="19">
+			<text x="7" font="letterica16" align="l" vert_align="c"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="255" g="255" b="255"/>
+			</text_color>
+		</mod_btn>
+		<row_1 width="459" height="30"/>
+		<sel_1 x="0" y="1" width="459" height="28" stretch="1">
+			<texture>ui_inGame2_combobox_line_b</texture>
+		</sel_1>
+		<cap_1 x="6" y="3" width="226" height="24">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</cap_1>
+		<num_1 x="408" y="3" width="45" height="24">
+			<text font="letterica16" r="170" g="170" b="170" align="r" vert_align="c"/>
+		</num_1>
+		<row_2 width="459" height="44"/>
+		<sel_2 x="0" y="1" width="459" height="42" stretch="1">
+			<texture>ui_inGame2_combobox_line_b</texture>
+		</sel_2>
+		<cap_2 x="6" y="3" width="226" height="38">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</cap_2>
+		<num_2 x="408" y="3" width="45" height="38">
+			<text font="letterica16" r="170" g="170" b="170" align="r" vert_align="c"/>
+		</num_2>
+	</tpl>
+
+	<rows>
+		<!-- cores -->
+		<l_core_mode x="245" y="12" width="125" height="20" list_length="3" always_show_scroll="0">
+			<options_item entry="cpu_core_mode" group="mm_opt_cpu_cores"/>
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</l_core_mode>
+		<k_tasks x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="cpu_tasks" group="mm_opt_cpu_cores"/>
+		</k_tasks>
+		<k_lua_gc x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="lua_parallel_gc" group="mm_opt_cpu_cores"/>
+		</k_lua_gc>
+		<!-- frame -->
+		<t_framelimit x="245" y="14" width="160" height="16" step="1" is_integer="1">
+			<options_item entry="r__framelimit" group="mm_opt_cpu_frame"/>
+		</t_framelimit>
+		<k_framelimit_menu x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="r__framelimit_menu" group="mm_opt_cpu_frame"/>
+		</k_framelimit_menu>
+		<k_show_fps x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="r__show_fps" group="mm_opt_cpu_frame"/>
+		</k_show_fps>
+		<s_fps_pos x="245" y="5" width="125" height="20" list_length="3" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</s_fps_pos>
+		<!-- load ( DX11 ) -->
+		<k_mt_textures x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="r__mt_textures" group="mm_opt_cpu_load"/>
+		</k_mt_textures>
+		<k_shader_prebuild x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="r__shader_prebuild" group="mm_opt_cpu_load" depend="restart"/>
+		</k_shader_prebuild>
+		<!-- particles -->
+		<s_particle_rate x="245" y="12" width="125" height="20" list_length="5" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</s_particle_rate>
+		<t_step_distance x="245" y="14" width="160" height="16" step="1">
+			<options_item entry="step_particle_distance" group="mm_opt_cpu_particles"/>
+		</t_step_distance>
+		<k_tracers x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="g_use_tracers" group="mm_opt_cpu_particles"/>
+		</k_tracers>
+		<k_short_tracers x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="render_short_tracers" group="mm_opt_cpu_particles"/>
+		</k_short_tracers>
+		<k_silencer_tracer x="234" y="0" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="allow_silencer_hide_tracer" group="mm_opt_cpu_particles"/>
+		</k_silencer_tracer>
+		<k_mt_particles x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="mt_particles" group="mm_opt_cpu_particles"/>
+		</k_mt_particles>
+		<!-- test -->
+		<k_test_mode x="234" y="7" width="35" height="29" stretch="1">
+			<texture>ui_inGame2_checkbox</texture>
+			<options_item entry="cpu_test_mode" group="mm_opt_cpu_test"/>
+		</k_test_mode>
+	</rows>
+</w>

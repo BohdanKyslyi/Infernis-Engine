@@ -41,4 +41,15 @@ public:
     virtual IRenderable* dcast_Renderable() { return this; }
 };
 
+// Written by Ivan Danko, 2026-11-17: FPS plan step 2b - the particles' update on all cores. The DX11
+// render ( xrRenderPC_R4\r4_R_render.cpp ) collects the particle objects it is going to draw and runs
+// their update in one batch through this entry, which the game sets ( xrGame\ParticlesObject.cpp ).
+// true = the object's update ran. nullptr = not set: every object updates itself, as before.
+// Створено (Ivan Danko, 2026-11-17): крок 2б плану FPS - оновлення частинок на всіх ядрах. Рендер DX11
+// ( xrRenderPC_R4\r4_R_render.cpp ) збирає об'єкти частинок, які має намалювати, і виконує їхнє
+// оновлення однією пачкою через цю точку входу, яку задає гра ( xrGame\ParticlesObject.cpp ).
+// true = оновлення об'єкта виконано. nullptr = не задано: кожен об'єкт оновлюється сам, як раніше.
+typedef bool ps_batch_update_fn(IRenderable* renderable);
+ENGINE_API extern ps_batch_update_fn* g_ps_batch_update;
+
 #endif

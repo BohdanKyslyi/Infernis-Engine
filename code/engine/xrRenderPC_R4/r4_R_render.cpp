@@ -5,6 +5,154 @@
 #include "xrEngine/xr_object.h"
 
 #include "xrRenderCommon/QueryHelper.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the render parts
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини рендеру
+#include "r4_frame_parts.h"
+// Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the visual types ( MT_* )
+// Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - типи візуалів ( MT_* )
+#include "xrEngine/fmesh.h"
+// Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - the particles' update batch ( r4_ps_batch_update )
+// Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - пачка оновлення частинок ( r4_ps_batch_update )
+#include "xrRenderCommon/ParticleEffect.h"
+#include "xrRenderCommon/ParticleGroup.h"
+#include "xrEngine/PS_instance.h"
+#include "xrEngine/frame_parts.h"
+#include "xrCore/xrTasks.h"
+
+// Written by Ivan Danko, 2026-11-15: FPS fix step 1 "do not draw what cannot be seen" ( "r__far_cull",
+// "r__occlusion_ext", xrRender_console.cpp ). Far small: an object whose diameter on the screen
+// ( measured on a 1080-pixel-high screen with this view's zoom - the 3D scope lens has its own ) is
+// under the limit is neither drawn nor updated in this view; characters and monsters always stay;
+// the objects the game would drop anyway at its own size limit are dropped before their update
+// now. Static meshes: r__dsgraph_build.cpp. Occlusion test: the 3D scope lens view uses the main
+// view's buffer of this frame, the main view after the lens gets its test back ( it stayed off
+// while aiming ), the transparent pass ( particles ) skips what this frame's test found hidden.
+// "cpu_frame_stats 1" prints what was cut.
+// Створено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS "не малювати те, чого не видно"
+// ( "r__far_cull", "r__occlusion_ext", xrRender_console.cpp ). Дрібне далеке: об'єкт, діаметр
+// якого на екрані ( міряється на екрані висотою 1080 пікселів зі збільшенням цього виду - лінза
+// 3D-прицілу має своє ) менший за межу, у цьому виді не малюється й не оновлюється; персонажі й
+// монстри лишаються завжди; об'єкти, які гра й так відкинула б за своєю межею розміру, тепер
+// відкидаються до оновлення. Статичні сітки: r__dsgraph_build.cpp. Перевірка перекриття: вид
+// лінзи 3D-прицілу використовує буфер основного виду цього кадру, основний вид після лінзи
+// отримує свою перевірку назад ( під час прицілювання вона лишалася вимкненою ), прохід
+// прозорого ( частинки ) пропускає те, що перевірка цього кадру визнала прихованим.
+// "cpu_frame_stats 1" пише, скільки відкинуто.
+extern int ps_r__far_cull;
+extern int ps_r__occlusion_ext;
+extern ENGINE_API int ps_cpu_frame_stats;
+extern float r_ssaDISCARD;
+float r4_far_cut_static_k = 0.f;           // r__dsgraph_build.cpp
+int r4_far_cut_count_view = -1;            // r__dsgraph_build.cpp
+u32 r4_far_cut_static_count[2] = { 0, 0 }; // r__dsgraph_build.cpp
+
+namespace {
+float far_cut_k_objects = 0.f, far_cut_k_particles = 0.f;
+int far_cut_view = -1;         // this render_main counts for: -1 none, 0 the main view, 1 the lens
+bool vis_forward_pass = false; // render_forward's render_main
+u32 lens_hom_frame = u32(-1);  // the frame whose 3D scope lens pass switched the test off
+
+// what was cut ( "cpu_frame_stats 1" ): this frame per view, the 5 s window per view
+u32 vis_cut_particles[2] = { 0, 0 }, vis_cut_objects[2] = { 0, 0 }, vis_cut_hidden[2] = { 0, 0 };
+struct vis_cut_window {
+    u32 start = 0;
+    u32 frames[2] = { 0, 0 };
+    double particles[2] = { 0, 0 }, objects[2] = { 0, 0 }, statics[2] = { 0, 0 }, hidden[2] = { 0, 0 };
+};
+vis_cut_window vis_cut;
+
+// render_main: this view's limits. The diameter on a 1080-pixel-high screen = radius * scale /
+// distance, scale = mProject._22 * 1080 ( the view's own zoom ); cut when radius^2 * k < distance^2.
+void far_cut_begin(bool count) {
+    const int level = ps_r__far_cull;
+    if (level <= 0) {
+        far_cut_k_objects = far_cut_k_particles = 0.f;
+        r4_far_cut_static_k = 0.f;
+        far_cut_view = r4_far_cut_count_view = -1;
+        return;
+    }
+    const float scale = Device.mProject._22 * 1080.f;
+    const float px_objects = level >= 2 ? 4.f : 2.f;
+    const float px_particles = level >= 2 ? 6.f : 3.f;
+    far_cut_k_objects = xr::sqr(scale / px_objects);
+    far_cut_k_particles = xr::sqr(scale / px_particles);
+    r4_far_cut_static_k = far_cut_k_objects;
+    far_cut_view = count ? (Device.scopeLensPass ? 1 : 0) : -1;
+    r4_far_cut_count_view = far_cut_view;
+}
+
+void far_cut_end() {
+    far_cut_k_objects = far_cut_k_particles = 0.f;
+    r4_far_cut_static_k = 0.f;
+    far_cut_view = r4_far_cut_count_view = -1;
+}
+
+// a renderable under the limit, or one the game's own size limit drops anyway after its update
+bool far_cut_renderable(IRenderable* renderable, ISpatial* spatial) {
+    if (far_cut_k_objects <= 0.f)
+        return false;
+    const dxRender_Visual* V = (const dxRender_Visual*)renderable->renderable.visual;
+    if (!V || V->Type == MT_SKELETON_ANIM)
+        return false; // characters and monsters always stay
+    const bool particles = V->Type == MT_PARTICLE_EFFECT || V->Type == MT_PARTICLE_GROUP;
+    const float R = spatial->spatial.sphere.R;
+    const float distSQ = Device.vCameraPosition.distance_to_sqr(spatial->spatial.sphere.P) + EPS;
+    if (R * R * (particles ? far_cut_k_particles : far_cut_k_objects) >= distSQ &&
+        R > r_ssaDISCARD * distSQ)
+        return false;
+    if (far_cut_view >= 0)
+        (particles ? vis_cut_particles : vis_cut_objects)[far_cut_view]++;
+    return true;
+}
+
+// the transparent pass: this frame's result of this view, else a test of this frame's buffer
+BOOL forward_visible(CHOM& hom, const vis_data& v) {
+    BOOL visible;
+    if (v.hom_tested == Device.dwFrame)
+        visible = v.hom_frame != Device.dwFrame + 1; // hidden = tested again next frame
+    else if (Device.dwFrame < v.hom_frame)
+        visible = TRUE; // found visible within the last frames
+    else
+        visible = hom.visible_frame(v.box);
+    if (!visible)
+        vis_cut_hidden[Device.scopeLensPass ? 1 : 0]++;
+    return visible;
+}
+
+// the end of a view: add its frame; the main view prints the window every 5 s
+void vis_cut_view_end(bool lens) {
+    const int view = lens ? 1 : 0;
+    if (ps_cpu_frame_stats) {
+        vis_cut.frames[view]++;
+        vis_cut.particles[view] += vis_cut_particles[view];
+        vis_cut.objects[view] += vis_cut_objects[view];
+        vis_cut.statics[view] += r4_far_cut_static_count[view];
+        vis_cut.hidden[view] += vis_cut_hidden[view];
+    }
+    vis_cut_particles[view] = vis_cut_objects[view] = vis_cut_hidden[view] = 0;
+    r4_far_cut_static_count[view] = 0;
+    if (!ps_cpu_frame_stats) {
+        vis_cut = vis_cut_window();
+        return;
+    }
+    if (lens)
+        return;
+    if (!vis_cut.start)
+        vis_cut.start = Device.dwTimeContinual;
+    if (Device.dwTimeContinual - vis_cut.start < 5000)
+        return;
+    const double m = double(vis_cut.frames[0]);
+    const double l = vis_cut.frames[1] ? double(vis_cut.frames[1]) : 1.0;
+    Msg("* Visibility cut [a frame, main view | 3D scope lens view]: far small ( r__far_cull %d ): "
+        "particles %.0f | %.0f, objects %.0f | %.0f, static meshes %.0f | %.0f | hidden in the "
+        "transparent pass ( r__occlusion_ext %d ): %.0f | %.0f | lens frames %u of %u",
+        ps_r__far_cull, vis_cut.particles[0] / m, vis_cut.particles[1] / l, vis_cut.objects[0] / m,
+        vis_cut.objects[1] / l, vis_cut.statics[0] / m, vis_cut.statics[1] / l, ps_r__occlusion_ext,
+        vis_cut.hidden[0] / m, vis_cut.hidden[1] / l, vis_cut.frames[1], vis_cut.frames[0]);
+    vis_cut = vis_cut_window();
+    vis_cut.start = Device.dwTimeContinual;
+}
+} // namespace
 
 IC bool pred_sp_sort(ISpatial* _1, ISpatial* _2) {
     float d1 = _1->spatial.sphere.P.distance_to_sqr(Device.vCameraPosition);
@@ -33,10 +181,123 @@ static Fmatrix scope_visibility_transform() {
     return transform;
 }
 
+// Written by Ivan Danko, 2026-11-17: FPS plan step 2b "particles on all cores" ( "mt_particles", on by
+// default, xrEngine\xr_ioc_cmd.cpp ). A view no longer updates and hands over each particle effect the
+// moment it meets it: it collects them, and after its walk over the objects updates all of them in one
+// batch on the task system's workers and on this thread ( xrCore\xrTasks.h ), then hands them to the
+// render as before. Each effect is updated at most once a frame ( the stamp on its visual ): the zfill,
+// main, transparent and 3D scope lens views and the shadow passes ( r__dsgraph_render.cpp ) share that
+// update. Kept on this thread, after the batch: groups that start child effects ( they create and
+// delete effects ) and effects that collide with the world ( the collision query is not made for many
+// threads ). The update itself is the game's ( xrGame\ParticlesObject.cpp, BatchUpdate ), which also
+// leaves these effects out of its scheduler. "mt_particles 0" = every effect is updated where it is
+// met, as before.
+// Створено (Ivan Danko, 2026-11-17): крок 2б плану FPS "частинки на всіх ядрах" ( "mt_particles",
+// увімкнено за замовчуванням, xrEngine\xr_ioc_cmd.cpp ). Вид більше не оновлює й не передає кожен
+// ефект частинок тієї миті, коли його зустрічає: він їх збирає, а після обходу об'єктів оновлює всі
+// однією пачкою в робочих потоках системи задач і в цьому потоці ( xrCore\xrTasks.h ), потім передає
+// їх рендеру, як раніше. Кожен ефект оновлюється щонайбільше раз на кадр ( позначка на його візуалі ):
+// види zfill, основний, прозорий і лінзи 3D-приціла та проходи тіней ( r__dsgraph_render.cpp ) ділять
+// це оновлення. У цьому потоці, після пачки, лишаються: групи, що запускають дочірні ефекти ( вони
+// створюють і видаляють ефекти ), та ефекти, що стикаються зі світом ( запит зіткнень не розрахований
+// на багато потоків ). Саме оновлення - гри ( xrGame\ParticlesObject.cpp, BatchUpdate ), яка також не
+// оновлює ці ефекти у своєму планувальнику. "mt_particles 0" = кожен ефект оновлюється там, де його
+// зустріли, як раніше.
+extern thread_local bool r4_ps_batch_thread; // ParticleEffect.cpp
+
+// the batch is on: the switch and the game's entry
+bool r4_ps_batch_on() { return g_ps_batch_update && psDeviceFlags.test(mtParticles); }
+
+// a particle effect or group ( the objects of the batch )
+bool r4_ps_batch_is(IRenderable* renderable) {
+    dxRender_Visual* visual = (dxRender_Visual*)renderable->renderable.visual;
+    return visual && (visual->Type == MT_PARTICLE_EFFECT || visual->Type == MT_PARTICLE_GROUP);
+}
+
+namespace {
+// an effect whose update has to stay on this thread ( see above )
+bool r4_ps_batch_main_only(dxRender_Visual* visual) {
+    if (visual->Type == MT_PARTICLE_EFFECT) {
+        const PS::CPEDef* def = static_cast<PS::CParticleEffect*>(visual)->GetDefinition();
+        return !def || def->m_Flags.is(PS::CPEDef::dfCollision);
+    }
+    const PS::CParticleGroup* group = static_cast<PS::CParticleGroup*>(visual);
+    const PS::CPGDef* def = group->GetDefinition();
+    if (!def)
+        return true;
+    for (const PS::CPGDef::SEffect* effect : def->m_Effects)
+        if (effect->m_Flags.is_any(PS::CPGDef::SEffect::flOnPlayChild |
+                                   PS::CPGDef::SEffect::flOnBirthChild |
+                                   PS::CPGDef::SEffect::flOnDeadChild))
+            return true;
+    for (const PS::CParticleGroup::SItem& item : group->items) {
+        if (!item._children_related.empty() || !item._children_free.empty())
+            return true;
+        if (!item._effect)
+            continue;
+        const PS::CPEDef* item_def =
+            static_cast<PS::CParticleEffect*>(item._effect)->GetDefinition();
+        if (item_def && item_def->m_Flags.is(PS::CPEDef::dfCollision))
+            return true;
+    }
+    return false;
+}
+
+xr_vector<IRenderable*> r4_ps_batch_workers; // this call's effects for all cores
+xr_vector<IRenderable*> r4_ps_batch_main;    // this call's effects for this thread
+xr_vector<IRenderable*> r4_ps_view;          // render_main: the view's effects
+} // namespace
+
+// the update batch of the effects met ( each once a frame ); on the main thread
+void r4_ps_batch_update(const xr_vector<IRenderable*>& list) {
+    const u32 frame = Device.dwFrame;
+    r4_ps_batch_workers.clear();
+    r4_ps_batch_main.clear();
+    for (IRenderable* renderable : list) {
+        dxRender_Visual* visual = (dxRender_Visual*)renderable->renderable.visual;
+        dxParticleCustom* particles = static_cast<dxParticleCustom*>(visual);
+        if (particles->ps_batch_frame == frame)
+            continue; // taken this frame already ( an earlier view, or met twice )
+        particles->ps_batch_frame = frame;
+        (r4_ps_batch_main_only(visual) ? r4_ps_batch_main : r4_ps_batch_workers)
+            .push_back(renderable);
+    }
+    if (r4_ps_batch_workers.empty() && r4_ps_batch_main.empty())
+        return;
+    const u64 start = frame_part_begin();
+    std::atomic<u32> updated(0);
+    const u32 count = u32(r4_ps_batch_workers.size());
+    u32 grain = count / (xrTasks::Slots() * 8);
+    if (grain < 4)
+        grain = 4;
+    xrTasks::ParallelFor(count, grain, [&updated](u32 begin, u32 end) {
+        const bool was = r4_ps_batch_thread;
+        r4_ps_batch_thread = true;
+        u32 done = 0;
+        for (u32 i = begin; i < end; ++i)
+            if (g_ps_batch_update(r4_ps_batch_workers[i]))
+                ++done;
+        r4_ps_batch_thread = was;
+        if (done)
+            updated.fetch_add(done, std::memory_order_relaxed);
+    });
+    u32 total = updated.load(std::memory_order_relaxed);
+    for (IRenderable* renderable : r4_ps_batch_main)
+        if (g_ps_batch_update(renderable))
+            ++total;
+    if (start)
+        frame_part_add_n(FP_PARTICLES, frame_part_now() - start, total);
+}
+
 void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
     PIX_EVENT(render_main);
     //	Msg						("---begin");
     marker++;
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - this view's far small limits ( the main
+    // calc counts what is cut )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - межі дрібного далекого для цього
+    // виду ( основний розрахунок рахує відкинуте )
+    far_cut_begin(_fportals);
 
     // Calculate sector(s) and their objects
     if (pLastSector) {
@@ -98,6 +359,11 @@ void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
             }
         }
 
+        // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - the view's particle effects wait for one
+        // update batch after this walk ( r4_ps_batch_update above )
+        // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - ефекти частинок виду чекають на одну
+        // пачку оновлення після цього обходу ( r4_ps_batch_update вище )
+        const bool ps_batch = r4_ps_batch_on();
         // Traverse frustums
         for (u32 o_it = 0; o_it < lstRenderables.size(); o_it++) {
             ISpatial* spatial = lstRenderables[o_it];
@@ -130,13 +396,24 @@ void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
                     // renderable
                     IRenderable* renderable = spatial->dcast_Renderable();
                     VERIFY(renderable);
+                    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - far small ( r__far_cull )
+                    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - дрібне далеке
+                    // ( r__far_cull )
+                    if (far_cut_renderable(renderable, spatial))
+                        break; // exit loop on frustums
 
                     // Occlusion
                     //	casting is faster then using getVis method
                     vis_data& v_orig = ((dxRender_Visual*)renderable->renderable.visual)->vis;
                     vis_data v_copy = v_orig;
                     v_copy.box.xform(renderable->renderable.xform);
-                    BOOL bVisible = HOM.visible(v_copy);
+                    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the transparent pass takes
+                    // this frame's occlusion result ( r__occlusion_ext )
+                    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - прохід прозорого
+                    // бере результат перевірки перекриття цього кадру ( r__occlusion_ext )
+                    BOOL bVisible = (vis_forward_pass && ps_r__occlusion_ext)
+                                        ? forward_visible(HOM, v_copy)
+                                        : HOM.visible(v_copy);
                     v_orig.marker = v_copy.marker;
                     v_orig.accept_frame = v_copy.accept_frame;
                     v_orig.hom_frame = v_copy.hom_frame;
@@ -144,6 +421,13 @@ void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
                     if (!bVisible)
                         break; // exit loop on frustums
 
+                    // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - a particle effect waits for the
+                    // batch
+                    // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - ефект частинок чекає на пачку
+                    if (ps_batch && r4_ps_batch_is(renderable)) {
+                        r4_ps_view.push_back(renderable);
+                        break; // exit loop on frustums
+                    }
                     // Rendering
                     set_Object(renderable);
                     renderable->renderable_Render();
@@ -152,6 +436,19 @@ void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
                 break; // exit loop on frustums
             }
         }
+        // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - the view's particle effects: one update
+        // batch on all cores, then into the render as before, in the order met
+        // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - ефекти частинок виду: одна пачка
+        // оновлення на всіх ядрах, потім у рендер, як раніше, у порядку зустрічі
+        if (!r4_ps_view.empty()) {
+            r4_ps_batch_update(r4_ps_view);
+            for (IRenderable* renderable : r4_ps_view) {
+                set_Object(renderable);
+                renderable->renderable_Render();
+                set_Object(0);
+            }
+            r4_ps_view.clear();
+        }
         if (g_pGameLevel && (phase == PHASE_NORMAL) && !Device.scopeLensPass)
             g_hud->Render_Last(); // HUD
     } else {
@@ -159,6 +456,11 @@ void CRender::render_main(Fmatrix& m_ViewProjection, bool _fportals) {
         if (g_pGameLevel && (phase == PHASE_NORMAL) && !Device.scopeLensPass)
             g_hud->Render_Last(); // HUD
     }
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the limits end with this view ( the
+    // shadow passes never cut )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - межі закінчуються з цим видом
+    // ( проходи тіней ніколи не відкидають )
+    far_cut_end();
 }
 
 void CRender::render_menu() {
@@ -260,7 +562,28 @@ void CRender::Render() {
         HOM.Enable();
         HOM.Render(ViewBase);
     } else if (Device.scopeLensPass) {
-        HOM.Disable();
+        // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the 3D scope lens view tests against
+        // the main view's buffer of this frame ( the same eye ) and keeps the main view's state
+        // ( r__occlusion_ext; 0 = off, as before ). Its lights switch the test off below, so the
+        // main view switches it back on.
+        // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - вид лінзи 3D-прицілу
+        // перевіряється по буферу основного виду цього кадру ( те саме око ) і не змінює стану
+        // основного виду ( r__occlusion_ext; 0 = вимкнено, як раніше ). Його світло нижче вимикає
+        // перевірку, тож основний вид вмикає її знову.
+        if (ps_r__occlusion_ext) {
+            HOM.EnableFrame();
+            CHOM::SetLensView(true);
+        } else
+            HOM.Disable();
+        lens_hom_frame = Device.dwFrame;
+    } else if (lens_hom_frame == Device.dwFrame) {
+        // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the main view after the 3D scope lens
+        // pass gets its occlusion test back, as in a frame without the lens ( it stayed off while
+        // aiming )
+        // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - основний вид після проходу
+        // лінзи 3D-прицілу отримує перевірку перекриття назад, як у кадрі без лінзи ( під час
+        // прицілювання вона лишалася вимкненою )
+        HOM.EnableFrame();
     }
 
     //******* Z-prefill calc - DEFERRER RENDERER
@@ -288,6 +611,11 @@ void CRender::Render() {
     } else {
         Target->phase_scene_prepare();
     }
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the render parts ( "cpu_frame_stats
+    // 1", r4_frame_parts.h ): visibility, HOM and the z-prefill end here
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини рендеру ( "cpu_frame_stats
+    // 1", r4_frame_parts.h ): тут закінчуються видимість, HOM і попереднє заповнення глибини
+    r4_frame_parts_mark(R4P_VISIBILITY);
 
     //*******
     // Sync point
@@ -313,6 +641,10 @@ void CRender::Render() {
     // CHK_DX
     // (q_sync_point[q_sync_count]->Issue(D3DISSUE_END));
     CHK_DX(EndQuery(q_sync_point[q_sync_count]));
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the wait for the GPU ends here
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - тут закінчується очікування
+    // відеокарти
+    r4_frame_parts_mark(R4P_GPU_WAIT);
 
     //******* Main calc - DEFERRER RENDERER
     // Main calc
@@ -327,6 +659,11 @@ void CRender::Render() {
     set_Recorder(NULL);
     r_pmask(true, false); // disable priority "1"
     Device.Statistic->RenderCALC.End();
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the main calc ends here
+    // ( visibility )
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - тут закінчується основний
+    // розрахунок ( видимість )
+    r4_frame_parts_mark(R4P_VISIBILITY);
 
     // SSFX: clear the motion vectors buffer and fill it with the sky motion. The G-buffer and
     // forward passes write the geometry on top of it.
@@ -358,8 +695,14 @@ void CRender::Render() {
             r_dsgraph_render_hud();
         r_dsgraph_render_graph(0);
         r_dsgraph_render_lods(true, true);
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the scene so far, then the
+        // grass
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - сцена до цього місця, потім
+        // трава
+        r4_frame_parts_mark(R4P_SCENE);
         if (Details)
             Details->Render();
+        r4_frame_parts_mark(R4P_GRASS);
         Target->phase_scene_end();
     } else {
         PIX_EVENT(DEFER_PART0_SPLIT);
@@ -452,8 +795,14 @@ void CRender::Render() {
         if (!Device.scopeLensPass)
             r_dsgraph_render_hud();
         r_dsgraph_render_lods(true, true);
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the scene so far, then the
+        // grass
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - сцена до цього місця, потім
+        // трава
+        r4_frame_parts_mark(R4P_SCENE);
         if (Details)
             Details->Render();
+        r4_frame_parts_mark(R4P_GRASS);
         Target->phase_scene_end();
     }
 
@@ -471,7 +820,13 @@ void CRender::Render() {
     }
 
     // Update incremental shadowmap-visibility solver
-    {
+    // Edited by Ivan Danko, 2026-11-14: not in the 3D scope lens pass - the list holds the main
+    // view's lamps, and only the main view's next pass reads their shadow tests (testQ_frame);
+    // reading and clearing it here lost those queries for good ("Too many occlusion queries").
+    // Змінено (Ivan Danko, 2026-11-14): не в проході 3D-лінзи - у списку ліхтарі основного кадру,
+    // і їхні перевірки тіні читає лише наступний прохід основного кадру (testQ_frame); читання й
+    // очищення тут губило ці запити назавжди ("Too many occlusion queries").
+    if (!Device.scopeLensPass) {
         PIX_EVENT(DEFER_FLUSH_OCCLUSION);
         u32 it = 0;
         for (it = 0; it < Lights_LastFrame.size(); it++) {
@@ -497,6 +852,12 @@ void CRender::Render() {
         PIX_EVENT(DEFER_RAIN);
         render_rain();
     }
+
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the rest of the scene ends here
+    // ( the light tests, the wallmarks, the rain )
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - тут закінчується решта сцени
+    // ( перевірки світла, сліди на стінах, дощ )
+    r4_frame_parts_mark(R4P_SCENE);
 
     // Screen Space Shaders: contact shadows for the sun and for the eight nearest shadow casting
     // lights. They run before the lighting, so the matrix pair that phase_combine normally
@@ -543,6 +904,9 @@ void CRender::Render() {
             }
         }
     }
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the contact shadows end here
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - тут закінчуються контактні тіні
+    r4_frame_parts_mark(R4P_SSS);
 
     // Directional light - fucking sun
     if (bSUN) {
@@ -557,6 +921,9 @@ void CRender::Render() {
         }
         Target->accum_direct_blend();
     }
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the sun ends here
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - тут закінчується сонце
+    r4_frame_parts_mark(R4P_SUN);
 
     {
         PIX_EVENT(DEFER_SELF_ILLUM);
@@ -588,6 +955,10 @@ void CRender::Render() {
                         !RImplementation.o.dx10_msaa ? HW.pBaseZB : Target->rt_MSAADepth->pZRT);
         RImplementation.r_dsgraph_render_emissive(true, true);
     }
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the emissive geometry ends here
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - тут закінчується геометрія, що
+    // світиться
+    r4_frame_parts_mark(R4P_EMISSIVE);
 
     // Lighting, non dependant on OCCQ
     {
@@ -607,12 +978,20 @@ void CRender::Render() {
     // have been accumulated, before the combine reads it.
     if (RImplementation.o.ssfx_volumetric)
         Target->phase_ssfx_volumetric_blur();
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the lights end here
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - тут закінчуються джерела світла
+    r4_frame_parts_mark(R4P_LIGHTS);
 
     // Postprocess
     {
         PIX_EVENT(DEFER_LIGHT_COMBINE);
         Target->phase_combine();
     }
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the post-process ends here
+    // ( phase_combine marks its own parts )
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - тут закінчується
+    // постобробка ( phase_combine позначає свої частини сам )
+    r4_frame_parts_mark(R4P_POST);
 
     // Screen Space Shaders. Monolith r4_R_render.cpp:652-653. Puts the grass fade distance back
     // after the shadow passes moved it, and drops the visibility lists those passes kept alive.
@@ -621,8 +1000,19 @@ void CRender::Render() {
     if (Details && !Device.scopeLensPass)
         Details->details_clear();
 
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the view reached its end: its
+    // parts count ( the lens view as one part )
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - вид дійшов до кінця: його
+    // частини зараховуються ( вид лінзи - як одна частина )
+    r4_frame_parts_pass_end();
     if (Device.scopeLensPass)
         m_bScopeLensRendered = true;
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the lens view ends here; what this view cut
+    // ( "cpu_frame_stats 1" )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - вид лінзи тут закінчується; що цей
+    // вид відкинув ( "cpu_frame_stats 1" )
+    CHOM::SetLensView(false);
+    vis_cut_view_end(Device.scopeLensPass);
 
     VERIFY(0 == mapDistort.size());
 }
@@ -648,7 +1038,11 @@ void CRender::render_forward() {
         r_pmask(false, true); // enable priority "1"
         phase = PHASE_NORMAL;
         Fmatrix visibility_transform = scope_visibility_transform();
+        // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the transparent pass ( forward_visible )
+        // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - прохід прозорого ( forward_visible )
+        vis_forward_pass = true;
         render_main(visibility_transform, false); //
+        vis_forward_pass = false;
         //	Igor: we don't want to render old lods on next frame.
         mapLOD.clear();
         r_dsgraph_render_graph(1);                     // normal level, secondary priority

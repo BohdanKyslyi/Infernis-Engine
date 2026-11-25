@@ -9,6 +9,11 @@ class CParticlesObject : public CPS_Instance {
     typedef CPS_Instance inherited;
 
     u32 dwLastTime;
+    // Written by Ivan Danko, 2026-11-17: FPS plan step 2b - the frame the DX11 render's update batch last
+    // took this effect ( 0 = never; see BatchUpdate )
+    // Створено (Ivan Danko, 2026-11-17): крок 2б плану FPS - кадр, у якому пачка оновлення рендера DX11
+    // востаннє взяла цей ефект ( 0 = ніколи; див. BatchUpdate )
+    u32 m_batch_frame;
     void Init(LPCSTR p_name, IRender_Sector* S, BOOL bAutoRemove);
     void UpdateSpatial();
 
@@ -31,6 +36,11 @@ public:
     virtual void renderable_Render();
     void PerformAllTheWork(u32 dt);
     void __stdcall PerformAllTheWork_mt();
+    // Written by Ivan Danko, 2026-11-17: FPS plan step 2b - the update the DX11 render runs for this effect
+    // in its batch on all cores ( xrRenderPC_R4\r4_R_render.cpp ); true = it ran.
+    // Створено (Ivan Danko, 2026-11-17): крок 2б плану FPS - оновлення, яке рендер DX11 запускає для
+    // цього ефекту у своїй пачці на всіх ядрах ( xrRenderPC_R4\r4_R_render.cpp ); true = виконано.
+    bool BatchUpdate();
 
     Fvector& Position();
     void SetXFORM(const Fmatrix& m);
@@ -46,6 +56,11 @@ public:
     bool IsAutoRemove();
     bool IsPlaying();
     void SetAutoRemove(bool auto_remove);
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - switches the HUD mode of the effect on or off
+    // (Monolith ParticlesObject.h; the Lua function set_hud_mode).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - вмикає або вимикає режим HUD ефекту
+    // (Monolith ParticlesObject.h; функція Lua set_hud_mode).
+    void SetHudMode(bool bHudMode);
 
     const shared_str Name();
 

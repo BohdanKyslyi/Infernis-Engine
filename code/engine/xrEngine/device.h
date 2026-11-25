@@ -264,7 +264,14 @@ public:
         TimerGlobal.time_factor(time_factor);
     }
 
-    IC const float& time_factor() const {
+    // Edited by Ivan Danko, 2026-11-24: returns the value instead of a reference.
+    // CTimer::time_factor() returns a float by value, so the reference pointed to a temporary
+    // destroyed on return (MSVC C4172, a dangling reference). The callers only read the number.
+    // Змінено (Ivan Danko, 2026-11-24): повертається значення замість посилання.
+    // CTimer::time_factor() повертає float за значенням, тому посилання вказувало на тимчасове
+    // число, знищене під час виходу з функції (MSVC C4172, висяче посилання). Місця виклику лише
+    // читають число.
+    IC float time_factor() const {
         VERIFY(Timer.time_factor() == TimerGlobal.time_factor());
         return (Timer.time_factor());
     }

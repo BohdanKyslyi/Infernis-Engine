@@ -36,6 +36,17 @@ void CUIButton::script_register(lua_State* L) {
                   .def("SetCheck", &CUITrackBar::SetCheck)
                   .def("GetIValue", &CUITrackBar::GetIValue)
                   .def("GetFValue", &CUITrackBar::GetFValue)
+                  // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 13
+                  // "Mods" - a script sets the value, step and direction of a slider ( the "Mods"
+                  // window, ui_mods_menu.script )
+                  // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 13
+                  // «Моди» - скрипт задає значення, крок і напрямок повзунка ( вікно «Моди»,
+                  // ui_mods_menu.script )
+                  .def("SetIValue", &CUITrackBar::SetIValue)
+                  .def("SetFValue", &CUITrackBar::SetFValue)
+                  .def("SetStep", &CUITrackBar::SetStep)
+                  .def("GetInvert", &CUITrackBar::GetInvert)
+                  .def("SetInvert", &CUITrackBar::SetInvert)
                   .def("SetOptIBounds", &CUITrackBar::SetOptIBounds)
                   .def("SetOptFBounds", &CUITrackBar::SetOptFBounds)
                   .def("SetCurrentValue", &CUITrackBar::SetCurrentOptValue)];

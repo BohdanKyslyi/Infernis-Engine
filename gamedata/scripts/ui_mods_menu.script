@@ -1,0 +1,805 @@
+-- @ Description: the "Mods" window ( "Моди" )
+-- Written by Ivan Danko, 2026-11-18: item 13 "Mods" - the window of the settings of the addons in
+--   the addons folder that have settings of their own. An addon is listed when its root folder
+--   holds mod_settings.ltx: the engine puts that file into the index as
+--   configs\mod_settings\<addon folder>.ltx ( LocatorAPI.cpp, ScanAddonDirectory ). Our own
+--   window; its look and its code follow our "Engine settings" and "SSS Settings" windows
+--   ( ui_cpu_menu.script, ui_sss_menu.script ). It replaces the "Wind Leaves Settings" window of
+--   Weather_ATMOS: Wind Leaves comes in through that addon's mod_settings.ltx.
+-- Створено (Ivan Danko, 2026-11-18): пункт 13 «Моди» - вікно налаштувань аддонів із теки addons,
+--   що мають власні налаштування. Аддон потрапляє до списку, коли в його кореневій теці лежить
+--   mod_settings.ltx: рушій заносить цей файл до індексу як configs\mod_settings\<тека аддона>.ltx
+--   ( LocatorAPI.cpp, ScanAddonDirectory ). Вікно наше власне; його вигляд і код повторюють наші
+--   вікна "Налаштування рушія" і "SSS Settings" ( ui_cpu_menu.script, ui_sss_menu.script ). Воно
+--   замінює вікно "Wind Leaves Settings" аддона Weather_ATMOS: Wind Leaves потрапляє сюди через
+--   mod_settings.ltx цього аддона.
+-- Edited by Ivan Danko, 2026-11-18, on the user's word: the left side has one line per addon, and a
+--   click on it shows all the addon's settings on the right, the title of each group as a heading
+--   above its settings - as the page of Wind Leaves in Anomaly's MCM ( wind_leaves_mcm.script ).
+--   It was a line per group, as the modules of the "SSS Settings" window.
+-- Змінено (Ivan Danko, 2026-11-18) за вказівкою користувача: ліворуч - один рядок на аддон, а
+--   натискання на нього показує праворуч усі налаштування аддона, назву кожної групи заголовком
+--   над її налаштуваннями - як сторінка Wind Leaves у MCM Anomaly ( wind_leaves_mcm.script ).
+--   Було: рядок на кожну групу, як модулі вікна "SSS Settings".
+
+--[[
+	The "Mods" button of the video page opens it ( OnBtnMods, ui_mm_opt_main.script ): the addons on
+	the left, a line each; a click on one shows all its settings on the right, the title of each of
+	its groups as a heading above that group's settings ( as an addon's page of MCM in Anomaly );
+	under them the description of the setting clicked last.
+
+	What an addon's mod_settings.ltx holds ( the instruction for addon authors,
+	MODS_MENU_INSTRUCTION.md, has a full example ):
+	[mod]       id        the name its values are kept under ( when left out: the name of its key
+	                      file, the addon's folder in lower case )
+	            name      its line on the left and the title of its page: a string id or the text
+	                      itself
+	            hint      shown under the page while no setting is picked ( optional )
+	            groups    its groups: sections, comma separated; the title of each is a heading
+	                      above that group's settings ( optional: without it, the options of [mod]
+	                      and no headings )
+	            options   ( without groups ) its settings: sections, comma separated
+	            on_apply  "script.function", called after "Apply" wrote a change of this addon
+	[<group>]   title     its heading: a string id or the text itself ( the section name when left
+	                      out )
+	            options   its settings: sections, comma separated
+	[<option>]  type      check | list | track
+	            text      its caption: a string id or the text itself
+	            hint      its description ( optional )
+	            lines     lines of caption, 1 to 3 ( 1 when left out )
+	            default   what it is before the player changes it, and what "Defaults" sets
+	            restart   1 = it takes effect after a restart ( marked * )
+	            command   a console command of the engine that keeps the value ( optional )
+	            items     list: its values, comma separated
+	            texts     list: their string ids, comma separated ( the items when left out )
+	            min, max, step   track: its range and its step ( step 0.1 when left out )
+
+	Where a value is kept: an option with a command keeps it in the console ( "Apply" writes it and
+	saves the console, as the other windows do ); any other in userdata\user_mods.ltx, under
+	[<mod id>] as <option> = <value>, and the addon reads it with ui_mods_menu.get_value( mod id,
+	option ) - the way Anomaly's addons read MCM. Nothing is stored before "Apply": the default of
+	the ltx holds until then.
+
+	A setting is left out, with a line in the log ( "! [Mods] ..." ), when its section is missing,
+	its type is none of the three, its console command does not exist, a list has no items or a
+	slider no range; a group with nothing left to show is left out with its heading; an addon with
+	nothing left to show is not listed.
+
+	The window opens and closes the way the "Engine settings" window does: the options dialog steps
+	aside while it is up and takes the screen back when it closes; "Apply" leaves for the main
+	menu, as the options dialog's own "Apply" does. Every control shows the kept value when the
+	window opens; "Defaults" sets the controls of the page on screen to the defaults of the ltx;
+	only "Apply" writes, and only what changed; "Cancel" writes nothing.
+--]]
+
+local MODS_DIR	= "mod_settings\\"	-- under $game_config$: the key files the engine put there
+local STORE		= "user_mods.ltx"	-- under $app_data_root$ ( userdata )
+local LIST_MIN	= 2					-- list_2 .. list_8 in ui_mods_menu.xml: the lines a list opens to
+local LIST_MAX	= 8
+
+local mods		= nil	-- the addons read, in the order of their folders
+local by_id		= nil	-- [ mod id ] = the addon
+local store		= nil	-- [ mod id ] = { [ option ] = value as written }: user_mods.ltx
+
+local function trim(s)
+	s = string.gsub(s, "^%s+", "")
+	s = string.gsub(s, "%s+$", "")
+	return s
+end
+
+-- the words of a comma separated line
+local function split(s)
+	local t = {}
+	if s ~= nil then
+		for w in string.gmatch(s, "[^,]+") do
+			w = trim(w)
+			if w ~= "" then
+				table.insert(t, w)
+			end
+		end
+	end
+	return t
+end
+
+-- A line of the ltx, trimmed; nil when it is missing or empty ( r_string stops the game on a
+-- missing line ).
+local function r_str(ini, sec, line)
+	if ini:line_exist(sec, line) then
+		local v = ini:r_string(sec, line)
+		if v ~= nil then
+			v = trim(v)
+			if v ~= "" then
+				return v
+			end
+		end
+	end
+	return nil
+end
+
+local function warn(file, fmt, ...)
+	printf("! [Mods] " .. file .. ": " .. fmt, ...)
+end
+
+-- the decimals a value of a slider is shown and written with: those of its step
+local function step_digits(step)
+	local d = 0
+	local s = step
+	while d < 4 and math.abs(s - math.floor(s + 0.5)) > 0.000001 do
+		s = s * 10
+		d = d + 1
+	end
+	return d
+end
+
+-- a value of a slider on its range and on its steps
+local function snap(o, v)
+	v = o.min + math.floor((v - o.min) / o.step + 0.5) * o.step
+	if v < o.min then
+		v = o.min
+	elseif v > o.max then
+		v = o.max
+	end
+	return tonumber(string.format("%." .. o.digits .. "f", v))
+end
+
+-- One setting of an addon, from its section; nil, with a line in the log, when it cannot be shown.
+local function read_option(ini, file, sec)
+	if not ini:section_exist(sec) then
+		warn(file, "no section [%s], the setting is left out", sec)
+		return nil
+	end
+	local o = { key = sec }
+	o.kind		= r_str(ini, sec, "type")
+	o.text		= r_str(ini, sec, "text") or sec
+	o.hint		= r_str(ini, sec, "hint")
+	o.cmd		= r_str(ini, sec, "command")
+	o.restart	= r_str(ini, sec, "restart") == "1"
+	o.lines		= math.floor(tonumber(r_str(ini, sec, "lines") or "") or 1)
+	if o.lines < 1 then
+		o.lines = 1
+	elseif o.lines > 3 then
+		o.lines = 3
+	end
+	local def	= r_str(ini, sec, "default")
+
+	if o.cmd ~= nil and get_console():get_string(o.cmd) == nil then
+		warn(file, "[%s]: the console has no command %s, the setting is left out", sec, o.cmd)
+		return nil
+	end
+	if o.kind == "check" then
+		o.def = def == "1" or def == "true" or def == "on"
+	elseif o.kind == "list" then
+		o.items = split(r_str(ini, sec, "items"))
+		if #o.items == 0 then
+			warn(file, "[%s]: a list without items, the setting is left out", sec)
+			return nil
+		end
+		local texts = split(r_str(ini, sec, "texts"))
+		o.texts = {}
+		for i, item in ipairs(o.items) do
+			o.texts[i] = texts[i] or item
+		end
+		o.def = def or o.items[1]
+	elseif o.kind == "track" then
+		o.min = tonumber(r_str(ini, sec, "min") or "")
+		o.max = tonumber(r_str(ini, sec, "max") or "")
+		if o.min == nil or o.max == nil or o.max <= o.min then
+			warn(file, "[%s]: a slider needs min and max, min below max; the setting is left out", sec)
+			return nil
+		end
+		o.step = tonumber(r_str(ini, sec, "step") or "") or 0.1
+		if o.step <= 0 then
+			o.step = 0.1
+		end
+		o.digits = step_digits(o.step)
+		o.def = snap(o, tonumber(def or "") or o.min)
+	else
+		warn(file, "[%s]: type %s is none of check, list, track; the setting is left out", sec, tostring(o.kind))
+		return nil
+	end
+	return o
+end
+
+-- One group of an addon, added to its page: the heading ( title; nil for an addon without groups )
+-- and the settings named in the section's "options". A setting named twice in one addon is left
+-- out the second time: one setting, one control. A group with no setting to show is left out with
+-- its heading.
+local function read_group(ini, file, m, sec, title)
+	local opts = {}
+	for _, s in ipairs(split(r_str(ini, sec, "options"))) do
+		if m.opt[s] ~= nil then
+			warn(file, "[%s] is named twice, the second is left out", s)
+		else
+			local o = read_option(ini, file, s)
+			if o ~= nil then
+				m.opt[s] = o
+				table.insert(opts, o)
+			end
+		end
+	end
+	if #opts == 0 then
+		warn(file, "[%s] has no setting to show, it is left out", sec)
+		return
+	end
+	if title ~= nil then
+		table.insert(m.items, { head = title })
+	end
+	for _, o in ipairs(opts) do
+		table.insert(m.items, { opt = o })
+	end
+	m.count = m.count + #opts
+end
+
+-- One addon, from its key file ( a name of the list of configs\mod_settings ): its page is
+-- m.items, the headings of its groups and its settings in the order of the ltx.
+local function read_mod(file)
+	local ini = ini_file(MODS_DIR .. file)
+	if not ini:section_exist("mod") then
+		warn(file, "no section [mod], the addon is not listed")
+		return nil
+	end
+	local m = { file = file, opt = {}, items = {}, count = 0 }
+	m.id		= r_str(ini, "mod", "id") or (string.gsub(file, "%.ltx$", ""))
+	m.name		= r_str(ini, "mod", "name") or m.id
+	m.hint		= r_str(ini, "mod", "hint")
+	m.on_apply	= r_str(ini, "mod", "on_apply")
+	local groups = split(r_str(ini, "mod", "groups"))
+	if #groups == 0 then
+		read_group(ini, file, m, "mod", nil)
+	else
+		for _, g in ipairs(groups) do
+			if ini:section_exist(g) then
+				read_group(ini, file, m, g, r_str(ini, g, "title") or g)
+			else
+				warn(file, "no section [%s], the group is left out", g)
+			end
+		end
+	end
+	if m.count == 0 then
+		warn(file, "no setting to show, the addon is not listed")
+		return nil
+	end
+	return m
+end
+
+-- The addons, read once: those whose key file the engine has put under configs\mod_settings.
+local function load_mods()
+	if mods ~= nil then
+		return
+	end
+	mods, by_id = {}, {}
+	local fs = getFS()
+	-- file_list_open gives back nothing usable for a folder the index does not have
+	if fs:exist("$game_config$", MODS_DIR) == nil then
+		return
+	end
+	local list = fs:file_list_open("$game_config$", MODS_DIR, FS.FS_ListFiles + FS.FS_RootOnly)
+	local names = {}
+	for i = 0, list:Size() - 1 do
+		local name = list:GetAt(i)
+		if string.find(name, "%.ltx$") then
+			table.insert(names, name)
+		end
+	end
+	list:Free()
+	table.sort(names)
+	for _, name in ipairs(names) do
+		local m = read_mod(name)
+		if m ~= nil then
+			if by_id[m.id] ~= nil then
+				warn(name, "id %s is the one of %s, the addon is not listed", m.id, by_id[m.id].file)
+			else
+				by_id[m.id] = m
+				table.insert(mods, m)
+			end
+		end
+	end
+end
+
+local function store_path()
+	return getFS():update_path("$app_data_root$", STORE)
+end
+
+-- user_mods.ltx, read once: [<mod id>] <option> = <value>
+local function load_store()
+	if store ~= nil then
+		return
+	end
+	store = {}
+	local f = io.open(store_path(), "r")
+	if f == nil then
+		return
+	end
+	local sec = nil
+	for line in f:lines() do
+		line = trim(string.gsub(line, ";.*$", ""))
+		local s = string.match(line, "^%[(.-)%]$")
+		if s ~= nil then
+			sec = trim(s)
+			store[sec] = store[sec] or {}
+		elseif sec ~= nil then
+			local k, v = string.match(line, "^([^=]-)%s*=%s*(.*)$")
+			if k ~= nil and k ~= "" then
+				store[sec][k] = v
+			end
+		end
+	end
+	f:close()
+end
+
+-- user_mods.ltx written anew from what it held and what "Apply" changed: the sections of addons
+-- that are not listed now stay as they were.
+local function save_store()
+	local path = store_path()
+	local f = io.open(path, "w")
+	if f == nil then
+		printf("! [Mods] cannot write %s", path)
+		return
+	end
+	f:write("; The settings of the addons in the \"Mods\" window ( ui_mods_menu.script ) that no console command\n")
+	f:write("; keeps: [<mod id>] <option> = <value>. The window writes this file on \"Apply\".\n")
+	f:write("; Налаштування аддонів у вікні «Моди» ( ui_mods_menu.script ), яких не зберігає жодна команда\n")
+	f:write("; консолі: [<id аддона>] <параметр> = <значення>. Вікно записує цей файл після «Застосувати».\n")
+	local secs = {}
+	for s in pairs(store) do
+		table.insert(secs, s)
+	end
+	table.sort(secs)
+	for _, s in ipairs(secs) do
+		local keys = {}
+		for k in pairs(store[s]) do
+			table.insert(keys, k)
+		end
+		table.sort(keys)
+		if #keys > 0 then
+			f:write("\n[" .. s .. "]\n")
+			for _, k in ipairs(keys) do
+				f:write(k .. " = " .. tostring(store[s][k]) .. "\n")
+			end
+		end
+	end
+	f:close()
+end
+
+-- a value as written ( user_mods.ltx, the console ) as the value of its setting
+local function from_text(o, s)
+	if s == nil then
+		return o.def
+	end
+	if o.kind == "check" then
+		return s == "1" or s == "true" or s == "on"
+	elseif o.kind == "list" then
+		return s
+	end
+	local v = tonumber(s)
+	if v == nil then
+		return o.def
+	end
+	return snap(o, v)
+end
+
+-- the value of a setting as it is written
+local function to_text(o, v)
+	if o.kind == "check" then
+		return v and "1" or "0"
+	elseif o.kind == "track" then
+		return string.format("%." .. o.digits .. "f", v)
+	end
+	return v
+end
+
+-- the kept value of a setting: the console's, or that of user_mods.ltx, or the default
+local function kept(m, o)
+	if o.cmd ~= nil then
+		local c = get_console()
+		if o.kind == "check" then
+			return c:get_bool(o.cmd)
+		end
+		return from_text(o, c:get_string(o.cmd))
+	end
+	load_store()
+	local s = store[m.id]
+	return from_text(o, s and s[o.key])
+end
+
+-- on_apply = "script.function": that function of the addon's script, called without arguments;
+-- an error in it goes to the log and stops nothing else
+local function call_on_apply(m)
+	local s, f = string.match(m.on_apply, "^([%w_]+)%.([%w_]+)$")
+	if s == nil then
+		warn(m.file, "on_apply %s is not script.function", m.on_apply)
+		return
+	end
+	local ok, err = pcall(function()
+		local t = _G[s]
+		if type(t) ~= "table" or type(t[f]) ~= "function" then
+			error("there is no such function")
+		end
+		t[f]()
+	end)
+	if not ok then
+		warn(m.file, "on_apply %s: %s", m.on_apply, tostring(err))
+	end
+end
+
+-- The value of an addon's setting, for the addon's own scripts ( as MCM's get_config in Anomaly ):
+-- a boolean ( check ), a string ( list ) or a number ( track ); the default of its
+-- mod_settings.ltx while nothing has been applied; nil for an addon or a setting the window does
+-- not know ( its key file is not in the game, or the setting was left out: the log says why ).
+function get_value(mod_id, option)
+	load_mods()
+	local m = by_id[mod_id]
+	local o = m and m.opt[option]
+	if o == nil then
+		return nil
+	end
+	return kept(m, o)
+end
+
+class "mods_menu" (CUIScriptWnd)
+
+function mods_menu:__init() super()
+	self.row		= {}	-- [ k ] = { mod, opt, page, sel, cap, ctrl, num, value, shown }: a setting
+	self.page		= {}	-- [ n ] = the scroll view of the settings of addon n
+	self.mark		= {}	-- [ n ] = the plate behind its line on the left
+	self.btn		= {}	-- [ n ] = its line, a button
+	self.info		= {}	-- [ n ] = { mod, rows, restart, described }
+	self.pages		= 0
+	self.first		= nil
+	self.current	= nil
+	self.selected	= nil
+	-- while the window itself moves the controls ( opening, "Defaults" ), their messages pick no row
+	self.loading	= true
+	self:InitControls()
+	self:InitCallBacks()
+	self.loading	= false
+end
+
+function mods_menu:__finalize()
+end
+
+function mods_menu:InitControls()
+	self:SetWndRect			(Frect():set(0, 0, 1024, 768))
+	self:Enable				(true)
+
+	local xml				= CScriptXmlInit()
+	xml:ParseFile			("ui_mods_menu.xml")
+	-- kept: the description is built again from its node each time another setting is picked
+	self.xml				= xml
+
+	xml:InitStatic			("background", self)
+	self.form				= xml:InitStatic("form", self)
+	xml:InitStatic			("form:caption", self.form)
+	xml:InitFrame			("form:mod_frame", self.form)
+	self.mod_list			= xml:InitScrollView("form:mod_list", self.form)
+	xml:InitFrame			("form:page_frame", self.form)
+	self.page_title			= xml:InitTextWnd("form:page_title", self.form)
+	xml:InitFrame			("form:desc_frame", self.form)
+	self.desc				= xml:InitScrollView("form:desc", self.form)
+	self.legend				= xml:InitTextWnd("form:legend", self.form)
+
+	local btn
+	btn = xml:Init3tButton	("form:btn_reset", self.form)
+	self:Register			(btn, "btn_reset")
+	btn = xml:Init3tButton	("form:btn_apply", self.form)
+	self:Register			(btn, "btn_apply")
+	btn = xml:Init3tButton	("form:btn_cancel", self.form)
+	self:Register			(btn, "btn_cancel")
+
+	-- a line per addon on the left, and its page with all its settings on the right
+	load_mods()
+	for n, m in ipairs(mods) do
+		local line = xml:InitStatic("tpl:mod_row", self.mod_list)
+		local mark = xml:InitStatic("tpl:mod_sel", line)
+		mark:Show(false)
+		local b = xml:Init3tButton("tpl:mod_btn", line)
+		b:TextControl():SetTextST(m.name)
+		self:Register(b, "pg_" .. n)
+		self.mark[n] = mark
+		self.btn[n] = b
+		self.info[n] = { mod = m, rows = {} }
+		self.pages = n
+		if self.first == nil then
+			self.first = n
+		end
+		self:BuildPage(xml, n)
+	end
+end
+
+-- One addon's page: its settings in the order of its ltx, the title of each of its groups as a
+-- heading row above that group's settings ( tpl:head_row, tpl:head ). A setting's row holds the
+-- highlight, the caption, the control and, for a slider, its number. Each kind of control comes
+-- from one node ( tpl:check, tpl:track, tpl:list_<lines it opens to> ); here it is put half way
+-- down its row of one, two or three lines.
+function mods_menu:BuildPage(xml, n)
+	local page = xml:InitScrollView("form:page", self.form)
+	page:Show(false)
+	self.page[n] = page
+	local info = self.info[n]
+
+	for _, item in ipairs(info.mod.items) do
+		if item.head ~= nil then
+			local head = xml:InitStatic("tpl:head_row", page)
+			xml:InitTextWnd("tpl:head", head):SetTextST(item.head)
+		else
+			local o = item.opt
+			local lines = o.lines
+			local row = xml:InitStatic("tpl:row_" .. lines, page)
+			local k = #self.row + 1
+			local c = { mod = info.mod, opt = o, page = n }
+			c.sel = xml:InitStatic("tpl:sel_" .. lines, row)
+			c.sel:Show(false)
+			c.cap = xml:Init3tButton("tpl:cap_" .. lines, row)
+			local text = game.translate_string(o.text)
+			if o.restart then
+				text = text .. " *"
+				info.restart = true
+			end
+			if o.hint ~= nil then
+				info.described = true
+			end
+			c.cap:TextControl():SetText(text)
+			self:Register(c.cap, "c_" .. k)
+
+			if o.kind == "check" then
+				c.ctrl = xml:InitCheck("tpl:check", row)
+			elseif o.kind == "list" then
+				c.ctrl = xml:InitComboBox("tpl:list_" .. math.min(math.max(#o.items, LIST_MIN), LIST_MAX), row)
+			else
+				c.ctrl = xml:InitTrackBar("tpl:track", row)
+				c.ctrl:SetOptFBounds(o.min, o.max)
+				c.ctrl:SetStep(o.step)
+				c.num = xml:InitTextWnd("tpl:num_" .. lines, row)
+			end
+			local pos = c.ctrl:GetWndPos()
+			c.ctrl:SetWndPos(vector2():set(pos.x, math.floor((row:GetHeight() - c.ctrl:GetHeight()) / 2)))
+			self:Register(c.ctrl, "v_" .. k)
+			self.row[k] = c
+			table.insert(info.rows, k)
+		end
+	end
+end
+
+function mods_menu:InitCallBacks()
+	self:AddCallback("btn_apply",	ui_events.BUTTON_CLICKED,	self.OnBtnApply,	self)
+	self:AddCallback("btn_cancel",	ui_events.BUTTON_CLICKED,	self.OnBtnCancel,	self)
+	self:AddCallback("btn_reset",	ui_events.BUTTON_CLICKED,	self.OnBtnReset,	self)
+
+	for n = 1, self.pages do
+		self:AddCallback("pg_" .. n, ui_events.BUTTON_CLICKED, function() self:ShowPage(n) end, self)
+	end
+	for k, c in ipairs(self.row) do
+		self:AddCallback("c_" .. k, ui_events.BUTTON_CLICKED, function() self:OnPick(k) end, self)
+		if c.opt.kind == "check" then
+			self:AddCallback("v_" .. k, ui_events.BUTTON_CLICKED, function() self:OnPick(k) end, self)
+		elseif c.opt.kind == "list" then
+			self:AddCallback("v_" .. k, ui_events.LIST_ITEM_SELECT, function() self:OnPick(k) end, self)
+		else
+			self:AddCallback("v_" .. k, ui_events.BUTTON_CLICKED, function() self:OnTrack(k) end, self)
+		end
+	end
+end
+
+-- Opening, from OnBtnMods of the options dialog: every control shows the kept value of its
+-- setting, which is what "Apply" compares with.
+function mods_menu:Open()
+	self.loading = true
+	for _, c in ipairs(self.row) do
+		c.value = kept(c.mod, c.opt)
+		self:SetControl(c, c.value)
+	end
+	self.loading = false
+
+	if self.first ~= nil then
+		self:ShowPage(self.current or self.first)
+	else
+		self.page_title:SetTextST("ui_mods_title")
+		self.legend:Show(false)
+		self:ShowText(game.translate_string("ui_mods_none"))
+	end
+	self:ShowDialog(true)
+end
+
+function mods_menu:Close()
+	self.owner:ShowDialog(true)
+	self:HideDialog()
+	self.owner:Show(true)
+end
+
+-- "Apply" leaves for the main menu, as the options dialog's own "Apply" does: the options dialog
+-- stepped aside when this window opened ( OnBtnMods ), so the main menu is the one to bring back.
+function mods_menu:CloseToMain()
+	local main = self.owner.owner
+	main:ShowDialog(true)
+	self:HideDialog()
+	main:Show(true)
+end
+
+-- The line of the addon on screen has the plate behind it and is switched off, as in the "SSS
+-- Settings" window ( the "disabled" colour of its text is the one a script can keep ).
+function mods_menu:ShowPage(n)
+	if self.current ~= nil then
+		self.page[self.current]:Show(false)
+		self.mark[self.current]:Show(false)
+		self.btn[self.current]:Enable(true)
+	end
+	self.current = n
+	self.page[n]:Show(true)
+	self.page[n]:ScrollToBegin()
+	self.mark[n]:Show(true)
+	self.btn[n]:Enable(false)
+	local info = self.info[n]
+	self.page_title:SetTextST(info.mod.name)
+	self.legend:Show(info.restart == true)
+	self:SelectRow(nil)
+end
+
+-- The row clicked last has the highlight behind it and its description under the page. With no
+-- row picked the box shows the hint of the addon, or how to get a description when a setting of
+-- the page has one.
+function mods_menu:SelectRow(k)
+	if self.selected ~= nil then
+		self.row[self.selected].sel:Show(false)
+	end
+	self.selected = k
+	if k ~= nil then
+		local c = self.row[k]
+		c.sel:Show(true)
+		self:ShowText(c.opt.hint and game.translate_string(c.opt.hint) or "")
+		return
+	end
+	local info = self.info[self.current]
+	if info.mod.hint ~= nil then
+		self:ShowText(game.translate_string(info.mod.hint))
+	elseif info.described then
+		self:ShowText(game.translate_string("ui_sss_hint"))
+	else
+		self:ShowText("")
+	end
+end
+
+-- The description box: a scroll view holding one text, built anew so it takes the height of the
+-- new text ( the scroll view measures its items when it is next drawn or scrolled ).
+function mods_menu:ShowText(text)
+	self.desc:Clear()
+	local t = self.xml:InitTextWnd("tpl:desc_text", self.desc)
+	t:SetText(text)
+	t:AdjustHeightToText()
+	self.desc:ScrollToBegin()
+end
+
+function mods_menu:OnPick(k)
+	if not self.loading and self.selected ~= k then
+		self:SelectRow(k)
+	end
+end
+
+function mods_menu:OnTrack(k)
+	self:UpdateNumber(self.row[k])
+	self:OnPick(k)
+end
+
+function mods_menu:UpdateNumber(c)
+	c.num:SetText(to_text(c.opt, snap(c.opt, c.ctrl:GetFValue())))
+end
+
+-- A control shows a value: the check box ticked or not; the list its entry, picked in the list
+-- too ( a value no entry has is shown as it is, as the "Engine settings" window does, and then
+-- nothing is picked ); the slider its place and its number.
+function mods_menu:SetControl(c, v)
+	local o = c.opt
+	if o.kind == "check" then
+		c.ctrl:SetCheck(v == true)
+	elseif o.kind == "list" then
+		c.shown = v
+		c.ctrl:ClearList()
+		for i, t in ipairs(o.texts) do
+			c.ctrl:AddItem(t, i)
+		end
+		local shown = v
+		for i, item in ipairs(o.items) do
+			if item == v then
+				c.ctrl:SetCurrentIdx(i - 1)
+				shown = game.translate_string(o.texts[i])
+				break
+			end
+		end
+		c.ctrl:SetText(shown or "")
+	else
+		c.ctrl:SetFValue(v)
+		self:UpdateNumber(c)
+	end
+end
+
+-- What a control holds now, as the value of its setting. A list gives the entry picked in it last
+-- ( its index in the list box: a pick of the entry already on show sends no message ), or the
+-- value it was given when nothing has been picked.
+function mods_menu:ControlValue(c)
+	local o = c.opt
+	if o.kind == "check" then
+		return c.ctrl:GetCheck()
+	elseif o.kind == "list" then
+		local idx = c.ctrl:GetCurrentIdx()
+		if idx < #o.items then
+			return o.items[idx + 1]
+		end
+		return c.shown
+	end
+	return snap(o, c.ctrl:GetFValue())
+end
+
+-- "Apply": what changed since the window opened is written - a setting with a command to the
+-- console, the others to user_mods.ltx - and the addons with a change hear of it ( on_apply ).
+function mods_menu:OnBtnApply()
+	local con = get_console()
+	local changed = {}
+	local to_console, to_store, restart = false, false, false
+	load_store()
+	for _, c in ipairs(self.row) do
+		local o = c.opt
+		local v = self:ControlValue(c)
+		if v ~= c.value then
+			local text = to_text(o, v)
+			if o.cmd ~= nil then
+				con:execute(o.cmd .. " " .. text)
+				to_console = true
+			else
+				store[c.mod.id] = store[c.mod.id] or {}
+				store[c.mod.id][o.key] = text
+				to_store = true
+			end
+			c.value = v
+			changed[c.mod.id] = true
+			if o.restart then
+				restart = true
+			end
+		end
+	end
+	if to_store then
+		save_store()
+	end
+	if to_console then
+		con:execute("cfg_save")
+	end
+	for _, m in ipairs(mods) do
+		if changed[m.id] and m.on_apply ~= nil then
+			call_on_apply(m)
+		end
+	end
+	self:CloseToMain()
+
+	-- a setting marked * was changed: the message the options dialog shows for its own pages
+	if restart and not self.owner.b_restart_system_shown then
+		self.owner.b_restart_system_shown = true
+		self.owner.message_box:InitMessageBox("message_box_restart_game")
+		self.owner.message_box:ShowDialog(true)
+	end
+end
+
+-- "Cancel": nothing is written; the controls show the kept values again when the window next opens
+function mods_menu:OnBtnCancel()
+	self:Close()
+end
+
+-- "Defaults": the controls of the page on screen show the defaults of the addon's mod_settings.ltx;
+-- only "Apply" writes them
+function mods_menu:OnBtnReset()
+	local n = self.current
+	if n == nil then
+		return
+	end
+	self.loading = true
+	for _, k in ipairs(self.info[n].rows) do
+		local c = self.row[k]
+		self:SetControl(c, c.opt.def)
+	end
+	self.loading = false
+end
+
+function mods_menu:OnKeyboard(dik, keyboard_action)
+	local res = CUIScriptWnd.OnKeyboard(self, dik, keyboard_action)
+	if res == false and keyboard_action == ui_events.WINDOW_KEY_PRESSED and dik == DIK_keys.DIK_ESCAPE then
+		self:OnBtnCancel()
+	end
+	return res
+end

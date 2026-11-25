@@ -1,6 +1,9 @@
 #include "stdafx.h"
 #include "xrSheduler.h"
 #include "xr_object.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the frame parts
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини кадру
+#include "frame_parts.h"
 
 //#define DEBUG_SCHEDULER
 
@@ -324,8 +327,15 @@ void CSheduler::ProcessStep() {
 
         m_current_step_obj = T.Object;
         //			try {
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - each object's time for the slowest
+        // one of the frame; T is a copy, its name stays valid
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - час кожного об'єкта для
+        // найповільнішого за кадр; T - копія, її ім'я лишається дійсним
+        const u64 fp_object_start = frame_part_begin();
         T.Object->shedule_Update(
             clampr(Elapsed, u32(1), u32(std::max(u32(T.Object->shedule.t_max), u32(1000)))));
+        if (fp_object_start)
+            frame_stats_object(0, frame_part_now() - fp_object_start, *T.scheduled_name);
         if (!m_current_step_obj) {
 #ifdef DEBUG_SCHEDULER
             Msg("SCHEDULER: process unregister (self unregistering) [%s][%x][%s]",
@@ -402,6 +412,9 @@ void CSheduler::Update() {
     R_ASSERT(Device.Statistic);
     // Initialize
     Device.Statistic->Sheduler.Begin();
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the whole scheduler as a part
+    // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - увесь планувальник як частина
+    frame_part_scope fp_scheduler(FP_SCHEDULER);
     cycles_start = CPU::QPC();
     cycles_limit = CPU::qpc_freq * u64(iCeil(psShedulerCurrent)) / 1000i64 + cycles_start;
     internal_Registration();
@@ -433,7 +446,15 @@ void CSheduler::Update() {
         VERIFY(T.Object->dbg_startframe != Device.dwFrame);
         T.Object->dbg_startframe = Device.dwFrame;
 #endif
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the realtime object's time; the item
+        // may move while the object updates, so its name is copied first
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - час об'єкта реального часу; запис
+        // може зсунутися, поки об'єкт оновлюється, тому його ім'я копіюється заздалегідь
+        const u64 fp_object_start = frame_part_begin();
+        const shared_str fp_object_name = fp_object_start ? T.scheduled_name : shared_str();
         T.Object->shedule_Update(Elapsed);
+        if (fp_object_start)
+            frame_stats_object(0, frame_part_now() - fp_object_start, *fp_object_name);
         T.dwTimeOfLastExecute = dwTime;
     }
 

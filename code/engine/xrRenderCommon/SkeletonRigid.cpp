@@ -6,6 +6,36 @@
 
 extern int psSkeletonUpdate;
 
+#if RENDER == R_R4
+// Item 9 stage C ( measure the bones before moving them, 2026-11-12 ): the main thread's
+// CalculateBones time for "cpu_frame_stats 1" ( xrEngine\device.cpp ). A nested call ( one
+// CalculateBones inside another ) is counted once, in the outer one.
+#include <chrono>
+ENGINE_API bool frame_stats_bones_on();
+ENGINE_API void frame_stats_add_bones(float ms);
+
+namespace {
+thread_local int bones_timer_depth = 0;
+
+struct bones_timer {
+    const bool on;
+    const std::chrono::steady_clock::time_point start;
+    bones_timer()
+        : on(bones_timer_depth++ == 0 && frame_stats_bones_on()),
+          start(on ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point()) {}
+    bones_timer(const bones_timer&) = delete;
+    bones_timer& operator=(const bones_timer&) = delete;
+    ~bones_timer() {
+        --bones_timer_depth;
+        if (on)
+            frame_stats_add_bones(
+                std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start)
+                    .count());
+    }
+};
+} // namespace
+#endif
+
 #ifdef DEBUG
 void check_kinematics(CKinematics* _k, LPCSTR s);
 #endif
@@ -16,6 +46,9 @@ void CKinematics::CalculateBones(BOOL bForceExact) {
     // skip all the computations - assume nothing changes in a small period of time :)
     if (RDEVICE.dwTimeGlobal == UCalc_Time)
         return; // early out for "fast" update
+#if RENDER == R_R4
+    const bones_timer bones_measure; // item 9 stage C: the bone time for "cpu_frame_stats 1"
+#endif
     std::lock_guard<decltype(UCalc_Mutex)> lock(UCalc_Mutex);
     OnCalculateBones();
     if (!bForceExact && (RDEVICE.dwTimeGlobal < (UCalc_Time + UCalc_Interval)))

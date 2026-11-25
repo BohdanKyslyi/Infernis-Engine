@@ -390,8 +390,16 @@ bool CUIXmlInit::Init3tButton(CUIXml& xml_doc, LPCSTR path, int index, CUI3tButt
     }
 
     LPCSTR text_hint = xml_doc.ReadAttrib(path, index, "hint", NULL);
+    // Edited by Ivan Danko, 2026-11-25: the button keeps the text id of its hint, as the hint of a static
+    // text above ( m_stat_hint_text ) and the talk window buttons do; CUIButtonHint::SetHintText translates
+    // it once ( SetTextST ). It was translated here as well, so the ready hint text was looked up again as
+    // an id ( "missing localization id" in the log with -dev_mode ). The text on screen is the same.
+    // Змінено (Ivan Danko, 2026-11-25): кнопка зберігає id тексту своєї підказки, як підказка статичного
+    // напису вище ( m_stat_hint_text ) і кнопки вікна розмови; CUIButtonHint::SetHintText перекладає його
+    // один раз ( SetTextST ). Раніше його перекладали ще й тут, тож готовий текст підказки шукався знову
+    // як id ( "missing localization id" у лог-файлі з -dev_mode ). Текст на екрані той самий.
     if (text_hint)
-        pWnd->m_hint_text = CStringTable().translate(text_hint);
+        pWnd->m_hint_text = text_hint;
 
     return true;
 }

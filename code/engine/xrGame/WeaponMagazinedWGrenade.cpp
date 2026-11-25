@@ -220,7 +220,7 @@ bool CWeaponMagazinedWGrenade::Action(u16 cmd, u32 flags) {
 void CWeaponMagazinedWGrenade::state_Fire(float dt) {
     VERIFY(fOneShotTime > 0.f);
 
-    //Г°ГҐГ¦ГЁГ¬ Г±ГІГ°ГҐГ«ГјГЎГ» ГЇГ®Г¤Г±ГІГўГ®Г«ГјГ­ГЁГЄГ 
+    //режим стрельбы подствольника
     if (m_bGrenadeMode) {
         /*
         fTime					-=dt;
@@ -246,7 +246,7 @@ void CWeaponMagazinedWGrenade::state_Fire(float dt) {
                 FireEnd();
         */
     }
-    //Г°ГҐГ¦ГЁГ¬ Г±ГІГ°ГҐГ«ГјГЎГ» Г®Г·ГҐГ°ГҐГ¤ГїГ¬ГЁ
+    //режим стрельбы очередями
     else
         inherited::state_Fire(dt);
 }
@@ -479,7 +479,7 @@ bool CWeaponMagazinedWGrenade::Attach(PIItem pIItem, bool b_send_event) {
 
         CRocketLauncher::m_fLaunchSpeed = pGrenadeLauncher->GetGrenadeVel();
 
-        //ГіГ­ГЁГ·ГІГ®Г¦ГЁГІГј ГЇГ®Г¤Г±ГІГўГ®Г«ГјГ­ГЁГЄ ГЁГ§ ГЁГ­ГўГҐГ­ГІГ Г°Гї
+        //уничтожить подствольник из инвентаря
         if (b_send_event) {
             if (OnServer())
                 pIItem->object().DestroyObject();
@@ -557,7 +557,7 @@ float CWeaponMagazinedWGrenade::CurrentZoomFactor() {
                           "gl_zoom_factor", ironsight);
 }
 
-//ГўГЁГ°ГІГіГ Г«ГјГ­Г»ГҐ ГґГіГ­ГЄГ¶ГЁГЁ Г¤Г«Гї ГЇГ°Г®ГЁГЈГ°Г»ГўГ Г­ГЁГї Г Г­ГЁГ¬Г Г¶ГЁГЁ HUD
+//виртуальные функции для проигрывания анимации HUD
 LPCSTR CWeaponMagazinedWGrenade::RifleHudState() const {
     if (bMisfire)
         return "_jammed";

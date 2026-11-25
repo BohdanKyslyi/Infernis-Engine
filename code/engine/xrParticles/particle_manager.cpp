@@ -87,6 +87,12 @@ void CParticleManager::PlayEffect(int effect_id, int alist_id) {
     
     for (auto* action : *pa) {
         VERIFY(action);
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in Anomaly (Monolith particle_manager.cpp),
+        // an empty entry (nullptr) of the action list is skipped; only DX11 switches this on (AnomalyMode).
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як в Anomaly (Monolith particle_manager.cpp),
+        // порожній запис (nullptr) списку дій пропускається; це вмикає лише DX11 (AnomalyMode).
+        if (!action && AnomalyMode())
+            continue;
         switch (action->type) {
         case PASourceID:
             static_cast<PASource*>(action)->m_Flags.set(PASource::flSilent, FALSE);
@@ -112,6 +118,10 @@ void CParticleManager::StopEffect(int effect_id, int alist_id, BOOL deffered) {
     pa->lock();
 
     for (auto* action : *pa) {
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in PlayEffect (Monolith).
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як у PlayEffect (Monolith).
+        if (!action && AnomalyMode())
+            continue;
         if (action->type == PASourceID) {
             static_cast<PASource*>(action)->m_Flags.set(PASource::flSilent, TRUE);
         }
@@ -136,6 +146,10 @@ void CParticleManager::Update(int effect_id, int alist_id, float dt) {
     float kill_old_time = 1.0f;
     for (auto* action : *pa) {
         VERIFY(action);
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in PlayEffect (Monolith).
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як у PlayEffect (Monolith).
+        if (!action && AnomalyMode())
+            continue;
         action->Execute(pe, dt, kill_old_time);
     }
     
@@ -155,6 +169,10 @@ void CParticleManager::Transform(int alist_id, const Fmatrix& full, const Fvecto
     mT.translate(full.c);
 
     for (auto* action : *pa) {
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in PlayEffect (Monolith).
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як у PlayEffect (Monolith).
+        if (!action && AnomalyMode())
+            continue;
         const bool r = action->m_Flags.is(ParticleAction::ALLOW_ROTATE);
         const Fmatrix& m = r ? full : mT;
         
@@ -244,7 +262,16 @@ u32 CParticleManager::LoadActions(int alist_id, IReader& R) {
     if (R.length()) {
         u32 cnt = R.r_u32();
         for (u32 k = 0; k < cnt; k++) {
-            auto* act = CreateAction(static_cast<PActionEnum>(R.r_u32()));
+            // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in Anomaly (Monolith LoadActions), the type
+            // u32(-1) marks an empty entry (SaveActions below) and is skipped; only with DX11 (AnomalyMode).
+            // The type is read into a variable first; without DX11 the same reading as before.
+            // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як в Anomaly (Monolith LoadActions), тип
+            // u32(-1) позначає порожній запис (SaveActions нижче) і пропускається; лише з DX11 (AnomalyMode).
+            // Тип спершу читається у змінну; без DX11 - те саме читання, що й раніше.
+            const u32 type = R.r_u32();
+            if (type == u32(-1) && AnomalyMode())
+                continue;
+            auto* act = CreateAction(static_cast<PActionEnum>(type));
             act->Load(R);
             pa->append(act);
         }
@@ -260,6 +287,19 @@ void CParticleManager::SaveActions(int alist_id, IWriter& W) {
     W.w_u32(static_cast<u32>(pa->size()));
     
     for (auto* action : *pa) {
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in Anomaly (Monolith SaveActions): with DX11
+        // (AnomalyMode) every action is written with its type, as LoadActions reads it, and an empty entry
+        // as u32(-1); without DX11 as before.
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як в Anomaly (Monolith SaveActions): з DX11
+        // (AnomalyMode) кожна дія записується зі своїм типом, як її читає LoadActions, а порожній запис - як
+        // u32(-1); без DX11 - як раніше.
+        if (AnomalyMode()) {
+            if (!action) {
+                W.w_u32(u32(-1));
+                continue;
+            }
+            W.w_u32(action->type);
+        }
         action->Save(W);
     }
     

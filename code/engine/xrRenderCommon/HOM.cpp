@@ -16,7 +16,17 @@ void __stdcall CHOM::MT_RENDER() {
     // Безпечне атомарне читання
     if (MT_frame_rendered.load(std::memory_order_acquire) != Device.dwFrame && !b_main_menu_is_active) {
         CFrustum ViewBase;
+#if RENDER == R_R4
+        // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the frame's main view, saved by the
+        // device before the drawing starts: this runs on the second thread while the 3D scope lens
+        // pass may already have set Device.mFullTransform to the lens view.
+        // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - основний вид кадру, збережений
+        // пристроєм до початку малювання: це працює в другому потоці, коли прохід лінзи 3D-прицілу
+        // може вже встановити в Device.mFullTransform вид лінзи.
+        ViewBase.CreateFromMatrix(Device.mFullTransform_saved, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
+#else
         ViewBase.CreateFromMatrix(Device.mFullTransform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
+#endif
         Enable();
         Render(ViewBase);
     }
@@ -125,8 +135,15 @@ void CHOM::Render_DB(CFrustum& base) {
         0.0f, 0.0f, 1.0f, 0.0f, 
         0.5f, 0.5f, 0.0f, 1.0f
     };
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the frame's main view ( see MT_RENDER )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - основний вид кадру ( див. MT_RENDER )
+    m_xform.mul(m_viewport, Device.mFullTransform_saved);
+    m_xform_01.mul(m_viewport_01, Device.mFullTransform_saved);
+#else
     m_xform.mul(m_viewport, Device.mFullTransform);
     m_xform_01.mul(m_viewport_01, Device.mFullTransform);
+#endif
 
     xrc.frustum_options(0);
     xrc.frustum_query(m_pModel, base);
@@ -134,7 +151,13 @@ void CHOM::Render_DB(CFrustum& base) {
 
     CDB::RESULT* it = xrc.r_begin();
     CDB::RESULT* end = xrc.r_end();
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the frame's main view ( see MT_RENDER )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - основний вид кадру ( див. MT_RENDER )
+    Fvector COP = Device.vCameraPosition_saved;
+#else
     Fvector COP = Device.vCameraPosition;
+#endif
 
     // МАКСИМАЛЬНА ОПТИМІЗАЦІЯ: C++11 Лямбди замість важких функторів
     end = std::remove_if(it, end, [this](const CDB::RESULT& res) {
@@ -146,7 +169,13 @@ void CHOM::Render_DB(CFrustum& base) {
     });
 
     CFrustum clip;
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the frame's main view ( see MT_RENDER )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - основний вид кадру ( див. MT_RENDER )
+    clip.CreateFromMatrix(Device.mFullTransform_saved, FRUSTUM_P_NEAR);
+#else
     clip.CreateFromMatrix(Device.mFullTransform, FRUSTUM_P_NEAR);
+#endif
     sPoly src, dst;
     const u32 _frame = Device.dwFrame;
     
@@ -254,14 +283,55 @@ static inline BOOL _visible(const Fbox& B, const Fmatrix& m_xform_01) {
     return Raster.test(min.x, min.y, max.x, max.y, z);
 }
 
+#if RENDER == R_R4
+// Written by Ivan Danko, 2026-11-15: FPS fix step 1 - this thread draws the 3D scope lens view
+// ( CHOM::SetLensView ); the grass thread has its own copy, always off.
+// Створено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - цей потік малює вид лінзи
+// 3D-прицілу ( CHOM::SetLensView ); потік трави має власну копію, завжди вимкнену.
+static thread_local bool hom_view_lens = false;
+
+// The test of _visible, but a box that reaches past the buffer's edge counts as visible: the lens
+// view may see past the main view's edges, and those parts are not in the buffer.
+// Перевірка _visible, але коробка, що виходить за край буфера, вважається видимою: вид лінзи може
+// бачити за краями основного виду, а цих частин у буфері немає.
+static inline BOOL _visible_inside(const Fbox& B, const Fmatrix& m_xform_01) {
+    Fvector2 min, max;
+    float z;
+    if (xform_b0(min, max, z, m_xform_01, B.min.x, B.min.y, B.min.z)) return TRUE;
+    if (xform_b1(min, max, z, m_xform_01, B.min.x, B.min.y, B.max.z)) return TRUE;
+    if (xform_b1(min, max, z, m_xform_01, B.max.x, B.min.y, B.max.z)) return TRUE;
+    if (xform_b1(min, max, z, m_xform_01, B.max.x, B.min.y, B.min.z)) return TRUE;
+    if (xform_b1(min, max, z, m_xform_01, B.min.x, B.max.y, B.min.z)) return TRUE;
+    if (xform_b1(min, max, z, m_xform_01, B.min.x, B.max.y, B.max.z)) return TRUE;
+    if (xform_b1(min, max, z, m_xform_01, B.max.x, B.max.y, B.max.z)) return TRUE;
+    if (xform_b1(min, max, z, m_xform_01, B.max.x, B.max.y, B.min.z)) return TRUE;
+    if (min.x < 0.f || min.y < 0.f || max.x > 1.f || max.y > 1.f) return TRUE;
+    return Raster.test(min.x, min.y, max.x, max.y, z);
+}
+#endif
+
 BOOL CHOM::visible(const Fbox3& B) {
     if (!bEnabled) return TRUE;
     if (B.contains(Device.vCameraPosition)) return TRUE;
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the 3D scope lens view: a box past the
+    // buffer's edge counts as visible
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - вид лінзи 3D-прицілу: коробка за
+    // краєм буфера вважається видимою
+    if (hom_view_lens) return _visible_inside(B, m_xform_01);
+#endif
     return _visible(B, m_xform_01);
 }
 
 BOOL CHOM::visible(const Fbox2& B, float depth) {
     if (!bEnabled) return TRUE;
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the 3D scope lens view: this rectangle is
+    // in the lens view's space, not in the buffer's
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - вид лінзи 3D-прицілу: цей
+    // прямокутник у просторі виду лінзи, а не буфера
+    if (hom_view_lens) return TRUE;
+#endif
     return Raster.test(B.min.x, B.min.y, B.max.x, B.max.y, depth);
 }
 
@@ -269,6 +339,14 @@ BOOL CHOM::visible(vis_data& vis) {
     if (Device.dwFrame < vis.hom_frame) return TRUE; 
     if (!bEnabled) return TRUE; 
 
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the 3D scope lens view tests against the
+    // main view's buffer and keeps the main view's state ( hom_frame / hom_tested )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - вид лінзи 3D-прицілу
+    // перевіряється по буферу основного виду й не змінює стану основного виду ( hom_frame /
+    // hom_tested )
+    if (hom_view_lens) return _visible_inside(vis.box, m_xform_01);
+#endif
 #ifdef DEBUG
     Device.Statistic->RenderCALC_HOM.Begin();
 #endif
@@ -295,12 +373,38 @@ BOOL CHOM::visible(const sPoly& P) {
     for (u32 it = 1; it < P.size(); ++it) {
         if (xform_b1(min, max, z, m_xform_01, P[it].x, P[it].y, P[it].z)) return TRUE;
     }
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - the 3D scope lens view: a portal past the
+    // buffer's edge counts as visible
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - вид лінзи 3D-прицілу: портал за
+    // краєм буфера вважається видимим
+    if (hom_view_lens && (min.x < 0.f || min.y < 0.f || max.x > 1.f || max.y > 1.f)) return TRUE;
+#endif
         
     return Raster.test(min.x, min.y, max.x, max.y, z);
 }
 
 void CHOM::Disable() { bEnabled = FALSE; }
 void CHOM::Enable() { bEnabled = m_pModel ? TRUE : FALSE; }
+
+#if RENDER == R_R4
+// Written by Ivan Danko, 2026-11-15: FPS fix step 1 ( HOM.h )
+// Створено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS ( HOM.h )
+void CHOM::EnableFrame() {
+    MT_SYNC();
+    if (m_pModel && MT_frame_rendered.load(std::memory_order_acquire) == Device.dwFrame)
+        bEnabled = TRUE;
+}
+
+BOOL CHOM::visible_frame(const Fbox3& B) {
+    if (!m_pModel || MT_frame_rendered.load(std::memory_order_acquire) != Device.dwFrame)
+        return TRUE;
+    if (B.contains(Device.vCameraPosition)) return TRUE;
+    return _visible_inside(B, m_xform_01);
+}
+
+void CHOM::SetLensView(bool on) { hom_view_lens = on; }
+#endif
 
 #ifdef DEBUG
 void CHOM::OnRender() {

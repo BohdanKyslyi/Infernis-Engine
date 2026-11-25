@@ -186,7 +186,15 @@ void CParticleGroup::SItem::StartRelatedChild(CParticleEffect* emitter, LPCSTR e
     M.identity();
     Fvector vel;
     vel.sub(m.pos, m.posB);
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the speed by the child effect's own update
+    // step, as in Anomaly (Monolith ParticleGroup.cpp).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - швидкість за власним кроком оновлення
+    // дочірнього ефекту, як в Anomaly (Monolith ParticleGroup.cpp).
+    vel.div(C->m_Def->GetFStep());
+#else
     vel.div(fDT_STEP);
+#endif
     if (emitter->m_RT_Flags.is(CParticleEffect::flRT_XFORM)) {
         M.set(emitter->m_XFORM);
         M.transform_dir(vel);
@@ -219,7 +227,13 @@ void CParticleGroup::SItem::StartFreeChild(CParticleEffect* emitter, LPCSTR nm, 
         M.identity();
         Fvector vel;
         vel.sub(m.pos, m.posB);
+#if RENDER == R_R4
+        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in StartRelatedChild (Monolith).
+        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як у StartRelatedChild (Monolith).
+        vel.div(C->m_Def->GetFStep());
+#else
         vel.div(fDT_STEP);
+#endif
         if (emitter->m_RT_Flags.is(CParticleEffect::flRT_XFORM)) {
             M.set(emitter->m_XFORM);
             M.transform_dir(vel);
@@ -335,7 +349,15 @@ void CParticleGroup::SItem::OnFrame(u32 u_dt, const CPGDef::SEffect& def, Fbox& 
                         M.translate(m.pos);
                         Fvector vel;
                         vel.sub(m.pos, m.posB);
+#if RENDER == R_R4
+                        // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in StartRelatedChild
+                        // (Monolith).
+                        // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як у StartRelatedChild
+                        // (Monolith).
+                        vel.div(C->m_Def->GetFStep());
+#else
                         vel.div(fDT_STEP);
+#endif
                         C->UpdateParent(M, vel, FALSE);
                     }
                 }

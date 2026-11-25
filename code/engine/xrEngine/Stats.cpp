@@ -57,6 +57,77 @@ static optimizer vtune;
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
 BOOL g_bDisableRedText = FALSE;
+
+// The FPS counter ( the user, 2026-11-13 ): "r__show_fps 1" shows the frames a second in red at the
+// top of the screen - "r__show_fps_pos" left, center ( the default ) or right - in the game, the menu
+// and the pause. Real frames on the performance counter, refreshed twice a second. The game's own
+// font at its own size ( this font render stretches only the height of a glyph, not its width ) and
+// a thin black shadow under the digits, so they stay readable on a bright sky. on_idle draws it after
+// the statistics, on top of everything ( device.cpp ).
+int ps_r_show_fps = 0;
+u32 ps_r_show_fps_pos = 1;
+void _InitializeFont(CGameFont*& F, LPCSTR section, u32 flags); // x_ray.cpp
+
+namespace {
+CGameFont* fps_font = nullptr;
+u32 fps_font_height = 0;              // the screen height its texture was picked for
+LONGLONG fps_freq = 0, fps_start = 0; // performance counter units
+u32 fps_frames = 0;
+int fps_value = -1; // -1: nothing measured yet
+} // namespace
+
+void fps_counter_draw() {
+    if (!ps_r_show_fps) {
+        fps_start = 0;
+        fps_value = -1;
+        return;
+    }
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    if (!fps_freq) {
+        LARGE_INTEGER freq;
+        QueryPerformanceFrequency(&freq);
+        fps_freq = freq.QuadPart;
+    }
+    if (!fps_start) {
+        fps_start = now.QuadPart;
+        fps_frames = 0;
+    } else {
+        fps_frames++;
+        const double sec = double(now.QuadPart - fps_start) / double(fps_freq);
+        if (sec >= 2.0) { // no frames for a while ( the window was away ): count again
+            fps_start = now.QuadPart;
+            fps_frames = 0;
+        } else if (sec >= 0.5) {
+            fps_value = int(double(fps_frames) / sec + 0.5);
+            fps_start = now.QuadPart;
+            fps_frames = 0;
+        }
+    }
+    if (fps_value < 0)
+        return;
+    if (!fps_font || fps_font_height != Device.dwHeight) {
+        _InitializeFont(fps_font, "ui_font_letter_25", 0);
+        fps_font_height = Device.dwHeight;
+    }
+    const float margin = float(Device.dwHeight) * 0.01f;
+    float x = margin;
+    CGameFont::EAligment align = CGameFont::alLeft;
+    if (ps_r_show_fps_pos == 1) {
+        x = float(Device.dwWidth) * 0.5f;
+        align = CGameFont::alCenter;
+    } else if (ps_r_show_fps_pos == 2) {
+        x = float(Device.dwWidth) - margin;
+        align = CGameFont::alRight;
+    }
+    fps_font->SetAligment(align);
+    fps_font->SetColor(color_rgba(0, 0, 0, 255)); // the shadow
+    fps_font->Out(x + 2.f, margin + 2.f, "%d", fps_value);
+    fps_font->SetColor(color_rgba(255, 0, 0, 255));
+    fps_font->Out(x, margin, "%d", fps_value);
+    fps_font->OnRender();
+}
+
 CStats::CStats() {
     fFPS = 30.f;
     fRFPS = 30.f;
@@ -485,6 +556,8 @@ void CStats::OnDeviceCreate() {
 void CStats::OnDeviceDestroy() {
     SetLogCB(0);
     xr_delete(pFont);
+    xr_delete(fps_font); // the FPS counter's font ( made again at its next frame )
+    fps_font_height = 0;
 }
 
 void CStats::OnRender() {

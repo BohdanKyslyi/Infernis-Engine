@@ -15,6 +15,9 @@
 #include "script_game_object.h"
 #include "gameobject.h"
 #include "level.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the frame parts
+// «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - частини кадру
+#include "../xrEngine/frame_parts.h"
 
 // comment next string when commiting
 //#define DBG_DISABLE_SCRIPTS
@@ -124,6 +127,11 @@ void CScriptBinder::set_object(CScriptBinderObject* object) {
 void CScriptBinder::shedule_Update(u32 time_delta) {
     if (m_object) {
         try {
+            // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the object's script as a
+            // part ( inside the scheduler )
+            // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - скрипт об'Їкта €к частина
+            // ( усередин≥ планувальника )
+            frame_part_scope fp_object_script(FP_OBJECT_SCRIPTS);
             m_object->shedule_Update(time_delta);
         } catch (...) {
             clear();

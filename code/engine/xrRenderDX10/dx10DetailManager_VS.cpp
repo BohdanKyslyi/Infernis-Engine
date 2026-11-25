@@ -7,6 +7,15 @@
 
 #include "../xrRenderDX10/dx10BufferUtils.h"
 
+#if RENDER == R_R4
+// Edited by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores" - the task system and the
+// parts of "cpu_frame_stats 1"
+// Змінено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах" - система задач і
+// частини "cpu_frame_stats 1"
+#include "xrCore/xrTasks.h"
+#include "xrEngine/frame_parts.h"
+#endif
+
 const int quant = 16384;
 const int c_hdr = 10;
 const int c_size = 4;
@@ -50,6 +59,129 @@ float GoToValue(float& current, float go_to) {
 
     return current < go_to ? r_value : -r_value;
 }
+#if RENDER == R_R4
+
+// Written by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores" ( "mt_grass", on by default,
+// xrEngine\xr_ioc_cmd.cpp; the pieces: DetailManager.h ). hw_Render calls mt_prepare once, before its
+// three draws: the blades of every list of the three variants are worked out at once on the task
+// system's workers and on this thread ( xrCore\xrTasks.h ), into pieces of up to 32 lists. A piece runs
+// exactly the code the old walk of hw_Render_dump runs for each blade ( below, unchanged ), list by
+// list in the same order, the opacity step and the "break" at a faded blade included. The first pass of
+// each grass type then copies the finished values into the constant buffer in the same batches and
+// draws them. The old way, as before: "mt_grass 0", "cpu_tasks 0" or a single CPU, fewer than 64 lists
+// in the call, a frame whose lists were not emptied ( m_mt_lists_stale ), and every pass after the
+// first.
+// Створено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах" ( "mt_grass", увімкнено
+// за замовчуванням, xrEngine\xr_ioc_cmd.cpp; шматки: DetailManager.h ). hw_Render викликає mt_prepare
+// один раз, перед своїми трьома малюваннями: травинки всіх списків трьох варіантів рахуються разом на
+// робочих потоках системи задач і в цьому потоці ( xrCore\xrTasks.h ) у шматки до 32 списків. Шматок
+// виконує рівно той код, який старий обхід hw_Render_dump виконує для кожної травинки ( нижче, без
+// змін ), список за списком у тому самому порядку, разом із кроком непрозорості й "break" на згаслій
+// травинці. Перший прохід кожного типу трави потім копіює готові значення в буфер констант тими самими
+// пачками й малює їх. По-старому, як раніше: "mt_grass 0", "cpu_tasks 0" або один процесор, менше ніж
+// 64 списки у виклику, кадр, чиї списки не спорожнили ( m_mt_lists_stale ), і кожен прохід після
+// першого.
+extern ENGINE_API int ps_mt_grass; // xrEngine\xr_ioc_cmd.cpp
+
+namespace {
+constexpr u32 mt_piece_lists = 32; // lists in one piece
+constexpr u32 mt_lists_min = 64;   // fewer lists in a call: the old way ( handing out would cost more )
+} // namespace
+
+// the pieces of this hw_Render call, worked out on all cores; m_mt_ready = they are there
+void CDetailManager::mt_prepare() {
+    m_mt_ready = false;
+    if (!ps_mt_grass || m_mt_lists_stale || !hw_BatchSize || xrTasks::Slots() < 2)
+        return;
+    const u32 objects_count = u32(objects.size());
+    u32 pieces_count = 0, lists = 0;
+    for (u32 v = 0; v < 3; ++v) {
+        // the shader element hw_Render draws the variant with: 0 for the waves, 1 for the still grass
+        const u32 lod_id = v ? 0 : 1;
+        for (u32 O = 0; O < objects_count; ++O) {
+            u32 n = u32(m_visibles[v][O].size());
+            if (n && !objects[O]->shader->E[lod_id]->passes.size())
+                n = 0; // never drawn, so its blades stay as they are, as before
+            m_mt_first[v][O] = pieces_count;
+            m_mt_count[v][O] = (n + mt_piece_lists - 1) / mt_piece_lists;
+            pieces_count += m_mt_count[v][O];
+            lists += n;
+        }
+    }
+    if (lists < mt_lists_min)
+        return;
+    if (m_mt_pieces.size() < pieces_count)
+        m_mt_pieces.resize(pieces_count);
+    mt_piece* pieces = m_mt_pieces.data();
+    for (u32 v = 0; v < 3; ++v)
+        for (u32 O = 0; O < objects_count; ++O) {
+            mt_piece* piece = pieces + m_mt_first[v][O];
+            const u32 n = m_mt_count[v][O] ? u32(m_visibles[v][O].size()) : 0;
+            for (u32 begin = 0; begin < n; begin += mt_piece_lists, ++piece) {
+                piece->var_id = v;
+                piece->object = O;
+                piece->list_begin = begin;
+                piece->list_end = std::min(n, begin + mt_piece_lists);
+                piece->blades = 0;
+            }
+        }
+    u32 grain = pieces_count / (xrTasks::Slots() * 4);
+    if (grain < 1)
+        grain = 1;
+    xrTasks::ParallelFor(pieces_count, grain, [this, pieces](u32 begin, u32 end) {
+        for (u32 i = begin; i < end; ++i)
+            mt_prepare_piece(pieces[i]);
+    });
+    m_mt_ready = true;
+}
+
+// one piece: for each blade the old walk's code ( hw_Render_dump below ), the values into the piece
+void CDetailManager::mt_prepare_piece(mt_piece& piece) {
+    xr_vector<SlotItemVec*>& vis = m_visibles[piece.var_id][piece.object];
+    u32 most = 0; // every blade of its lists: the most the piece can take
+    for (u32 l = piece.list_begin; l < piece.list_end; ++l)
+        most += u32(vis[l]->size());
+    if (piece.arr.size() < most * 4)
+        piece.arr.resize(most * 4);
+    if (piece.ex.size() < most)
+        piece.ex.resize(most);
+    Fvector4* c_storage = piece.arr.data();
+    Fvector4* c_ExData = piece.ex.data();
+    u32 dwBatch = 0; // the blades taken ( the names are the old walk's )
+    for (u32 l = piece.list_begin; l < piece.list_end; ++l) {
+        SlotItemVec* items = vis[l];
+        auto _iI = items->begin();
+        auto _iE = items->end();
+        for (; _iI != _iE && dwBatch < most; _iI++) {
+            SlotItem& Instance = **_iI;
+            u32 base = dwBatch * 4;
+
+            float scale = Instance.scale_calculated;
+            if (ssfx_session_enable) {
+                Instance.alpha += GoToValue(Instance.alpha, Instance.alpha_target);
+                if (fade_distance <= -1)
+                    scale *= 1.0f - Instance.position.distance_to_xz_sqr(light_position) * 0.005f;
+                else if (Instance.distance > fade_distance)
+                    scale *= 1.0f - abs(Instance.distance - fade_distance) * 0.005f;
+                if (scale <= 0 || Instance.alpha <= 0)
+                    break;
+            }
+
+            Fmatrix& M = Instance.mRotY;
+            c_storage[base + 0].set(M._11 * scale, M._21 * scale, M._31 * scale, M._41);
+            c_storage[base + 1].set(M._12 * scale, M._22 * scale, M._32 * scale, M._42);
+            c_storage[base + 2].set(M._13 * scale, M._23 * scale, M._33 * scale, M._43);
+            float h = Instance.c_hemi;
+            float s = Instance.c_sun;
+            c_storage[base + 3].set(s, s, s, h);
+            c_ExData[dwBatch].set(Instance.normal.x, Instance.normal.y, Instance.normal.z,
+                                  Instance.alpha);
+            dwBatch++;
+        }
+    }
+    piece.blades = dwBatch;
+}
+#endif
 
 void CDetailManager::hw_Load_Shaders() {
     // Create shader to access constant storage
@@ -92,6 +224,20 @@ void CDetailManager::hw_Render() {
     // Setup geometry and DMA
     RCache.set_Geometry(hw_Geom);
 
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores" - the blades of the three
+    // draws below are first worked out at once on all cores ( mt_prepare above ); "cpu_frame_stats 1"
+    // gets that time, the drawing's time, the blades drawn and the draw calls ( xrEngine\device.cpp )
+    // Змінено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах" - травинки трьох
+    // малювань нижче спершу рахуються разом на всіх ядрах ( mt_prepare вище ); "cpu_frame_stats 1"
+    // отримує цей час, час малювання, намальовані травинки й виклики малювання ( xrEngine\device.cpp )
+    const u64 mt_start = frame_part_begin();
+    m_mt_blades = 0;
+    m_mt_draws = 0;
+    mt_prepare();
+    const u64 mt_prepared = mt_start ? frame_part_now() : 0;
+#endif
+
     // Wave0
     float scale = 1.f / float(quant);
     Fvector4 wave, prev_wave;
@@ -123,6 +269,18 @@ void CDetailManager::hw_Render() {
     // 1.f);  RCache.set_c			(&*hwc_s_xform,	Device.mFullTransform);
     // hw_Render_dump			(&*hwc_s_array,	0, 1, c_hdr );
     hw_Render_dump(consts, wave.div(PI_MUL_2), dir2, prev_wave.div(PI_MUL_2), prev_dir2, 0, 1);
+
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-18: FPS plan step 3 - the worked-out blades are used up; this call's
+    // parts for "cpu_frame_stats 1"
+    // Змінено (Ivan Danko, 2026-11-18): крок 3 плану FPS - пораховані травинки використано; частини
+    // цього виклику для "cpu_frame_stats 1"
+    m_mt_ready = false;
+    if (mt_start) {
+        frame_part_add_n(FP_GRASS_PREP, mt_prepared - mt_start, m_mt_blades);
+        frame_part_add_n(FP_GRASS_DRAW, frame_part_now() - mt_prepared, m_mt_draws);
+    }
+#endif
 
     if (prev_frame != Device.dwFrame) {
         prev_frame = Device.dwFrame;
@@ -277,6 +435,57 @@ void CDetailManager::hw_Render_dump(const Fvector4& consts, const Fvector4& wave
 
                 xr_vector<SlotItemVec*>::iterator _vI = vis.begin();
                 xr_vector<SlotItemVec*>::iterator _vE = vis.end();
+#if RENDER == R_R4
+                // Written by Ivan Danko, 2026-11-18: FPS plan step 3 "grass on all cores" - the first
+                // pass takes the blades mt_prepare worked out on all cores: copied into the constants
+                // in runs and drawn in the same batches as by the walk below, which then has nothing
+                // left to do.
+                // Створено (Ivan Danko, 2026-11-18): крок 3 плану FPS "трава на всіх ядрах" - перший
+                // прохід бере травинки, пораховані mt_prepare на всіх ядрах: вони копіюються в
+                // константи шматками й малюються тими самими пачками, що й в обході нижче, якому потім
+                // нічого не лишається.
+                if (m_mt_ready && iPass == 0) {
+                    const u32 first = m_mt_first[var_id][O];
+                    const u32 last = first + m_mt_count[var_id][O];
+                    for (u32 p = first; p < last; ++p) {
+                        const mt_piece& piece = m_mt_pieces[p];
+                        for (u32 done = 0; done < piece.blades;) {
+                            const u32 run = std::min(piece.blades - done, hw_BatchSize - dwBatch);
+                            memcpy(c_storage + dwBatch * 4, piece.arr.data() + done * 4,
+                                   run * 4 * sizeof(Fvector4));
+                            if (c_ExData)
+                                memcpy(c_ExData + dwBatch, piece.ex.data() + done,
+                                       run * sizeof(Fvector4));
+                            dwBatch += run;
+                            done += run;
+                            if (dwBatch == hw_BatchSize) {
+                                // flush ( the walk's own lines below )
+                                Device.Statistic->RenderDUMP_DT_Count += dwBatch;
+                                u32 dwCNT_verts = dwBatch * Object.number_vertices;
+                                u32 dwCNT_prims = (dwBatch * Object.number_indices) / 3;
+                                RCache.Render(D3DPT_TRIANGLELIST, vOffset, 0, dwCNT_verts, iOffset,
+                                              dwCNT_prims);
+                                RCache.stat.r.s_details.add(dwCNT_verts);
+                                m_mt_blades += dwBatch;
+                                m_mt_draws++;
+
+                                // restart
+                                dwBatch = 0;
+
+                                //	Remap constants to memory directly ( as the walk below does )
+                                {
+                                    void* pVData;
+                                    RCache.get_ConstantDirect(
+                                        strArray, hw_BatchSize * sizeof(Fvector4) * 4, &pVData, 0, 0);
+                                    c_storage = (Fvector4*)pVData;
+                                }
+                                VERIFY(c_storage);
+                            }
+                        }
+                    }
+                    _vI = _vE;
+                }
+#endif
                 for (; _vI != _vE; _vI++) {
                     SlotItemVec* items = *_vI;
                     auto _iI = items->begin();
@@ -348,6 +557,14 @@ void CDetailManager::hw_Render_dump(const Fvector4& consts, const Fvector4& wave
                             RCache.Render(D3DPT_TRIANGLELIST, vOffset, 0, dwCNT_verts, iOffset,
                                           dwCNT_prims);
                             RCache.stat.r.s_details.add(dwCNT_verts);
+#if RENDER == R_R4
+                            // Edited by Ivan Danko, 2026-11-18: FPS plan step 3 - "cpu_frame_stats 1":
+                            // the blades and the draw calls
+                            // Змінено (Ivan Danko, 2026-11-18): крок 3 плану FPS - "cpu_frame_stats 1":
+                            // травинки й виклики малювання
+                            m_mt_blades += dwBatch;
+                            m_mt_draws++;
+#endif
 
                             // restart
                             dwBatch = 0;
@@ -375,6 +592,14 @@ void CDetailManager::hw_Render_dump(const Fvector4& consts, const Fvector4& wave
                     RCache.Render(D3DPT_TRIANGLELIST, vOffset, 0, dwCNT_verts, iOffset,
                                   dwCNT_prims);
                     RCache.stat.r.s_details.add(dwCNT_verts);
+#if RENDER == R_R4
+                    // Edited by Ivan Danko, 2026-11-18: FPS plan step 3 - "cpu_frame_stats 1": the
+                    // blades and the draw calls
+                    // Змінено (Ivan Danko, 2026-11-18): крок 3 плану FPS - "cpu_frame_stats 1":
+                    // травинки й виклики малювання
+                    m_mt_blades += dwBatch;
+                    m_mt_draws++;
+#endif
                 }
             }
             // Clean up

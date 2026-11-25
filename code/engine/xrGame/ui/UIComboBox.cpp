@@ -348,3 +348,11 @@ void CUIComboBox::ClearList() {
     ShowList(false);
     m_disabled.clear();
 }
+
+// Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 13 "Mods" - the
+// chosen line of the list for a script ( the "Mods" window, ui_mods_menu.script )
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 13 «Моди» - вибраний
+// рядок списку для скрипту ( вікно «Моди», ui_mods_menu.script )
+void CUIComboBox::SetSelectedIDX(u32 idx) { m_list_box.SetSelectedIDX(idx); }
+
+u32 CUIComboBox::GetSelectedIDX() { return m_list_box.GetSelectedIDX(); }

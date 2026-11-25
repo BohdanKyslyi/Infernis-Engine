@@ -540,6 +540,23 @@ public:
     Fvector CurrentVel();
     virtual float GetfHealth() const { return CEntity::GetfHealth(); };
     virtual float SetfHealth(float value) { return CEntity::SetfHealth(value); };
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (authors Ray Twitty (aka Shadows), Alundaio): FPS plan step 2 - the Lua functions PlayDamageParticles /
+    // StopDamageParticles of Anomaly: they switch the car damage smoke on and off (Monolith Car.h, the
+    // block added by Ray Twitty (aka Shadows) / Alundaio). Adapted: without #ifdef ENABLE_CAR (our engine
+    // always builds the car).
+    // Перенесення з Monolith (автори Ray Twitty (aka Shadows), Alundaio) - Ivan Danko, 2026-11-17: крок 2 плану FPS - функції Lua PlayDamageParticles /
+    // StopDamageParticles з Anomaly: вмикають і вимикають дим пошкоджень машини (Monolith Car.h, блок,
+    // який додали Ray Twitty (aka Shadows) / Alundaio). Адаптовано: без #ifdef ENABLE_CAR (наш рушій
+    // завжди збирає машину).
+    void PlayDamageParticles() {
+        m_damage_particles.Play1(this);
+        m_damage_particles.Play2(this);
+    }
+
+    void StopDamageParticles() {
+        m_damage_particles.Stop1(this);
+        m_damage_particles.Stop2(this);
+    }
 
     // Hits
     virtual void HitSignal(float /**HitAmount/**/, Fvector& /**local_dir/**/, CObject* /**who/**/,

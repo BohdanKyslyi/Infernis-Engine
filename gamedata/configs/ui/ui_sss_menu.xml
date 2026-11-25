@@ -687,7 +687,7 @@
 		<t_water_ssr_res x="306" y="7" width="200" height="16" step="0.5" invert="1">
 			<options_item entry="ssfx_ui_water_ssr_res" group="mm_opt_sss_water"/>
 		</t_water_ssr_res>
-		<l_water_parallax_quality x="306" y="5" width="156" height="20" list_length="4" always_show_scroll="0">
+		<l_water_parallax_quality x="306" y="5" width="156" height="20" list_length="3" always_show_scroll="0">
 			<options_item entry="ssfx_ui_water_parallax_quality" group="mm_opt_sss_water" depend="restart"/>
 			<list_font r="170" g="170" b="170" font="letterica16"/>
 			<text_color>

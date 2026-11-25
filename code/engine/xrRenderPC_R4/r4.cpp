@@ -18,7 +18,24 @@
 
 #include "D3DX10Core.h"
 
+#include <chrono> // item 9 stage B: the shader build measurement
+#include <mutex>
+
+// Edited by Ivan Danko, 2026-11-14: stage E point 4 - the shader build ahead on all cores.
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - збирання шейдерів наперед на всіх ядрах.
+#include "r4_shader_prebuild.h"
+#include "xrCore/xrTasks.h"
+
 CRender RImplementation;
+
+// Edited by Ivan Danko, 2026-11-14: stage E point 4 - the pre-build ( before CRender::shader_compile
+// below ): started in create, its results written in OnFrame, stopped in destroy.
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - попереднє збирання ( перед
+// CRender::shader_compile нижче ): запускається в create, його результати записуються в OnFrame,
+// зупиняється в destroy.
+static void shader_prebuild_begin();
+static void shader_prebuild_frame();
+static void shader_prebuild_end();
 
 //////////////////////////////////////////////////////////////////////////
 class CGlow : public IRender_Glow {
@@ -624,6 +641,12 @@ void CRender::create() {
 
     m_bMakeAsyncSS = false;
 
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - the shaders start building ahead on the
+    // worker threads before the first one is asked for ( CRenderTarget below asks for many ).
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - шейдери починають збиратися наперед на
+    // робочих потоках ще до першого запиту ( CRenderTarget нижче запитує багато шейдерів ).
+    shader_prebuild_begin();
+
     Target = xr_new<CRenderTarget>(); // Main target
 
     Models = xr_new<CModelPool>();
@@ -655,7 +678,379 @@ void CRender::create() {
     FluidManager.SetScreenSize(Device.dwWidth, Device.dwHeight);
 }
 
+// Item 9 stage B ( multithreading ): how long building the shaders takes, measured before stage E
+// changes anything about it. Every shader the game asks for ( shader_compile below ) is either read
+// from the cache ( userdata\shaders_cache ) or compiled with D3DCompile and written there. Counted:
+// how many of each and the time they take, the time inside D3DCompile alone, the failures, and the
+// ten slowest compiles. Into the log when the renderer goes ( leaving the game ) and by the console
+// command "r__shader_build_stats" ( xrRender_console.cpp ). Our own design, the donor has none.
+namespace {
+using shader_build_clock = std::chrono::steady_clock;
+
+struct shader_build_slow {
+    string128 name; // e.g. deffer_base_bump.ps
+    double ms;      // inside D3DCompile
+};
+
+struct shader_build_data {
+    u32 cached = 0, compiled = 0, failed = 0;
+    double cached_ms = 0, compiled_ms = 0, compile_ms = 0;
+    shader_build_slow slowest[10]; // slowest first
+    u32 slowest_count = 0;
+    // Edited by Ivan Danko, 2026-11-14: stage E point 3 - shader texts hashed ( texts, text_ms ) and
+    // shaders taken from the cache by their text instead of compiled ( by_text ).
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - для скількох текстів шейдерів обчислено
+    // хеш ( texts, text_ms ) і скільки шейдерів узято з кешу за текстом замість збирання ( by_text ).
+    u32 texts = 0, by_text = 0;
+    double text_ms = 0;
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - shaders taken from the pre-build.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - шейдери, узяті з попереднього збирання.
+    u32 prebuilt = 0;
+    double prebuilt_ms = 0;
+};
+shader_build_data shader_build;
+std::mutex shader_build_lock; // only the thread that builds shaders writes, but that may change
+
+double shader_build_ms(const shader_build_clock::time_point& from) {
+    return std::chrono::duration<double, std::milli>(shader_build_clock::now() - from).count();
+}
+
+// One shader: from the cache, or compiled ( compile_ms: the time inside D3DCompile ); total_ms is
+// all of shader_compile for it.
+void shader_build_note(LPCSTR name, LPCSTR target, bool cached, bool ok, double compile_ms,
+                       double total_ms) {
+    std::lock_guard<std::mutex> lock(shader_build_lock);
+    shader_build_data& s = shader_build;
+    if (cached) {
+        s.cached++;
+        s.cached_ms += total_ms;
+        return;
+    }
+    if (!ok) {
+        s.failed++;
+        return;
+    }
+    s.compiled++;
+    s.compiled_ms += total_ms;
+    if (compile_ms < 0)
+        return;
+    s.compile_ms += compile_ms;
+    u32 at = s.slowest_count;
+    while (at && s.slowest[at - 1].ms < compile_ms)
+        --at;
+    if (at >= 10)
+        return;
+    for (u32 i = (s.slowest_count < 10 ? s.slowest_count : 9); i > at; --i)
+        s.slowest[i] = s.slowest[i - 1];
+    xr_sprintf(s.slowest[at].name, "%s.%.2s", name, target);
+    s.slowest[at].ms = compile_ms;
+    if (s.slowest_count < 10)
+        s.slowest_count++;
+}
+
+// Edited by Ivan Danko, 2026-11-14: stage E point 3 - one shader text hashed ( ms: the time of its
+// preprocessing ), and one shader taken from the cache by its text instead of compiled.
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - обчислено хеш тексту одного шейдера ( ms: час
+// його препроцесування ) і один шейдер узято з кешу за текстом замість збирання.
+void shader_build_note_text(double ms) {
+    std::lock_guard<std::mutex> lock(shader_build_lock);
+    shader_build.texts++;
+    shader_build.text_ms += ms;
+}
+
+void shader_build_note_by_text() {
+    std::lock_guard<std::mutex> lock(shader_build_lock);
+    shader_build.by_text++;
+}
+
+// Edited by Ivan Danko, 2026-11-14: stage E point 4 - one shader taken from the pre-build ( ms: all
+// of shader_compile for it ).
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - один шейдер узято з попереднього збирання
+// ( ms: увесь shader_compile для нього ).
+void shader_build_note_prebuilt(double ms) {
+    std::lock_guard<std::mutex> lock(shader_build_lock);
+    shader_build.prebuilt++;
+    shader_build.prebuilt_ms += ms;
+}
+} // namespace
+
+void shader_build_stats_print() {
+    std::lock_guard<std::mutex> lock(shader_build_lock);
+    const shader_build_data& s = shader_build;
+    Msg("* Shader build: %u compiled in %.2f s ( inside D3DCompile %.2f s ), %u read from the "
+        "cache in %.2f s, %u failed",
+        s.compiled, s.compiled_ms / 1000.0, s.compile_ms / 1000.0, s.cached, s.cached_ms / 1000.0,
+        s.failed);
+    // Edited by Ivan Danko, 2026-11-14: stage E point 3 - the second line of the measurement.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - другий рядок вимірювання.
+    Msg("* Shader build: %u shader texts hashed in %.2f s, %u shaders taken from the cache by "
+        "their text instead of compiled",
+        s.texts, s.text_ms / 1000.0, s.by_text);
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - the third line of the measurement and the
+    // lines of the pre-build itself.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - третій рядок вимірювання та рядки самого
+    // попереднього збирання.
+    Msg("* Shader build: %u shaders taken from the pre-build in %.2f s ( built ahead on the worker "
+        "threads )",
+        s.prebuilt, s.prebuilt_ms / 1000.0);
+    shader_prebuild::print_stats();
+    for (u32 i = 0; i < s.slowest_count; ++i)
+        Msg("* Shader build: slowest %u - %s, %.1f ms", i + 1, s.slowest[i].name, s.slowest[i].ms);
+}
+
+// Item 9 stage E ( multithreading plan: the shader build ). Two changes, both as the donor does
+// them ( Monolith MT: r4.cpp shader_compile, xrCore\ShaderSourceCRC.cpp ), our own code:
+//
+// 1. Shaders are compiled by d3dcompiler_47.dll, about three times faster than the
+//    d3dcompiler_43.dll the engine links ( the 273 shaders of a full cache with SSS: 47 s ->
+//    14-15 s ). Only the compile call changes. Reading a compiled shader back stays on _43
+//    ( D3DReflect, D3DGetInputSignatureBlob, D3DDisassemble in create_shader ): _47 refuses the
+//    June 2010 interface id the engine passes to D3DReflect, and _43 reads the code of _47 exactly
+//    as its own ( checked on all 273 ). The donor links _47 outright, which needs the newer SDK
+//    headers; here it is loaded at run time - the game's bin first, then Windows - and when it is
+//    missing ( an old Windows 7 ) the linked _43 compiles, as before.
+//
+// 2. Each file of the generated cache ( userdata\shaders_cache ) starts with a CRC of the shader's
+//    source and of every file it includes, so a changed shader or include is compiled again by
+//    itself. Before, the cache key held only the defines, and a stale file had to be deleted by
+//    hand. Unlike the donor, each include is read and summed once per renderer, not again for
+//    every shader that includes it ( 370 files instead of about 25 000 reads for the 273 ).
+//
+// 3. Edited by Ivan Danko, 2026-11-14 ( stage E point 3 ): a settings change builds only the
+//    shaders whose text it changes. A cache file named by the defines ( the settings key above )
+//    now holds a link: the source CRC, a hash of the shader's preprocessed text ( with the entry,
+//    the target, the flags and the compiler ) and the compiler's id. The code itself sits in a
+//    file named by that hash ( x<hash> in the shader's cache folder ), shared by every settings
+//    key that gives the same text. A start with nothing changed reads link -> code, as before,
+//    without preprocessing. After a changed setting or source the shader is preprocessed ( about
+//    1 ms ) and its code is taken by its text when it is there: only the shaders whose text
+//    really changed are compiled. A cache file of the old layout is read once more and turned
+//    into link + code. The compile call is the same, so the code is the same byte for byte. Our
+//    own design, the donor keys the cache by the defines as before.
+//    Змінено (Ivan Danko, 2026-11-14) ( етап E пункт 3 ): зміна налаштувань збирає лише ті
+//    шейдери, текст яких вона змінює. Файл кешу з назвою за значеннями макросів ( ключ
+//    налаштувань вище ) тепер містить посилання: CRC джерела, хеш препроцесованого тексту
+//    шейдера ( разом із точкою входу, ціллю компіляції, прапорцями та компілятором ) та
+//    ідентифікатор компілятора. Сам код лежить у файлі з назвою за цим хешем ( x<хеш> у теці
+//    кешу шейдера ), спільному для всіх ключів налаштувань із тим самим текстом. Запуск без змін
+//    читає посилання -> код, як і раніше, без препроцесування. Після зміни налаштування чи
+//    джерела шейдер препроцесується ( близько 1 мс ), а код береться за текстом, якщо він уже є:
+//    збираються лише шейдери, текст яких справді змінився. Файл кешу старого формату читається
+//    ще раз і перетворюється на посилання + код. Виклик компілятора той самий, тому код
+//    однаковий до байта. Наша власна розробка, донор і далі будує ключ кешу за макросами.
+//
+// 4. Edited by Ivan Danko, 2026-11-14 ( stage E point 4 ): the shaders are built ahead on all
+//    cores ( r4_shader_prebuild.h, the block before shader_compile ). At renderer start every
+//    request the game can make with the current settings - each source of the shader folder, a
+//    vertex shader with every skinning - is checked against its cache file; the missing ones are
+//    preprocessed and compiled on the background worker threads while the game goes on loading,
+//    and shader_compile takes them from there. Our own design, the donor builds its shaders one
+//    by one when the game asks for them.
+//    Змінено (Ivan Danko, 2026-11-14) ( етап E пункт 4 ): шейдери збираються наперед на всіх
+//    ядрах ( r4_shader_prebuild.h, блок перед shader_compile ). Під час запуску рендера кожен
+//    запит, який гра може зробити з поточними налаштуваннями - кожне джерело теки шейдерів,
+//    вершинний шейдер з кожним скінінгом, - перевіряється за своїм файлом кешу; відсутні
+//    препроцесуються й збираються на фонових робочих потоках, поки гра далі завантажується, а
+//    shader_compile бере їх звідти. Наша власна розробка, донор збирає шейдери по одному, коли їх
+//    запитує гра.
+//
+// Edited by Ivan Danko, 2026-11-14: stage E point 4 - all of this runs on the main thread, except
+// the compiler and the text hash, which the pre-build's worker threads call too once they are set
+// up here.
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - усе це працює на головному потоці, крім
+// компілятора та хешу тексту, які після налаштування тут викликають і робочі потоки попереднього
+// збирання.
+namespace {
+pD3DCompile shader_compile_fn = nullptr;
+
+// Edited by Ivan Danko, 2026-11-14: stage E point 3 - D3DPreprocess of the same compiler DLL and
+// an id of that DLL ( its name, size and file time ) for the text hash. The compiler is now set up
+// by shader_compiler_init; its log line is still written only when a shader is compiled.
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - D3DPreprocess тієї самої DLL компілятора та
+// ідентифікатор цієї DLL ( назва, розмір і час файлу ) для хешу тексту. Компілятор тепер налаштовує
+// shader_compiler_init; його рядок у журналі, як і раніше, пишеться лише тоді, коли збирається шейдер.
+typedef HRESULT(WINAPI* shader_preprocess_t)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*,
+                                             ID3DInclude*, ID3DBlob**, ID3DBlob**);
+shader_preprocess_t shader_preprocess_fn = nullptr;
+u64 shader_compiler_hash = 0;
+string_path shader_compiler_name = "";
+bool shader_compiler_ready = false;
+bool shader_compiler_logged = false;
+
+u64 const shader_hash_start = 14695981039346656037ull; // FNV-1a, 64 bit
+
+u64 shader_hash(const void* data, size_t size, u64 hash) {
+    const u8* p = (const u8*)data;
+    for (size_t i = 0; i < size; ++i) {
+        hash ^= p[i];
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+// Another compiler ( another version in bin or in Windows ) gives other code, so its file is part
+// of the hash.
+// Інший компілятор ( інша версія в bin чи у Windows ) дає інший код, тому його файл входить у хеш.
+u64 shader_module_hash(HMODULE module, LPCSTR which) {
+    u64 hash = shader_hash(which, xr_strlen(which), shader_hash_start);
+    string_path path = "";
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if (module && GetModuleFileNameA(module, path, sizeof(path)) &&
+        GetFileAttributesExA(path, GetFileExInfoStandard, &data)) {
+        hash = shader_hash(&data.nFileSizeHigh, sizeof(data.nFileSizeHigh), hash);
+        hash = shader_hash(&data.nFileSizeLow, sizeof(data.nFileSizeLow), hash);
+        hash = shader_hash(&data.ftLastWriteTime, sizeof(data.ftLastWriteTime), hash);
+    }
+    return hash;
+}
+
+void shader_compiler_init() {
+    if (shader_compiler_ready)
+        return;
+    shader_compiler_ready = true;
+    HMODULE const dll = LoadLibraryA("d3dcompiler_47.dll"); // kept loaded, like a linked one
+    if (dll) {
+        shader_compile_fn = (pD3DCompile)GetProcAddress(dll, "D3DCompile");
+        shader_preprocess_fn = (shader_preprocess_t)GetProcAddress(dll, "D3DPreprocess");
+    }
+    if (shader_compile_fn && shader_preprocess_fn) {
+        GetModuleFileNameA(dll, shader_compiler_name, sizeof(shader_compiler_name));
+        shader_compiler_hash = shader_module_hash(dll, "47");
+    } else {
+        shader_compile_fn = &D3DCompile;
+        shader_preprocess_fn = &D3DPreprocess;
+        xr_strcpy(shader_compiler_name, "d3dcompiler_43.dll ( d3dcompiler_47.dll not found )");
+        shader_compiler_hash = shader_module_hash(LoadLibraryA("d3dcompiler_43.dll"), "43");
+    }
+}
+
+pD3DCompile shader_compiler() {
+    shader_compiler_init();
+    if (!shader_compiler_logged) {
+        shader_compiler_logged = true;
+        Msg("* Shader compiler: %s", shader_compiler_name);
+    }
+    return shader_compile_fn;
+}
+
+shader_preprocess_t shader_preprocessor() {
+    shader_compiler_init();
+    return shader_preprocess_fn;
+}
+
+u64 shader_compiler_id() {
+    shader_compiler_init();
+    return shader_compiler_hash;
+}
+
+// Include name ( lower case, as written between the quotes ) -> CRC of the file and its includes.
+xr_map<xr_string, u32> shader_include_crcs;
+// Edited by Ivan Danko, 2026-11-14: stage E point 4 - while it is set ( the pre-build at renderer
+// start ), the text of each include read is kept here too, for the worker threads.
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - поки покажчик задано ( попереднє збирання під
+// час запуску рендера ), текст кожного прочитаного включеного файлу теж зберігається тут для
+// робочих потоків.
+xr_map<xr_string, xr_string>* shader_include_texts = nullptr;
+
+u32 shader_text_crc(const char* text, u32 size, u32 depth);
+
+u32 shader_include_crc(const xr_string& include_name, u32 depth) {
+    auto const found = shader_include_crcs.find(include_name);
+    if (found != shader_include_crcs.end())
+        return found->second;
+    shader_include_crcs[include_name] = 0; // a file that includes itself back adds nothing
+    // the two places the includer of the compiler looks in, in its order ( class includer below )
+    string_path pname;
+    strconcat(sizeof(pname), pname, ::Render->getShaderPath(), include_name.c_str());
+    IReader* R = FS.r_open("$game_shaders$", pname);
+    if (!R)
+        R = FS.r_open("$game_shaders$", include_name.c_str());
+    u32 crc = 0;
+    if (R) {
+        // Edited by Ivan Danko, 2026-11-14: stage E point 4 - the text for the pre-build's workers.
+        // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - текст для робочих потоків
+        // попереднього збирання.
+        if (shader_include_texts)
+            (*shader_include_texts)[include_name].assign((const char*)R->pointer(),
+                                                          (size_t)R->length());
+        crc = shader_text_crc((const char*)R->pointer(), (u32)R->length(), depth + 1);
+        FS.r_close(R);
+    } else
+        Msg("~ Shader source CRC: can't find include '%s', skipping it for cache validation",
+            include_name.c_str());
+    shader_include_crcs[include_name] = crc;
+    return crc;
+}
+
+// The text itself, then the CRC of each included file in the order the lines name them. As the
+// donor, every line that starts with '#' and holds "#include" counts, inside an #if or not: a
+// header behind a switched-off #if that changes costs a needless rebuild at worst, never a stale
+// shader.
+u32 shader_text_crc(const char* text, u32 size, u32 depth) {
+    u32 crc = crc32(text, size);
+    if (depth > 32) // deeper than any real chain; only a broken tree gets here
+        return crc;
+    const char* p = text;
+    const char* const end = text + size;
+    while (p < end) {
+        const char* line = p;
+        while (p < end && *p != '\r' && *p != '\n')
+            ++p;
+        const char* const line_end = p;
+        while (p < end && (*p == '\r' || *p == '\n'))
+            ++p;
+        while (line < line_end && (*line == ' ' || *line == '\t'))
+            ++line;
+        if (line == line_end || *line != '#')
+            continue;
+        const xr_string s(line, line_end);
+        if (s.find("#include") == xr_string::npos)
+            continue;
+        size_t const q1 = s.find('"');
+        if (q1 == xr_string::npos)
+            continue;
+        size_t const q2 = s.find('"', q1 + 1);
+        if (q2 == xr_string::npos || q2 == q1 + 1)
+            continue;
+        xr_string include_name = s.substr(q1 + 1, q2 - q1 - 1);
+        for (char& c : include_name)
+            if (c >= 'A' && c <= 'Z')
+                c = char(c - 'A' + 'a');
+        u32 const include_crc = shader_include_crc(include_name, depth);
+        crc = crc32(&include_crc, (u32)sizeof(include_crc), crc);
+    }
+    return crc;
+}
+
+// For a shader source handed to shader_compile.
+u32 shader_source_crc(const void* source, u32 size) {
+    return shader_text_crc((const char*)source, size, 0);
+}
+
+void shader_source_crcs_reset() { shader_include_crcs.clear(); }
+} // namespace
+
+// Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - the particle vertex buffer
+// ( xrRenderCommon\ParticleEffect.cpp ) goes before the resources it depends on: at the renderer's end
+// and at a device reset; a new one is made when it is needed.
+// Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - буфер вершин частинок
+// ( xrRenderCommon\ParticleEffect.cpp ) звільняється раніше за ресурси, від яких він залежить: на
+// завершенні рендера й під час скидання пристрою; новий створюється, коли він потрібен.
+void r4_ps_geom_release();
+
 void CRender::destroy() {
+    // Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - the particle vertex buffer goes
+    // first ( r4_ps_geom_release above ).
+    // Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - буфер вершин частинок
+    // звільняється першим ( r4_ps_geom_release вище ).
+    r4_ps_geom_release();
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - the pre-build stops ( what is built goes
+    // into the cache ) before the measurement goes into the log.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - попереднє збирання зупиняється ( зібране
+    // записується в кеш ) до того, як вимірювання потрапляє в журнал.
+    shader_prebuild_end();
+    shader_build_stats_print(); // item 9 stage B: the shader build measurement into the log
+    shader_source_crcs_reset(); // item 9 stage E: a new renderer reads the includes again
     m_bMakeAsyncSS = false;
     FluidManager.Destroy();
     ::PortalTraverser.destroy();
@@ -673,6 +1068,12 @@ void CRender::destroy() {
 }
 
 void CRender::reset_begin() {
+    // Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - the particle vertex buffer goes
+    // first ( r4_ps_geom_release above CRender::destroy ).
+    // Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - буфер вершин частинок
+    // звільняється першим ( r4_ps_geom_release над CRender::destroy ).
+    r4_ps_geom_release();
+
     // Update incremental shadowmap-visibility solver
     // BUG-ID: 10646
     {
@@ -747,6 +1148,12 @@ void CRender::OnFrame() {
     // SSFX interactive grass: advance the bender animations once per frame. Donor r4.cpp:677-678.
     if (Details)
         g_pGamePersistent->GrassBendersUpdateAnimations();
+
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - pre-built shaders the game did not take go
+    // into the cache, a little each frame.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - попередньо зібрані шейдери, яких гра не
+    // взяла, записуються в кеш потроху щокадру.
+    shader_prebuild_frame();
 }
 
 // Implementation
@@ -1202,8 +1609,416 @@ public:
 static inline bool match_shader_id(LPCSTR const debug_shader_id, LPCSTR const full_shader_id,
                                    FS_FileSet const& file_set, string_path& result);
 
+// Edited by Ivan Danko, 2026-11-14: stage E point 3 - the cache by the shader's text ( see the
+// comment before shader_compiler ). The link file ( named by the settings key ) is 24 bytes:
+// [ source CRC ][ 'LNK1' ][ text hash ][ compiler id ]. The code file ( x<text hash> ) is
+// [ 'CNT1' ][ text hash ][ code CRC ][ code ].
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - кеш за текстом шейдера ( див. коментар перед
+// shader_compiler ). Файл-посилання ( назва за ключем налаштувань ) має 24 байти:
+// [ CRC джерела ][ 'LNK1' ][ хеш тексту ][ ідентифікатор компілятора ]. Файл коду
+// ( x<хеш тексту> ): [ 'CNT1' ][ хеш тексту ][ CRC коду ][ код ].
+static u32 const shader_link_tag = 0x314b4e4c;    // "LNK1"
+static u32 const shader_content_tag = 0x31544e43; // "CNT1"
+static u32 const shader_link_size = 24;
+
+// Edited by Ivan Danko, 2026-11-14: stage E point 4 - the text hash on its own, for shader_text_hash
+// below and for the pre-build's worker threads ( the same bytes, so the same hash ).
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - хеш тексту окремою функцією, для
+// shader_text_hash нижче та для робочих потоків попереднього збирання ( ті самі байти, тож той
+// самий хеш ).
+static u64 shader_text_hash_of(const void* text, size_t size, LPCSTR entry, LPCSTR target,
+                               DWORD flags, u64 compiler) {
+    u64 hash = shader_hash(text, size, shader_hash_start);
+    hash = shader_hash(entry, xr_strlen(entry) + 1, hash);
+    hash = shader_hash(target, xr_strlen(target) + 1, hash);
+    hash = shader_hash(&flags, sizeof(flags), hash);
+    return shader_hash(&compiler, sizeof(compiler), hash);
+}
+
+// The hash of what the compiler gets: the preprocessed text ( the same includer and defines as the
+// compile ), the entry, the target, the flags and the compiler. False when the text can't be
+// preprocessed ( the compile below then fails too and says why ).
+// Хеш того, що отримує компілятор: препроцесований текст ( той самий includer і ті самі макроси,
+// що й при збиранні ), точка входу, ціль, прапорці та компілятор. false, коли текст не вдається
+// препроцесувати ( тоді збирання нижче теж не вдасться і скаже чому ).
+static bool shader_text_hash(DWORD const* pSrcData, UINT SrcDataLen,
+                             D3D_SHADER_MACRO const* defines, LPCSTR pFunctionName,
+                             LPCSTR pTarget, DWORD Flags, u64& result) {
+    const shader_build_clock::time_point start = shader_build_clock::now();
+    includer Includer;
+    ID3DBlob* text = nullptr;
+    ID3DBlob* errors = nullptr;
+    HRESULT const hr =
+        shader_preprocessor()(pSrcData, SrcDataLen, "", defines, &Includer, &text, &errors);
+    bool const ok = SUCCEEDED(hr) && text;
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - the hash by shader_text_hash_of above ( the
+    // same bytes ), which the pre-build's worker threads use as well.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - хеш через shader_text_hash_of вище ( ті самі
+    // байти ), який використовують і робочі потоки попереднього збирання.
+    if (ok)
+        result = shader_text_hash_of(text->GetBufferPointer(), text->GetBufferSize(), pFunctionName,
+                                     pTarget, Flags, shader_compiler_id());
+    _RELEASE(text);
+    _RELEASE(errors);
+    shader_build_note_text(shader_build_ms(start));
+    return ok;
+}
+
+static void shader_content_name(string_path& result, LPCSTR name, LPCSTR extension, u64 hash) {
+    string_path file;
+    xr_sprintf(file, "shaders_cache\\r4\\%s.%s\\x%016llx", name, extension, hash);
+    FS.update_path(result, "$app_data_root$", file);
+}
+
+static void shader_content_write(LPCSTR content_name, u64 hash, u32 crc, const void* code,
+                                 u32 size) {
+    IWriter* file = FS.w_open(content_name);
+    if (!file)
+        return;
+    file->w_u32(shader_content_tag);
+    file->w_u64(hash);
+    file->w_u32(crc);
+    file->w(code, size);
+    FS.w_close(file);
+}
+
+static void shader_link_write(LPCSTR file_name, u32 source_crc, u64 hash) {
+    IWriter* file = FS.w_open(file_name);
+    if (!file)
+        return;
+    file->w_u32(source_crc);
+    file->w_u32(shader_link_tag);
+    file->w_u64(hash);
+    file->w_u64(shader_compiler_id());
+    FS.w_close(file);
+}
+
+// Edited by Ivan Danko, 2026-11-14: stage E point 4 - the shader build ahead on all cores
+// ( r4_shader_prebuild.h ). The requests come from shader_compile itself ( its branch for
+// shader_capture ), the results go into the cache of point 3. Besides the link ( LNK1 ), a
+// request's cache file can now hold one of two marks of the same 24 bytes, which shader_compile
+// does not take for a link: PRE1 - the request's code is in the cache under its text ( a result
+// the game did not ask for ), FAL1 - the compiler refused the request. With either of them the
+// next start does not build the request again; the game's own link replaces both.
+// Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - збирання шейдерів наперед на всіх ядрах
+// ( r4_shader_prebuild.h ). Запити дає сам shader_compile ( його гілка для shader_capture ),
+// результати йдуть у кеш пункту 3. Крім посилання ( LNK1 ), файл кешу запиту тепер може містити
+// одну з двох позначок тих самих 24 байтів, яку shader_compile не вважає посиланням: PRE1 - код
+// запиту є в кеші за його текстом ( результат, якого гра не запитувала ), FAL1 - компілятор
+// відхилив запит. З будь-якою з них наступний запуск не збирає запит знову; власне посилання гри
+// замінює обидві.
+extern int ps_r__shader_prebuild; // xrRender_console.cpp, "r__shader_prebuild"
+
+static u32 const shader_prebuilt_tag = 0x31455250; // "PRE1"
+static u32 const shader_failed_tag = 0x314c4146;   // "FAL1"
+
+namespace {
+// What shader_compile does for one request, copied out by its branch for shader_capture.
+// Що shader_compile робить для одного запиту; це копіює його гілка для shader_capture.
+struct shader_request {
+    xr_vector<shader_prebuild::define> defines;
+    xr_string key, entry, target, link;
+    DWORD flags = 0;
+    bool generated_cache = false, scope_lens = false;
+};
+shader_request* shader_capture = nullptr;
+} // namespace
+
+// The tag of a request's cache file ( LNK1, PRE1 or FAL1 ) when it has 24 bytes written for this
+// source and this compiler; 0 otherwise.
+// Тег файлу кешу запиту ( LNK1, PRE1 або FAL1 ), коли файл має 24 байти, записані для цього
+// джерела й цього компілятора; інакше 0.
+static u32 shader_cache_tag(LPCSTR file_name, u32 source_crc) {
+    if (!FS.exist(file_name))
+        return 0;
+    IReader* file = FS.r_open(file_name);
+    if (!file)
+        return 0;
+    u32 tag = 0;
+    if (file->length() == shader_link_size) {
+        u32 const saved_source_crc = file->r_u32();
+        u32 const saved_tag = file->r_u32();
+        file->r_u64(); // the text hash
+        u64 const saved_compiler = file->r_u64();
+        if (saved_source_crc == source_crc && saved_compiler == shader_compiler_id())
+            tag = saved_tag;
+    }
+    FS.r_close(file);
+    return tag;
+}
+
+// A mark ( PRE1, FAL1 ) in the layout of the link.
+// Позначка ( PRE1, FAL1 ) у форматі посилання.
+static void shader_mark_write(LPCSTR file_name, u32 source_crc, u32 tag, u64 hash) {
+    IWriter* file = FS.w_open(file_name);
+    if (!file)
+        return;
+    file->w_u32(source_crc);
+    file->w_u32(tag);
+    file->w_u64(hash);
+    file->w_u64(shader_compiler_id());
+    FS.w_close(file);
+}
+
+// The entry and the target the resource manager gives a source ( dx10ResourceManager_Resources.cpp:
+// _CreateVS, _CreatePS, _CreateGS ).
+// Точка входу й ціль, які менеджер ресурсів дає джерелу ( dx10ResourceManager_Resources.cpp:
+// _CreateVS, _CreatePS, _CreateGS ).
+static void shader_prebuild_entry(LPCSTR ext, LPCSTR data, LPCSTR& entry, LPCSTR& target) {
+    entry = "main";
+    if ('v' == ext[0]) {
+        target = HW.Caps.geometry_major >= 2 ? "vs_2_0" : "vs_1_1";
+        if (strstr(data, "main_vs_1_1")) {
+            target = "vs_1_1";
+            entry = "main_vs_1_1";
+        }
+        if (strstr(data, "main_vs_2_0")) {
+            target = "vs_2_0";
+            entry = "main_vs_2_0";
+        }
+    } else if ('p' == ext[0]) {
+        target = "ps_2_0";
+        if (strstr(data, "main_ps_1_1")) {
+            target = "ps_1_1";
+            entry = "main_ps_1_1";
+        }
+        if (strstr(data, "main_ps_1_2")) {
+            target = "ps_1_2";
+            entry = "main_ps_1_2";
+        }
+        if (strstr(data, "main_ps_1_3")) {
+            target = "ps_1_3";
+            entry = "main_ps_1_3";
+        }
+        if (strstr(data, "main_ps_1_4")) {
+            target = "ps_1_4";
+            entry = "main_ps_1_4";
+        }
+        if (strstr(data, "main_ps_2_0")) {
+            target = "ps_2_0";
+            entry = "main_ps_2_0";
+        }
+    } else
+        target = "gs_4_0";
+}
+
+// At renderer start: every request the game can make with the current settings - each .vs, .ps
+// and .gs of the shader folder, a vertex shader as plain and with skinning 0..4, as _CreateVS asks
+// for them - is worked out by shader_compile ( shader_capture ) and its cache file is checked; the
+// requests without a valid one go to the worker threads. The sources are read here, and their
+// includes with them ( shader_include_texts ), so the workers read no file.
+// Під час запуску рендера: кожен запит, який гра може зробити з поточними налаштуваннями - кожен
+// .vs, .ps і .gs теки шейдерів, вершинний шейдер без скінінгу та зі скінінгом 0..4, як їх запитує
+// _CreateVS, - визначає shader_compile ( shader_capture ), і перевіряється його файл кешу; запити
+// без чинного файлу йдуть робочим потокам. Джерела читаються тут, а з ними й їхні включені файли
+// ( shader_include_texts ), тож робочі потоки не читають файлів.
+static void shader_prebuild_begin() {
+    if (!ps_r__shader_prebuild) {
+        shader_prebuild::note("* Shader prebuild: off ( r__shader_prebuild 0 )");
+        return;
+    }
+    if (xrTasks::Slots() <= 1) {
+        shader_prebuild::note(
+            "* Shader prebuild: off ( no worker threads: cpu_tasks 0 or one CPU )");
+        return;
+    }
+    const shader_build_clock::time_point begin = shader_build_clock::now();
+
+    // the sources of the shader folder; addon files are in the index under the game's paths
+    // джерела теки шейдерів; файли аддонів є в індексі під шляхами гри
+    string_path folder;
+    FS.update_path(folder, "$game_shaders$", RImplementation.getShaderPath());
+    FS_FileSet files;
+    FS.file_list(files, folder, FS_ListFiles | FS_RootOnly, "*.vs,*.ps,*.gs");
+
+    shader_source_crcs_reset(); // every include is read again, and its text kept
+    xr_map<xr_string, xr_string> includes;
+    shader_include_texts = &includes;
+
+    xr_vector<shader_prebuild::job*> jobs;
+    u32 checked = 0, in_cache = 0, failing = 0, requests = 0;
+    s32 const skinning = RImplementation.m_skinning;
+    shader_request request;
+    for (const FS_File& found : files) {
+        LPCSTR const file = found.name.c_str();
+        LPCSTR const dot = strrchr(file, '.');
+        if (!dot || dot == file || xr_strlen(dot) != 3)
+            continue;
+        xr_string const stem(file, dot);
+        LPCSTR const ext = dot + 1;
+
+        // the source as the resource manager reads it
+        // джерело так, як його читає менеджер ресурсів
+        string_path source_name;
+        strconcat(sizeof(source_name), source_name, RImplementation.getShaderPath(), stem.c_str(),
+                  dot);
+        FS.update_path(source_name, "$game_shaders$", source_name);
+        IReader* R = FS.r_open(source_name);
+        if (!R)
+            continue;
+        xr_string const source((const char*)R->pointer(), (size_t)R->length());
+        FS.r_close(R);
+        LPCSTR entry = "main";
+        LPCSTR target = "";
+        shader_prebuild_entry(ext, source.c_str(), entry, target);
+        u32 const source_crc = shader_source_crc(source.data(), (u32)source.size());
+
+        shader_prebuild::job* todo = nullptr;
+        int const last_skinning = 'v' == ext[0] ? 4 : -1;
+        for (int k = -1; k <= last_skinning; ++k) {
+            string_path request_name;
+            if (k < 0)
+                xr_strcpy(request_name, stem.c_str());
+            else
+                xr_sprintf(request_name, "%s_%d", stem.c_str(), k);
+            RImplementation.shader_option_skinning(k);
+            void* nothing = nullptr;
+            shader_capture = &request;
+            RImplementation.shader_compile(request_name, (DWORD const*)source.data(),
+                                           (UINT)source.size(), entry, target,
+                                           D3D10_SHADER_PACK_MATRIX_ROW_MAJOR, nothing);
+            shader_capture = nullptr;
+            ++checked;
+            // built by shader_compile alone, as before
+            // збирає лише shader_compile, як і раніше
+            if (!request.generated_cache || request.scope_lens)
+                break;
+            u32 const tag = shader_cache_tag(request.link.c_str(), source_crc);
+            if (shader_link_tag == tag || shader_prebuilt_tag == tag) {
+                ++in_cache;
+                continue;
+            }
+            if (shader_failed_tag == tag) {
+                ++failing;
+                continue;
+            }
+            if (!todo) {
+                todo = xr_new<shader_prebuild::job>();
+                todo->ext = ext;
+                todo->source = source;
+                todo->source_crc = source_crc;
+            }
+            shader_prebuild::variant* const v = xr_new<shader_prebuild::variant>();
+            v->request = request_name;
+            v->link = request.link;
+            v->key = request.key;
+            v->defines = request.defines;
+            v->entry = request.entry;
+            v->target = request.target;
+            v->flags = request.flags;
+            todo->variants.push_back(v);
+            ++requests;
+        }
+        if (todo)
+            jobs.push_back(todo);
+    }
+    RImplementation.shader_option_skinning(skinning);
+    shader_include_texts = nullptr;
+    double const check_s = shader_build_ms(begin) / 1000.0;
+
+    string512 line;
+    if (jobs.empty()) {
+        xr_sprintf(line,
+                   "* Shader prebuild: %u shader requests of %u sources checked in %.2f s: %u in "
+                   "the cache, %u refused by the compiler before, nothing to build",
+                   checked, (u32)files.size(), check_s, in_cache, failing);
+        shader_prebuild::note(line);
+        return;
+    }
+
+    // the code files of the cache ( x<text hash> in each shader's folder ), for the workers
+    // файли коду в кеші ( x<хеш тексту> у теці кожного шейдера ), для робочих потоків
+    xr_set<xr_string> contents;
+    {
+        string_path cache;
+        FS.update_path(cache, "$app_data_root$", "shaders_cache\\r4\\");
+        FS_FileSet cached;
+        FS.file_list(cached, cache, FS_ListFiles, "*\\x*");
+        for (const FS_File& found : cached) {
+            LPCSTR const slash = strrchr(found.name.c_str(), '\\');
+            if (slash && 'x' == slash[1] && 17 == xr_strlen(slash + 1))
+                contents.insert(found.name);
+        }
+    }
+
+    // set up here, on the main thread / налаштовуються тут, на головному потоці
+    shader_prebuild::tools with;
+    with.compile = shader_compiler();
+    with.preprocess = shader_preprocessor();
+    with.text_hash = &shader_text_hash_of;
+    with.compiler = shader_compiler_id();
+    u32 const sources = (u32)jobs.size();
+    shader_prebuild::start(jobs, includes, contents, with);
+    xr_sprintf(line,
+               "* Shader prebuild: %u shader requests of %u sources checked in %.2f s: %u in the "
+               "cache, %u refused by the compiler before, %u to build ahead ( %u sources ) on the "
+               "worker threads",
+               checked, (u32)files.size(), check_s, in_cache, failing, requests, sources);
+    shader_prebuild::note(line);
+}
+
+// The results the game did not take go into the cache: the code under its text and the mark PRE1
+// in the request's cache file, or FAL1 for a request the compiler refused. A valid link of the
+// game is never replaced. budget_ms: the time for one call, below 0 for all of them.
+// Результати, яких гра не взяла, записуються в кеш: код за його текстом і позначка PRE1 у файлі
+// кешу запиту, або FAL1 для запиту, який відхилив компілятор. Чинне посилання гри ніколи не
+// замінюється. budget_ms: час на один виклик, менше за 0 - для всіх.
+static void shader_prebuild_write(double budget_ms) {
+    const shader_build_clock::time_point start = shader_build_clock::now();
+    const shader_prebuild::job* j = nullptr;
+    const shader_prebuild::variant* v = nullptr;
+    while (shader_prebuild::next_extra(j, v)) {
+        LPCSTR const link = v->link.c_str();
+        if (shader_link_tag != shader_cache_tag(link, j->source_crc)) {
+            if (shader_prebuild::kind_failed == v->kind)
+                shader_mark_write(link, j->source_crc, shader_failed_tag, 0);
+            else {
+                string_path content;
+                shader_content_name(content, v->request.c_str(), j->ext.c_str(), v->hash);
+                if (shader_prebuild::kind_code == v->kind && !FS.exist(content)) {
+                    const xr_string& code = j->codes[v->code];
+                    shader_content_write(content, v->hash, crc32(code.data(), (u32)code.size()),
+                                         code.data(), (u32)code.size());
+                }
+                if (FS.exist(content))
+                    shader_mark_write(link, j->source_crc, shader_prebuilt_tag, v->hash);
+            }
+        }
+        if (budget_ms >= 0 && shader_build_ms(start) >= budget_ms)
+            break;
+    }
+}
+
+// Each frame while the pre-build runs: its results into the cache ( about 2 ms ), and its end with
+// the log lines once all is done.
+// Щокадру, поки працює попереднє збирання: його результати в кеш ( близько 2 мс ) і завершення з
+// рядками в журналі, коли все готово.
+static void shader_prebuild_frame() {
+    if (!shader_prebuild::running())
+        return;
+    shader_prebuild_write(2.0);
+    if (shader_prebuild::finished()) {
+        shader_prebuild::end();
+        shader_prebuild::print_result();
+    }
+}
+
+// The renderer goes: the workers stop after the shader each is building, what is ready goes into
+// the cache.
+// Рендер закривається: робочі потоки зупиняються після шейдера, який кожен збирає, готове
+// записується в кеш.
+static void shader_prebuild_end() {
+    if (!shader_prebuild::running())
+        return;
+    shader_prebuild::cancel();
+    shader_prebuild_write(-1.0);
+    shader_prebuild::end();
+}
+
 HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcDataLen,
                                 LPCSTR pFunctionName, LPCSTR pTarget, DWORD Flags, void*& result) {
+    // item 9 stage B: the shader build measurement ( shader_build_note at the end )
+    const shader_build_clock::time_point build_start = shader_build_clock::now();
     D3D_SHADER_MACRO defines[128];
     int def_it = 0;
     char c_smapsize[32];
@@ -1895,6 +2710,7 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
           name[lens_shader_name_len + 1] >= '0' && name[lens_shader_name_len + 1] <= '7' &&
           name[lens_shader_name_len + 2] == 0));
     bool loaded_from_cache = false;
+    double build_compile_ms = -1.0; // item 9 stage B: the time inside D3DCompile
 
     string_path folder_name, folder;
     xr_strcpy(folder, "r3\\objects\\r4\\");
@@ -1912,7 +2728,10 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
     FS.file_list(m_file_set, folder_name, FS_ListFiles | FS_RootOnly, "*");
 
     string_path temp_file_name, file_name;
-    if (!match_shader_id(name, sh_name, m_file_set, temp_file_name)) {
+    // item 9 stage E: only the generated cache ( userdata ) keeps the source CRC; match_shader_id
+    // never finds a shipped shader ( its #if 1 ), so this is always the generated cache
+    bool const generated_cache = !match_shader_id(name, sh_name, m_file_set, temp_file_name);
+    if (generated_cache) {
         string_path file;
         xr_strcpy(file, "shaders_cache\\r4\\");
         xr_strcat(file, name);
@@ -1934,9 +2753,124 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         xr_strcat(file_name, temp_file_name);
     }
 
-    if (FS.exist(file_name)) {
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - the pre-build asks what this function would
+    // do for a request ( shader_prebuild_begin above ): its defines, entry, target, flags and cache
+    // file are copied out, and nothing is read, built or written.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - попереднє збирання питає, що ця функція
+    // зробила б для запиту ( shader_prebuild_begin вище ): копіюються її макроси, точка входу,
+    // ціль, прапорці та файл кешу, і нічого не читається, не збирається й не записується.
+    if (shader_capture) {
+        shader_capture->defines.clear();
+        for (const D3D_SHADER_MACRO* d = defines; d->Name; ++d) {
+            shader_prebuild::define copy;
+            copy.name = d->Name;
+            copy.null_value = !d->Definition;
+            if (d->Definition)
+                copy.value = d->Definition;
+            shader_capture->defines.push_back(copy);
+        }
+        shader_capture->key = sh_name;
+        shader_capture->entry = pFunctionName;
+        shader_capture->target = pTarget;
+        shader_capture->flags = Flags;
+        shader_capture->link = file_name;
+        shader_capture->generated_cache = generated_cache;
+        shader_capture->scope_lens = scope_lens_shader;
+        return S_FALSE;
+    }
+
+    // item 9 stage E: a generated cache file is [ source CRC ][ code CRC ][ code ], as the donor's.
+    // A file of the old layout [ code CRC ][ code ] fails the source test and is built once again.
+    u32 const source_crc = generated_cache ? shader_source_crc(pSrcData, SrcDataLen) : 0;
+    // Edited by Ivan Danko, 2026-11-14: stage E point 3 - the generated cache file is now a link to
+    // the code by the shader's text ( shader_text_hash above ). A link that matches the source and
+    // the compiler gives the text hash without preprocessing; the code is read by it below. A file
+    // of the stage E layout is still read, and its code is kept by its text as well.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - згенерований файл кешу тепер посилання на
+    // код за текстом шейдера ( shader_text_hash вище ). Посилання, що збігається з джерелом і
+    // компілятором, дає хеш тексту без препроцесування; код за ним читається нижче. Файл формату
+    // етапу E і далі читається, а його код теж зберігається за текстом.
+    u64 text_hash = 0;
+    bool text_known = false;
+    bool link_ok = false;
+    string_path content_name = "";
+
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - the shader built ahead on a worker thread
+    // ( r4_shader_prebuild.h ), taken only when every input of the compile is the same: its code,
+    // or its text hash when its code is in the cache already ( read by it below ). A request the
+    // pre-build has not started yet is built here, as before.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - шейдер, зібраний наперед на робочому
+    // потоці ( r4_shader_prebuild.h ), береться лише тоді, коли всі вхідні дані збирання ті самі:
+    // його код або хеш його тексту, коли код уже є в кеші ( читається за ним нижче ). Запит, якого
+    // попереднє збирання ще не почало, збирається тут, як і раніше.
+    bool prebuilt = false;
+    if (generated_cache && !scope_lens_shader) {
+        shader_prebuild::result pre;
+        if (shader_prebuild::take(extension, sh_name, name, pSrcData, SrcDataLen, defines,
+                                  pFunctionName, pTarget, Flags, pre)) {
+            text_hash = pre.hash;
+            text_known = true;
+            if (pre.code) {
+                shader_content_name(content_name, name, extension, text_hash);
+                if (!FS.exist(content_name))
+                    shader_content_write(content_name, text_hash, crc32(pre.code, pre.size),
+                                         pre.code, pre.size);
+                _result = create_shader(pTarget, (DWORD const*)pre.code, pre.size, file_name,
+                                        result, o.disasm);
+                prebuilt = SUCCEEDED(_result);
+            }
+        }
+    }
+
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - not when the pre-build gave the text hash.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - не тоді, коли хеш тексту дало попереднє
+    // збирання.
+    if (FAILED(_result) && !text_known && FS.exist(file_name)) {
         IReader* file = FS.r_open(file_name);
-        if (file->length() > 4) {
+        if (generated_cache) {
+            if (file->length() == shader_link_size) {
+                u32 const saved_source_crc = file->r_u32();
+                u32 const tag = file->r_u32();
+                u64 const saved_text_hash = file->r_u64();
+                u64 const saved_compiler = file->r_u64();
+                if (tag == shader_link_tag) {
+                    if (saved_source_crc == source_crc && saved_compiler == shader_compiler_id()) {
+                        text_hash = saved_text_hash;
+                        text_known = link_ok = true;
+                    } else if (saved_source_crc != source_crc)
+                        Msg("~ Shader cache source CRC mismatch for '%s.%s': cached=0x%08x "
+                            "current=0x%08x, checking the text",
+                            name, extension, saved_source_crc, source_crc);
+                }
+            } else if (file->length() > 8) {
+                u32 const saved_source_crc = file->r_u32();
+                if (saved_source_crc == source_crc) {
+                    u32 const crc = file->r_u32();
+                    u32 const real_crc = crc32(file->pointer(), file->elapsed());
+                    if (real_crc == crc) {
+                        _result = create_shader(pTarget, (DWORD*)file->pointer(), file->elapsed(),
+                                                file_name, result, o.disasm);
+                        loaded_from_cache = SUCCEEDED(_result);
+                        // the code of a stage E file is kept by its text too ( the link replaces
+                        // this file below )
+                        // код файлу етапу E теж зберігається за текстом ( посилання замінить цей
+                        // файл нижче )
+                        if (loaded_from_cache &&
+                            shader_text_hash(pSrcData, SrcDataLen, defines, pFunctionName, pTarget,
+                                             Flags, text_hash)) {
+                            text_known = true;
+                            shader_content_name(content_name, name, extension, text_hash);
+                            if (!FS.exist(content_name))
+                                shader_content_write(content_name, text_hash, crc,
+                                                     file->pointer(), file->elapsed());
+                        }
+                    }
+                } else
+                    Msg("~ Shader cache source CRC mismatch for '%s.%s': cached=0x%08x "
+                        "current=0x%08x, checking the text",
+                        name, extension, saved_source_crc, source_crc);
+            }
+        } else if (file->length() > 4) {
             u32 crc = 0;
             crc = file->r_u32();
 
@@ -1951,26 +2885,71 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
         file->close();
     }
 
+    // Edited by Ivan Danko, 2026-11-14: stage E point 3 - the code by the shader's text: after a
+    // settings change only a shader whose text changed is compiled below.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - код за текстом шейдера: після зміни
+    // налаштувань нижче збирається лише шейдер, текст якого змінився.
+    if (generated_cache && FAILED(_result)) {
+        if (!text_known)
+            text_known = shader_text_hash(pSrcData, SrcDataLen, defines, pFunctionName, pTarget,
+                                          Flags, text_hash);
+        if (text_known) {
+            shader_content_name(content_name, name, extension, text_hash);
+            if (FS.exist(content_name)) {
+                IReader* content = FS.r_open(content_name);
+                if (content) {
+                    if (content->length() > 16 && content->r_u32() == shader_content_tag &&
+                        content->r_u64() == text_hash) {
+                        u32 const crc = content->r_u32();
+                        if (crc32(content->pointer(), content->elapsed()) == crc) {
+                            _result = create_shader(pTarget, (DWORD*)content->pointer(),
+                                                    content->elapsed(), file_name, result,
+                                                    o.disasm);
+                            loaded_from_cache = SUCCEEDED(_result);
+                            if (loaded_from_cache && !link_ok)
+                                shader_build_note_by_text();
+                        }
+                    }
+                    content->close();
+                }
+            }
+        }
+    }
+
     if (FAILED(_result)) {
         includer Includer;
         LPD3DBLOB pShaderBuf = NULL;
         LPD3DBLOB pErrorBuf = NULL;
-        _result = D3DCompile(pSrcData, SrcDataLen,
+        // item 9 stage B: the shader build measurement
+        const shader_build_clock::time_point compile_start = shader_build_clock::now();
+        // item 9 stage E: d3dcompiler_47 when it is there ( shader_compiler )
+        _result = shader_compiler()(pSrcData, SrcDataLen,
                              "", // NULL, //LPCSTR pFileName,	//	NVPerfHUD bug workaround.
                              defines, &Includer, pFunctionName, pTarget, Flags, 0, &pShaderBuf,
                              &pErrorBuf);
+        build_compile_ms = shader_build_ms(compile_start); // item 9 stage B
 
         if (SUCCEEDED(_result)) {
-            IWriter* file = FS.w_open(file_name);
-
             // boost::crc_32_type		processor;
             // processor.process_block	( pShaderBuf->GetBufferPointer(),
             // ((char*)pShaderBuf->GetBufferPointer()) + pShaderBuf->GetBufferSize() );
             u32 const crc = crc32(pShaderBuf->GetBufferPointer(), pShaderBuf->GetBufferSize());
 
-            file->w_u32(crc);
-            file->w(pShaderBuf->GetBufferPointer(), (u32)pShaderBuf->GetBufferSize());
-            FS.w_close(file);
+            // Edited by Ivan Danko, 2026-11-14: stage E point 3 - the code goes into the file named
+            // by its text ( the link to it is written below ); without a text hash, as before.
+            // Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - код іде у файл з назвою за його
+            // текстом ( посилання на нього записується нижче ); без хешу тексту - як і раніше.
+            if (generated_cache && text_known)
+                shader_content_write(content_name, text_hash, crc, pShaderBuf->GetBufferPointer(),
+                                     (u32)pShaderBuf->GetBufferSize());
+            else {
+                IWriter* file = FS.w_open(file_name);
+                if (generated_cache) // item 9 stage E: the source CRC first
+                    file->w_u32(source_crc);
+                file->w_u32(crc);
+                file->w(pShaderBuf->GetBufferPointer(), (u32)pShaderBuf->GetBufferSize());
+                FS.w_close(file);
+            }
 
             _result = create_shader(pTarget, (DWORD*)pShaderBuf->GetBufferPointer(),
                                     (u32)pShaderBuf->GetBufferSize(), file_name, result, o.disasm);
@@ -1983,11 +2962,35 @@ HRESULT CRender::shader_compile(LPCSTR name, DWORD const* pSrcData, UINT SrcData
             else
                 Msg("Can't compile shader hr=0x%08x", _result);
         }
+        // item 9 stage E: the compiler's buffers go back here; the original engine kept them until
+        // the game closed. Nothing needs them any more: the code is in the cache file and in the
+        // shader ( create_shader copies it, as for the cache path above, whose buffer file->close()
+        // frees right after ), the error text is in the log.
+        _RELEASE(pShaderBuf);
+        _RELEASE(pErrorBuf);
     }
+
+    // Edited by Ivan Danko, 2026-11-14: stage E point 3 - the link file ( named by the settings key )
+    // points to the code by its text; written when it was missing, stale or of the old layout.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 3 - файл-посилання ( назва за ключем
+    // налаштувань ) вказує на код за текстом; записується, коли його не було, коли він застарів
+    // або мав старий формат.
+    if (generated_cache && text_known && !link_ok && SUCCEEDED(_result))
+        shader_link_write(file_name, source_crc, text_hash);
 
     if (scope_lens_shader && SUCCEEDED(_result))
         Msg("* ScopeLens%s: %s source_crc=%08x file=%s", pTarget[0] == 'v' ? "VS" : "PS",
             loaded_from_cache ? "cached" : "compiled", crc32(pSrcData, SrcDataLen), file_name);
+
+    // item 9 stage B: the shader build measurement
+    // Edited by Ivan Danko, 2026-11-14: stage E point 4 - a pre-built shader counts on its own line.
+    // Змінено (Ivan Danko, 2026-11-14): етап E пункт 4 - попередньо зібраний шейдер рахується
+    // окремим рядком.
+    if (prebuilt)
+        shader_build_note_prebuilt(shader_build_ms(build_start));
+    else
+        shader_build_note(name, pTarget, loaded_from_cache, SUCCEEDED(_result), build_compile_ms,
+                          shader_build_ms(build_start));
 
     return _result;
 }

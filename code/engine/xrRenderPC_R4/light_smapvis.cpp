@@ -23,6 +23,18 @@ void smapvis::begin() {
         // do nothing -> we just prepare for testing process
         break;
     case state_working:
+        // Edited by Ivan Danko, 2026-11-14: the 3D scope lens draws the scene a second time in the
+        // same frame. There this lamp only hides the shadow casters already known to be hidden and
+        // starts no test of its own: zeroing testQ_id here lost the main view's pending query,
+        // which then never went back to the shared pool of 1536 ("Too many occlusion queries").
+        // Змінено (Ivan Danko, 2026-11-14): 3D-лінза малює сцену вдруге в тому самому кадрі. Там
+        // цей ліхтар лише пропускає об'єкти, уже відомі як невидимі для його тіні, і власної
+        // перевірки не починає: обнулення testQ_id тут губило запит основного кадру, і той уже не
+        // повертався до спільного пулу на 1536 запитів ("Too many occlusion queries").
+        if (Device.scopeLensPass) {
+            mark();
+            break;
+        }
         // mark already known to be invisible visuals, set breakpoint
         testQ_V = 0;
         testQ_id = 0;
@@ -41,6 +53,13 @@ void smapvis::end() {
     RImplementation.get_Counters(ts, td);
     RImplementation.stats.ic_total += ts;
     RImplementation.set_Feedback(0, 0);
+
+    // Edited by Ivan Danko, 2026-11-14: in the 3D scope lens pass no state change and no new query
+    // - the main view tests this lamp, the lens only uses the result.
+    // Змінено (Ivan Danko, 2026-11-14): у проході 3D-лінзи ні зміни стану, ні нового запиту -
+    // ліхтар перевіряє основний кадр, лінза лише бере результат.
+    if (Device.scopeLensPass)
+        return;
 
     switch (state) {
     case state_counting:

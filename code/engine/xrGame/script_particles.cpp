@@ -85,6 +85,10 @@ void CScriptParticlesCustom::remove_owner() {
 
 CScriptParticles::CScriptParticles(LPCSTR caParticlesName) {
     m_particles = xr_new<CScriptParticlesCustom>(this, caParticlesName);
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the effect's transform starts as the identity
+    // matrix (Monolith).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - матриця ефекту спершу одинична (Monolith).
+    m_transform.identity();
 }
 
 CScriptParticles::~CScriptParticles() {
@@ -96,14 +100,29 @@ CScriptParticles::~CScriptParticles() {
     }
 }
 
-void CScriptParticles::Play() {
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - Play / PlayAtPos of Anomaly (Monolith
+// script_particles.cpp) with the HUD mode flag; play_at_pos keeps the turn set by set_direction /
+// set_orientation and only moves the effect (before, it put the effect at the point unturned).
+// Adapted: the calls without the flag are two own functions (see script_particles.h).
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - Play / PlayAtPos з Anomaly (Monolith
+// script_particles.cpp) з прапорцем режиму HUD; play_at_pos зберігає поворот, заданий set_direction /
+// set_orientation, і лише переносить ефект (раніше він ставив ефект у точку без повороту).
+// Адаптовано: виклики без прапорця - дві окремі функції (див. script_particles.h).
+void CScriptParticles::Play() { Play(false); }
+
+void CScriptParticles::Play(bool bHudMode) {
     VERIFY(m_particles);
-    m_particles->Play(false);
+    m_particles->Play(bHudMode);
 }
 
-void CScriptParticles::PlayAtPos(const Fvector& position) {
+void CScriptParticles::PlayAtPos(const Fvector& position) { PlayAtPos(position, false); }
+
+void CScriptParticles::PlayAtPos(const Fvector& position, bool bHudMode) {
     VERIFY(m_particles);
-    m_particles->play_at_pos(position);
+    m_transform.translate_over(position);
+    m_particles->UpdateParent(m_transform, zero_vel);
+    m_particles->Play(bHudMode);
+    m_particles->UpdateParent(m_transform, zero_vel);
 }
 
 void CScriptParticles::Stop() {
@@ -116,12 +135,48 @@ void CScriptParticles::StopDeffered() {
     m_particles->Stop(TRUE);
 }
 
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - MoveTo of Anomaly (Monolith script_particles.cpp):
+// it moves the effect and keeps its turn (before, every move dropped the turn).
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - MoveTo з Anomaly (Monolith
+// script_particles.cpp): переносить ефект і зберігає його поворот (раніше кожне перенесення скидало
+// поворот).
 void CScriptParticles::MoveTo(const Fvector& pos, const Fvector& vel) {
     VERIFY(m_particles);
-    Fmatrix XF;
-    XF.translate(pos);
-    m_particles->UpdateParent(XF, vel);
+    m_transform.translate_over(pos);
+    m_particles->UpdateParent(m_transform, vel);
 }
+
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the Lua functions set_position, set_direction,
+// set_orientation and set_hud_mode of Anomaly (Monolith script_particles.cpp, as there).
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - функції Lua set_position, set_direction,
+// set_orientation і set_hud_mode з Anomaly (Monolith script_particles.cpp, як там).
+void CScriptParticles::XFORMMoveTo(const Fvector& pos) {
+    VERIFY(m_particles);
+    m_transform.translate_over(pos);
+    m_particles->SetXFORM(m_transform);
+}
+
+void CScriptParticles::SetDirection(const Fvector& dir) {
+    Fmatrix matrix;
+    matrix.identity();
+    matrix.k.set(dir);
+    Fvector::generate_orthonormal_basis_normalized(matrix.k, matrix.j, matrix.i);
+    matrix.translate_over(m_transform.c);
+    m_transform.set(matrix);
+    m_particles->UpdateParent(matrix, zero_vel);
+}
+
+void CScriptParticles::SetOrientation(float yaw, float pitch, float roll) {
+    Fmatrix matrix = Fmatrix().set(m_transform);
+    // setHPB clears the position (matrix.c), the next line puts it back.
+    // setHPB обнуляє положення (matrix.c), наступний рядок повертає його.
+    matrix.setHPB(yaw, pitch, roll);
+    matrix.translate_over(m_transform.c);
+    m_transform.set(matrix);
+    m_particles->SetXFORM(m_transform);
+}
+
+void CScriptParticles::SetHudMode(bool bHudMode) { m_particles->SetHudMode(bHudMode); }
 
 bool CScriptParticles::IsPlaying() const {
     VERIFY(m_particles);

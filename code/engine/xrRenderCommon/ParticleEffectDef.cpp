@@ -7,6 +7,18 @@
 #include "UI_ToolsCustom.h"
 #include "ParticleEffectActions.h"
 #endif
+#if RENDER == R_R4
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the particle actions of Anomaly in the game
+// (Monolith ParticleEffectDef.cpp includes them outside the editor) and the update coefficient
+// particle_update_mod (xrRender_console.cpp).
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - дії частинок Anomaly у грі (Monolith
+// ParticleEffectDef.cpp підключає їх поза редактором) і коефіцієнт оновлення particle_update_mod
+// (xrRender_console.cpp).
+#define AnsiString std::string
+#include "ParticleEffectActions.h"
+
+extern float ps_particle_update_coeff;
+#endif
 
 using namespace PAPI;
 using namespace PS;
@@ -17,6 +29,17 @@ CPEDef::CPEDef() {
 
 CPEDef::~CPEDef() {
 #ifdef _EDITOR
+    for (auto* action : m_EActionList) {
+        xr_delete(action);
+    }
+    m_EActionList.clear();
+#endif
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the editor actions are freed, as in the editor
+    // branch above. Adapted: Monolith's game build keeps them (a small leak at every library reload).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - дії редактора звільняються, як у гілці
+    // редактора вище. Адаптовано: у Monolith у грі вони лишаються (невеликий витік при кожному
+    // перезавантаженні бібліотеки).
     for (auto* action : m_EActionList) {
         xr_delete(action);
     }
@@ -37,6 +60,23 @@ void CPEDef::SetName(LPCSTR name) {
     m_Name = name; 
 }
 
+#if RENDER == R_R4
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - Monolith's GetUStep / GetFStep: the effect's
+// update step times particle_update_mod. Adapted: at least 1 ms - a step of 0 (a small update_step
+// times a small coefficient) would divide by zero in CParticleEffect::OnFrame.
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - GetUStep / GetFStep з Monolith: крок
+// оновлення ефекту, помножений на particle_update_mod. Адаптовано: щонайменше 1 мс - крок 0 (малий
+// update_step на малий коефіцієнт) дав би ділення на нуль у CParticleEffect::OnFrame.
+u32 CPEDef::GetUStep() {
+    const u32 step = u32(m_uStep * ps_particle_update_coeff);
+    return step ? step : 1;
+}
+
+float CPEDef::GetFStep() {
+    return m_fStep * ps_particle_update_coeff;
+}
+
+#endif
 void CPEDef::ExecuteAnimate(Particle* particles, u32 p_cnt, float dt) {
     const float speedFac = m_Frame.m_fSpeed * dt;
     const float iFrameCountF = static_cast<float>(m_Frame.m_iFrameCount);
@@ -191,11 +231,58 @@ BOOL CPEDef::Load(IReader& F) {
         Compile(m_EActionList);
     }
 #endif
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - as in Anomaly (Monolith CPEDef::Load): when
+    // particles.xr keeps the editor data of an effect, its action list is compiled from them again;
+    // data of another version keep the compiled list of the file. Adapted: an unknown action type is
+    // written to the log and the file's compiled list is kept (Monolith stops the game); the actions
+    // of rejected data are freed (Monolith keeps them in memory).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - як в Anomaly (Monolith CPEDef::Load):
+    // коли particles.xr містить дані редактора для ефекту, його список дій компілюється з них заново;
+    // дані іншої версії лишають скомпільований список із файлу. Адаптовано: невідомий тип дії
+    // пишеться в журнал і лишається скомпільований список файлу (Monolith зупиняє гру); дії
+    // відхилених даних звільняються (Monolith лишає їх у пам'яті).
+    if (pCreateEAction && F.find_chunk(PED_CHUNK_EDATA)) {
+        m_EActionList.resize(F.r_u32());
+        bool valid = false;
+        for (auto& action : m_EActionList) {
+            const u32 type = F.r_u32();
+            action = pCreateEAction(static_cast<PAPI::PActionEnum>(type));
+            if (!action) {
+                Msg("! Particles: effect '%s': unknown action type %u in the editor data, the compiled list is kept",
+                    *m_Name, type);
+                valid = false;
+                break;
+            }
+            valid = action->Load(F);
+            if (!valid)
+                break;
+        }
+        if (valid) {
+            Compile(m_EActionList);
+        } else {
+            for (auto* action : m_EActionList) {
+                xr_delete(action);
+            }
+            m_EActionList.clear();
+        }
+    }
+#endif
 
     return TRUE;
 }
 
 BOOL CPEDef::Load2(CInifile& ini) {
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - a loose .pe file may set its own update step
+    // in ms ([_effect] update_step), as in Anomaly (Monolith CPEDef::Load2).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - окремий файл .pe може задати власний крок
+    // оновлення в мс ([_effect] update_step), як в Anomaly (Monolith CPEDef::Load2).
+    if (ini.line_exist("_effect", "update_step")) {
+        m_uStep = ini.r_u32("_effect", "update_step");
+        m_fStep = float(m_uStep) / 1000.f;
+    }
+#endif
     m_MaxParticles = ini.r_u32("_effect", "max_particles");
     m_Flags.assign(ini.r_u32("_effect", "flags"));
 
@@ -246,6 +333,33 @@ BOOL CPEDef::Load2(CInifile& ini) {
         Compile(m_EActionList);
     }
 #endif
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the actions of a loose .pe file are read and
+    // compiled, as in Anomaly (Monolith CPEDef::Load2); before, our game skipped them and such effects
+    // stayed empty. Adapted: an action of an unknown type is written to the log and skipped (Monolith
+    // stops the game).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - дії окремого файлу .pe читаються і
+    // компілюються, як в Anomaly (Monolith CPEDef::Load2); раніше наша гра їх пропускала і такі ефекти
+    // лишалися порожніми. Адаптовано: дія невідомого типу пишеться в журнал і пропускається (Monolith
+    // зупиняє гру).
+    if (pCreateEAction) {
+        const u32 count = ini.r_u32("_effect", "action_count");
+        m_EActionList.reserve(count);
+        for (u32 action_id = 0; action_id < count; ++action_id) {
+            string256 sect;
+            xr_sprintf(sect, sizeof(sect), "action_%04d", action_id);
+            const u32 type = ini.r_u32(sect, "action_type");
+            EParticleAction* action = pCreateEAction(static_cast<PAPI::PActionEnum>(type));
+            if (!action) {
+                Msg("! Particles: effect '%s', [%s]: unknown action type %u, skipped", *m_Name, sect, type);
+                continue;
+            }
+            action->Load2(ini, sect);
+            m_EActionList.push_back(action);
+        }
+        Compile(m_EActionList);
+    }
+#endif
 
     return TRUE;
 }
@@ -287,6 +401,23 @@ void CPEDef::Save2(CInifile& ini) {
     }
     
 #ifdef _EDITOR
+    ini.w_u32("_effect", "action_count", static_cast<u32>(m_EActionList.size()));
+    u32 action_id = 0;
+    for (auto* action : m_EActionList) {
+        string256 sect;
+        xr_sprintf(sect, sizeof(sect), "action_%04d", action_id);
+        ini.w_u32(sect, "action_type", action->type);
+        action->Save2(ini, sect);
+        ++action_id;
+    }
+#endif
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the actions are written into the loose .pe file
+    // (console part_export), as in Anomaly (Monolith CPEDef::Save2; as there, the update step is not
+    // written).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - дії записуються в окремий файл .pe
+    // (консоль part_export), як в Anomaly (Monolith CPEDef::Save2; як і там, крок оновлення не
+    // записується).
     ini.w_u32("_effect", "action_count", static_cast<u32>(m_EActionList.size()));
     u32 action_id = 0;
     for (auto* action : m_EActionList) {
@@ -366,8 +497,42 @@ void CPEDef::Save(IWriter& F) {
     }
     F.close_chunk();
 #endif
+#if RENDER == R_R4
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the editor data are written into particles.xr
+    // (console part_import), as in Anomaly (Monolith CPEDef::Save).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - дані редактора записуються в particles.xr
+    // (консоль part_import), як в Anomaly (Monolith CPEDef::Save).
+    F.open_chunk(PED_CHUNK_EDATA);
+    F.w_u32(static_cast<u32>(m_EActionList.size()));
+    for (auto* action : m_EActionList) {
+        F.w_u32(action->type);
+        action->Save(F);
+    }
+    F.close_chunk();
+#endif
 }
 
+#if RENDER == R_R4
+// Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - Monolith's CPEDef::Compile: the enabled actions of
+// the editor list are written into the compiled list m_Actions that the particle library plays.
+// Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - CPEDef::Compile з Monolith: увімкнені дії
+// списку редактора записуються у скомпільований список m_Actions, який відтворює бібліотека частинок.
+void PS::CPEDef::Compile(EPAVec& v) {
+    m_Actions.clear();
+    m_Actions.w_u32(static_cast<u32>(v.size()));
+    u32 cnt = 0;
+
+    for (auto* action : v) {
+        if (action->flags.is(EParticleAction::flEnabled)) {
+            action->Compile(m_Actions);
+            cnt++;
+        }
+    }
+    m_Actions.seek(0);
+    m_Actions.w_u32(cnt);
+}
+
+#endif
 #ifdef _EDITOR
 void PS::CPEDef::Compile(EPAVec& v) {
     m_Actions.clear();

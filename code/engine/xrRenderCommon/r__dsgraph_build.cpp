@@ -29,6 +29,26 @@ float r_ssaHZBvsTEX;
 u32 g_mapWaterFrame = u32(-1);
 #endif
 
+#if RENDER == R_R4
+// Written by Ivan Danko, 2026-11-15: FPS fix step 1 "do not draw what cannot be seen" - far small
+// static meshes ( "r__far_cull" ). xrRenderPC_R4\r4_R_render.cpp sets these for the camera views
+// only ( render_main ), never for the shadow passes.
+// Створено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS "не малювати те, чого не видно" -
+// дрібні далекі статичні сітки ( "r__far_cull" ). xrRenderPC_R4\r4_R_render.cpp задає це лише
+// для видів камери ( render_main ), ніколи для проходів тіней.
+extern float r4_far_cut_static_k;      // ( scale on the screen / limit )^2, 0 = no cut
+extern int r4_far_cut_count_view;      // -1 = no count, 0 = the main view, 1 = the 3D scope lens
+extern u32 r4_far_cut_static_count[2]; // meshes cut in this frame
+
+// Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - every particle effect the frame will
+// draw goes into the queue of the particle vertex buffer: at its first draw the vertices of all of them
+// are built at once on all cores ( ParticleEffect.cpp, r4_ps_geom_* ).
+// Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - кожен ефект частинок, який кадр
+// малюватиме, стає в чергу буфера вершин частинок: на першому малюванні вершини їх усіх будуються
+// разом на всіх ядрах ( ParticleEffect.cpp, r4_ps_geom_* ).
+void r4_ps_geom_queue(dxRender_Visual* visual);
+#endif
+
 ICF float CalcSSA(float& distSQ, Fvector& C, dxRender_Visual* V) {
     float R = V->vis.sphere.R + 0;
     distSQ = Device.vCameraPosition.distance_to_sqr(C) + EPS;
@@ -70,6 +90,14 @@ void R_dsgraph_structure::r_dsgraph_insert_dynamic(dxRender_Visual* pVisual, Fve
         N->val.pVisual = pVisual;
         N->val.Matrix = *RI.val_pTransform;
         N->val.se = sh_d; // 4=L_special
+#if RENDER == R_R4
+        // Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - a particle effect drawn into the
+        // heat haze waits for its vertices ( r4_ps_geom_queue above ).
+        // Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - ефект частинок, що
+        // малюється в марево, чекає на свої вершини ( r4_ps_geom_queue вище ).
+        if (pVisual->Type == MT_PARTICLE_EFFECT)
+            r4_ps_geom_queue(pVisual);
+#endif
     }
 
     // Select shader
@@ -78,6 +106,16 @@ void R_dsgraph_structure::r_dsgraph_insert_dynamic(dxRender_Visual* pVisual, Fve
         return;
     if (!pmask[sh->flags.iPriority / 2])
         return;
+#if RENDER == R_R4
+    // Written by Ivan Danko, 2026-11-18: FPS plan step 2b part B - a particle effect this pass will draw
+    // waits for its vertices ( r4_ps_geom_queue above ); one that only casts a shadow ( val_bInvisible,
+    // not the HUD ) is not drawn.
+    // Створено (Ivan Danko, 2026-11-18): крок 2б плану FPS, частина B - ефект частинок, який цей прохід
+    // малюватиме, чекає на свої вершини ( r4_ps_geom_queue вище ); той, що лише відкидає тінь
+    // ( val_bInvisible, не HUD ), не малюється.
+    if (pVisual->Type == MT_PARTICLE_EFFECT && (RI.val_bHUD || !RI.val_bInvisible))
+        r4_ps_geom_queue(pVisual);
+#endif
 
     // Create common node
     // NOTE: Invisible elements exist only in R1
@@ -273,6 +311,21 @@ void R_dsgraph_structure::r_dsgraph_insert_static(dxRender_Visual* pVisual) {
     float SSA = CalcSSA(distSQ, pVisual->vis.sphere.P, pVisual);
     if (SSA <= r_ssaDISCARD)
         return;
+#if RENDER == R_R4
+    // Edited by Ivan Danko, 2026-11-15: FPS fix step 1 - a far small mesh is not drawn ( camera
+    // views only; trees and glowing meshes always stay )
+    // Змінено (Ivan Danko, 2026-11-15): крок 1 виправлення FPS - дрібна далека сітка не малюється
+    // ( лише види камери; дерева й сітки, що світяться, лишаються завжди )
+    if (r4_far_cut_static_k > 0.f && pVisual->Type != MT_TREE_ST && pVisual->Type != MT_TREE_PM &&
+        pVisual->vis.sphere.R * pVisual->vis.sphere.R * r4_far_cut_static_k < distSQ) {
+        ShaderElement* sh_cut = RImplementation.rimp_select_sh_static(pVisual, distSQ);
+        if (!(sh_cut && sh_cut->flags.bEmissive)) {
+            if (r4_far_cut_count_view >= 0)
+                r4_far_cut_static_count[r4_far_cut_count_view]++;
+            return;
+        }
+    }
+#endif
 
     // Distortive geometry should be marked and R2 special-cases it
     // a) Allow to optimize RT order

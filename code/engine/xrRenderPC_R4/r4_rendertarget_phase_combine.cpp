@@ -3,6 +3,9 @@
 #include "xrEngine/environment.h"
 
 #include "xrRenderCommon/dxEnvironmentRender.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the render parts
+// «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - частини рендеру
+#include "r4_frame_parts.h"
 
 #define STENCIL_CULL 0
 
@@ -103,6 +106,11 @@ void CRenderTarget::phase_combine() {
             phase_ssfx_il();
         }
     }
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the ambient occlusion and the
+    // indirect light end here
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - тут зак≥нчуютьс€ зат≥ненн€
+    // навколишнього св≥тла й непр€ме св≥тло
+    r4_frame_parts_mark(R4P_AO_IL);
 
     FLOAT ColorRGBA[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     // low/hi RTs
@@ -376,6 +384,12 @@ void CRenderTarget::phase_combine() {
                                       rt_Generic_0_r->pTexture->surface_get());
     }
 
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the combine, the reflections and
+    // the water end here
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - тут зак≥нчуютьс€ поЇднанн€,
+    // в≥дбитт€ й вода
+    r4_frame_parts_mark(R4P_COMBINE);
+
     // Forward rendering
     {
         PIX_EVENT(Forward_rendering);
@@ -393,6 +407,10 @@ void CRenderTarget::phase_combine() {
         if (g_pGamePersistent && !Device.scopeLensPass)
             g_pGamePersistent->OnRenderPPUI_main(); // PP-UI
     }
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the transparent geometry ends here
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - тут зак≥нчуЇтьс€ прозора
+    // геометр≥€
+    r4_frame_parts_mark(R4P_TRANSPARENT);
 
     //	Igor: for volumetric lights
     //	combine light volume here

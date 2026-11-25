@@ -35,6 +35,12 @@ public:
     void InitComboBox(Fvector2 pos, float width);
     void SetItemIDX(int idx);
     void SetItemToken(int tok);
+    // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 13 "Mods" - the
+    // chosen line of the list for a script ( the "Mods" window, ui_mods_menu.script )
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 13 «Моди» - вибраний
+    // рядок списку для скрипту ( вікно «Моди», ui_mods_menu.script )
+    u32 GetSelectedIDX();
+    void SetSelectedIDX(u32 idx);
 
     virtual void SendMessage(CUIWindow* pWnd, s16 msg, void* pData = 0);
     virtual void OnFocusLost();

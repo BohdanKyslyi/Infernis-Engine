@@ -1,0 +1,202 @@
+<w>
+	<!-- The "Mods" window ( ui_mods_menu.script ), 4:3.
+	     Written by Ivan Danko, 2026-11-18: item 13 "Mods" - the layout of our "SSS Settings" window
+	     ( ui_sss_menu.xml ): the addons on the left, the settings of the page picked on the right,
+	     the description box under them. Each kind of control comes from one node here ( tpl:
+	     check, track, list_2 .. list_8 ), as in our "Wind Leaves Settings" window ( Weather_ATMOS
+	     ui_wl_menu.xml ); the script puts it half way down its row.
+	     Створено (Ivan Danko, 2026-11-18): пункт 13 «Моди» - розмітка нашого вікна "SSS Settings"
+	     ( ui_sss_menu.xml ): аддони ліворуч, налаштування вибраної сторінки праворуч, поле опису
+	     під ними. Кожен вид елемента керування береться з одного вузла тут ( tpl: check, track,
+	     list_2 .. list_8 ), як у нашому вікні "Wind Leaves Settings" ( Weather_ATMOS
+	     ui_wl_menu.xml ); скрипт ставить його посередині висоти рядка.
+	     Edited by Ivan Danko, 2026-11-18, on the user's word: a line per addon on the left
+	     ( tpl:mod_btn; mod_head and mod_sub went ), all its settings on its page, the title of each
+	     group as a heading row ( tpl:head_row, tpl:head ), as an addon's page of MCM in Anomaly.
+	     Змінено (Ivan Danko, 2026-11-18) за вказівкою користувача: ліворуч рядок на аддон
+	     ( tpl:mod_btn; mod_head і mod_sub прибрано ), усі його налаштування на його сторінці, назва
+	     кожної групи - рядком-заголовком ( tpl:head_row, tpl:head ), як сторінка аддона в MCM Anomaly. -->
+	<background width="1024" height="768">
+		<auto_static x="190" y="250" width="336" height="176">
+			<texture width="336" height="176">ui\video_window</texture>
+		</auto_static>
+		<auto_static width="1024" height="768">
+			<texture>ui_inGame2_opt_background</texture>
+		</auto_static>
+	</background>
+
+	<form x="62" y="34" width="900" height="700" stretch="1">
+		<texture>ui_inGame2_main_window_small</texture>
+		<caption x="0" y="18" width="900" height="34">
+			<text font="graffiti32" align="c">ui_mods_title</text>
+		</caption>
+		<mod_frame x="28" y="66" width="236" height="536">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</mod_frame>
+		<mod_list x="28" y="68" width="236" height="532" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="0"/>
+		<page_frame x="272" y="66" width="600" height="432">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</page_frame>
+		<page_title x="282" y="70" width="580" height="26">
+			<text font="letterica18" r="235" g="219" b="178" align="l" vert_align="c"/>
+		</page_title>
+		<page x="275" y="98" width="594" height="396" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="1"/>
+		<desc_frame x="272" y="506" width="600" height="96">
+			<texture>ui_inGame2_servers_list_frame</texture>
+		</desc_frame>
+		<desc x="282" y="510" width="580" height="88" right_ident="0" left_ident="0" top_indent="0" bottom_indent="0" vert_interval="0" always_show_scroll="0"/>
+		<legend x="46" y="658" width="236" height="24">
+			<text font="letterica16" r="140" g="140" b="140" align="l" vert_align="c">ui_sss_legend</text>
+		</legend>
+		<btn_reset x="437" y="656" width="135" height="26">
+			<text font="letterica18" align="c">ui_sss_reset</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_reset>
+		<btn_apply x="582" y="656" width="135" height="26">
+			<text font="letterica18" align="c">ui_mm_apply</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_apply>
+		<btn_cancel x="727" y="656" width="135" height="26">
+			<text font="letterica18" align="c">ui_mm_cancel</text>
+			<texture>ui_inGame2_Mp_bigbuttone</texture>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+			</text_color>
+		</btn_cancel>
+	</form>
+
+	<tpl>
+		<mod_row width="236" height="19"/>
+		<mod_sel x="0" y="0" width="236" height="19" stretch="1">
+			<texture>ui_inGame2_Mp_bigbuttone_h</texture>
+		</mod_sel>
+		<mod_btn x="0" y="0" width="236" height="19">
+			<text x="9" font="letterica16" align="l" vert_align="c"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="255" g="255" b="255"/>
+			</text_color>
+		</mod_btn>
+		<!-- a heading row of an addon's page: the title of a group, in the font and colour of the page
+		     title ( the plate of MCM's headings, ui_options_slider_player, is not in this game )
+		     рядок-заголовок сторінки аддона: назва групи, шрифтом і кольором заголовка сторінки
+		     ( плашки заголовків MCM, ui_options_slider_player, у цій грі немає ) -->
+		<head_row width="574" height="30"/>
+		<head x="8" y="3" width="558" height="24">
+			<text font="letterica18" r="235" g="219" b="178" align="l" vert_align="c"/>
+		</head>
+		<row_1 width="574" height="30"/>
+		<sel_1 x="0" y="1" width="574" height="28" stretch="1">
+			<texture>ui_inGame2_combobox_line_b</texture>
+		</sel_1>
+		<cap_1 x="8" y="3" width="283" height="24">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</cap_1>
+		<num_1 x="510" y="3" width="56" height="24">
+			<text font="letterica16" r="170" g="170" b="170" align="r" vert_align="c"/>
+		</num_1>
+		<row_2 width="574" height="44"/>
+		<sel_2 x="0" y="1" width="574" height="42" stretch="1">
+			<texture>ui_inGame2_combobox_line_b</texture>
+		</sel_2>
+		<cap_2 x="8" y="3" width="283" height="38">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</cap_2>
+		<num_2 x="510" y="3" width="56" height="38">
+			<text font="letterica16" r="170" g="170" b="170" align="r" vert_align="c"/>
+		</num_2>
+		<row_3 width="574" height="60"/>
+		<sel_3 x="0" y="1" width="574" height="58" stretch="1">
+			<texture>ui_inGame2_combobox_line_b</texture>
+		</sel_3>
+		<cap_3 x="8" y="3" width="283" height="54">
+			<text font="letterica16" align="l" vert_align="c" complex_mode="1"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<h r="230" g="230" b="230"/>
+				<t r="235" g="219" b="178"/>
+				<d r="100" g="100" b="100"/>
+			</text_color>
+		</cap_3>
+		<num_3 x="510" y="3" width="56" height="54">
+			<text font="letterica16" r="170" g="170" b="170" align="r" vert_align="c"/>
+		</num_3>
+		<desc_text x="0" y="0" width="556" height="16">
+			<text font="letterica16" r="200" g="200" b="200" align="l" complex_mode="1"/>
+		</desc_text>
+		<!-- the controls: y is set by the script -->
+		<check x="293" y="0" width="44" height="29">
+			<texture>ui_inGame2_checkbox</texture>
+		</check>
+		<track x="306" y="7" width="200" height="16" step="0.1"/>
+		<list_2 x="306" y="5" width="156" height="20" list_length="2" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</list_2>
+		<list_3 x="306" y="5" width="156" height="20" list_length="3" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</list_3>
+		<list_4 x="306" y="5" width="156" height="20" list_length="4" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</list_4>
+		<list_5 x="306" y="5" width="156" height="20" list_length="5" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</list_5>
+		<list_6 x="306" y="5" width="156" height="20" list_length="6" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</list_6>
+		<list_7 x="306" y="5" width="156" height="20" list_length="7" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</list_7>
+		<list_8 x="306" y="5" width="156" height="20" list_length="8" always_show_scroll="0">
+			<list_font r="170" g="170" b="170" font="letterica16"/>
+			<text_color>
+				<e r="170" g="170" b="170"/>
+				<d r="70" g="70" b="70"/>
+			</text_color>
+		</list_8>
+	</tpl>
+</w>

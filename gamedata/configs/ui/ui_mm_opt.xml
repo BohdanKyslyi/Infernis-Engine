@@ -138,6 +138,28 @@
         </check_fullscreen>
 
 
+        <!-- Written by Ivan Danko, 2026-11-18: item 9 stage F - the "Engine settings" button
+             ( ui_cpu_menu.script ), above the SSS check box, never grey.
+             Створено (Ivan Danko, 2026-11-18): пункт 9 етап F - кнопка "Налаштування рушія"
+             ( ui_cpu_menu.script ), над прапорцем SSS, ніколи не сіра. -->
+        <btn_cpu x="50" y="258" width="196" height="24" stretch="1">
+            <text r="170" g="170" b="170" align="c" font="letterica16">ui_cpu_button</text>
+            <texture>ui_inGame2_button</texture>
+            <text_color><e r="210" g="210" b="210"/><d r="70" g="70" b="70"/></text_color>
+        </btn_cpu>
+
+        <!-- Written by Ivan Danko, 2026-11-18: item 13 "Mods" - the "Mods" button
+             ( ui_mods_menu.script ), beside "Engine settings", where the button of the
+             "Wind Leaves Settings" window of Weather_ATMOS stood; never grey.
+             Створено (Ivan Danko, 2026-11-18): пункт 13 «Моди» - кнопка «Моди»
+             ( ui_mods_menu.script ), поруч із "Налаштування рушія", де стояла кнопка вікна
+             "Wind Leaves Settings" аддона Weather_ATMOS; ніколи не сіра. -->
+        <btn_mods x="250" y="258" width="196" height="24" stretch="1">
+            <text r="170" g="170" b="170" align="c" font="letterica16">ui_mods_button</text>
+            <texture>ui_inGame2_button</texture>
+            <text_color><e r="210" g="210" b="210"/><d r="70" g="70" b="70"/></text_color>
+        </btn_mods>
+
         <check_ssfx_enable x="37" y="290" width="44" height="29">
             <texture>ui_inGame2_checkbox</texture>
             <text x="-7" font="letterica16">ui_ssfx_enable</text>
@@ -684,7 +706,7 @@
         <cap_water_parallax_quality x="8" y="3" width="239" height="38">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c" complex_mode="1">ui_ssfx_water_parallax_quality</text>
         </cap_water_parallax_quality>
-        <list_water_parallax_quality x="262" y="7" width="156" height="20" list_length="4" always_show_scroll="0">
+        <list_water_parallax_quality x="262" y="7" width="156" height="20" list_length="3" always_show_scroll="0">
             <options_item entry="ssfx_ui_water_parallax_quality" group="mm_opt_ssfx" depend="restart"/>
             <list_font r="170" g="170" b="170" font="letterica16"/>
             <text_color>

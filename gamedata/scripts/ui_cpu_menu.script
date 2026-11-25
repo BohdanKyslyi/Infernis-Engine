@@ -1,0 +1,451 @@
+-- @ Description: the "Engine settings" window ( "Налаштування рушія" )
+-- Written by Ivan Danko, 2026-11-18: item 9 stage F + FPS plan step 2 - the window of the engine
+--   settings this project added: the CPU cores and threads, the frame, the loading on all cores
+--   ( DX11 ), the particles ( the settings of Anomaly's "Particles" page and ours ), the test mode.
+--   Our own window; its look and its code follow our "Wind Leaves Settings" and "SSS Settings"
+--   windows ( Weather_ATMOS ui_wl_menu.script, ui_sss_menu.script ).
+-- Створено (Ivan Danko, 2026-11-18): пункт 9 етап F + крок 2 плану FPS - вікно налаштувань рушія,
+--   доданих цим проєктом: ядра процесора й потоки, кадр, завантаження на всіх ядрах ( DX11 ),
+--   частинки ( налаштування сторінки "Particles" Anomaly і наші ), режим тесту. Наше власне вікно;
+--   його вигляд і код повторюють наші вікна "Wind Leaves Settings" і "SSS Settings"
+--   ( Weather_ATMOS ui_wl_menu.script, ui_sss_menu.script ).
+
+--[[
+	The "Engine settings" button of the video page opens it ( OnBtnCPU, ui_mm_opt_main.script ):
+	the groups on the left, the settings of the group picked on the right.
+
+	The check boxes, the core list and the sliders carry an options_item in ui_cpu_menu.xml, so the
+	engine's own COptionsManager reads the console and writes it back. Each group is an options
+	group of its own ( mm_opt_cpu_<group> ), so "Defaults" touches only the group on screen. Two
+	lists are filled here instead ( the place of the FPS counter, the particle update rate ): they
+	show the console's value by name, and only a pick of the player's is written, on "Apply".
+
+	The settings that exist on DX11 only are left out on the other renderers: the "Loading" group,
+	the particle update rate and the multithreaded particles. The DX11 renderer is the one that
+	registers the console command r__mt_textures.
+
+	The window opens and closes the way the "SSS Settings" window does: the options dialog steps
+	aside while it is up and takes the screen back when it closes; "Apply" leaves for the main
+	menu, as the options dialog's own "Apply" does.
+--]]
+
+local GROUP = "mm_opt_cpu_"
+
+-- groups = { { id, name, dx11 }, ... }: its line on the left; the name is the title of its page
+-- too; dx11 = the group exists on DX11 only
+local groups = {
+	{ id = "cores", name = "ui_cpu_grp_cores" },
+	{ id = "frame", name = "ui_cpu_grp_frame" },
+	{ id = "load", name = "ui_cpu_grp_load", dx11 = true },
+	{ id = "particles", name = "ui_cpu_grp_particles" },
+	{ id = "test", name = "ui_cpu_grp_test" },
+}
+
+-- rows[ group ] = { { kind, key, label, lines, cmd, def, int, dx11 }, ... }
+--   kind   "c" a check box ( rows:k_<key> ), "l" a list ( rows:l_<key> ), "t" a slider with its
+--          number ( rows:t_<key> ), "s" a list filled here ( rows:s_<key>, its entries in lists )
+--   lines  lines of caption, which pick the row ( "tpl:row_" .. lines )
+--   def    what "Defaults" writes to the command: the engine's own default
+--   int    a slider of whole numbers ( is_integer in the xml )
+--   dx11   the row exists on DX11 only
+local rows = {
+	cores = {
+		{ kind = "l", key = "core_mode", label = "ui_cpu_core_mode", lines = 2, cmd = "cpu_core_mode", def = "cpu_mode_auto" },
+		{ kind = "c", key = "tasks", label = "ui_cpu_tasks", lines = 2, cmd = "cpu_tasks", def = "1" },
+		{ kind = "c", key = "lua_gc", label = "ui_cpu_lua_gc", lines = 1, cmd = "lua_parallel_gc", def = "1" },
+	},
+	frame = {
+		{ kind = "t", key = "framelimit", label = "ui_cpu_framelimit", lines = 2, cmd = "r__framelimit", def = "0", int = true },
+		{ kind = "c", key = "framelimit_menu", label = "ui_cpu_framelimit_menu", lines = 2, cmd = "r__framelimit_menu", def = "1" },
+		{ kind = "c", key = "show_fps", label = "ui_cpu_show_fps", lines = 1, cmd = "r__show_fps", def = "0" },
+		{ kind = "s", key = "fps_pos", label = "ui_cpu_fps_pos", lines = 1, cmd = "r__show_fps_pos", def = "center" },
+	},
+	load = {
+		{ kind = "c", key = "mt_textures", label = "ui_cpu_mt_textures", lines = 2, cmd = "r__mt_textures", def = "1" },
+		{ kind = "c", key = "shader_prebuild", label = "ui_cpu_shader_prebuild", lines = 2, cmd = "r__shader_prebuild", def = "1" },
+	},
+	particles = {
+		{ kind = "s", key = "particle_rate", label = "ui_cpu_particle_rate", lines = 2, cmd = "particle_update_mod", def = "1", dx11 = true },
+		{ kind = "t", key = "step_distance", label = "ui_cpu_step_distance", lines = 2, cmd = "step_particle_distance", def = "50" },
+		{ kind = "c", key = "tracers", label = "ui_cpu_tracers", lines = 1, cmd = "g_use_tracers", def = "1" },
+		{ kind = "c", key = "short_tracers", label = "ui_cpu_short_tracers", lines = 1, cmd = "render_short_tracers", def = "1" },
+		{ kind = "c", key = "silencer_tracer", label = "ui_cpu_silencer_tracer", lines = 1, cmd = "allow_silencer_hide_tracer", def = "0" },
+		{ kind = "c", key = "mt_particles", label = "ui_cpu_mt_particles", lines = 2, cmd = "mt_particles", def = "1", dx11 = true },
+	},
+	test = {
+		{ kind = "c", key = "test_mode", label = "ui_cpu_test_mode", lines = 2, cmd = "cpu_test_mode", def = "0" },
+	},
+}
+
+-- lists[ key ] = { { console value, text id }, ... }: the entries of a list filled here
+local lists = {
+	fps_pos = {
+		{ "left", "ui_cpu_fps_pos_left" },
+		{ "center", "ui_cpu_fps_pos_center" },
+		{ "right", "ui_cpu_fps_pos_right" },
+	},
+	-- particle_update_mod multiplies the update step of every effect, 1 = 30 updates a second
+	-- ( xrRender_console.cpp ): the list offers it as updates a second
+	particle_rate = {
+		{ "2", "ui_cpu_rate_15" },
+		{ "1", "ui_cpu_rate_30" },
+		{ "0.5", "ui_cpu_rate_60" },
+		{ "0.333", "ui_cpu_rate_90" },
+		{ "0.25", "ui_cpu_rate_120" },
+	},
+}
+
+class "cpu_menu" (CUIScriptWnd)
+
+function cpu_menu:__init() super()
+	self.ctl		= {}	-- [ key ] = { data, sel, cap, ctrl, num }
+	self.page		= {}	-- [ group ] = the scroll view of its settings
+	self.mark		= {}	-- [ group ] = the plate behind its line on the left
+	self.btn		= {}	-- [ group ] = its line, a button
+	self.title		= {}	-- [ group ] = the string id of its title
+	self.rows		= {}	-- [ group ] = its rows this renderer has
+	self.order		= {}	-- the groups built, in their order
+	self.choice		= {}	-- [ key ] = the console value picked in a list filled here
+	self.first		= nil
+	self.current	= nil
+	self.selected	= nil
+	self.kept		= nil	-- what the console held before "Defaults" wrote to it
+	self.kept_cmd	= nil
+	-- while the window itself moves the controls ( opening, "Defaults" ), their messages pick no row
+	self.loading	= true
+	self:InitControls()
+	self:InitCallBacks()
+	self.loading	= false
+end
+
+function cpu_menu:__finalize()
+end
+
+function cpu_menu:InitControls()
+	self:SetWndRect			(Frect():set(0, 0, 1024, 768))
+	self:Enable				(true)
+
+	-- the DX11 renderer registers r__mt_textures; on the others its rows and groups are left out
+	self.dx11				= get_console():get_string("r__mt_textures") ~= nil
+
+	local xml				= CScriptXmlInit()
+	xml:ParseFile			("ui_cpu_menu.xml")
+
+	xml:InitStatic			("background", self)
+	self.form				= xml:InitStatic("form", self)
+	xml:InitStatic			("form:caption", self.form)
+	xml:InitFrame			("form:mod_frame", self.form)
+	self.mod_list			= xml:InitScrollView("form:mod_list", self.form)
+	xml:InitFrame			("form:page_frame", self.form)
+	self.page_title			= xml:InitTextWnd("form:page_title", self.form)
+
+	local btn
+	btn = xml:Init3tButton	("form:btn_reset", self.form)
+	self:Register			(btn, "btn_reset")
+	btn = xml:Init3tButton	("form:btn_apply", self.form)
+	self:Register			(btn, "btn_apply")
+	btn = xml:Init3tButton	("form:btn_cancel", self.form)
+	self:Register			(btn, "btn_cancel")
+
+	for _, g in ipairs(groups) do
+		if self.dx11 or not g.dx11 then
+			local id = g.id
+			local line = xml:InitStatic("tpl:mod_row", self.mod_list)
+			local mark = xml:InitStatic("tpl:mod_sel", line)
+			mark:Show(false)
+			local b = xml:Init3tButton("tpl:mod_btn", line)
+			b:TextControl():SetTextST(g.name)
+			self:Register(b, "grp_" .. id)
+			self.mark[id] = mark
+			self.btn[id] = b
+			self.title[id] = g.name
+			table.insert(self.order, id)
+			if self.first == nil then
+				self.first = id
+			end
+			self:BuildPage(xml, id)
+		end
+	end
+end
+
+-- One group's page: a row per setting, each holding the highlight, the caption, the control and,
+-- for a slider, its number.
+function cpu_menu:BuildPage(xml, id)
+	local page = xml:InitScrollView("form:page", self.form)
+	page:Show(false)
+	self.page[id] = page
+	self.rows[id] = {}
+
+	for _, r in ipairs(rows[id]) do
+		if self.dx11 or not r.dx11 then
+			local key, lines = r.key, r.lines
+			local row = xml:InitStatic("tpl:row_" .. lines, page)
+			local c = { data = r }
+			c.sel = xml:InitStatic("tpl:sel_" .. lines, row)
+			c.sel:Show(false)
+			c.cap = xml:Init3tButton("tpl:cap_" .. lines, row)
+			c.cap:TextControl():SetText(game.translate_string(r.label))
+			self:Register(c.cap, "c_" .. key)
+			if r.kind == "c" then
+				c.ctrl = xml:InitCheck("rows:k_" .. key, row)
+			elseif r.kind == "l" then
+				c.ctrl = xml:InitComboBox("rows:l_" .. key, row)
+			elseif r.kind == "t" then
+				c.ctrl = xml:InitTrackBar("rows:t_" .. key, row)
+				c.num = xml:InitTextWnd("tpl:num_" .. lines, row)
+			else
+				c.ctrl = xml:InitComboBox("rows:s_" .. key, row)
+			end
+			self:Register(c.ctrl, "v_" .. key)
+			self.ctl[key] = c
+			table.insert(self.rows[id], r)
+		end
+	end
+end
+
+function cpu_menu:InitCallBacks()
+	self:AddCallback("btn_apply",	ui_events.BUTTON_CLICKED,	self.OnBtnApply,	self)
+	self:AddCallback("btn_cancel",	ui_events.BUTTON_CLICKED,	self.OnBtnCancel,	self)
+	self:AddCallback("btn_reset",	ui_events.BUTTON_CLICKED,	self.OnBtnReset,	self)
+
+	for _, id in ipairs(self.order) do
+		self:AddCallback("grp_" .. id, ui_events.BUTTON_CLICKED, function() self:ShowGroup(id) end, self)
+		for _, r in ipairs(self.rows[id]) do
+			local key = r.key
+			self:AddCallback("c_" .. key, ui_events.BUTTON_CLICKED, function() self:OnPick(key) end, self)
+			if r.kind == "c" then
+				self:AddCallback("v_" .. key, ui_events.BUTTON_CLICKED, function() self:OnPick(key) end, self)
+			elseif r.kind == "l" then
+				self:AddCallback("v_" .. key, ui_events.LIST_ITEM_SELECT, function() self:OnPick(key) end, self)
+			elseif r.kind == "t" then
+				self:AddCallback("v_" .. key, ui_events.BUTTON_CLICKED, function() self:OnTrack(key) end, self)
+			else
+				self:AddCallback("v_" .. key, ui_events.LIST_ITEM_SELECT, function() self:OnListPick(key) end, self)
+			end
+		end
+	end
+end
+
+-- Opening, from OnBtnCPU of the options dialog: every control reads the console, and what it
+-- shows now is what "Cancel" goes back to.
+function cpu_menu:Open()
+	self.loading = true
+	local opt = COptionsManager()
+	for _, id in ipairs(self.order) do
+		opt:SetCurrentValues(GROUP .. id)
+		opt:SaveBackupValues(GROUP .. id)
+		self:UpdateGroup(id)
+	end
+	self.kept = nil
+	self.kept_cmd = nil
+	self.choice = {}
+	self.loading = false
+
+	self:ShowGroup(self.current or self.first)
+	self:ShowDialog(true)
+end
+
+function cpu_menu:Close()
+	self.owner:ShowDialog(true)
+	self:HideDialog()
+	self.owner:Show(true)
+end
+
+-- "Apply" leaves for the main menu, as the options dialog's own "Apply" does: the options dialog
+-- stepped aside when this window opened ( OnBtnCPU ), so the main menu is the one to bring back.
+function cpu_menu:CloseToMain()
+	local main = self.owner.owner
+	main:ShowDialog(true)
+	self:HideDialog()
+	main:Show(true)
+end
+
+-- The line of the group on screen has the plate behind it and is switched off, as in the "SSS
+-- Settings" window ( the "disabled" colour of its text is the one a script can keep ).
+function cpu_menu:ShowGroup(id)
+	if self.current ~= nil then
+		self.page[self.current]:Show(false)
+		self.mark[self.current]:Show(false)
+		self.btn[self.current]:Enable(true)
+	end
+	self.current = id
+	self.page[id]:Show(true)
+	self.page[id]:ScrollToBegin()
+	self.mark[id]:Show(true)
+	self.btn[id]:Enable(false)
+	self.page_title:SetTextST(self.title[id])
+	self:SelectRow(nil)
+end
+
+-- The row clicked last has the highlight behind it.
+function cpu_menu:SelectRow(key)
+	if self.selected ~= nil then
+		self.ctl[self.selected].sel:Show(false)
+	end
+	self.selected = key
+	if key ~= nil then
+		self.ctl[key].sel:Show(true)
+	end
+end
+
+function cpu_menu:OnPick(key)
+	if not self.loading and self.selected ~= key then
+		self:SelectRow(key)
+	end
+end
+
+function cpu_menu:OnTrack(key)
+	self:UpdateNumber(key)
+	self:OnPick(key)
+end
+
+-- The numbers of the sliders and the lists filled here of one group, from the console.
+function cpu_menu:UpdateGroup(id)
+	for _, r in ipairs(self.rows[id]) do
+		if r.kind == "t" then
+			self:UpdateNumber(r.key)
+		elseif r.kind == "s" then
+			self:FillList(r.key)
+		end
+	end
+end
+
+function cpu_menu:UpdateNumber(key)
+	local c = self.ctl[key]
+	local v
+	if c.data.int then
+		v = c.ctrl:GetIValue()
+	else
+		v = c.ctrl:GetFValue()
+	end
+	c.num:SetText(string.format("%d", math.floor(v + 0.5)))
+end
+
+-- A list filled here shows the console's value by the name of its entry. A value set in the
+-- console that no entry has is shown as it is ( the particle update rate: as the updates a second
+-- it gives ).
+function cpu_menu:FillList(key)
+	local c = self.ctl[key]
+	local con = get_console()
+	local shown = nil
+	c.ctrl:ClearList()
+	if key == "particle_rate" then
+		local v = con:get_float(c.data.cmd)
+		for i, e in ipairs(lists[key]) do
+			c.ctrl:AddItem(e[2], i)
+			if shown == nil and math.abs(v - tonumber(e[1])) < 0.002 then
+				shown = game.translate_string(e[2])
+			end
+		end
+		if shown == nil and v > 0 then
+			shown = string.format("%d", math.floor(30 / v + 0.5))
+		end
+	else
+		local t = con:get_token(c.data.cmd)
+		for i, e in ipairs(lists[key]) do
+			c.ctrl:AddItem(e[2], i)
+			if shown == nil and e[1] == t then
+				shown = game.translate_string(e[2])
+			end
+		end
+		shown = shown or t
+	end
+	c.ctrl:SetText(shown or "")
+end
+
+function cpu_menu:OnListPick(key)
+	if self.loading then
+		return
+	end
+	local e = lists[key][self.ctl[key].ctrl:CurrentID()]
+	if e ~= nil then
+		self.choice[key] = e[1]
+	end
+	self:OnPick(key)
+end
+
+function cpu_menu:OnBtnApply()
+	local opt = COptionsManager()
+	local c = get_console()
+	for _, id in ipairs(self.order) do
+		opt:SaveValues(GROUP .. id)
+	end
+	for key, value in pairs(self.choice) do
+		c:execute(self.ctl[key].data.cmd .. " " .. value)
+	end
+	self.choice = {}
+	self.kept = nil
+	self.kept_cmd = nil
+	c:execute("cfg_save")
+	self:CloseToMain()
+
+	-- "Shader build on all cores" is read at the next start ( depend="restart" in the xml ): the
+	-- message the options dialog shows for its own pages
+	if not self.owner.b_restart_system_shown and opt:NeedSystemRestart() then
+		self.owner.b_restart_system_shown = true
+		self.owner.message_box:InitMessageBox("message_box_restart_game")
+		self.owner.message_box:ShowDialog(true)
+	end
+end
+
+function cpu_menu:OnBtnCancel()
+	local opt = COptionsManager()
+	for _, id in ipairs(self.order) do
+		opt:UndoGroup(GROUP .. id)
+	end
+	self:RestoreKept()
+	self.choice = {}
+	self:Close()
+end
+
+-- "Defaults": the engine's own defaults of the group on screen go to the console, and the group
+-- is read back from it - as the "SSS Settings" window does it ( a stock slider answers
+-- "set_default_value" with the middle of its range ). A write to the console is outside what
+-- COptionsManager can undo, so what it held before is kept, once per command, and goes back on
+-- "Cancel".
+function cpu_menu:OnBtnReset()
+	local id = self.current
+	if id == nil then
+		return
+	end
+	self.loading = true
+	local c = get_console()
+	if self.kept == nil then
+		self.kept = {}
+		self.kept_cmd = {}
+	end
+	for _, r in ipairs(self.rows[id]) do
+		if not self.kept_cmd[r.cmd] then
+			self.kept_cmd[r.cmd] = true
+			table.insert(self.kept, { r.cmd, c:get_string(r.cmd) })
+		end
+		c:execute(r.cmd .. " " .. r.def)
+		self.choice[r.key] = nil
+	end
+	COptionsManager():SetCurrentValues(GROUP .. id)
+	self:UpdateGroup(id)
+	self.loading = false
+end
+
+function cpu_menu:RestoreKept()
+	local kept = self.kept
+	self.kept = nil
+	self.kept_cmd = nil
+	if kept == nil then
+		return
+	end
+	local c = get_console()
+	for _, row in ipairs(kept) do
+		if row[2] ~= nil then
+			c:execute(row[1] .. " " .. row[2])
+		end
+	end
+end
+
+function cpu_menu:OnKeyboard(dik, keyboard_action)
+	local res = CUIScriptWnd.OnKeyboard(self, dik, keyboard_action)
+	if res == false and keyboard_action == ui_events.WINDOW_KEY_PRESSED and dik == DIK_keys.DIK_ESCAPE then
+		self:OnBtnCancel()
+	end
+	return res
+end

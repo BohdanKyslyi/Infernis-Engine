@@ -52,6 +52,9 @@
 #include "demoinfo.h"
 #include "CustomDetector.h"
 #include "visual_memory_manager.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the frame parts
+// «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - частини кадру
+#include "../xrEngine/frame_parts.h"
 
 #include "../xrphysics/iphworld.h"
 #include "../xrphysics/console_vars.h"
@@ -74,6 +77,24 @@ BOOL g_bDebugEvents = FALSE;
 
 extern CAI_Space* g_ai_space;
 int psLUA_GCSTEP = 10;
+
+// Item 9 stage C3 ( multithreading ): the Lua collector runs on the secondary thread while the
+// frame is drawn ( xrEngine\device.cpp, "lua_parallel_gc" ); the level gives it one step of its
+// Lua state ( from the constructor to the destructor ) and stands its own step down ( script_gc ).
+extern ENGINE_API BOOL ps_lua_parallel_gc;
+extern ENGINE_API int (*g_lua_parallel_gc)(int step);
+static int level_lua_parallel_gc(int step) {
+    return lua_gc(ai().script_engine().lua(), LUA_GCSTEP, step);
+}
+
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the level gives the frame measurement
+// the memory of its Lua state ( "* Memory", xrEngine\device.cpp; read while the secondary thread
+// waits ), from the constructor to the destructor.
+// «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - р≥вень даЇ зам≥ру кадру пам'€ть свого
+// стану Lua ( "* Memory", xrEngine\device.cpp; читаЇтьс€, поки другий пот≥к чекаЇ ), в≥д
+// конструктора до деструктора.
+extern ENGINE_API int (*g_lua_memory_kb)();
+static int level_lua_memory_kb() { return lua_gc(ai().script_engine().lua(), LUA_GCCOUNT, 0); }
 
 #ifdef DEBUG
 extern Flags32 dbg_net_Draw_Flags;
@@ -161,10 +182,19 @@ CLevel::CLevel() : IPureClient(Device.GetTimerGlobal())
 
     m_lzo_working_memory = nullptr;
     m_lzo_working_buffer = nullptr;
+
+    g_lua_parallel_gc = &level_lua_parallel_gc; // item 9 stage C3: the secondary thread's step
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the Lua memory for the measurement
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - пам'€ть Lua дл€ зам≥ру
+    g_lua_memory_kb = &level_lua_memory_kb;
 }
 
 CLevel::~CLevel() 
 {
+    g_lua_parallel_gc = nullptr; // item 9 stage C3: the step goes with the level
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the Lua memory goes with the level
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - пам'€ть Lua йде разом ≥з р≥внем
+    g_lua_memory_kb = nullptr;
     xr_delete(g_player_hud);
     delete_data(hud_zones_list);
     hud_zones_list = nullptr;
@@ -423,7 +453,11 @@ void CLevel::OnFrame()
     psDeviceFlags.set(rsDisableObjectsAsCrows, GameID() != eGameIDSingle);
 
     Device.Statistic->TEST0.Begin();
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the bullets as a part
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - кул≥ €к частина
+    const u64 fp_bullets = frame_part_begin();
     BulletManager().CommitEvents();
+    frame_part_end(FP_BULLETS, fp_bullets);
     Device.Statistic->TEST0.End();
 
     if (net_isDisconnected()) {
@@ -437,11 +471,19 @@ void CLevel::OnFrame()
         return;
     } else {
         Device.Statistic->netClient1.Begin();
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the network receive as a part
+        // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - прийманн€ мереж≥ €к частина
+        const u64 fp_net_receive = frame_part_begin();
         ClientReceive();
+        frame_part_end(FP_NET_RECEIVE, fp_net_receive);
         Device.Statistic->netClient1.End();
     }
 
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - spawns and events as a part
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - по€ви й под≥њ €к частина
+    const u64 fp_events = frame_part_begin();
     ProcessGameEvents();
+    frame_part_end(FP_EVENTS, fp_events);
 
     if (m_bNeed_CrPr)
         make_NetCorrectionPrediction();
@@ -452,7 +494,11 @@ void CLevel::OnFrame()
         MapManager().Update();
 
     if (IsGameTypeSingle() && Device.dwPrecacheFrame == 0) {
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the tasks as a part
+        // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - завданн€ €к частина
+        const u64 fp_tasks = frame_part_begin();
         GameTaskManager().UpdateTasks();
+        frame_part_end(FP_TASKS, fp_tasks);
     }
 
     inherited::OnFrame();
@@ -469,12 +515,20 @@ void CLevel::OnFrame()
 
     g_pGamePersistent->Environment().SetGameTime(GetEnvironmentGameDayTimeSec(), game->GetEnvironmentGameTimeFactor());
 
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the level scripts as a part
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - скрипти р≥вн€ €к частина
+    const u64 fp_level_scripts = frame_part_begin();
     ai().script_engine().script_process(ScriptEngine::eScriptProcessorLevel)->update();
+    frame_part_end(FP_LEVEL_SCRIPTS, fp_level_scripts);
     m_ph_commander->update();
     m_ph_commander_scripts->update();
 
     Device.Statistic->TEST0.Begin();
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the bullets as a part
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - кул≥ €к частина
+    const u64 fp_bullets_render = frame_part_begin();
     BulletManager().CommitRenderSet();
+    frame_part_end(FP_BULLETS, fp_bullets_render);
     Device.Statistic->TEST0.End();
 
     if (g_mt_config.test(mtLevelSounds))
@@ -497,6 +551,11 @@ void CLevel::OnFrame()
 }
 
 void CLevel::script_gc() { 
+    if (ps_lua_parallel_gc) // item 9 stage C3: the secondary thread collects ( device.cpp )
+        return;
+    // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the collector step as a part
+    // «м≥нено (Ivan Danko, 2026-11-14): пункт 9 "повний зам≥р" - крок збирача €к частина
+    frame_part_scope fp_lua_gc(FP_LUA_GC);
     lua_gc(ai().script_engine().lua(), LUA_GCSTEP, psLUA_GCSTEP); 
 }
 

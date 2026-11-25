@@ -23,6 +23,9 @@
 
 #include "object_broker.h"
 #include "../xrRenderCommon/infernis_pbr_settings.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the menu open time
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - час відкриття меню
+#include "../xrEngine/frame_parts.h"
 
 string128 ErrMsgBoxTemplate[] = { "message_box_invalid_host",
                                   "message_box_session_full",
@@ -143,13 +146,25 @@ void CMainMenu::Activate(bool bActivate) {
     bool b_is_single = IsGameTypeSingle();
 
     if (bActivate) {
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the menu open time, the UI
+        // build and the memory report in it ( "* Menu open", "cpu_frame_stats 1" )
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - час відкриття меню, збирання
+        // інтерфейсу й звіт пам'яті в ньому ( "* Menu open", "cpu_frame_stats 1" )
+        const u64 menu_open_start = frame_part_begin();
+        u64 menu_ui_ticks = 0, menu_memory_ticks = 0;
         b_shniaganeed_pp = true;
         Device.Pause(TRUE, FALSE, TRUE, "mm_activate1");
         m_Flags.set(flActive | flNeedChangeCapture, TRUE);
 
         m_Flags.set(flRestoreCursor, GetUICursor().IsVisible());
 
-        if (!ReloadUI())
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the UI build time
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - час збирання інтерфейсу
+        const u64 menu_ui_start = frame_part_begin();
+        const bool menu_ui_ready = ReloadUI();
+        if (menu_ui_start)
+            menu_ui_ticks = frame_part_now() - menu_ui_start;
+        if (!menu_ui_ready)
             return;
 
         m_Flags.set(flRestoreConsole, Console->bVisible);
@@ -175,7 +190,12 @@ void CMainMenu::Activate(bool bActivate) {
         };
         Device.seqRender.Add(this, 4); // 1-console 2-cursor 3-tutorial
 
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the memory report time
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - час звіту пам'яті
+        const u64 menu_memory_start = frame_part_begin();
         Console->Execute("stat_memory");
+        if (menu_memory_start)
+            menu_memory_ticks = frame_part_now() - menu_memory_start;
         //
         // Do not replace location status when opening
         // the in-game pause menu.
@@ -193,6 +213,11 @@ void CMainMenu::Activate(bool bActivate) {
 
             g_discord.SetMenuStatus();
         }
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the menu open line
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - рядок відкриття меню
+        if (menu_open_start)
+            frame_stats_menu_open(frame_part_now() - menu_open_start, menu_ui_ticks,
+                                  menu_memory_ticks);
     } else {
         m_deactivated_frame = Device.dwFrame;
         m_Flags.set(flActive, FALSE);

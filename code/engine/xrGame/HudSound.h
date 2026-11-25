@@ -37,8 +37,8 @@ struct HUD_SOUND_ITEM {
 
     struct SSnd {
         ref_sound snd;
-        float delay;  //Г§Г Г¤ГҐГ°Г¦ГЄГ  ГЇГҐГ°ГҐГ¤ ГЇГ°Г®ГЁГЈГ°Г»ГўГ Г­ГЁГҐГ¬
-        float volume; //ГЈГ°Г®Г¬ГЄГ®Г±ГІГј
+        float delay;  //задержка перед проигрыванием
+        float volume; //громкость
     };
     shared_str m_alias;
     SSnd* m_activeSnd;

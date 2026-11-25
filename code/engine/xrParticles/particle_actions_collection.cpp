@@ -904,6 +904,42 @@ void PASpeedLimit::Execute(ParticleEffect* effect, const float dt, float& tm_max
 void PASpeedLimit::Transform(const Fmatrix&) { ; }
 
 void PATargetColor::Execute(ParticleEffect* effect, const float dt, float& tm_max) {
+    // Edited by Ivan Danko, 2026-11-17: FPS plan step 2 - with the float colours (Anomaly behaviour,
+    // particle_effect.h) the fade of Monolith's PATargetColor: the target step is taken for the
+    // standard 0.033 s update and applied in the part dt / 0.033, so a faster update
+    // (particle_update_mod below 1) fades smoothly instead of in 1/255 jumps. The colour the
+    // renderers read is made from the floats. Without them = the code as it was.
+    // Змінено (Ivan Danko, 2026-11-17): крок 2 плану FPS - з кольорами у float (поведінка Anomaly,
+    // particle_effect.h) згасання як у PATargetColor з Monolith: крок до цілі береться для звичайного
+    // оновлення 0.033 с і застосовується в частці dt / 0.033, тож частіше оновлення
+    // (particle_update_mod менше 1) згасає плавно, а не стрибками по 1/255. Колір, який читають
+    // рендери, складається з float. Без них = код без змін.
+    if (effect->colors_f) {
+        constexpr float STEP_DEFAULT = 0.033f;
+        const float COEFF = STEP_DEFAULT / dt;
+        const float scaleFacStep = scale * STEP_DEFAULT;
+        Fcolor c_p, c_t, c_n;
+
+        for (u32 i = 0; i < effect->p_count; ++i) {
+            Particle& m = effect->particles[i];
+            if (m.age < timeFrom * tm_max || m.age > timeTo * tm_max)
+                continue;
+
+            Fcolor& f = effect->colors_f[i];
+            c_p.set(f.r, f.g, f.b, f.a);
+            c_t.set(color.x, color.y, color.z, alpha);
+            c_n.lerp(c_p, c_t, scaleFacStep);
+            c_n.set(c_n.get());
+
+            f.r -= (f.r - c_n.r) / COEFF;
+            f.g -= (f.g - c_n.g) / COEFF;
+            f.b -= (f.b - c_n.b) / COEFF;
+            f.a -= (f.a - c_n.a) / COEFF;
+            m.color = color_rgba_f(f.r, f.g, f.b, f.a);
+        }
+        return;
+    }
+
     float scaleFac = scale * dt;
     Fcolor c_p, c_t;
 
@@ -1139,10 +1175,15 @@ void PATurbulence::Execute(ParticleEffect* effect, const float dt, float& tm_max
     TAL_SCOPED_TASK_NAMED("PATurbulence::Execute()");
 #endif // _GPA_ENABLED
 
-    if (noise_start) {
-        noise_start = 0;
-        noise3Init();
-    };
+    // Edited by Ivan Danko, 2026-11-17: FPS plan step 2b - the noise tables are built once, safe for many
+    // threads: the DX11 render now updates many effects at once on all cores, and two of them could start
+    // the build together ( was: the flag noise_start, checked and cleared without a lock ).
+    // Змінено (Ivan Danko, 2026-11-17): крок 2б плану FPS - таблиці шуму будуються один раз, безпечно для
+    // багатьох потоків: рендер DX11 тепер оновлює багато ефектів одночасно на всіх ядрах, і два з них
+    // могли почати побудову разом ( було: прапорець noise_start, який перевірявся й скидався без
+    // блокування ).
+    static const bool noise_ready = (noise_start = 0, noise3Init(), true);
+    (void)noise_ready;
 
     age += dt;
 
@@ -1155,6 +1196,33 @@ void PATurbulence::Execute(ParticleEffect* effect, const float dt, float& tm_max
 
     if (p_cnt < nWorkers * 20)
         nWorkers = 1;
+
+    // Edited by Ivan Danko, 2026-11-14: FPS fix step 1 - an effect whose particles are one piece of
+    // work runs it right here. Handing that one piece to a task worker and waiting for it cost more
+    // than the work itself, and a far view updates hundreds of effects a frame. Bigger effects are
+    // cut into pieces as before.
+    // Змінено (Ivan Danko, 2026-11-14): крок 1 виправлення FPS - ефект, частинки якого є одним
+    // шматком роботи, виконує його одразу тут. Передача цього шматка робочому потоку й очікування
+    // на нього коштували більше за саму роботу, а дальній вид оновлює сотні ефектів за кадр.
+    // Більші ефекти діляться на шматки, як і раніше.
+    if (nWorkers == 1) {
+        TES_PARAMS tesParam;
+        tesParam.p_from = 0;
+        tesParam.p_to = p_cnt;
+        tesParam.effect = effect;
+        tesParam.offset = offset;
+        tesParam.age = age;
+        tesParam.epsilon = epsilon;
+        tesParam.frequency = frequency;
+        tesParam.octaves = octaves;
+        // Edited by Ivan Danko, 2026-11-17: FPS plan step 2 - the strength times the update coefficient
+        // (particle_update_mod on DX11, 1.0 elsewhere), as Monolith's PATurbulence; was: magnitude.
+        // Змінено (Ivan Danko, 2026-11-17): крок 2 плану FPS - сила, помножена на коефіцієнт оновлення
+        // (particle_update_mod на DX11, 1.0 в інших), як у PATurbulence з Monolith; було: magnitude.
+        tesParam.magnitude = magnitude * UpdateCoeff();
+        PATurbulenceExecuteStream(&tesParam);
+        return;
+    }
 
     std::vector<TES_PARAMS> tesParams(nWorkers);
 
@@ -1171,7 +1239,9 @@ void PATurbulence::Execute(ParticleEffect* effect, const float dt, float& tm_max
         tesParams[i].epsilon = epsilon;
         tesParams[i].frequency = frequency;
         tesParams[i].octaves = octaves;
-        tesParams[i].magnitude = magnitude;
+        // Edited by Ivan Danko, 2026-11-17: FPS plan step 2 - the same coefficient as above.
+        // Змінено (Ivan Danko, 2026-11-17): крок 2 плану FPS - той самий коефіцієнт, що вище.
+        tesParams[i].magnitude = magnitude * UpdateCoeff();
         
         TES_PARAMS* pParam = &tesParams[i];
         ttapi.threads[i]->addJob([pParam] { PATurbulenceExecuteStream((void*)pParam); });

@@ -22,6 +22,9 @@
 #include "ssfx_console_vars.h"
 #include "../xrcdb/ispatial.h"
 #include "Text_Console.h"
+// Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the frame parts
+// Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - частини кадру
+#include "frame_parts.h"
 #include <process.h>
 #include <locale.h>
 
@@ -88,7 +91,13 @@ struct _SoundProcessor : public pureFrame {
         // Msg							("------------- sound: %d
         // [%3.2f,%3.2f,%3.2f]",u32(Device.dwFrame),VPUSH(Device.vCameraPosition));
         Device.Statistic->Sound.Begin();
+        // Edited by Ivan Danko, 2026-11-14: item 9 "full measurement" - the sound as a part ( the
+        // secondary thread's when the sound runs there )
+        // Змінено (Ivan Danko, 2026-11-14): пункт 9 "повний замір" - звук як частина ( другого
+        // потоку, коли звук працює там )
+        const u64 fp_sound = frame_part_begin();
         ::Sound->update(Device.vCameraPosition, Device.vCameraDirection, Device.vCameraTop);
+        frame_part_end(FP_SOUND, fp_sound);
         Device.Statistic->Sound.End();
     }
 } SoundProcessor;
@@ -191,10 +200,14 @@ void execUserScript() {
 }
 
 extern int g_current_renderer; // EngineAPI.cpp
+void cpu_core_mode_apply();     // xr_ioc_cmd.cpp ( item 9 stage A )
 
 void Startup() {
     InitSound1();
     execUserScript();
+    // Item 9 stage A: the CPU core mode of the profile, also for a profile without the line
+    // ( cpu_core_mode, xr_ioc_cmd.cpp ).
+    cpu_core_mode_apply();
     // Infernis PBR: user.ltx is in, no shader is built yet - this is what the session runs with.
     pbr_settings_user_config_loaded();
     // And the SSS switch the session runs with.
@@ -204,6 +217,9 @@ void Startup() {
     // Engine.External.Initialize before Startup ). Nothing has read their files yet: the weathers,
     // their sounds and skies are loaded from here on.
     FS.ssfx_addons(ssfx_session_enable && g_current_renderer == 4);
+    // Weather_ATMOS put in or taken out since the last start: the SSS settings follow, once
+    // ( ssfx_atmos_switch, xr_ioc_cmd.cpp ). The pack is mounted by now, and so is its list.
+    ssfx_atmos_switch();
     InitSound2();
 
     // ...command line for auto start
@@ -555,7 +571,9 @@ int APIENTRY WinMain_impl(HINSTANCE hInstance, HINSTANCE hPrevInstance, char* lp
     }
 #endif
 
-    SetThreadAffinityMask(GetCurrentThread(), 1);
+    // Item 9 stage A: no pin to logical CPU 0 any more ( Monolith pins nothing ). The CPUs the game
+    // runs on are set by cpu_core_mode ( CPU::ApplyCoreMode, xrCore\_math.cpp ) from Startup().
+    // SetThreadAffinityMask(GetCurrentThread(), 1);
 
     // Title window
     logoWindow =
@@ -893,6 +911,9 @@ void CApplication::OnEvent(EVENT E, u64 P1, u64 P2) {
 
 static CTimer phase_timer;
 extern ENGINE_API BOOL g_appLoaded = FALSE;
+// Written by Ivan Danko, 2026-11-18: item 9 stage F - "Test mode" ( xr_ioc_cmd.cpp )
+// Створено (Ivan Danko, 2026-11-18): пункт 9 етап F - "Режим тесту" ( xr_ioc_cmd.cpp )
+extern ENGINE_API int ps_cpu_test_mode;
 
 void CApplication::LoadBegin() {
     ll_dwReference++;
@@ -914,6 +935,17 @@ void CApplication::LoadEnd() {
         Msg("* phase time: %d ms", phase_timer.GetElapsed_ms());
         Msg("* phase cmem: %d K", Memory.mem_usage() / 1024);
         Console->Execute("stat_memory");
+        // Edited by Ivan Danko, 2026-11-18: item 9 stage F - "Test mode" ( "cpu_test_mode 1" ) writes the
+        // shader build line after each level load ( "r__shader_build_stats": DX11 only, the command is
+        // there only with that renderer )
+        // Змінено (Ivan Danko, 2026-11-18): пункт 9 етап F - "Режим тесту" ( "cpu_test_mode 1" ) пише
+        // рядок збирання шейдерів після кожного завантаження рівня ( "r__shader_build_stats": лише DX11,
+        // команда є тільки з цим рендером )
+        if (ps_cpu_test_mode) {
+            IConsole_Command* shader_stats = Console->GetCommand("r__shader_build_stats");
+            if (shader_stats)
+                shader_stats->Execute("");
+        }
         g_appLoaded = TRUE;
         //		DUMP_PHASE;
     }

@@ -33,6 +33,12 @@ public:
     void SetCheck(bool b);
     int GetIValue() { return m_i_val; }
     float GetFValue() { return m_f_val; }
+    // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 13 "Mods" - a
+    // script sets the value of a slider ( the "Mods" window, ui_mods_menu.script )
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 13 «Моди» - скрипт
+    // задає значення повзунка ( вікно «Моди», ui_mods_menu.script )
+    void SetIValue(int i);
+    void SetFValue(float f);
     void SetOptIBounds(int imin, int imax);
     void SetOptFBounds(float fmin, float fmax);
 

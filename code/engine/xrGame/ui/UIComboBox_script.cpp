@@ -28,6 +28,13 @@ void CUIComboBox::script_register(lua_State* L) {
                   .def("SetText", &CUIComboBox::SetText)
                   .def("ClearList", &CUIComboBox::ClearList)
                   .def("SetCurrentOptValue", &CUIComboBox::SetCurrentOptValue)
+                  // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 13
+                  // "Mods" - the chosen line of the list for a script ( the "Mods" window,
+                  // ui_mods_menu.script )
+                  // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 13
+                  // «Моди» - вибраний рядок списку для скрипту ( вікно «Моди», ui_mods_menu.script )
+                  .def("SetCurrentIdx", &CUIComboBox::SetSelectedIDX)
+                  .def("GetCurrentIdx", &CUIComboBox::GetSelectedIDX)
 
     ];
 }

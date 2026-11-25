@@ -1522,11 +1522,19 @@ public:
     void Save(IWriter*) override {}
 };
 
+#endif // DEBUG_CAPS
+
+// run_script / run_string: in release too, they work only with -dev_mode ( the donor: with -dbg, Monolith
+// console_commands.cpp:2695-2702 ); logging part C tests C++ errors with run_string
 //#ifndef MASTER_GOLD
 class CCC_Script : public IConsole_Command {
 public:
     CCC_Script(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = false; };
     virtual void Execute(LPCSTR args) {
+        if (!is_dev_mode()) {
+            Msg("! Command available only in -dev_mode");
+            return;
+        }
         if (!xr_strlen(args)) {
             Log("* Specify script name!");
         } else {
@@ -1555,6 +1563,10 @@ public:
     CCC_ScriptCommand(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = false; };
 
     virtual void Execute(LPCSTR args) {
+        if (!is_dev_mode()) {
+            Msg("! Command available only in -dev_mode");
+            return;
+        }
         if (!xr_strlen(args))
             Log("* Specify string to run!");
         else {
@@ -1600,6 +1612,7 @@ public:
     }
 };
 
+#ifdef DEBUG_CAPS
 class CCC_TimeFactor : public IConsole_Command {
 public:
     CCC_TimeFactor(LPCSTR N) : IConsole_Command(N) {}
@@ -2178,16 +2191,23 @@ void CCC_RegisterCommands() {
     CMD1(CCC_WeatherEditor, "weather_editor");
     CMD1(CCC_LuaWorkbench, "lua_workbench");
     CMD1(CCC_HudEditor, "hud_editor");
+    // run_script / run_string: in release too, they work only with -dev_mode ( the donor: with -dbg,
+    // Monolith console_commands.cpp:2695-2702 )
+    CMD1(CCC_Script, "run_script");
+    CMD1(CCC_ScriptCommand, "run_string");
 
 #ifdef DEBUG_CAPS
     CMD1(CCC_GreedIsGood, "g_greedisgood");
-    CMD1(CCC_Script, "run_script");
-    CMD1(CCC_ScriptCommand, "run_string");
 #endif
 
     CMD3(CCC_Mask, "g_autopickup", &psActorFlags, AF_AUTOPICKUP);
     CMD3(CCC_Mask, "g_dynamic_music", &psActorFlags, AF_DYNAMIC_MUSIC);
     CMD3(CCC_Mask, "g_important_save", &psActorFlags, AF_IMPORTANT_SAVE);
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author themrdemonized): FPS plan step 2 - the tracers on / off, as in Anomaly (Monolith
+    // console_commands.cpp g_use_tracers; on by default, Actor.cpp).
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-17: крок 2 плану FPS - увімкнення трасерів, як в Anomaly (Monolith
+    // console_commands.cpp g_use_tracers; типово ввімкнено, Actor.cpp).
+    CMD3(CCC_Mask, "g_use_tracers", &psActorFlags, AF_USE_TRACERS);
 
 #ifdef DEBUG
     CMD1(CCC_LuaHelp, "lua_help");
@@ -2403,6 +2423,39 @@ void CCC_RegisterCommands() {
     CMD4(CCC_Integer, "g_sleep_time", &psActorSleepTime, 1, 24);
 
     CMD4(CCC_Integer, "ai_use_old_vision", &g_ai_use_old_vision, 0, 1);
+
+    // Ported by Ivan Danko, 2026-11-17, from Monolith (author momopate): FPS plan step 2 - the tracer settings of Anomaly (Monolith
+    // console_commands.cpp, momopate): render_short_tracers 1 = a tracer shorter than tracer_length_min is
+    // drawn at that length instead of not at all (the default, as in Anomaly); allow_silencer_hide_tracer
+    // 1 = a silencer hides the tracers (off by default). Adapted: the two extern declarations stand next
+    // to their commands.
+    // Перенесення з Monolith (автор momopate) - Ivan Danko, 2026-11-17: крок 2 плану FPS - налаштування трасерів з Anomaly (Monolith
+    // console_commands.cpp, momopate): render_short_tracers 1 = трасер, коротший за tracer_length_min,
+    // малюється такої довжини, а не зникає (типово, як в Anomaly); allow_silencer_hide_tracer 1 =
+    // глушник ховає трасери (типово вимкнено). Адаптовано: два оголошення extern стоять поряд зі своїми
+    // командами.
+    extern BOOL g_render_short_tracers;
+    extern BOOL g_allow_silencer_hide_tracer;
+    CMD4(CCC_Integer, "render_short_tracers", &g_render_short_tracers, 0, 1);
+    CMD4(CCC_Integer, "allow_silencer_hide_tracer", &g_allow_silencer_hide_tracer, 0, 1);
+
+    // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): item 9 stage F - the console
+    // command of the enemy manager's "useful" cache ( Monolith's console_commands.cpp ): ms, -1 = no
+    // cache. Console only.
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: пункт 9 етап F - консольна
+    // команда кешу "useful" менеджера ворогів ( console_commands.cpp Monolith ): мс, -1 = без кешу. Лише
+    // консоль.
+    extern int enemy_manager_useful_cache_time;
+    CMD4(CCC_Integer, "g_enemy_manager_useful_cache_time", &enemy_manager_useful_cache_time, -1, 500);
+
+    // Ported by Ivan Danko, 2026-11-18, from Monolith (author themrdemonized): FPS plan step 2 -
+    // the footstep particle distance ( step_manager.cpp ), 10 .. 100 m as in Monolith's
+    // console_commands.cpp; on the "Particles" page of the "Engine settings" window.
+    // Перенесення з Monolith (автор themrdemonized) - Ivan Danko, 2026-11-18: крок 2 плану
+    // FPS - дальність частинок кроків ( step_manager.cpp ), 10 .. 100 м, як у console_commands.cpp
+    // Monolith; на сторінці "Частинки" вікна "Налаштування рушія".
+    extern float g_step_particle_distance;
+    CMD4(CCC_Float, "step_particle_distance", &g_step_particle_distance, 10.0f, 100.0f);
 
     CMD4(CCC_Float, "ai_aim_predict_time", &g_aim_predict_time, 0.f, 10.f);
 

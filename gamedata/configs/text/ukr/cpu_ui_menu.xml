@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="windows-1251" ?>
+<!-- The "Engine settings" window ( ui_cpu_menu.script ) and its button on the video page.
+     Written by Ivan Danko, 2026-11-18: item 9 stage F + FPS plan step 2. The labels of the
+     particle and tracer settings follow the wording of Anomaly's "Modded Exes" menu ( Monolith,
+     author themrdemonized, configs\text\eng\ui_mm_modded_exes.xml ).
+     Створено (Ivan Danko, 2026-11-18): пункт 9 етап F + крок 2 плану FPS. Назви налаштувань
+     частинок і трасерів повторюють меню "Modded Exes" Anomaly ( Monolith, автор themrdemonized,
+     configs\text\eng\ui_mm_modded_exes.xml ). -->
+<string_table>
+
+	<string id="ui_cpu_button">
+		<text>Налаштування рушія</text>
+	</string>
+	<string id="ui_cpu_title">
+		<text>Налаштування рушія</text>
+	</string>
+
+	<string id="ui_cpu_grp_cores">
+		<text>Ядра і потоки</text>
+	</string>
+	<string id="ui_cpu_grp_frame">
+		<text>Кадр</text>
+	</string>
+	<string id="ui_cpu_grp_load">
+		<text>Завантаження</text>
+	</string>
+	<string id="ui_cpu_grp_particles">
+		<text>Частинки</text>
+	</string>
+	<string id="ui_cpu_grp_test">
+		<text>Тест</text>
+	</string>
+
+	<string id="ui_cpu_core_mode">
+		<text>Ядра процесора (Авто: без ядра 0 від 6 логічних процесорів)</text>
+	</string>
+	<string id="cpu_mode_auto">
+		<text>Авто</text>
+	</string>
+	<string id="cpu_mode_no_core0">
+		<text>Без ядра 0</text>
+	</string>
+	<string id="cpu_mode_all">
+		<text>Усі ядра</text>
+	</string>
+	<string id="ui_cpu_tasks">
+		<text>Система задач (робота рушія на всіх ядрах)</text>
+	</string>
+	<string id="ui_cpu_lua_gc">
+		<text>Паралельне збирання сміття Lua</text>
+	</string>
+
+	<string id="ui_cpu_framelimit">
+		<text>Обмеження кадрів (0 = без обмеження)</text>
+	</string>
+	<string id="ui_cpu_framelimit_menu">
+		<text>Обмежувати меню і паузу частотою монітора</text>
+	</string>
+	<string id="ui_cpu_show_fps">
+		<text>Лічильник FPS</text>
+	</string>
+	<string id="ui_cpu_fps_pos">
+		<text>Розташування лічильника FPS</text>
+	</string>
+	<string id="ui_cpu_fps_pos_left">
+		<text>Угорі ліворуч</text>
+	</string>
+	<string id="ui_cpu_fps_pos_center">
+		<text>Угорі по центру</text>
+	</string>
+	<string id="ui_cpu_fps_pos_right">
+		<text>Угорі праворуч</text>
+	</string>
+
+	<string id="ui_cpu_mt_textures">
+		<text>Текстури на всіх ядрах під час завантаження рівня</text>
+	</string>
+	<string id="ui_cpu_shader_prebuild">
+		<text>Збирання шейдерів на всіх ядрах (після перезапуску гри)</text>
+	</string>
+
+	<string id="ui_cpu_particle_rate">
+		<text>Частота оновлення частинок (разів на секунду)</text>
+	</string>
+	<string id="ui_cpu_rate_15">
+		<text>15</text>
+	</string>
+	<string id="ui_cpu_rate_30">
+		<text>30</text>
+	</string>
+	<string id="ui_cpu_rate_60">
+		<text>60</text>
+	</string>
+	<string id="ui_cpu_rate_90">
+		<text>90</text>
+	</string>
+	<string id="ui_cpu_rate_120">
+		<text>120</text>
+	</string>
+	<string id="ui_cpu_step_distance">
+		<text>Дальність частинок від кроків, м</text>
+	</string>
+	<string id="ui_cpu_tracers">
+		<text>Трасери куль</text>
+	</string>
+	<string id="ui_cpu_short_tracers">
+		<text>Завжди показувати короткі трасери</text>
+	</string>
+	<string id="ui_cpu_silencer_tracer">
+		<text>Глушники можуть ховати трасери</text>
+	</string>
+	<string id="ui_cpu_mt_particles">
+		<text>Багатопотокові частинки (на всіх ядрах)</text>
+	</string>
+
+	<string id="ui_cpu_test_mode">
+		<text>Режим тесту (заміри в журналі гри)</text>
+	</string>
+
+</string_table>

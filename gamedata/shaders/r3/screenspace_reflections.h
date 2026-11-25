@@ -54,7 +54,7 @@ float4 SSFX_ssr_fast_ray(float3 ray_start_vs, float3 ray_dir_vs, float2 tc, floa
 	float2 ray_check = 0;
 
 	// Ray-march
-	[unroll (q_ssr_steps[SSFX_SSR_QUALITY].x)]
+	[loop]
 	for (int i = 0; i < q_ssr_steps[SSFX_SSR_QUALITY].x; i++)
 	{
 		// Ray out of screen...

@@ -181,4 +181,21 @@ public:
 
 PARTICLES_API IParticleManager* ParticleManager();
 
+// Written by Ivan Danko, 2026-11-17: FPS plan step 2 - the particle behaviour of Anomaly (Monolith).
+// Only the DX11 render calls these (at its start); the other renderers never do, so they keep the
+// behaviour as it was. On: the spread (NRand) and the turbulence table as in Monolith and the smooth
+// colour fade (a float colour kept next to the particles; Particle stays 64 bytes). The update
+// coefficient is the DX11 console value particle_update_mod (Monolith ps_particle_update_coeff):
+// the turbulence strength follows it; without a pointer it is 1.0, as it was.
+// Створено (Ivan Danko, 2026-11-17): крок 2 плану FPS - поведінка частинок як в Anomaly (Monolith).
+// Ці функції викликає лише рендер DX11 (під час старту); інші рендери їх не викликають і працюють,
+// як раніше. Увімкнено: розкид (NRand) і таблиця завихрень як у Monolith та плавне згасання кольору
+// (колір у float зберігається поруч із частинками; Particle лишається 64 байти). Коефіцієнт
+// оновлення - консольне значення DX11 particle_update_mod (у Monolith ps_particle_update_coeff):
+// сила завихрень іде за ним; без вказівника він 1.0, як раніше.
+PARTICLES_API void SetAnomalyMode(bool on);
+PARTICLES_API bool AnomalyMode();
+PARTICLES_API void SetUpdateCoeff(const float* coeff);
+PARTICLES_API float UpdateCoeff();
+
 } // namespace PAPI

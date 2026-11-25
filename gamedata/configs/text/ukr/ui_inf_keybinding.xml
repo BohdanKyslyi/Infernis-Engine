@@ -1,43 +1,43 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="windows-1251" ?>
 <string_table>
 	<string id="inf_mm_cam1">
-		<text>Р’РёРґ РІС–Рґ 1-РіРѕ РѕР±Р»РёС‡С‡СЏ</text>
+		<text>Вид від 1-го обличчя</text>
 	</string>
 	<string id="inf_mm_cam2">
-		<text>Р’РёРґ РІС–Рґ 2-РіРѕ РѕР±Р»РёС‡С‡СЏ</text>
+		<text>Вид від 2-го обличчя</text>
 	</string>
 	<string id="inf_mm_cam3">
-		<text>Р’РёРґ РІС–Рґ 3-РіРѕ РѕР±Р»РёС‡С‡СЏ</text>
+		<text>Вид від 3-го обличчя</text>
 	</string>
 	<string id="inf_mm_quick_kick">
-		<text>РЁРІРёРґРєРёР№ СѓРґР°СЂ</text>
+		<text>Швидкий удар</text>
 	</string>
 	<string id="inf_mm_quick_grenade">
-		<text>РЁРІРёРґРєРёР№ РєРёРґРѕРє РіСЂР°РЅР°С‚Рё</text>
+		<text>Швидкий кидок гранати</text>
 	</string>
 	<string id="inf_mm_wpn_inspect">
-		<text>РћРіР»СЏРЅСѓС‚Рё Р·Р±СЂРѕСЋ</text>
+		<text>Оглянути зброю</text>
 	</string>
 	<string id="inf_mm_wpn_zoom_alter">
-		<text>РђР»СЊС‚РµСЂРЅР°С‚РёРІРЅРµ РїСЂРёС†С–Р»СЋРІР°РЅРЅСЏ</text>
+		<text>Альтернативне прицілювання</text>
 	</string>
 	<string id="inf_mm_wipe_visor">
-		<text>РџСЂРѕС‚РµСЂС‚Рё РµРєСЂР°РЅ</text>
+		<text>Протерти екран</text>
 	</string>
 	
-	<!-->РџРµСЂРµРєР»Р°СЃС‚Рё РЅР° С–РЅС€С– РјРѕРІРё - РІРµСЂСЃС–СЏ 0.2.8<-->
+	<!-->Перекласти на інші мови - версія 0.2.8<-->
 	
 	<string id="inf_mm_tac_torch">
-		<text>РўР°РєС‚РёС‡РЅРёР№ Р»С–С…С‚Р°СЂ</text>
+		<text>Тактичний ліхтар</text>
 	</string>
 	<string id="inf_mm_laser">
-		<text>Р›Р°Р·РµСЂРЅРёР№ С†С–Р»РµРІРєР°Р·С–РІРЅРёРє</text>
+		<text>Лазерний цілевказівник</text>
 	</string>
 	<string id="inf_mm_scope_brightness_plus">
-		<text>РЇСЃРєСЂР°РІС–СЃС‚СЊ РїСЂРёС†С–Р»Сѓ +</text>
+		<text>Яскравість прицілу +</text>
 	</string>
 	<string id="inf_mm_scope_brightness_minus">
-		<text>РЇСЃРєСЂР°РІС–СЃС‚СЊ РїСЂРёС†С–Р»Сѓ -</text>
+		<text>Яскравість прицілу -</text>
 	</string>
 	
 </string_table>

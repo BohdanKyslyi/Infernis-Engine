@@ -29,5 +29,11 @@ void CCar::script_register(lua_State* L) {
                   .def("SetExplodeTime", &CCar::SetExplodeTime)
                   .def("ExplodeTime", &CCar::ExplodeTime)
                   .def("CarExplode", &CCar::CarExplode)
+                  // Ported by Ivan Danko, 2026-11-17, from Monolith (author Ray Twitty (aka Shadows)): FPS plan step 2 - the car damage smoke from Lua
+                  // (Monolith CarScript.cpp, added by Ray Twitty (aka Shadows)).
+                  // Перенесення з Monolith (автор Ray Twitty (aka Shadows)) - Ivan Danko, 2026-11-17: крок 2 плану FPS - дим пошкоджень машини з Lua
+                  // (Monolith CarScript.cpp, додав Ray Twitty (aka Shadows)).
+                  .def("PlayDamageParticles", &CCar::PlayDamageParticles)
+                  .def("StopDamageParticles", &CCar::StopDamageParticles)
                   .def(constructor<>())];
 }
