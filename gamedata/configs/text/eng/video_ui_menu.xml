@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="windows-1251" ?>
+<!-- The rows of the video page ( ui_mm_opt.xml tab_video ) built by ui_mm_opt_main.script.
+     Written by Ivan Danko, 2026-11-25: plan step 1 (a) - the caption of the "Saturation" slider
+     ( r__saturation ) under the "Brightness" row.
+     Створено (Ivan Danko, 2026-11-25): крок 1 (а) плану - підпис повзунка «Насиченість»
+     ( r__saturation ) під рядком «Яскравість». -->
+<string_table>
+
+	<string id="ui_mm_saturation">
+		<text>Saturation</text>
+	</string>
+
+</string_table>

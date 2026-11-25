@@ -129,10 +129,29 @@
             <options_item entry="rs_c_brightness" group="mm_opt_video" depend="runtime"/>
         </track_brightness>
 
-        <cap_fullscreen x="15" y="183" width="135" height="24">
+        <!-- Written by Ivan Danko, 2026-11-25: plan step 1 (a) - the "Saturation" slider
+             ( r__saturation, 0 - 2, 1 = as before ) under the "Brightness" row, where the
+             "Full screen" row stood. ui_mm_opt_main.script builds it on DX11 only, like the
+             actor's shadow row: the other renderers do not apply the saturation.
+             Створено (Ivan Danko, 2026-11-25): крок 1 (а) плану - повзунок «Насиченість»
+             ( r__saturation, 0 - 2, 1 = як раніше ) під рядком «Яскравість», де стояв рядок
+             «Повний екран». Його будує ui_mm_opt_main.script лише на DX11, як рядок
+             «Тінь гравця»: інші рендери насиченість не застосовують. -->
+        <cap_saturation x="15" y="183" width="135" height="24">
+            <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_saturation</text>
+        </cap_saturation>
+        <track_saturation x="175" y="187" width="235" height="16">
+            <options_item entry="r__saturation" group="mm_opt_video" depend="runtime"/>
+        </track_saturation>
+
+        <!-- Edited by Ivan Danko, 2026-11-25: plan step 1 (a) - the "Full screen" row one row
+             down ( y 183 / 180 to 213 / 210 ), under the new "Saturation" slider.
+             Змінено (Ivan Danko, 2026-11-25): крок 1 (а) плану - рядок «Повний екран» на один
+             рядок нижче ( y 183 / 180 на 213 / 210 ), під новим повзунком «Насиченість». -->
+        <cap_fullscreen x="15" y="213" width="135" height="24">
             <text r="170" g="170" b="170" font="letterica16" align="r" vert_align="c">ui_mm_fullscreen</text>
         </cap_fullscreen>
-        <check_fullscreen x="162" y="180" width="44" height="29">
+        <check_fullscreen x="162" y="210" width="44" height="29">
 	        <texture>ui_inGame2_checkbox</texture>
             <options_item entry="rs_fullscreen" group="mm_opt_video" depend="vid"/>
         </check_fullscreen>

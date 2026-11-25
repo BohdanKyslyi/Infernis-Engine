@@ -1221,22 +1221,23 @@ void ssfx_profile_backup() {
 // remembered yet, 0 not there, 1 there. Called by Startup right after FS.ssfx_addons, when the pack
 // is mounted, so the list is read from it. Nothing happens unless SSS runs ( switched on, DX11 ):
 // SSS off is the game without SSS. Our own design, the donor has none.
-static LPCSTR ssfx_atmos_pack = "Weather_ATMOS";
+// Edited by Ivan Danko, 2026-11-25: the folder name of the pack is no longer in the engine. The pack
+// is the one [shader_extensions] ssfx_addons of configs\infernis_engine\engine_external.ltx names
+// ( Weather_ATMOS by default ): a renamed folder needs only that line changed.
+// Змінено (Ivan Danko, 2026-11-25): назви теки пакета в рушії більше немає. Пакет - той, що названо
+// в [shader_extensions] ssfx_addons файлу configs\infernis_engine\engine_external.ltx ( типово
+// Weather_ATMOS ): для перейменованої теки досить змінити лише цей рядок.
 static LPCSTR ssfx_atmos_list = "ssfx_atmos_switch.ltx";
 
 // The pack is on the disk: ssfx_addon_names gives the packs of ssfx_addons that are, folder names
-// as found there, a space between two.
-static bool ssfx_atmos_there() {
-    string_path packs;
+// as found there, a space between two; packs keeps them for the log.
+// Edited by Ivan Danko, 2026-11-25: any pack of ssfx_addons on the disk counts, no folder name is
+// compared.
+// Змінено (Ivan Danko, 2026-11-25): зараховується будь-який пакет ssfx_addons на диску, назва теки
+// не порівнюється.
+static bool ssfx_atmos_there(string_path& packs) {
     FS.ssfx_addon_names(packs);
-    const int count = _GetItemCount(packs, ' ');
-    for (int i = 0; i < count; ++i) {
-        string_path name;
-        _GetItem(packs, i, name, ' ');
-        if (0 == _stricmp(name, ssfx_atmos_pack))
-            return true;
-    }
-    return false;
+    return packs[0] != 0;
 }
 
 // configs\ssfx_atmos_switch.ltx, one console command a line ( blank lines and lines of ';' are left
@@ -1267,23 +1268,29 @@ void ssfx_atmos_switch() {
     if (!ssfx_session_enable || g_current_renderer != 4)
         return;
 
-    const int there = ssfx_atmos_there() ? 1 : 0;
+    // Edited by Ivan Danko, 2026-11-25: the log names the pack folder found on the disk, or "the addon
+    // of ssfx_addons" when none is there ( no folder name in the engine ).
+    // Змінено (Ivan Danko, 2026-11-25): журнал називає знайдену на диску теку пакета або "the addon
+    // of ssfx_addons", коли її немає ( назви теки в рушії немає ).
+    string_path packs;
+    const int there = ssfx_atmos_there(packs) ? 1 : 0;
     if (ps_ssfx_atmos_state == there)
         return;
+    LPCSTR pack = there ? packs : "the addon of ssfx_addons";
 
     if (ps_ssfx_atmos_state < 0) {
         // nothing remembered yet: the first start of this build. Remember the pack, change no setting.
-        Msg("* SSS: %s is %s: remembered, the settings stay as they are", ssfx_atmos_pack,
+        Msg("* SSS: %s is %s: remembered, the settings stay as they are", pack,
             there ? "there" : "not there");
     } else {
         u32 count = 0;
         string_path source;
         if (!ssfx_atmos_run_list(count, source)) {
             Msg("! SSS: %s is %s now, but the list [%s] is missing or empty: the settings stay as they are",
-                ssfx_atmos_pack, there ? "there" : "not there", ssfx_atmos_list);
+                pack, there ? "there" : "not there", ssfx_atmos_list);
             return;
         }
-        Msg("* SSS: %s %s: %u settings set from [%s]", ssfx_atmos_pack,
+        Msg("* SSS: %s %s: %u settings set from [%s]", pack,
             there ? "put in" : "taken out", count, source);
     }
     ps_ssfx_atmos_state = there;

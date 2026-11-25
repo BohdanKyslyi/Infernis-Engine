@@ -62,3 +62,16 @@ ssfx_ui_wind_grass_wave 0.4
 ssfx_ui_wind_tree_branch 11
 ssfx_ui_wind_tree_trunk 0.15
 ssfx_ui_wind_tree_bend 0.5
+; Edited by Ivan Danko, 2026-11-25: + the last 3 lines, the bloom threshold, exposure and sky of the
+; SSS settings window at their defaults. While the bloom of the weather is on ( the pack's list )
+; they do nothing, so any number may stand there unseen; taking the pack out turns that bloom off
+; ( ssfx_ui_bloom_use_weather 0 above ) and they came on as they were ( exposure 83.9 = a white
+; screen, 2026-11-25 ). atmos_switch_build.py does not make these 3 lines: keep them by hand.
+; Змінено (Ivan Danko, 2026-11-25): + останні 3 рядки - поріг, експозиція та небо блуму вікна
+; налаштувань SSS на типових значеннях. Поки блум із погоди увімкнено ( список пакета ), вони
+; нічого не роблять, тож там непомітно може стояти будь-яке число; коли пакет прибирають, цей блум
+; вимикається ( ssfx_ui_bloom_use_weather 0 вище ) і вони вмикалися як є ( експозиція 83.9 = білий
+; екран, 2026-11-25 ). atmos_switch_build.py цих 3 рядків не робить: зберігати їх вручну.
+ssfx_ui_bloom_threshold 3.5
+ssfx_ui_bloom_exposure 3
+ssfx_ui_bloom_sky 0.6

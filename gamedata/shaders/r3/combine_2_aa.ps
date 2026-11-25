@@ -1,6 +1,11 @@
 // Screen Space Shaders on / off ( ssfx_enable ): with SSS on the DX11 renderer defines
 // IE_SSFX_ENABLED and the SSS version is compiled; with SSS off, and on DX10, the game's
-// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ).
+// own version after #else. Both are copied unchanged ( _ssfx_work\transfer_shaders.py ), except
+// one step at the end of the #else half:
+// Edited by Ivan Danko, 2026-11-25: plan step 1 (a) - the saturation of the video page's slider
+// ( r__saturation ) with SSS off too, on DX11 only; see the end of the #else half.
+// Змінено (Ivan Danko, 2026-11-25): крок 1 (а) плану - насиченість повзунка сторінки відео
+// ( r__saturation ) і з вимкненим SSS, лише на DX11; див. кінець половини після #else.
 #ifdef IE_SSFX_ENABLED
 #include "common.h"
 #include "mblur.h"
@@ -186,6 +191,17 @@ float4 main ( v_aa_AA I ) : SV_Target
 #else
 #include "common.h"
 #include "mblur.h"
+// Edited by Ivan Danko, 2026-11-25: plan step 1 (a) - the saturation constant for the step at the end
+// of main( ), DX11 only. The engine fills it for every shader that declares it ( pp_img_corrections,
+// Blender_Recorder_StandartBinding.cpp:857, under no condition ); img_corrections.h declares it for
+// the SSS half and is not included here.
+// Змінено (Ivan Danko, 2026-11-25): крок 1 (а) плану - константа насиченості для кроку в кінці
+// main( ), лише DX11. Рушій заповнює її для кожного шейдера, який її оголошує ( pp_img_corrections,
+// Blender_Recorder_StandartBinding.cpp:857, без жодної умови ); img_corrections.h оголошує її для
+// половини SSS і тут не підключений.
+#ifdef SM_5
+uniform float4 		pp_img_corrections;	// x - exposure, y - gamma, z - saturation, w = 1
+#endif
 /*
 struct 	v2p
 {
@@ -307,6 +323,26 @@ float4 main ( v_aa_AA I ) : SV_Target
 	float3 	final	=  mblur( center, dc, (s0+s1+s2+s3)/4.h );
 
 //	return combine_bloom(final,tex2D	(s_bloom, I.tc0));
+#ifdef SM_5
+	// Edited by Ivan Danko, 2026-11-25: plan step 1 (a) - the "Saturation" slider of the video page
+	// ( r__saturation ) with SSS off, on DX11 only ( SM_5; DX10 keeps the game's own pass ). The
+	// saturation line of img_corrections.h that the SSS half runs, with the luminance weights the
+	// SSS half sees ( LUMINANCE_VECTOR of anomaly_shaders.h ): this half's own LUMINANCE_VECTOR
+	// ( common_defines.h ) is 0.3 / 0.38 / 0.22, which sums to 0.9 and would turn white grey at 0.
+	// Skipped at 1.0, the default: the picture stays the game's own until the slider moves.
+	// Змінено (Ivan Danko, 2026-11-25): крок 1 (а) плану - повзунок «Насиченість» сторінки відео
+	// ( r__saturation ) з вимкненим SSS, лише на DX11 ( SM_5; DX10 лишає власний прохід гри ).
+	// Рядок насиченості з img_corrections.h, який виконує половина SSS, з тими самими вагами
+	// яскравості, що бачить половина SSS ( LUMINANCE_VECTOR з anomaly_shaders.h ): власний
+	// LUMINANCE_VECTOR цієї половини ( common_defines.h ) - 0.3 / 0.38 / 0.22, у сумі 0.9, і біле
+	// при 0 стало б сірим. Пропускається при 1.0, типовому значенні: картинка лишається власною
+	// картинкою гри, доки повзунок не зрушено.
+	float4	res	=  combine_bloom( final, s_bloom.Sample( smp_rtlinear, I.Tex0));
+	if (abs(pp_img_corrections.z - 1.0) > 0.001)
+		res.rgb = saturate(lerp(res.rgb, dot(res.rgb, float3(0.2125, 0.7154, 0.0721)), 1.0 - pp_img_corrections.z));
+	return res;
+#else
 	return combine_bloom( final, s_bloom.Sample( smp_rtlinear, I.Tex0));
+#endif
 }
 #endif

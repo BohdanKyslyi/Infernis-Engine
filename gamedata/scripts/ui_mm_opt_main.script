@@ -29,6 +29,20 @@ function options_dialog:InitControls()
 	self.dlg_video:Show			(false)
 	self.dialog:AttachChild		(self.dlg_video)
 	xml:InitWindow				("tab_size", 0, self.dlg_video)
+	-- Written by Ivan Danko, 2026-11-25: plan step 1 (a) - the "Saturation" slider ( r__saturation )
+	-- under the "Brightness" row of the video page, where the "Full screen" row stood ( ui_mm_opt.xml ).
+	-- The page's own script comes from the game's archives and builds only its stock rows, so this row
+	-- is built here; on DX11 only, like the actor's shadow: the other renderers do not apply the
+	-- saturation ( combine_2_naa.ps / combine_2_aa.ps apply it on DX11 only ).
+	-- Створено (Ivan Danko, 2026-11-25): крок 1 (а) плану - повзунок «Насиченість» ( r__saturation )
+	-- під рядком «Яскравість» сторінки відео, де стояв рядок «Повний екран» ( ui_mm_opt.xml ).
+	-- Власний скрипт сторінки береться з архівів гри і будує лише свої стандартні рядки, тому цей
+	-- рядок будується тут; лише на DX11, як тінь гравця: інші рендери насиченість не застосовують
+	-- ( combine_2_naa.ps / combine_2_aa.ps застосовують її лише на DX11 ).
+	if get_console():get_token("renderer") == "renderer_r4" then
+		xml:InitStatic				("tab_video:cap_saturation", self.dlg_video)
+		xml:InitTrackBar			("tab_video:track_saturation", self.dlg_video)
+	end
 
 	self.dlg_sound				= ui_mm_opt_sound.opt_sound()
 	self.dlg_sound:InitControls	(0,0, xml, self)
